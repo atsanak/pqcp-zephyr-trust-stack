@@ -1,0 +1,340 @@
+# SPDX-License-Identifier: Apache-2.0
+# PQCP Zephyr Trust Stack - Kconfig Configuration
+#
+# Post-Quantum Cryptography Package for Zephyr RTOS
+# Implements ML-KEM (FIPS-203) and ML-DSA (FIPS-204)
+
+menuconfig PQCP
+	bool "PQ Code Package - Post-Quantum Cryptography"
+	help
+	  Enable the PQ Code Package post-quantum cryptography module.
+	  This provides ML-KEM (FIPS-203) and ML-DSA (FIPS-204) implementations
+	  using mlkem-native and mldsa-native libraries.
+
+if PQCP
+
+# =============================================================================
+# ML-KEM (FIPS-203) Configuration
+# =============================================================================
+menu "ML-KEM (FIPS-203) Configuration"
+
+config PQCP_MLKEM
+	bool "Enable ML-KEM support"
+	default y
+	help
+	  Enable ML-KEM (Module-Lattice Key Encapsulation Mechanism) support.
+	  ML-KEM is standardized in FIPS-203.
+
+if PQCP_MLKEM
+
+config PQCP_MLKEM_LEVEL_512
+	bool "ML-KEM-512 (NIST Level 1)"
+	default n
+	help
+	  Enable ML-KEM-512 providing NIST security level 1.
+	  Public key: 800 bytes, Ciphertext: 768 bytes.
+
+config PQCP_MLKEM_LEVEL_768
+	bool "ML-KEM-768 (NIST Level 3)"
+	default y
+	help
+	  Enable ML-KEM-768 providing NIST security level 3.
+	  Public key: 1184 bytes, Ciphertext: 1088 bytes.
+	  This is the recommended default for most applications.
+
+config PQCP_MLKEM_LEVEL_1024
+	bool "ML-KEM-1024 (NIST Level 5)"
+	default n
+	help
+	  Enable ML-KEM-1024 providing NIST security level 5.
+	  Public key: 1568 bytes, Ciphertext: 1568 bytes.
+
+config PQCP_MLKEM_MULTI_LEVEL
+	bool "Multi-level ML-KEM build"
+	default n
+	help
+	  Build a single library that supports multiple ML-KEM security levels
+	  at runtime. This increases code size but allows runtime level selection.
+
+config PQCP_MLKEM_MONOLITHIC
+	bool "Monolithic ML-KEM build (single translation unit)"
+	default n
+	depends on !SOC_FAMILY_ARM
+	help
+	  Build ML-KEM as a single translation unit for potential LTO benefits.
+	  This is primarily useful for host/native_sim builds and is not
+	  recommended for MCU targets due to increased peak memory during
+	  compilation.
+
+endif # PQCP_MLKEM
+endmenu
+
+# =============================================================================
+# ML-DSA (FIPS-204) Configuration
+# =============================================================================
+menu "ML-DSA (FIPS-204) Configuration"
+
+config PQCP_MLDSA
+	bool "Enable ML-DSA support"
+	default y
+	help
+	  Enable ML-DSA (Module-Lattice Digital Signature Algorithm) support.
+	  ML-DSA is standardized in FIPS-204.
+
+if PQCP_MLDSA
+
+config PQCP_MLDSA_LEVEL_44
+	bool "ML-DSA-44 (NIST Level 2)"
+	default n
+	help
+	  Enable ML-DSA-44 providing NIST security level 2.
+	  Public key: 1312 bytes, Signature: 2420 bytes.
+
+config PQCP_MLDSA_LEVEL_65
+	bool "ML-DSA-65 (NIST Level 3)"
+	default y
+	help
+	  Enable ML-DSA-65 providing NIST security level 3.
+	  Public key: 1952 bytes, Signature: 3293 bytes.
+	  This is the recommended default for most applications.
+
+config PQCP_MLDSA_LEVEL_87
+	bool "ML-DSA-87 (NIST Level 5)"
+	default n
+	help
+	  Enable ML-DSA-87 providing NIST security level 5.
+	  Public key: 2592 bytes, Signature: 4595 bytes.
+
+config PQCP_MLDSA_MULTI_LEVEL
+	bool "Multi-level ML-DSA build"
+	default n
+	help
+	  Build a single library that supports multiple ML-DSA security levels
+	  at runtime. This increases code size but allows runtime level selection.
+
+config PQCP_MLDSA_STREAMING
+	bool "ML-DSA streaming API"
+	default y
+	help
+	  Enable streaming hash-based signing for large messages. This allows
+	  signing messages that exceed available RAM by processing in chunks.
+
+config PQCP_MLDSA_MONOLITHIC
+	bool "Monolithic ML-DSA build (single translation unit)"
+	default n
+	depends on !SOC_FAMILY_ARM
+	help
+	  Build ML-DSA as a single translation unit. Primarily useful for
+	  host/native_sim builds.
+
+endif # PQCP_MLDSA
+endmenu
+
+# =============================================================================
+# RNG Configuration
+# =============================================================================
+menu "Random Number Generator Configuration"
+
+choice PQCP_RNG_MODE
+	prompt "RNG Backend"
+	default PQCP_RNG_ZEPHYR_ENTROPY
+
+config PQCP_RNG_ZEPHYR_ENTROPY
+	bool "Zephyr Entropy (sys_csrand_get)"
+	depends on ENTROPY_GENERATOR
+	help
+	  Use Zephyr's cryptographically secure random number generator
+	  (sys_csrand_get) which is backed by hardware entropy sources.
+	  This is the recommended option for production use.
+
+config PQCP_RNG_PSA
+	bool "PSA Crypto RNG"
+	depends on MBEDTLS_PSA_CRYPTO_C || BUILD_WITH_TFM
+	help
+	  Use PSA Crypto's psa_generate_random() for random number generation.
+	  This option is useful when PSA Crypto is already in use.
+
+config PQCP_RNG_CUSTOM
+	bool "Custom RNG (application-provided)"
+	help
+	  Allow application to register a custom RNG implementation.
+	  The application must call pqcp_rng_register() before using
+	  any PQCP cryptographic operations.
+
+endchoice
+
+config PQCP_RNG_DETERMINISTIC_TEST
+	bool "Deterministic RNG for testing (DANGEROUS)"
+	depends on PQCP_RNG_CUSTOM
+	help
+	  WARNING: This option is for testing and ACVP validation ONLY.
+	  DO NOT enable this in production builds.
+	  
+	  Enables a deterministic DRBG that can be seeded with known values
+	  for Known Answer Tests (KAT) and ACVP test vectors.
+
+endmenu
+
+# =============================================================================
+# Backend Configuration
+# =============================================================================
+menu "Implementation Backend Configuration"
+
+choice PQCP_BACKEND
+	prompt "Implementation Backend"
+	default PQCP_BACKEND_AUTO
+
+config PQCP_BACKEND_AUTO
+	bool "Automatic (detect ISA features)"
+	help
+	  Automatically select the best available backend based on detected
+	  ISA features at compile time. Uses native assembly backends when
+	  available (AArch64 NEON, x86-64 AVX2, RISC-V RVV) and falls back
+	  to portable C otherwise.
+
+config PQCP_BACKEND_FORCE_C
+	bool "Force portable C backend"
+	help
+	  Force use of the portable C backend even when native backends
+	  are available. This is useful for testing and comparison purposes.
+
+config PQCP_BACKEND_FORCE_NATIVE
+	bool "Force native backend (advanced)"
+	help
+	  Force use of native assembly backends. This may cause build
+	  failures or runtime errors on unsupported architectures.
+	  Only use this if you know your target supports the required
+	  ISA extensions.
+
+endchoice
+
+config PQCP_FIPS202_EXTERNAL
+	bool "Use external FIPS-202 implementation"
+	default n
+	help
+	  Use an external SHA-3/SHAKE implementation instead of the one
+	  bundled with mlkem-native and mldsa-native. This allows sharing
+	  a single FIPS-202 implementation across the system.
+
+config PQCP_REDUCE_RAM
+	bool "Reduced RAM mode"
+	default n
+	help
+	  Enable reduced RAM mode which trades performance for lower
+	  memory usage. This is useful on very constrained devices.
+
+endmenu
+
+# =============================================================================
+# PSA Driver Configuration
+# =============================================================================
+menu "PSA Crypto Driver Configuration"
+
+config PQCP_PSA_DRIVER
+	bool "Enable PSA Crypto driver shims"
+	depends on MBEDTLS_PSA_CRYPTO_C || BUILD_WITH_TFM
+	default y if MBEDTLS_PSA_CRYPTO_C
+	help
+	  Enable PSA Crypto driver shims for ML-DSA and ML-KEM.
+	  This allows using PQCP implementations through the standard
+	  PSA Crypto API.
+
+if PQCP_PSA_DRIVER
+
+config PQCP_PSA_DRIVER_MLDSA
+	bool "ML-DSA PSA driver"
+	default y
+	depends on PQCP_MLDSA
+	help
+	  Enable PSA Crypto driver for ML-DSA operations including
+	  key generation, signing, and verification.
+
+config PQCP_PSA_DRIVER_MLKEM
+	bool "ML-KEM PSA driver"
+	default y
+	depends on PQCP_MLKEM
+	help
+	  Enable PSA Crypto driver for ML-KEM operations including
+	  key generation, encapsulation, and decapsulation.
+
+endif # PQCP_PSA_DRIVER
+endmenu
+
+# =============================================================================
+# Benchmarking Configuration
+# =============================================================================
+menu "Benchmarking Configuration"
+
+config PQCP_BENCH
+	bool "Enable benchmarking support"
+	default n
+	help
+	  Enable the PQCP benchmarking harness for measuring performance
+	  of cryptographic operations.
+
+if PQCP_BENCH
+
+config PQCP_BENCH_ITERATIONS
+	int "Number of benchmark iterations"
+	default 100
+	range 1 10000
+	help
+	  Number of iterations for each benchmark measurement.
+	  Higher values provide more accurate averages but take longer.
+
+config PQCP_BENCH_WARMUP
+	int "Number of warmup iterations"
+	default 10
+	range 0 100
+	help
+	  Number of warmup iterations before starting measurements.
+	  This helps stabilize caches and branch predictors.
+
+config PQCP_BENCH_STACK_ANALYSIS
+	bool "Stack usage analysis"
+	depends on THREAD_STACK_INFO
+	default y
+	help
+	  Enable stack usage analysis during benchmarks.
+	  Requires Zephyr stack monitoring support.
+
+config PQCP_BENCH_CYCLE_COUNTER
+	bool "Use cycle counter for timing"
+	default y if CPU_CORTEX_M_HAS_DWT
+	help
+	  Use hardware cycle counter for precise timing measurements.
+	  Falls back to k_cyc_to_us_floor32() if unavailable.
+
+config PQCP_BENCH_PROTOCOL
+	bool "Protocol-level benchmarks"
+	depends on NET_TCP || NET_UDP
+	default n
+	help
+	  Enable protocol-level benchmarks (TLS/DTLS handshakes).
+	  Requires networking support.
+
+endif # PQCP_BENCH
+endmenu
+
+# =============================================================================
+# Debug Configuration
+# =============================================================================
+menu "Debug Configuration"
+
+config PQCP_DEBUG_LOG
+	bool "Enable debug logging"
+	depends on LOG
+	default n
+	help
+	  Enable verbose debug logging for PQCP operations.
+
+config PQCP_ASSERT
+	bool "Enable runtime assertions"
+	default y if DEBUG
+	help
+	  Enable runtime assertion checks. Disable in production
+	  for slightly smaller code size.
+
+endmenu
+
+endif # PQCP
