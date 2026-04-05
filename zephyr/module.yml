@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# PQCP Zephyr Trust Stack - Module Registration
+#
+# This module provides ML-KEM (FIPS-203) and ML-DSA (FIPS-204) implementations
+# using the PQ Code Package's mlkem-native and mldsa-native libraries.
+
+name: pqcp_zephyr_trust_stack
+
+build:
+  cmake: .
+  kconfig: Kconfig
+  settings:
+    dts_root: .

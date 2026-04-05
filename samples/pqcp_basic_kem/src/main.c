@@ -1,0 +1,152 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * PQCP Basic KEM Sample
+ *
+ * Demonstrates ML-KEM key encapsulation mechanism using the PQCP module.
+ * Runs keygen, encapsulation, and decapsulation operations and prints
+ * timing results.
+ */
+
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <pqcp_zephyr/mlkem.h>
+#include <pqcp_zephyr/rng.h>
+#include <pqcp_zephyr/bench.h>
+
+#include <string.h>
+
+/* Verify shared secrets match */
+static bool verify_ss(const uint8_t *ss1, const uint8_t *ss2)
+{
+    return memcmp(ss1, ss2, PQCP_MLKEM_SS_SIZE) == 0;
+}
+
+/* Print hex bytes */
+static void print_hex(const char *label, const uint8_t *data, size_t len)
+{
+    printk("%s: ", label);
+    for (size_t i = 0; i < len && i < 16; i++) {
+        printk("%02x", data[i]);
+    }
+    if (len > 16) {
+        printk("...");
+    }
+    printk("\n");
+}
+
+int main(void)
+{
+    printk("\n");
+    printk("========================================\n");
+    printk("  PQCP Basic ML-KEM Sample\n");
+    printk("========================================\n\n");
+    
+    /* Initialize RNG */
+    int ret = pqcp_rng_init();
+    if (ret != 0) {
+        printk("ERROR: Failed to initialize RNG: %d\n", ret);
+        return -1;
+    }
+    printk("RNG initialized successfully\n");
+    
+    /* Test ML-KEM-768 (default) */
+    pqcp_mlkem_level_t level = PQCP_MLKEM_768;
+    
+    printk("\nUsing %s\n", pqcp_mlkem_level_name(level));
+    printk("  Public key size: %zu bytes\n", pqcp_mlkem_pk_size(level));
+    printk("  Secret key size: %zu bytes\n", pqcp_mlkem_sk_size(level));
+    printk("  Ciphertext size: %zu bytes\n", pqcp_mlkem_ct_size(level));
+    printk("  Shared secret:   %d bytes\n\n", PQCP_MLKEM_SS_SIZE);
+    
+    /* Allocate buffers */
+    static uint8_t pk[PQCP_MLKEM_PK_SIZE_MAX];
+    static uint8_t sk[PQCP_MLKEM_SK_SIZE_MAX];
+    static uint8_t ct[PQCP_MLKEM_CT_SIZE_MAX];
+    static uint8_t ss_enc[PQCP_MLKEM_SS_SIZE];
+    static uint8_t ss_dec[PQCP_MLKEM_SS_SIZE];
+    
+    /* Initialize benchmark timing */
+    pqcp_bench_init();
+    
+    /* Key Generation */
+    printk("--- Key Generation ---\n");
+    uint64_t start = pqcp_bench_start_timing();
+    
+    ret = pqcp_mlkem_keypair(level, pk, sk);
+    
+    uint64_t keygen_time = pqcp_bench_end_timing(start);
+    
+    if (ret != PQCP_MLKEM_SUCCESS) {
+        printk("ERROR: Key generation failed: %d\n", ret);
+        return -1;
+    }
+    
+    printk("Key generation completed\n");
+    print_hex("Public key", pk, pqcp_mlkem_pk_size(level));
+    printk("Time: %llu cycles\n\n", keygen_time);
+    
+    /* Encapsulation */
+    printk("--- Encapsulation ---\n");
+    start = pqcp_bench_start_timing();
+    
+    ret = pqcp_mlkem_encapsulate(level, pk, ct, ss_enc);
+    
+    uint64_t encaps_time = pqcp_bench_end_timing(start);
+    
+    if (ret != PQCP_MLKEM_SUCCESS) {
+        printk("ERROR: Encapsulation failed: %d\n", ret);
+        return -1;
+    }
+    
+    printk("Encapsulation completed\n");
+    print_hex("Ciphertext", ct, pqcp_mlkem_ct_size(level));
+    print_hex("Shared secret (encap)", ss_enc, PQCP_MLKEM_SS_SIZE);
+    printk("Time: %llu cycles\n\n", encaps_time);
+    
+    /* Decapsulation */
+    printk("--- Decapsulation ---\n");
+    start = pqcp_bench_start_timing();
+    
+    ret = pqcp_mlkem_decapsulate(level, ct, sk, ss_dec);
+    
+    uint64_t decaps_time = pqcp_bench_end_timing(start);
+    
+    if (ret != PQCP_MLKEM_SUCCESS) {
+        printk("ERROR: Decapsulation failed: %d\n", ret);
+        return -1;
+    }
+    
+    printk("Decapsulation completed\n");
+    print_hex("Shared secret (decap)", ss_dec, PQCP_MLKEM_SS_SIZE);
+    printk("Time: %llu cycles\n\n", decaps_time);
+    
+    /* Verify */
+    printk("--- Verification ---\n");
+    if (verify_ss(ss_enc, ss_dec)) {
+        printk("SUCCESS: Shared secrets match!\n");
+    } else {
+        printk("FAILURE: Shared secrets do not match!\n");
+        return -1;
+    }
+    
+    /* Summary */
+    printk("\n--- Summary ---\n");
+    printk("Algorithm: %s\n", pqcp_mlkem_level_name(level));
+    printk("KeyGen:    %llu cycles\n", keygen_time);
+    printk("Encaps:    %llu cycles\n", encaps_time);
+    printk("Decaps:    %llu cycles\n", decaps_time);
+    printk("Total:     %llu cycles\n", keygen_time + encaps_time + decaps_time);
+    
+    /* Stack usage */
+    uint32_t stack = pqcp_bench_get_stack_usage();
+    if (stack > 0) {
+        printk("Stack:     %u bytes\n", stack);
+    }
+    
+    printk("\n========================================\n");
+    printk("  Sample completed successfully!\n");
+    printk("========================================\n");
+    
+    return 0;
+}
