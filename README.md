@@ -374,3 +374,4 @@ SPDX-License-Identifier: Apache-2.0
 ## Authors
 
 - PQCP Zephyr Trust Stack Contributors
+# pqcp-zephyr-trust-stack
