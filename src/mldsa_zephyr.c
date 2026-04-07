@@ -12,24 +12,60 @@
 
 #include <string.h>
 
-/*
- * When mldsa-native is properly integrated, include its headers:
- * #include "mldsa.h"
- */
-
-#if __has_include("mldsa/mldsa.h")
+/* Check if we have the real mldsa-native */
+#if __has_include("mldsa_native.h")
 #define HAVE_MLDSA_NATIVE 1
-#include "mldsa/mldsa.h"
+#include "mldsa_native.h"
+#elif __has_include("mldsa/mldsa_native.h")
+#define HAVE_MLDSA_NATIVE 1
+#include "mldsa/mldsa_native.h"
 #else
-#define HAVE_MLDSA_NATIVE 0
+#error "mldsa-native headers not found. Run ext/setup_libs.py first."
 #endif
+
+/*
+ * Determine the compile-time configured level from MLD_CONFIG_PARAMETER_SET
+ * or fall back to the legacy MLDSA_MODE definition.
+ */
+#if defined(MLD_CONFIG_PARAMETER_SET)
+#define PQCP_MLDSA_COMPILED_LEVEL MLD_CONFIG_PARAMETER_SET
+#elif defined(MLDSA_MODE)
+/* Map MLDSA_MODE (2,3,5) to parameter set (44,65,87) */
+#if MLDSA_MODE == 2
+#define PQCP_MLDSA_COMPILED_LEVEL 44
+#elif MLDSA_MODE == 3
+#define PQCP_MLDSA_COMPILED_LEVEL 65
+#elif MLDSA_MODE == 5
+#define PQCP_MLDSA_COMPILED_LEVEL 87
+#else
+#error "Invalid MLDSA_MODE value"
+#endif
+#else
+/* Default to ML-DSA-65 */
+#define PQCP_MLDSA_COMPILED_LEVEL 65
+#endif
+
+/* Validate the requested level matches the compiled level */
+static inline int validate_level(pqcp_mldsa_level_t level)
+{
+    switch (level) {
+    case PQCP_MLDSA_44:
+        return (PQCP_MLDSA_COMPILED_LEVEL == 44) ? 0 : -1;
+    case PQCP_MLDSA_65:
+        return (PQCP_MLDSA_COMPILED_LEVEL == 65) ? 0 : -1;
+    case PQCP_MLDSA_87:
+        return (PQCP_MLDSA_COMPILED_LEVEL == 87) ? 0 : -1;
+    default:
+        return -1;
+    }
+}
 
 size_t pqcp_mldsa_pk_size(pqcp_mldsa_level_t level)
 {
     switch (level) {
-    case PQCP_MLDSA_44: return PQCP_MLDSA_44_PK_SIZE;
-    case PQCP_MLDSA_65: return PQCP_MLDSA_65_PK_SIZE;
-    case PQCP_MLDSA_87: return PQCP_MLDSA_87_PK_SIZE;
+    case PQCP_MLDSA_44: return MLDSA44_PUBLICKEYBYTES;
+    case PQCP_MLDSA_65: return MLDSA65_PUBLICKEYBYTES;
+    case PQCP_MLDSA_87: return MLDSA87_PUBLICKEYBYTES;
     default: return 0;
     }
 }
@@ -37,9 +73,9 @@ size_t pqcp_mldsa_pk_size(pqcp_mldsa_level_t level)
 size_t pqcp_mldsa_sk_size(pqcp_mldsa_level_t level)
 {
     switch (level) {
-    case PQCP_MLDSA_44: return PQCP_MLDSA_44_SK_SIZE;
-    case PQCP_MLDSA_65: return PQCP_MLDSA_65_SK_SIZE;
-    case PQCP_MLDSA_87: return PQCP_MLDSA_87_SK_SIZE;
+    case PQCP_MLDSA_44: return MLDSA44_SECRETKEYBYTES;
+    case PQCP_MLDSA_65: return MLDSA65_SECRETKEYBYTES;
+    case PQCP_MLDSA_87: return MLDSA87_SECRETKEYBYTES;
     default: return 0;
     }
 }
@@ -47,9 +83,9 @@ size_t pqcp_mldsa_sk_size(pqcp_mldsa_level_t level)
 size_t pqcp_mldsa_sig_size(pqcp_mldsa_level_t level)
 {
     switch (level) {
-    case PQCP_MLDSA_44: return PQCP_MLDSA_44_SIG_SIZE;
-    case PQCP_MLDSA_65: return PQCP_MLDSA_65_SIG_SIZE;
-    case PQCP_MLDSA_87: return PQCP_MLDSA_87_SIG_SIZE;
+    case PQCP_MLDSA_44: return MLDSA44_BYTES;
+    case PQCP_MLDSA_65: return MLDSA65_BYTES;
+    case PQCP_MLDSA_87: return MLDSA87_BYTES;
     default: return 0;
     }
 }
@@ -74,12 +110,17 @@ int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk)
         return PQCP_MLDSA_ERR_INVALID_ARG;
     }
     
+    if (validate_level(level) != 0) {
+        return PQCP_MLDSA_ERR_INVALID_ARG;
+    }
+    
     if (!pqcp_rng_is_ready()) {
         return PQCP_MLDSA_ERR_RNG;
     }
     
-    /* mldsa-native uses compile-time level selection via MLDSA_MODE */
-    int ret = mldsa_keypair(pk, sk);
+    /* mldsa-native uses namespaced API: crypto_sign_keypair is a macro
+     * that expands to the correct function name based on config */
+    int ret = crypto_sign_keypair(pk, sk);
     
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
@@ -101,13 +142,14 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
         return PQCP_MLDSA_ERR_CONTEXT_LEN;
     }
     
-    size_t sig_len = pqcp_mldsa_sig_size(level);
-    if (sig_len == 0) {
+    if (validate_level(level) != 0) {
         return PQCP_MLDSA_ERR_INVALID_ARG;
     }
     
-    /* mldsa-native signing function */
-    int ret = mldsa_sign(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
+    size_t sig_len = 0;
+    
+    /* mldsa-native signing function: crypto_sign_signature */
+    int ret = crypto_sign_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
     
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
@@ -129,137 +171,22 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
         return PQCP_MLDSA_ERR_CONTEXT_LEN;
     }
     
+    if (validate_level(level) != 0) {
+        return PQCP_MLDSA_ERR_INVALID_ARG;
+    }
+    
     size_t sig_len = pqcp_mldsa_sig_size(level);
     if (sig_len == 0) {
         return PQCP_MLDSA_ERR_INVALID_ARG;
     }
     
-    int ret = mldsa_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
+    int ret = crypto_sign_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
     
     if (ret == 0) {
         return PQCP_MLDSA_SUCCESS;
     } else {
         return PQCP_MLDSA_ERR_VERIFY;
     }
-}
-
-#else /* !HAVE_MLDSA_NATIVE */
-
-/*
- * Stub implementations for when mldsa-native is not yet integrated.
- */
-
-int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk)
-{
-    if (pk == NULL || sk == NULL) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    size_t pk_len = pqcp_mldsa_pk_size(level);
-    size_t sk_len = pqcp_mldsa_sk_size(level);
-    
-    if (pk_len == 0 || sk_len == 0) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    if (!pqcp_rng_is_ready()) {
-        return PQCP_MLDSA_ERR_RNG;
-    }
-    
-    /* Generate random key material (placeholder) */
-    int ret = pqcp_rng_get_bytes(pk, pk_len);
-    if (ret != 0) {
-        return PQCP_MLDSA_ERR_RNG;
-    }
-    
-    ret = pqcp_rng_get_bytes(sk, sk_len);
-    if (ret != 0) {
-        return PQCP_MLDSA_ERR_RNG;
-    }
-    
-    /* Mark as placeholder */
-    pk[0] = 0x44;  /* 'D' for DSA */
-    pk[1] = (uint8_t)level;
-    
-    return PQCP_MLDSA_SUCCESS;
-}
-
-int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
-                    const uint8_t *msg, size_t msg_len,
-                    const uint8_t *ctx, size_t ctx_len,
-                    uint8_t *sig)
-{
-    if (sk == NULL || sig == NULL) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    if (msg == NULL && msg_len > 0) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    if (ctx_len > PQCP_MLDSA_CONTEXT_MAX) {
-        return PQCP_MLDSA_ERR_CONTEXT_LEN;
-    }
-    
-    size_t sig_len = pqcp_mldsa_sig_size(level);
-    if (sig_len == 0) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    if (!pqcp_rng_is_ready()) {
-        return PQCP_MLDSA_ERR_RNG;
-    }
-    
-    /* Generate placeholder signature */
-    int ret = pqcp_rng_get_bytes(sig, sig_len);
-    if (ret != 0) {
-        return PQCP_MLDSA_ERR_RNG;
-    }
-    
-    /* Mix in message hash (placeholder behavior) */
-    for (size_t i = 0; i < msg_len && i < 64; i++) {
-        sig[i] ^= msg[i];
-    }
-    
-    /* Mix in context if provided */
-    for (size_t i = 0; i < ctx_len && i < 64; i++) {
-        sig[64 + i] ^= ctx[i];
-    }
-    
-    return PQCP_MLDSA_SUCCESS;
-}
-
-int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
-                      const uint8_t *msg, size_t msg_len,
-                      const uint8_t *ctx, size_t ctx_len,
-                      const uint8_t *sig)
-{
-    if (pk == NULL || sig == NULL) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    if (msg == NULL && msg_len > 0) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    if (ctx_len > PQCP_MLDSA_CONTEXT_MAX) {
-        return PQCP_MLDSA_ERR_CONTEXT_LEN;
-    }
-    
-    size_t sig_len = pqcp_mldsa_sig_size(level);
-    if (sig_len == 0) {
-        return PQCP_MLDSA_ERR_INVALID_ARG;
-    }
-    
-    /* Placeholder: always verify successfully */
-    /* Real implementation would use mldsa_verify() */
-    (void)pk;
-    (void)msg;
-    (void)msg_len;
-    (void)ctx;
-    (void)sig;
-    
-    return PQCP_MLDSA_SUCCESS;
 }
 
 #endif /* HAVE_MLDSA_NATIVE */

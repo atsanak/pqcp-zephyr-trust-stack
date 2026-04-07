@@ -5,7 +5,7 @@
  *
  * Measures performance of ML-KEM and ML-DSA operations.
  */
-
+#include <pqcp_zephyr/rng.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <pqcp_zephyr/bench.h>

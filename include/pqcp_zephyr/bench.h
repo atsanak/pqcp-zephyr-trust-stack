@@ -210,7 +210,6 @@ void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result
 uint64_t pqcp_bench_start_timing(void);
 
 /**
- * @brief End timing measurement.
  *
  * @param start Start timestamp from pqcp_bench_start_timing().
  * @return Elapsed time (cycles or microseconds based on config).
