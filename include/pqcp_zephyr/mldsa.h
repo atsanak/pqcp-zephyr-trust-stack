@@ -39,11 +39,11 @@ typedef enum {
 
 #define PQCP_MLDSA_65_PK_SIZE       1952
 #define PQCP_MLDSA_65_SK_SIZE       4032
-#define PQCP_MLDSA_65_SIG_SIZE      3293
+#define PQCP_MLDSA_65_SIG_SIZE      3309
 
 #define PQCP_MLDSA_87_PK_SIZE       2592
 #define PQCP_MLDSA_87_SK_SIZE       4896
-#define PQCP_MLDSA_87_SIG_SIZE      4595
+#define PQCP_MLDSA_87_SIG_SIZE      4627
 
 /* Maximum sizes (for static allocation) */
 #define PQCP_MLDSA_PK_SIZE_MAX      PQCP_MLDSA_87_PK_SIZE

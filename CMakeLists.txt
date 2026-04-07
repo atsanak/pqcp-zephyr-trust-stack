@@ -63,16 +63,21 @@ if(CONFIG_PQCP_MLKEM)
         # Determine security level to build
         if(CONFIG_PQCP_MLKEM_LEVEL_512)
             set(MLKEM_K 2)
+            set(MLK_PARAM_SET 512)
         elseif(CONFIG_PQCP_MLKEM_LEVEL_768)
             set(MLKEM_K 3)
+            set(MLK_PARAM_SET 768)
         elseif(CONFIG_PQCP_MLKEM_LEVEL_1024)
             set(MLKEM_K 4)
+            set(MLK_PARAM_SET 1024)
         else()
             # Default to ML-KEM-768
             set(MLKEM_K 3)
+            set(MLK_PARAM_SET 768)
         endif()
         
         zephyr_compile_definitions(MLKEM_K=${MLKEM_K})
+        zephyr_compile_definitions(MLK_CONFIG_PARAMETER_SET=${MLK_PARAM_SET})
         
         # Backend selection
         if(CONFIG_PQCP_BACKEND_FORCE_C)
@@ -86,9 +91,11 @@ if(CONFIG_PQCP_MLKEM)
             zephyr_compile_definitions(MLKEM_USE_REDUCE_RAM=1)
         endif()
         
-        # Core mlkem-native sources
-        # Note: In a real build, these would be the actual mlkem-native source files
-        # For now, we compile our wrapper which calls the library
+        # Compile the mlkem-native Single Compilation Unit (SCU)
+        # This includes all the crypto implementation
+        zephyr_library_sources(${MLKEM_NATIVE_DIR}/mlkem/mlkem_native.c)
+        
+        # Compile our Zephyr wrapper
         zephyr_library_sources(${PQCP_SRC}/mlkem_zephyr.c)
         
         # FIPS-202 (SHA-3/SHAKE) - use bundled or external
@@ -123,16 +130,21 @@ if(CONFIG_PQCP_MLDSA)
         # Determine security level
         if(CONFIG_PQCP_MLDSA_LEVEL_44)
             set(MLDSA_MODE 2)
+            set(MLD_PARAM_SET 44)
         elseif(CONFIG_PQCP_MLDSA_LEVEL_65)
             set(MLDSA_MODE 3)
+            set(MLD_PARAM_SET 65)
         elseif(CONFIG_PQCP_MLDSA_LEVEL_87)
             set(MLDSA_MODE 5)
+            set(MLD_PARAM_SET 87)
         else()
             # Default to ML-DSA-65
             set(MLDSA_MODE 3)
+            set(MLD_PARAM_SET 65)
         endif()
         
         zephyr_compile_definitions(MLDSA_MODE=${MLDSA_MODE})
+        zephyr_compile_definitions(MLD_CONFIG_PARAMETER_SET=${MLD_PARAM_SET})
         
         # Backend selection
         if(CONFIG_PQCP_BACKEND_FORCE_C)
@@ -146,6 +158,11 @@ if(CONFIG_PQCP_MLDSA)
             zephyr_compile_definitions(MLDSA_USE_REDUCE_RAM=1)
         endif()
         
+        # Compile the mldsa-native Single Compilation Unit (SCU)
+        # This includes all the crypto implementation
+        zephyr_library_sources(${MLDSA_NATIVE_DIR}/mldsa/mldsa_native.c)
+        
+        # Compile our Zephyr wrapper
         zephyr_library_sources(${PQCP_SRC}/mldsa_zephyr.c)
         
         # Streaming API

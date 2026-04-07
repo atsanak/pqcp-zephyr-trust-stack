@@ -5,7 +5,7 @@
  *
  * Provides the common RNG abstraction used by ML-KEM and ML-DSA wrappers.
  */
-
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <pqcp_zephyr/rng.h>
 
@@ -82,7 +82,19 @@ int pqcp_rng_get_bytes(uint8_t *out, size_t len)
 #endif
 }
 
-/* randombytes callback for mlkem-native and mldsa-native */
+/*
+ * randombytes callback for mlkem-native and mldsa-native.
+ * 
+ * Both libraries expect a function with this exact signature to be
+ * provided externally. They call it via their internal wrappers
+ * (mlk_randombytes / mld_randombytes).
+ */
+int randombytes(uint8_t *out, size_t len)
+{
+    return pqcp_rng_get_bytes(out, len);
+}
+
+/* Legacy callback wrapper */
 static int pqcp_randombytes_callback(uint8_t *out, size_t len)
 {
     return pqcp_rng_get_bytes(out, len);

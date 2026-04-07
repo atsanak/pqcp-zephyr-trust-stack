@@ -12,64 +12,60 @@
 
 #include <string.h>
 
-/*
- * When mlkem-native is properly integrated, include its headers:
- * #include "mlkem.h"
- * 
- * For now, we provide stub implementations that will be replaced
- * once the submodule is added.
- */
-
 /* Check if we have the real mlkem-native */
-#if __has_include("mlkem/mlkem.h")
+#if __has_include("mlkem_native.h")
 #define HAVE_MLKEM_NATIVE 1
-#include "mlkem/mlkem.h"
+#include "mlkem_native.h"
+#elif __has_include("mlkem/mlkem_native.h")
+#define HAVE_MLKEM_NATIVE 1
+#include "mlkem/mlkem_native.h"
 #else
-#define HAVE_MLKEM_NATIVE 0
+#error "mlkem-native headers not found. Run ext/setup_libs.py first."
 #endif
 
-/* Size lookup tables */
-static const size_t pk_sizes[] = {
-    [0] = 0,
-    [512] = PQCP_MLKEM_512_PK_SIZE,
-    [768] = PQCP_MLKEM_768_PK_SIZE,
-    [1024] = PQCP_MLKEM_1024_PK_SIZE,
-};
+/*
+ * Determine the compile-time configured level from MLK_CONFIG_PARAMETER_SET
+ * or fall back to the legacy MLKEM_K definition.
+ */
+#if defined(MLK_CONFIG_PARAMETER_SET)
+#define PQCP_MLKEM_COMPILED_LEVEL MLK_CONFIG_PARAMETER_SET
+#elif defined(MLKEM_K)
+/* Map MLKEM_K (2,3,4) to parameter set (512,768,1024) */
+#if MLKEM_K == 2
+#define PQCP_MLKEM_COMPILED_LEVEL 512
+#elif MLKEM_K == 3
+#define PQCP_MLKEM_COMPILED_LEVEL 768
+#elif MLKEM_K == 4
+#define PQCP_MLKEM_COMPILED_LEVEL 1024
+#else
+#error "Invalid MLKEM_K value"
+#endif
+#else
+/* Default to ML-KEM-768 */
+#define PQCP_MLKEM_COMPILED_LEVEL 768
+#endif
 
-static const size_t sk_sizes[] = {
-    [0] = 0,
-    [512] = PQCP_MLKEM_512_SK_SIZE,
-    [768] = PQCP_MLKEM_768_SK_SIZE,
-    [1024] = PQCP_MLKEM_1024_SK_SIZE,
-};
-
-static const size_t ct_sizes[] = {
-    [0] = 0,
-    [512] = PQCP_MLKEM_512_CT_SIZE,
-    [768] = PQCP_MLKEM_768_CT_SIZE,
-    [1024] = PQCP_MLKEM_1024_CT_SIZE,
-};
-
-static inline int level_to_index(pqcp_mlkem_level_t level)
+/* Validate the requested level matches the compiled level */
+static inline int validate_level(pqcp_mlkem_level_t level)
 {
     switch (level) {
-    case PQCP_MLKEM_512:  return 512;
-    case PQCP_MLKEM_768:  return 768;
-    case PQCP_MLKEM_1024: return 1024;
-    default: return 0;
+    case PQCP_MLKEM_512:
+        return (PQCP_MLKEM_COMPILED_LEVEL == 512) ? 0 : -1;
+    case PQCP_MLKEM_768:
+        return (PQCP_MLKEM_COMPILED_LEVEL == 768) ? 0 : -1;
+    case PQCP_MLKEM_1024:
+        return (PQCP_MLKEM_COMPILED_LEVEL == 1024) ? 0 : -1;
+    default:
+        return -1;
     }
 }
 
 size_t pqcp_mlkem_pk_size(pqcp_mlkem_level_t level)
 {
-    int idx = level_to_index(level);
-    if (idx == 0) return 0;
-    
-    /* Map level value to array index */
     switch (level) {
-    case PQCP_MLKEM_512:  return PQCP_MLKEM_512_PK_SIZE;
-    case PQCP_MLKEM_768:  return PQCP_MLKEM_768_PK_SIZE;
-    case PQCP_MLKEM_1024: return PQCP_MLKEM_1024_PK_SIZE;
+    case PQCP_MLKEM_512:  return MLKEM512_PUBLICKEYBYTES;
+    case PQCP_MLKEM_768:  return MLKEM768_PUBLICKEYBYTES;
+    case PQCP_MLKEM_1024: return MLKEM1024_PUBLICKEYBYTES;
     default: return 0;
     }
 }
@@ -77,9 +73,9 @@ size_t pqcp_mlkem_pk_size(pqcp_mlkem_level_t level)
 size_t pqcp_mlkem_sk_size(pqcp_mlkem_level_t level)
 {
     switch (level) {
-    case PQCP_MLKEM_512:  return PQCP_MLKEM_512_SK_SIZE;
-    case PQCP_MLKEM_768:  return PQCP_MLKEM_768_SK_SIZE;
-    case PQCP_MLKEM_1024: return PQCP_MLKEM_1024_SK_SIZE;
+    case PQCP_MLKEM_512:  return MLKEM512_SECRETKEYBYTES;
+    case PQCP_MLKEM_768:  return MLKEM768_SECRETKEYBYTES;
+    case PQCP_MLKEM_1024: return MLKEM1024_SECRETKEYBYTES;
     default: return 0;
     }
 }
@@ -87,9 +83,9 @@ size_t pqcp_mlkem_sk_size(pqcp_mlkem_level_t level)
 size_t pqcp_mlkem_ct_size(pqcp_mlkem_level_t level)
 {
     switch (level) {
-    case PQCP_MLKEM_512:  return PQCP_MLKEM_512_CT_SIZE;
-    case PQCP_MLKEM_768:  return PQCP_MLKEM_768_CT_SIZE;
-    case PQCP_MLKEM_1024: return PQCP_MLKEM_1024_CT_SIZE;
+    case PQCP_MLKEM_512:  return MLKEM512_CIPHERTEXTBYTES;
+    case PQCP_MLKEM_768:  return MLKEM768_CIPHERTEXTBYTES;
+    case PQCP_MLKEM_1024: return MLKEM1024_CIPHERTEXTBYTES;
     default: return 0;
     }
 }
@@ -114,14 +110,17 @@ int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
         return PQCP_MLKEM_ERR_INVALID_ARG;
     }
     
+    if (validate_level(level) != 0) {
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+    
     if (!pqcp_rng_is_ready()) {
         return PQCP_MLKEM_ERR_RNG;
     }
     
-    /* mlkem-native uses compile-time level selection via MLKEM_K */
-    /* The actual call depends on how mlkem-native is configured */
-    
-    int ret = mlkem_keypair(pk, sk);
+    /* mlkem-native uses namespaced API: crypto_kem_keypair is a macro
+     * that expands to the correct function name based on config */
+    int ret = crypto_kem_keypair(pk, sk);
     
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
@@ -133,11 +132,15 @@ int pqcp_mlkem_encapsulate(pqcp_mlkem_level_t level, const uint8_t *pk,
         return PQCP_MLKEM_ERR_INVALID_ARG;
     }
     
+    if (validate_level(level) != 0) {
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+    
     if (!pqcp_rng_is_ready()) {
         return PQCP_MLKEM_ERR_RNG;
     }
     
-    int ret = mlkem_enc(ct, ss, pk);
+    int ret = crypto_kem_enc(ct, ss, pk);
     
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
@@ -149,100 +152,14 @@ int pqcp_mlkem_decapsulate(pqcp_mlkem_level_t level, const uint8_t *ct,
         return PQCP_MLKEM_ERR_INVALID_ARG;
     }
     
-    int ret = mlkem_dec(ss, ct, sk);
+    if (validate_level(level) != 0) {
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+    
+    int ret = crypto_kem_dec(ss, ct, sk);
     
     /* ML-KEM uses implicit rejection - always returns success */
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
-}
-
-#else /* !HAVE_MLKEM_NATIVE */
-
-/*
- * Stub implementations for when mlkem-native is not yet integrated.
- * These allow the module to build and test basic integration.
- */
-
-int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
-{
-    if (pk == NULL || sk == NULL) {
-        return PQCP_MLKEM_ERR_INVALID_ARG;
-    }
-    
-    size_t pk_len = pqcp_mlkem_pk_size(level);
-    size_t sk_len = pqcp_mlkem_sk_size(level);
-    
-    if (pk_len == 0 || sk_len == 0) {
-        return PQCP_MLKEM_ERR_INVALID_ARG;
-    }
-    
-    if (!pqcp_rng_is_ready()) {
-        return PQCP_MLKEM_ERR_RNG;
-    }
-    
-    /* Generate random key material (placeholder) */
-    int ret = pqcp_rng_get_bytes(pk, pk_len);
-    if (ret != 0) {
-        return PQCP_MLKEM_ERR_RNG;
-    }
-    
-    ret = pqcp_rng_get_bytes(sk, sk_len);
-    if (ret != 0) {
-        return PQCP_MLKEM_ERR_RNG;
-    }
-    
-    /* Mark as placeholder with pattern */
-    pk[0] = 0x4B;  /* 'K' for KEM */
-    pk[1] = (uint8_t)(level >> 8);
-    pk[2] = (uint8_t)(level & 0xFF);
-    
-    return PQCP_MLKEM_SUCCESS;
-}
-
-int pqcp_mlkem_encapsulate(pqcp_mlkem_level_t level, const uint8_t *pk,
-                           uint8_t *ct, uint8_t *ss)
-{
-    if (pk == NULL || ct == NULL || ss == NULL) {
-        return PQCP_MLKEM_ERR_INVALID_ARG;
-    }
-    
-    size_t ct_len = pqcp_mlkem_ct_size(level);
-    
-    if (ct_len == 0) {
-        return PQCP_MLKEM_ERR_INVALID_ARG;
-    }
-    
-    if (!pqcp_rng_is_ready()) {
-        return PQCP_MLKEM_ERR_RNG;
-    }
-    
-    /* Generate random ciphertext and shared secret (placeholder) */
-    int ret = pqcp_rng_get_bytes(ct, ct_len);
-    if (ret != 0) {
-        return PQCP_MLKEM_ERR_RNG;
-    }
-    
-    ret = pqcp_rng_get_bytes(ss, PQCP_MLKEM_SS_SIZE);
-    if (ret != 0) {
-        return PQCP_MLKEM_ERR_RNG;
-    }
-    
-    return PQCP_MLKEM_SUCCESS;
-}
-
-int pqcp_mlkem_decapsulate(pqcp_mlkem_level_t level, const uint8_t *ct,
-                           const uint8_t *sk, uint8_t *ss)
-{
-    if (ct == NULL || sk == NULL || ss == NULL) {
-        return PQCP_MLKEM_ERR_INVALID_ARG;
-    }
-    
-    /* Generate deterministic shared secret from sk hash (placeholder) */
-    /* In real implementation, this is implicit rejection */
-    for (int i = 0; i < PQCP_MLKEM_SS_SIZE; i++) {
-        ss[i] = sk[i % 32] ^ ct[i % 32] ^ 0xAA;
-    }
-    
-    return PQCP_MLKEM_SUCCESS;
 }
 
 #endif /* HAVE_MLKEM_NATIVE */
