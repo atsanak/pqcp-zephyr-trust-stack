@@ -31,18 +31,16 @@ zephyr_include_directories(${PQCP_INC})
 # =============================================================================
 zephyr_library_named(pqcp_common)
 
-# RNG abstraction
-if(CONFIG_PQCP_RNG_ZEPHYR_ENTROPY)
+# RNG abstraction - select ONE backend
+if(CONFIG_PQCP_RNG_DETERMINISTIC_TEST)
+    # Deterministic RNG for testing (overrides custom)
+    zephyr_library_sources(${PQCP_SRC}/rng_deterministic.c)
+elseif(CONFIG_PQCP_RNG_ZEPHYR_ENTROPY)
     zephyr_library_sources(${PQCP_SRC}/rng_zephyr_entropy.c)
 elseif(CONFIG_PQCP_RNG_PSA)
     zephyr_library_sources(${PQCP_SRC}/rng_psa.c)
 elseif(CONFIG_PQCP_RNG_CUSTOM)
     zephyr_library_sources(${PQCP_SRC}/rng_custom.c)
-endif()
-
-# Deterministic RNG for testing
-if(CONFIG_PQCP_RNG_DETERMINISTIC_TEST)
-    zephyr_library_sources(${PQCP_SRC}/rng_deterministic.c)
 endif()
 
 # Common RNG interface

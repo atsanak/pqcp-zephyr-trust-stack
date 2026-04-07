@@ -196,6 +196,11 @@ int pqcp_mldsa_verify_hash(pqcp_mldsa_level_t level, const uint8_t *pk,
 /* Opaque streaming context */
 typedef struct pqcp_mldsa_stream_ctx pqcp_mldsa_stream_ctx_t;
 
+/* Size of streaming context buffer (use for static allocation) */
+#define PQCP_MLDSA_STREAM_CTX_SIZE \
+    (PQCP_MLDSA_SK_SIZE_MAX + PQCP_MLDSA_SIG_SIZE_MAX + \
+     PQCP_MLDSA_CONTEXT_MAX + 600)
+
 /**
  * @brief Initialize streaming signing context.
  *
