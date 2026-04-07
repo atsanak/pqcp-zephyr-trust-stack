@@ -71,7 +71,10 @@ int pqcp_rng_get_bytes(uint8_t *out, size_t len)
         return PQCP_RNG_ERR_NOT_INIT;
     }
     
-#ifdef CONFIG_PQCP_RNG_CUSTOM
+#ifdef CONFIG_PQCP_RNG_DETERMINISTIC_TEST
+    /* Deterministic mode uses backend directly, bypassing custom interface */
+    return pqcp_rng_backend_get_bytes(out, len);
+#elif defined(CONFIG_PQCP_RNG_CUSTOM)
     if (rng_state.custom_iface != NULL) {
         return rng_state.custom_iface->get_bytes(
             rng_state.custom_iface->ctx, out, len);

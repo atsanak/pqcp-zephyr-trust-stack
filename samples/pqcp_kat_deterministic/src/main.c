@@ -178,13 +178,22 @@ static void test_mldsa_kat(void)
     
     print_hex("Public key (first 32 bytes)", pk1, 32);
     
+    /* Re-seed RNG for signing (ML-DSA sign needs randomness) */
+    uint8_t sign_seed[64];
+    memcpy(sign_seed, mldsa_seed, 32);
+    memset(sign_seed + 32, 0x55, 32);  /* Different padding for sign */
+    pqcp_rng_deterministic_seed(sign_seed, 64);
+    
     /* Sign message */
     int ret = pqcp_mldsa_sign(level, sk1,
                               test_message, sizeof(test_message) - 1,
                               NULL, 0, sig);
     
+    /* Reset RNG after signing */
+    pqcp_rng_deterministic_reset();
+    
     if (ret != PQCP_MLDSA_SUCCESS) {
-        printk("FAIL: Signing failed\n");
+        printk("FAIL: Signing failed (ret=%d)\n", ret);
         tests_failed++;
         return;
     }

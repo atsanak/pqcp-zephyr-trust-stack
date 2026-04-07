@@ -14,9 +14,8 @@
 
 #include <string.h>
 
-/* Streaming context - size must match internal structure */
-#define STREAMING_CTX_SIZE (PQCP_MLDSA_SK_SIZE_MAX + PQCP_MLDSA_SIG_SIZE_MAX + 512)
-static uint8_t stream_ctx_buffer[STREAMING_CTX_SIZE];
+/* Streaming context - use PQCP_MLDSA_STREAM_CTX_SIZE for proper sizing */
+static uint8_t stream_ctx_buffer[PQCP_MLDSA_STREAM_CTX_SIZE];
 
 /* Simulated large message - sent in chunks */
 #define TOTAL_MESSAGE_SIZE 4096
