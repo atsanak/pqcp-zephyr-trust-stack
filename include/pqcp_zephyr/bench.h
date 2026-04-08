@@ -199,6 +199,45 @@ void pqcp_bench_print_result(const pqcp_bench_result_t *result);
 void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result);
 
 /*
+ * Structured Metrics Logging
+ *
+ * Use these macros to emit machine-parseable metrics that can be
+ * collected by scripts/parse_logs.py.
+ *
+ * Format: PQCP_METRIC,<component>,<operation>,<algo>,<level>,<metric>,<value>,<unit>
+ *
+ * Components: primitive, driver, protocol, rtos, entropy
+ * Operations: keygen, encaps, decaps, sign, verify, handshake, etc.
+ */
+
+/* Log a single metric value */
+#define PQCP_LOG_METRIC(component, op, algo, level, metric, value, unit) \
+    printk("PQCP_METRIC,%s,%s,%s,%d,%s,%llu,%s\n", \
+           (component), (op), (algo), (level), (metric), \
+           (unsigned long long)(value), (unit))
+
+/* Convenience macros for common metric types */
+#define PQCP_LOG_CYCLES(component, op, algo, level, cycles) \
+    PQCP_LOG_METRIC(component, op, algo, level, "cycles", cycles, "cyc")
+
+#define PQCP_LOG_TIME_US(component, op, algo, level, us) \
+    PQCP_LOG_METRIC(component, op, algo, level, "time", us, "us")
+
+#define PQCP_LOG_TIME_MS(component, op, algo, level, ms) \
+    PQCP_LOG_METRIC(component, op, algo, level, "time", ms, "ms")
+
+#define PQCP_LOG_STACK(component, op, algo, level, bytes) \
+    PQCP_LOG_METRIC(component, op, algo, level, "stack", bytes, "B")
+
+#define PQCP_LOG_SIZE(component, op, algo, level, name, bytes) \
+    PQCP_LOG_METRIC(component, op, algo, level, name, bytes, "B")
+
+/* Log status (pass/fail) */
+#define PQCP_LOG_STATUS(component, op, algo, level, status) \
+    printk("PQCP_METRIC,%s,%s,%s,%d,status,%s,\n", \
+           (component), (op), (algo), (level), (status) ? "PASS" : "FAIL")
+
+/*
  * Low-level timing utilities
  */
 

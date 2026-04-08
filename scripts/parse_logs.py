@@ -4,6 +4,10 @@ PQCP Benchmark Log Parser
 
 Parses serial output logs from PQCP benchmarks and generates CSV files.
 
+Supports two log formats:
+1. Legacy: PRIM,MLKEM768,KEYGEN,cycles=12345,stack=2048,text=4096,bss=256,backend=C
+2. New:    PQCP_METRIC,primitive,keygen,MLKEM,768,cycles,12345,cyc
+
 Usage:
     python parse_logs.py <log_file> [--output-dir <dir>]
     python parse_logs.py benchmark_results.json --from-json
@@ -17,6 +21,31 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Optional
 from collections import defaultdict
+
+
+def parse_pqcp_metric_line(line: str) -> Optional[Dict]:
+    """Parse a PQCP_METRIC line.
+    
+    Format: PQCP_METRIC,<component>,<operation>,<algo>,<level>,<metric>,<value>,<unit>
+    """
+    pattern = re.compile(
+        r'PQCP_METRIC,(\w+),(\w+),(\w+),(\d+),(\w+),(\w+),(\w*)'
+    )
+    
+    m = pattern.match(line)
+    if not m:
+        return None
+    
+    return {
+        'type': 'pqcp_metric',
+        'component': m.group(1),
+        'operation': m.group(2),
+        'algorithm': m.group(3),
+        'level': int(m.group(4)),
+        'metric': m.group(5),
+        'value': m.group(6),  # Keep as string for status values
+        'unit': m.group(7) or '',
+    }
 
 
 def parse_primitive_line(line: str) -> Optional[Dict]:
@@ -89,11 +118,19 @@ def parse_log_file(log_path: Path) -> List[Dict]:
         for line in f:
             line = line.strip()
             
+            # Try new PQCP_METRIC format first
+            result = parse_pqcp_metric_line(line)
+            if result:
+                results.append(result)
+                continue
+            
+            # Try legacy PRIM format
             result = parse_primitive_line(line)
             if result:
                 results.append(result)
                 continue
             
+            # Try legacy TLS format
             result = parse_protocol_line(line)
             if result:
                 results.append(result)
@@ -112,22 +149,42 @@ def write_primitive_csv(results: List[Dict], output_path: Path):
     primitives = [r for r in results if r.get('type') == 'primitive']
     
     if not primitives:
-        print("No primitive results to write")
+        print("No legacy primitive results to write")
+    else:
+        fieldnames = [
+            'algorithm', 'level', 'operation', 
+            'time_unit', 'time_value',
+            'stack_bytes', 'text_bytes', 'bss_bytes',
+            'backend', 'target', 'timestamp'
+        ]
+        
+        with open(output_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(primitives)
+        
+        print(f"Wrote {len(primitives)} legacy primitive results to {output_path}")
+
+
+def write_metrics_csv(results: List[Dict], output_path: Path):
+    """Write PQCP_METRIC results to CSV."""
+    metrics = [r for r in results if r.get('type') == 'pqcp_metric']
+    
+    if not metrics:
+        print("No PQCP_METRIC results to write")
         return
     
     fieldnames = [
-        'algorithm', 'level', 'operation', 
-        'time_unit', 'time_value',
-        'stack_bytes', 'text_bytes', 'bss_bytes',
-        'backend', 'target', 'timestamp'
+        'component', 'operation', 'algorithm', 'level',
+        'metric', 'value', 'unit'
     ]
     
     with open(output_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader()
-        writer.writerows(primitives)
+        writer.writerows(metrics)
     
-    print(f"Wrote {len(primitives)} primitive results to {output_path}")
+    print(f"Wrote {len(metrics)} PQCP_METRIC results to {output_path}")
 
 
 def write_protocol_csv(results: List[Dict], output_path: Path):
@@ -226,9 +283,19 @@ def main():
     
     print(f"Parsed {len(results)} results")
     
+    # Count by type
+    metric_count = sum(1 for r in results if r.get('type') == 'pqcp_metric')
+    legacy_count = sum(1 for r in results if r.get('type') == 'primitive')
+    proto_count = sum(1 for r in results if r.get('type') == 'protocol')
+    
+    print(f"  - PQCP_METRIC: {metric_count}")
+    print(f"  - Legacy PRIM: {legacy_count}")
+    print(f"  - Protocol:    {proto_count}")
+    
     # Generate outputs
     stem = input_path.stem
     
+    write_metrics_csv(results, output_dir / f"{stem}_metrics.csv")
     write_primitive_csv(results, output_dir / f"{stem}_primitives.csv")
     write_protocol_csv(results, output_dir / f"{stem}_protocols.csv")
     write_summary(results, output_dir / f"{stem}_summary.txt")
