@@ -43,7 +43,7 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 
 ### Adding to Your Zephyr Project
 
-1. Add this module to your `west.yml`:
+**Option 1: Via west.yml**
 
 ```yaml
 manifest:
@@ -54,31 +54,77 @@ manifest:
       path: modules/pqcp
 ```
 
-2. Update west:
+Then run `west update`.
+
+**Option 2: Via EXTRA_ZEPHYR_MODULES**
 
 ```bash
-west update
+# Clone the repository
+git clone https://github.com/your-org/pqcp-zephyr-trust-stack
+cd pqcp-zephyr-trust-stack
+python ext/setup_libs.py  # Fetch mlkem-native and mldsa-native
+
+# Build with the module
+export EXTRA_ZEPHYR_MODULES=/path/to/pqcp-zephyr-trust-stack
+west build -p always -b qemu_x86_64 samples/pqcp_basic_kem
 ```
 
-3. Enable in your `prj.conf`:
+### Building and Running Samples
+
+**Basic ML-KEM Demo:**
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_basic_kem
+west build -t run
+```
+
+**Basic ML-DSA Demo:**
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_basic_sig
+west build -t run
+```
+
+**KAT (Known Answer Tests):**
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_kat_deterministic
+west build -t run
+```
+
+**Streaming ML-DSA (Large Messages):**
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_streaming_hash_mldsa
+west build -t run
+```
+
+**TLS Sample (with PSA Crypto):**
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_tls_mbedtls_psa -- -DOVERLAY_CONFIG=overlay-mbedtls.conf
+west build -t run
+```
+
+**Running Tests:**
+```bash
+# Base tests (13 tests)
+west build -p always -b qemu_x86_64 tests/ztest_primitive
+west build -t run
+
+# With PSA driver tests (18 tests)
+west build -p always -b qemu_x86_64 tests/ztest_primitive -- -DOVERLAY_CONFIG=overlay-psa.conf
+west build -t run
+
+# On Cortex-M (mps2/an385 with 4MB RAM)
+west build -p always -b mps2/an385 tests/ztest_primitive -- -DOVERLAY_CONFIG=overlay-no-entropy.conf
+west build -t run
+```
+
+### Enable in Your Application
+
+Add to your `prj.conf`:
 
 ```
 CONFIG_PQCP=y
 CONFIG_PQCP_MLKEM_LEVEL_768=y
 CONFIG_PQCP_MLDSA_LEVEL_65=y
-```
-
-### Building a Sample
-
-```bash
-# Build for native_sim
-west build -b native_sim samples/pqcp_basic_kem
-
-# Build for QEMU Cortex-M3
-west build -b qemu_cortex_m3 samples/pqcp_basic_sig
-
-# Run
-west build -t run
+CONFIG_MAIN_STACK_SIZE=131072
 ```
 
 ## Repository Structure
@@ -125,6 +171,27 @@ pqcp-zephyr-trust-stack/
 ```
 
 ## Configuration Options
+
+### Build Profiles
+
+The module provides pre-configured profiles for common use cases:
+
+```
+# Minimal MCU profile: single level of each algorithm
+CONFIG_PQCP_PROFILE_MCU_MINIMAL=y
+
+# Gateway profile: all levels, PSA drivers, streaming
+CONFIG_PQCP_PROFILE_GATEWAY=y
+
+# Native/Lab profile: all features + benchmarking
+CONFIG_PQCP_PROFILE_NATIVE_LAB=y
+```
+
+| Profile | ML-KEM Levels | ML-DSA Levels | PSA | Streaming | Bench | Use Case |
+|---------|---------------|---------------|-----|-----------|-------|----------|
+| MCU_MINIMAL | 768 | 65 | No | No | No | Constrained devices |
+| GATEWAY | 512/768/1024 | 44/65/87 | Yes | Yes | No | Capable devices |
+| NATIVE_LAB | 512/768/1024 | 44/65/87 | No | Yes | Yes | Development/testing |
 
 ### Algorithm Selection
 
@@ -292,12 +359,97 @@ python parse_logs.py benchmark_results_*.json --from-json -o results/
 
 ### Output Format
 
-Benchmark logs use structured lines:
+Benchmark logs use two formats:
 
+**PQCP_METRIC format (new, recommended):**
+```
+PQCP_METRIC,primitive,keygen,MLKEM,768,cycles,3120,cyc
+PQCP_METRIC,primitive,encaps,MLKEM,768,stack,18392,B
+PQCP_METRIC,primitive,sign,MLDSA,65,time,10,ms
+```
+
+**Legacy PRIM format:**
 ```
 PRIM,MLKEM768,KEYGEN,cycles=450000,stack=2048,text=8192,bss=256
-PRIM,MLDSA65,SIGN,cycles=1200000,stack=4096,text=16384,bss=512
-TLS,MLKEM768+MLDSA65,handshake_ms=150,cpu_pct=45,peak_kib=32,transcript_bytes=8192,frags=12
+```
+
+Use `scripts/parse_logs.py` to convert logs to CSV:
+```bash
+python scripts/parse_logs.py sample_output.log -o results/
+```
+
+## Serial ACVP Interface
+
+The `pqcp_serial_acvp` sample provides a UART-based interface for running ACVP test vectors and KATs.
+
+### Building
+
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_serial_acvp
+west build -t run
+```
+
+### Protocol Format
+
+Commands are sent as colon-separated strings:
+```
+CMD:ALG:LEVEL:HEX_DATA
+```
+
+### Supported Commands
+
+| Command | Format | Description |
+|---------|--------|-------------|
+| SEED | `SEED:DRBG:0:<hexseed>` | Seed deterministic RNG |
+| KEYGEN | `KEYGEN:MLKEM:768:` | Generate ML-KEM keypair |
+| ENCAPS | `ENCAPS:MLKEM:768:<pk_hex>` | Encapsulate with public key |
+| DECAPS | `DECAPS:MLKEM:768:<ct_sk_hex>` | Decapsulate ciphertext |
+| KEYGEN | `KEYGEN:MLDSA:65:` | Generate ML-DSA keypair |
+| SIGN | `SIGN:MLDSA:65:<sk_msg_hex>` | Sign message |
+| VERIFY | `VERIFY:MLDSA:65:<pk_msg_sig_hex>` | Verify signature |
+| SELFTEST | `SELFTEST::` | Run internal self-test |
+| HELP | `HELP::` | Show command help |
+
+### Response Format
+
+```
+RESULT:<hex_data>  # Success
+ERROR:<error_code> # Error
+```
+
+### Example Session
+
+```
+> SELFTEST:
+Running self-test...
+  ML-KEM-768: PASS
+  ML-DSA-65: PASS
+RESULT:SELFTEST_OK
+
+> SEED:DRBG:0:0102030405060708090a0b0c0d0e0f10...
+RESULT:OK
+
+> KEYGEN:MLKEM:768:
+RESULT:<pk_hex><sk_hex>
+```
+
+### Host Script Example
+
+```python
+import serial
+
+ser = serial.Serial('/dev/ttyUSB0', 115200)
+
+def acvp_command(cmd):
+    ser.write((cmd + '\n').encode())
+    return ser.readline().decode().strip()
+
+# Seed RNG
+result = acvp_command('SEED:DRBG:0:' + '00' * 48)
+
+# Generate keypair
+result = acvp_command('KEYGEN:MLKEM:768:')
+pk_sk = bytes.fromhex(result.split(':')[1])
 ```
 
 ## Security Considerations
