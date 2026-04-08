@@ -185,20 +185,24 @@ CONFIG_PQCP_PSA_DRIVER_MLKEM=y
 
 ```c
 #include <pqcp_zephyr/mlkem.h>
+#include <pqcp_zephyr/rng.h>
+
+/* Initialize RNG (required before any crypto ops) */
+pqcp_rng_init();
 
 /* Key generation */
-uint8_t pk[PQCP_MLKEM768_PUBLIC_KEY_BYTES];
-uint8_t sk[PQCP_MLKEM768_SECRET_KEY_BYTES];
-pqcp_mlkem768_keypair(pk, sk);
+static uint8_t pk[PQCP_MLKEM_PK_SIZE_MAX];
+static uint8_t sk[PQCP_MLKEM_SK_SIZE_MAX];
+int ret = pqcp_mlkem_keypair(PQCP_MLKEM_768, pk, sk);
 
 /* Encapsulation (sender) */
-uint8_t ct[PQCP_MLKEM768_CIPHERTEXT_BYTES];
-uint8_t ss1[PQCP_MLKEM_SHARED_SECRET_BYTES];
-pqcp_mlkem768_enc(ct, ss1, pk);
+static uint8_t ct[PQCP_MLKEM_CT_SIZE_MAX];
+static uint8_t ss1[PQCP_MLKEM_SS_SIZE];
+pqcp_mlkem_encapsulate(PQCP_MLKEM_768, pk, ct, ss1);
 
 /* Decapsulation (receiver) */
-uint8_t ss2[PQCP_MLKEM_SHARED_SECRET_BYTES];
-pqcp_mlkem768_dec(ss2, ct, sk);
+static uint8_t ss2[PQCP_MLKEM_SS_SIZE];
+pqcp_mlkem_decapsulate(PQCP_MLKEM_768, ct, sk, ss2);
 /* ss1 == ss2 */
 ```
 
@@ -206,19 +210,24 @@ pqcp_mlkem768_dec(ss2, ct, sk);
 
 ```c
 #include <pqcp_zephyr/mldsa.h>
+#include <pqcp_zephyr/rng.h>
+
+/* Initialize RNG */
+pqcp_rng_init();
 
 /* Key generation */
-uint8_t pk[PQCP_MLDSA65_PUBLIC_KEY_BYTES];
-uint8_t sk[PQCP_MLDSA65_SECRET_KEY_BYTES];
-pqcp_mldsa65_keypair(pk, sk);
+static uint8_t pk[PQCP_MLDSA_PK_SIZE_MAX];
+static uint8_t sk[PQCP_MLDSA_SK_SIZE_MAX];
+pqcp_mldsa_keypair(PQCP_MLDSA_65, pk, sk);
 
 /* Sign message */
-uint8_t sig[PQCP_MLDSA65_SIGNATURE_BYTES];
-size_t sig_len;
-pqcp_mldsa65_sign(sig, &sig_len, message, msg_len, sk);
+static uint8_t sig[PQCP_MLDSA_SIG_SIZE_MAX];
+const uint8_t msg[] = "Hello, PQC!";
+pqcp_mldsa_sign(PQCP_MLDSA_65, sk, msg, sizeof(msg)-1, NULL, 0, sig);
 
 /* Verify signature */
-int valid = pqcp_mldsa65_verify(sig, sig_len, message, msg_len, pk);
+int ret = pqcp_mldsa_verify(PQCP_MLDSA_65, pk, msg, sizeof(msg)-1, NULL, 0, sig);
+/* ret == PQCP_MLDSA_SUCCESS if valid */
 ```
 
 ### Streaming ML-DSA (Large Messages)
@@ -226,19 +235,21 @@ int valid = pqcp_mldsa65_verify(sig, sig_len, message, msg_len, pk);
 ```c
 #include <pqcp_zephyr/mldsa.h>
 
-/* Initialize streaming context */
-pqcp_mldsa_streaming_ctx_t ctx;
-pqcp_mldsa_streaming_sign_init(&ctx, sk, PQCP_MLDSA65_SECRET_KEY_BYTES);
+/* Allocate context buffer */
+static uint8_t ctx_buffer[PQCP_MLDSA_STREAM_CTX_SIZE];
+pqcp_mldsa_stream_ctx_t *ctx = (pqcp_mldsa_stream_ctx_t *)ctx_buffer;
+
+/* Initialize streaming signing */
+pqcp_mldsa_sign_stream_init(ctx, PQCP_MLDSA_65, sk, NULL, 0);
 
 /* Feed data in chunks */
 while (more_data) {
-    pqcp_mldsa_streaming_sign_update(&ctx, chunk, chunk_len);
+    pqcp_mldsa_sign_stream_update(ctx, chunk, chunk_len);
 }
 
 /* Finalize and get signature */
-uint8_t sig[PQCP_MLDSA65_SIGNATURE_BYTES];
-size_t sig_len;
-pqcp_mldsa_streaming_sign_final(&ctx, sig, &sig_len);
+static uint8_t sig[PQCP_MLDSA_SIG_SIZE_MAX];
+pqcp_mldsa_sign_stream_final(ctx, sig);
 ```
 
 ### Custom RNG Registration
@@ -301,6 +312,7 @@ The `CONFIG_PQCP_RNG_DETERMINISTIC_TEST` option enables deterministic RNG for te
 
 ```
 # WARNING: Test builds only!
+CONFIG_PQCP_RNG_CUSTOM=y  # Required for deterministic
 CONFIG_PQCP_RNG_DETERMINISTIC_TEST=y
 ```
 
@@ -308,17 +320,17 @@ CONFIG_PQCP_RNG_DETERMINISTIC_TEST=y
 
 PQC algorithms require significant stack space:
 
-| Algorithm | Stack (keygen) | Stack (sign/encaps) |
-|-----------|----------------|---------------------|
-| ML-KEM-768 | ~3 KB | ~2.5 KB |
-| ML-KEM-1024 | ~4 KB | ~3.5 KB |
-| ML-DSA-65 | ~5 KB | ~6 KB |
-| ML-DSA-87 | ~6 KB | ~7 KB |
+| Algorithm   | Stack (keygen) | Stack (sign/encaps) |
+|-------------|----------------|---------------------|
+| ML-KEM-768  | ~18 KB         | ~16 KB              |
+| ML-KEM-1024 | ~24 KB         | ~20 KB              |
+| ML-DSA-65   | ~86 KB         | ~80 KB              |
+| ML-DSA-87   | ~100 KB        | ~95 KB              |
 
 Configure adequate stack sizes:
 
 ```
-CONFIG_MAIN_STACK_SIZE=16384
+CONFIG_MAIN_STACK_SIZE=131072  # 128KB for ML-DSA-65
 ```
 
 ## Integration with External Libraries
@@ -342,12 +354,29 @@ The module detects these libraries via `__has_include()` and switches from stub 
 ## Testing
 
 ```bash
-# Run primitive tests
-west build -b native_sim tests/ztest_primitive
+# Run primitive tests (13 tests)
+west build -p always -b qemu_x86_64 tests/ztest_primitive
 west build -t run
 
-# Run RNG tests
-west build -b native_sim tests/ztest_rng
+# Run RNG tests (8 tests)
+west build -p always -b qemu_x86_64 tests/ztest_rng
+west build -t run
+```
+
+## Sample Applications
+
+| Sample | Description |
+|--------|-------------|
+| `pqcp_basic_kem` | Basic ML-KEM keygen/encap/decap demo with timing |
+| `pqcp_basic_sig` | Basic ML-DSA keygen/sign/verify demo with timing |
+| `pqcp_kat_deterministic` | Known Answer Tests using deterministic RNG |
+| `pqcp_streaming_hash_mldsa` | Streaming signature for large messages |
+| `pqcp_tls_mbedtls_psa` | TLS integration with PSA Crypto |
+| `pqcp_serial_acvp` | UART-based ACVP test interface |
+
+```bash
+# Build and run a sample
+west build -p always -b qemu_x86_64 samples/pqcp_basic_kem
 west build -t run
 ```
 
@@ -367,12 +396,10 @@ SPDX-License-Identifier: Apache-2.0
 ## Contributing
 
 1. Fork and create a feature branch
-2. Ensure all tests pass on `native_sim`
+2. Ensure all tests pass on `qemu_x86_64`
 3. Add tests for new functionality
 4. Submit a pull request
 
 ## Authors
 
 - PQCP Zephyr Trust Stack Contributors
-# pqcp-zephyr-trust-stack
-# pqcp-zephyr-trust-stack
