@@ -317,6 +317,21 @@ endif # PQCP_BENCH
 endmenu
 
 # =============================================================================
+# ACVP Support
+# =============================================================================
+menu "ACVP Support"
+
+config PQCP_ACVP
+	bool "Enable ACVP command library"
+	default y if PQCP_PROFILE_NATIVE_LAB
+	help
+	  Enable the ACVP command handler library for validation testing.
+	  This provides reusable command handlers for SEED, KEYGEN,
+	  ENCAPS, DECAPS, SIGN, VERIFY operations.
+
+endmenu
+
+# =============================================================================
 # Debug Configuration
 # =============================================================================
 menu "Debug Configuration"
