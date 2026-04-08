@@ -209,6 +209,25 @@ if(CONFIG_PQCP_PSA_DRIVER)
 endif()
 
 # =============================================================================
+# ACVP Command Library
+# =============================================================================
+if(CONFIG_PQCP_ACVP)
+    zephyr_library_named(pqcp_acvp)
+    
+    zephyr_library_sources(${PQCP_SRC}/acvp_cmd.c)
+    
+    zephyr_library_link_libraries(pqcp_common)
+    
+    if(CONFIG_PQCP_MLKEM)
+        zephyr_library_link_libraries(pqcp_mlkem)
+    endif()
+    
+    if(CONFIG_PQCP_MLDSA)
+        zephyr_library_link_libraries(pqcp_mldsa)
+    endif()
+endif()
+
+# =============================================================================
 # Benchmarking Support
 # =============================================================================
 if(CONFIG_PQCP_BENCH)
@@ -216,9 +235,9 @@ if(CONFIG_PQCP_BENCH)
     
     zephyr_library_sources(${PQCP_SRC}/bench_primitive.c)
     
-    if(CONFIG_PQCP_BENCH_PROTOCOL)
-        zephyr_library_sources(${PQCP_SRC}/bench_protocol.c)
-    endif()
+    # Protocol benchmark is always included (simulated mode)
+    # Real networking benchmarks require CONFIG_PQCP_BENCH_PROTOCOL
+    zephyr_library_sources(${PQCP_SRC}/bench_protocol.c)
     
     zephyr_library_link_libraries(pqcp_common)
     

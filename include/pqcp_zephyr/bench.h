@@ -191,12 +191,40 @@ void pqcp_bench_print_result(const pqcp_bench_result_t *result);
 /**
  * @brief Print a protocol benchmark result.
  *
- * Outputs a line like:
- * TLS,MLKEM768+MLDSA65,handshake_ms=150,cpu_pct=45,peak_kib=32,...
+ * Outputs both PQCP_METRIC format and legacy TLS format:
+ * PQCP_METRIC,protocol,handshake,MLKEM,768,time,150,ms
+ * TLS,MLKEM768,handshake_ms=150,cpu_pct=45,peak_kib=32,...
  *
  * @param result The protocol benchmark result to print.
  */
 void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result);
+
+/**
+ * @brief Run TLS handshake benchmark.
+ *
+ * Performs simulated TLS 1.3 handshakes using actual PQCP cryptographic
+ * operations. Measures real primitive costs without requiring network
+ * connectivity.
+ *
+ * @param kem_level   KEM security level (512, 768, or 1024).
+ * @param sig_level   Signature security level (44, 65, or 87).
+ * @param iterations  Number of handshakes to perform.
+ * @param result      Output protocol benchmark result.
+ *
+ * @return 0 on success, negative error code on failure.
+ */
+int pqcp_bench_tls_handshake(uint16_t kem_level,
+                              uint16_t sig_level,
+                              uint32_t iterations,
+                              pqcp_bench_protocol_result_t *result);
+
+/**
+ * @brief Run all protocol benchmarks.
+ *
+ * Runs TLS handshake benchmarks for all enabled algorithm combinations
+ * and prints results in both PQCP_METRIC and legacy formats.
+ */
+void pqcp_bench_run_protocol_all(void);
 
 /*
  * Structured Metrics Logging
