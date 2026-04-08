@@ -144,6 +144,23 @@ int main(void)
         printk("Stack:     %u bytes\n", stack);
     }
     
+    /* Emit structured metrics for parsing */
+    printk("\n--- Structured Metrics ---\n");
+    PQCP_LOG_CYCLES("primitive", "keygen", "MLKEM", level, keygen_time);
+    PQCP_LOG_CYCLES("primitive", "encaps", "MLKEM", level, encaps_time);
+    PQCP_LOG_CYCLES("primitive", "decaps", "MLKEM", level, decaps_time);
+    
+    if (stack > 0) {
+        PQCP_LOG_STACK("primitive", "total", "MLKEM", level, stack);
+    }
+    
+    PQCP_LOG_SIZE("primitive", "keygen", "MLKEM", level, "pk_size", pqcp_mlkem_pk_size(level));
+    PQCP_LOG_SIZE("primitive", "keygen", "MLKEM", level, "sk_size", pqcp_mlkem_sk_size(level));
+    PQCP_LOG_SIZE("primitive", "encaps", "MLKEM", level, "ct_size", pqcp_mlkem_ct_size(level));
+    PQCP_LOG_SIZE("primitive", "encaps", "MLKEM", level, "ss_size", PQCP_MLKEM_SS_SIZE);
+    
+    PQCP_LOG_STATUS("primitive", "complete", "MLKEM", level, 1);
+    
     printk("\n========================================\n");
     printk("  Sample completed successfully!\n");
     printk("========================================\n");

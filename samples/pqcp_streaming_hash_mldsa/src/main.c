@@ -11,6 +11,7 @@
 #include <zephyr/sys/printk.h>
 #include <pqcp_zephyr/mldsa.h>
 #include <pqcp_zephyr/rng.h>
+#include <pqcp_zephyr/bench.h>
 
 #include <string.h>
 
@@ -238,6 +239,16 @@ int main(void)
     printk("Sign time:    %u ms\n", sign_time);
     printk("Verify time:  %u ms\n", verify_time);
     printk("\nStreaming API allows signing messages larger than RAM!\n");
+    
+    /* Emit structured metrics for parsing */
+    printk("\n--- Structured Metrics ---\n");
+    PQCP_LOG_TIME_MS("primitive", "sign_stream", "MLDSA", level, sign_time);
+    PQCP_LOG_TIME_MS("primitive", "verify_stream", "MLDSA", level, verify_time);
+    PQCP_LOG_SIZE("primitive", "sign_stream", "MLDSA", level, "msg_size", TOTAL_MESSAGE_SIZE);
+    PQCP_LOG_SIZE("primitive", "sign_stream", "MLDSA", level, "chunk_size", CHUNK_SIZE);
+    PQCP_LOG_SIZE("primitive", "sign_stream", "MLDSA", level, "sig_size", pqcp_mldsa_sig_size(level));
+    PQCP_LOG_STATUS("primitive", "stream_complete", "MLDSA", level, 1);
+    
     printk("========================================\n");
     
     return 0;

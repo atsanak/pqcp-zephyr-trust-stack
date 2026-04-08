@@ -12,6 +12,7 @@
 #include <pqcp_zephyr/mlkem.h>
 #include <pqcp_zephyr/mldsa.h>
 #include <pqcp_zephyr/rng.h>
+#include <pqcp_zephyr/bench.h>
 
 #include <string.h>
 
@@ -261,6 +262,15 @@ int main(void)
     } else {
         printk("\nSome tests FAILED!\n");
     }
+    
+    /* Emit structured metrics for parsing */
+    printk("\n--- Structured Metrics ---\n");
+    PQCP_LOG_STATUS("kat", "mlkem_det_keygen", "MLKEM", 768, tests_failed == 0);
+    PQCP_LOG_STATUS("kat", "mlkem_det_encaps", "MLKEM", 768, tests_failed == 0);
+    PQCP_LOG_STATUS("kat", "mldsa_det_keygen", "MLDSA", 65, tests_failed == 0);
+    PQCP_LOG_STATUS("kat", "mldsa_sign_verify", "MLDSA", 65, tests_failed == 0);
+    PQCP_LOG_METRIC("kat", "summary", "ALL", 0, "passed", tests_passed, "");
+    PQCP_LOG_METRIC("kat", "summary", "ALL", 0, "failed", tests_failed, "");
     
     printk("========================================\n");
     
