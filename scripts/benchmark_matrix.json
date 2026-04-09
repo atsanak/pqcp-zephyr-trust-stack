@@ -1,19 +1,39 @@
 {
-  "boards": [
-    "qemu_x86_64",
-    "mps2/an385"
-  ],
-  "profiles": [
-    "MCU_MINIMAL",
-    "GATEWAY",
-    "NATIVE_LAB"
-  ],
-  "samples": [
-    "pqcp_basic_kem",
-    "pqcp_basic_sig",
-    "pqcp_streaming_hash_mldsa",
-    "pqcp_tls_mbedtls_psa",
-    "pqcp_bench_protocol",
-    "pqcp_kat_deterministic"
+  "runs": [
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem"
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig"
+    },
+    {
+      "board": "mps2/an385",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem"
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "GATEWAY",
+      "sample": "pqcp_streaming_hash_mldsa"
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "GATEWAY",
+      "sample": "pqcp_tls_mbedtls_psa"
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol"
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_kat_deterministic"
+    }
   ]
 }

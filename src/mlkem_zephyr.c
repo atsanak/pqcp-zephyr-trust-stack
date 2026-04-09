@@ -13,7 +13,10 @@
 #include <string.h>
 
 /* Check if we have the real mlkem-native */
-#if __has_include("mlkem_native.h")
+#if defined(PQCP_MLKEM_MULTILEVEL_BUILD)
+#define HAVE_MLKEM_NATIVE 1
+#include "mlkem_native_all.h"
+#elif __has_include("mlkem_native.h")
 #define HAVE_MLKEM_NATIVE 1
 #include "mlkem_native.h"
 #elif __has_include("mlkem/mlkem_native.h")
@@ -23,6 +26,21 @@
 #error "mlkem-native headers not found. Run ext/setup_libs.py first."
 #endif
 
+/* Validate the requested level matches the compiled level */
+static inline int validate_level(pqcp_mlkem_level_t level)
+{
+#if defined(PQCP_MLKEM_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLKEM_512:
+        return IS_ENABLED(CONFIG_PQCP_MLKEM_LEVEL_512) ? 0 : -1;
+    case PQCP_MLKEM_768:
+        return IS_ENABLED(CONFIG_PQCP_MLKEM_LEVEL_768) ? 0 : -1;
+    case PQCP_MLKEM_1024:
+        return IS_ENABLED(CONFIG_PQCP_MLKEM_LEVEL_1024) ? 0 : -1;
+    default:
+        return -1;
+    }
+#else
 /*
  * Determine the compile-time configured level from MLK_CONFIG_PARAMETER_SET
  * or fall back to the legacy MLKEM_K definition.
@@ -44,10 +62,6 @@
 /* Default to ML-KEM-768 */
 #define PQCP_MLKEM_COMPILED_LEVEL 768
 #endif
-
-/* Validate the requested level matches the compiled level */
-static inline int validate_level(pqcp_mlkem_level_t level)
-{
     switch (level) {
     case PQCP_MLKEM_512:
         return (PQCP_MLKEM_COMPILED_LEVEL == 512) ? 0 : -1;
@@ -58,6 +72,7 @@ static inline int validate_level(pqcp_mlkem_level_t level)
     default:
         return -1;
     }
+#endif
 }
 
 size_t pqcp_mlkem_pk_size(pqcp_mlkem_level_t level)
@@ -118,10 +133,28 @@ int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
         return PQCP_MLKEM_ERR_RNG;
     }
     
+    int ret;
+
+#if defined(PQCP_MLKEM_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLKEM_512:
+        ret = mlkem512_keypair(pk, sk);
+        break;
+    case PQCP_MLKEM_768:
+        ret = mlkem768_keypair(pk, sk);
+        break;
+    case PQCP_MLKEM_1024:
+        ret = mlkem1024_keypair(pk, sk);
+        break;
+    default:
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+#else
     /* mlkem-native uses namespaced API: crypto_kem_keypair is a macro
      * that expands to the correct function name based on config */
-    int ret = crypto_kem_keypair(pk, sk);
-    
+    ret = crypto_kem_keypair(pk, sk);
+#endif
+
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
 
@@ -140,8 +173,26 @@ int pqcp_mlkem_encapsulate(pqcp_mlkem_level_t level, const uint8_t *pk,
         return PQCP_MLKEM_ERR_RNG;
     }
     
-    int ret = crypto_kem_enc(ct, ss, pk);
-    
+    int ret;
+
+#if defined(PQCP_MLKEM_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLKEM_512:
+        ret = mlkem512_enc(ct, ss, pk);
+        break;
+    case PQCP_MLKEM_768:
+        ret = mlkem768_enc(ct, ss, pk);
+        break;
+    case PQCP_MLKEM_1024:
+        ret = mlkem1024_enc(ct, ss, pk);
+        break;
+    default:
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+#else
+    ret = crypto_kem_enc(ct, ss, pk);
+#endif
+
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
 
@@ -156,8 +207,26 @@ int pqcp_mlkem_decapsulate(pqcp_mlkem_level_t level, const uint8_t *ct,
         return PQCP_MLKEM_ERR_INVALID_ARG;
     }
     
-    int ret = crypto_kem_dec(ss, ct, sk);
-    
+    int ret;
+
+#if defined(PQCP_MLKEM_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLKEM_512:
+        ret = mlkem512_dec(ss, ct, sk);
+        break;
+    case PQCP_MLKEM_768:
+        ret = mlkem768_dec(ss, ct, sk);
+        break;
+    case PQCP_MLKEM_1024:
+        ret = mlkem1024_dec(ss, ct, sk);
+        break;
+    default:
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+#else
+    ret = crypto_kem_dec(ss, ct, sk);
+#endif
+
     /* ML-KEM uses implicit rejection - always returns success */
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }

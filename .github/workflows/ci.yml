@@ -49,9 +49,18 @@ jobs:
           west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
-      - name: Run qemu_x86_64 validation builds
+      - name: Check Python tooling
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         run: |
+          python -m py_compile \
+            "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
+            "$GITHUB_WORKSPACE/scripts/parse_logs.py"
+          python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" --help > /dev/null
+
+      - name: Run qemu_x86_64 tests
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          set -euo pipefail
           west build -p always -d build-ztest-rng -b qemu_x86_64 "$GITHUB_WORKSPACE/tests/ztest_rng" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
           west build -d build-ztest-rng -t run
 
@@ -64,11 +73,47 @@ jobs:
           west build -p always -d build-ztest-tls -b qemu_x86_64 "$GITHUB_WORKSPACE/tests/ztest_tls_selftest" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
           west build -d build-ztest-tls -t run
 
-          west build -p always -d build-basic-kem -b qemu_x86_64 "$GITHUB_WORKSPACE/samples/pqcp_basic_kem" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
-          west build -d build-basic-kem -t run
+      - name: Run qemu_x86_64 sample smoke tests
+        shell: bash
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          set -euo pipefail
 
-          west build -p always -d build-basic-sig -b qemu_x86_64 "$GITHUB_WORKSPACE/samples/pqcp_basic_sig" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
-          west build -d build-basic-sig -t run
+          cleanup_qemu() {
+            local build_dir="$1"
+            if [[ -f "$build_dir/qemu.pid" ]]; then
+              local pid
+              pid="$(cat "$build_dir/qemu.pid" || true)"
+              if [[ -n "$pid" ]]; then
+                kill "$pid" 2>/dev/null || true
+              fi
+              rm -f "$build_dir/qemu.pid"
+            fi
+          }
 
-          west build -p always -d build-protocol-bench -b qemu_x86_64 "$GITHUB_WORKSPACE/samples/pqcp_bench_protocol" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
-          west build -d build-protocol-bench -t run
+          run_sample() {
+            local app="$1"
+            local build_dir="$2"
+            local metric="$3"
+            local log_file="$RUNNER_TEMP/${build_dir}.log"
+            local status=0
+
+            west build -p always -d "$build_dir" -b qemu_x86_64 "$GITHUB_WORKSPACE/$app" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
+
+            cleanup_qemu "$build_dir"
+            timeout 45s west build -d "$build_dir" -t run >"$log_file" 2>&1 || status=$?
+            cleanup_qemu "$build_dir"
+
+            if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+              cat "$log_file"
+              exit "$status"
+            fi
+
+            if ! grep -q "$metric" "$log_file"; then
+              cat "$log_file"
+              exit 1
+            fi
+          }
+
+          run_sample "samples/pqcp_basic_kem" "build-basic-kem" "PQCP_METRIC,primitive,keygen,MLKEM,"
+          run_sample "samples/pqcp_basic_sig" "build-basic-sig" "PQCP_METRIC,primitive,keygen,MLDSA,"

@@ -81,7 +81,7 @@ static pqcp_mldsa_level_t to_mldsa_level(uint16_t level)
 
 static uint32_t current_stack_usage(void)
 {
-#if defined(CONFIG_THREAD_STACK_INFO)
+#if defined(CONFIG_THREAD_STACK_INFO) && defined(CONFIG_INIT_STACKS)
     struct k_thread *thread = k_current_get();
     size_t unused = 0U;
 

@@ -6,6 +6,11 @@
       "notes": "Primitive regression baseline for the minimal production profile."
     },
     {
+      "board": "qemu_x86_64",
+      "target": "tests/ztest_rng",
+      "notes": "RNG backend regression baseline for the minimal production profile."
+    },
+    {
       "board": "mps2/an385",
       "target": "tests/ztest_primitive",
       "overlay": "overlay-no-entropy.conf",
