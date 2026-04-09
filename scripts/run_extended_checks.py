@@ -30,15 +30,21 @@ HOST_ENV_BLACKLIST = (
 DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/acvp_cmd.h",
     "include/pqcp_zephyr/bench.h",
+    "include/pqcp_zephyr/rng.h",
     "include/pqcp_zephyr/tls_selftest.h",
+    "include/pqcp_zephyr/version.h",
     "src/acvp_cmd.c",
     "src/bench_primitive.c",
     "src/bench_protocol.c",
     "src/mlkem_zephyr.c",
     "src/mldsa_zephyr.c",
     "src/rng_common.c",
+    "src/rng_custom.c",
+    "src/rng_deterministic.c",
     "src/rng_psa.c",
     "src/rng_zephyr_entropy.c",
+    "src/psa_mlkem_driver.c",
+    "src/psa_mldsa_driver.c",
     "src/tls_selftest.c",
 ]
 

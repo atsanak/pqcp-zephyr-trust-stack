@@ -479,7 +479,7 @@ benchmark_results/
 The repository includes two machine-readable configuration files:
 
 - `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection, keeping at least one primitive-oriented entry per profile plus protocol/TLS-oriented coverage where that profile supports it
-- `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI
+- `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI, including the explicit `mps2/an385` Cortex-M no-entropy validation path
 
 ### Profile Cookbook
 
@@ -488,6 +488,11 @@ Common profile-oriented invocations:
 ```bash
 # Conservative MCU-oriented build
 west build -p always -b qemu_x86_64 samples/pqcp_basic_kem -- \
+  -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
+
+# Conservative Cortex-M validation build without hardware entropy
+west build -p always -b mps2/an385 tests/ztest_primitive -- \
+  -DOVERLAY_CONFIG=overlay-no-entropy.conf \
   -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
 
 # PSA/TLS-capable gateway-style build
@@ -531,6 +536,10 @@ The wire-format response serializer is shared by the sample and tests through
 `pqcp_acvp_format_response_line()` in
 `include/pqcp_zephyr/acvp_cmd.h`, so the documented `RESULT:*` / `ERROR:*`
 grammar is enforced in one place.
+
+For external-tool integration, the repository also includes
+`scripts/run_acvp_serial_session.py`, a small host-side smoke driver that can
+either talk to a real serial port or launch the sample through QEMU/stdin.
 
 ### Building
 
@@ -658,6 +667,39 @@ result = acvp_command('KEYGEN:MLKEM:768:')
 pk_sk = bytes.fromhex(result.split(':')[1])
 ```
 
+### Host Driver Smoke Script
+
+QEMU/stdin example:
+
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_serial_acvp
+
+python scripts/run_acvp_serial_session.py \
+  --cwd /path/to/zephyrproject \
+  --run-command "west build -d build -t run" \
+  --json-out acvp-session.json \
+  --transcript-out acvp-session.log
+```
+
+Real serial-port example:
+
+```bash
+python -m pip install pyserial
+
+python scripts/run_acvp_serial_session.py \
+  --serial-port /dev/ttyUSB0 \
+  --baudrate 115200 \
+  --json-out acvp-session.json
+```
+
+The script performs a deterministic smoke session covering:
+
+- `SELFTEST`
+- `SEED`
+- ML-KEM `KEYGEN` / `ENCAPS` / `DECAPS`
+- ML-DSA `KEYGEN` / `SIGN` / `VERIFY`
+- a tampered-signature `VERIFY` that must return `RESULT:INVALID`
+
 ## Security Considerations
 
 ### RNG Safety
@@ -741,6 +783,11 @@ west build -p always -b qemu_x86_64 tests/ztest_tls_selftest -- \
   -DOVERLAY_CONFIG=overlay-fuzz.conf
 west build -t run
 
+# Optional ASan/UBSan coverage on native_sim/native/64
+python scripts/run_sanitizer_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD"
+
 # Run primitive tests on mps2/an385 without entropy hardware
 west build -p always -b mps2/an385 tests/ztest_primitive -- -DOVERLAY_CONFIG=overlay-no-entropy.conf
 west build -t run
@@ -755,6 +802,14 @@ while adding randomized valid and invalid command sequences plus direct wire
 format stress checks. The TLS fuzz overlay adds repeated self-test runs across
 the enabled KEM/DSA levels to catch state-leak and reinitialization regressions
 without affecting the default qemu smoke path.
+
+The sanitizer runner uses dedicated `overlay-sanitize.conf` files for
+`tests/ztest_acvp_serial` and `tests/ztest_tls_selftest` on
+`native_sim/native/64`, which makes it easy to get ASan/UBSan coverage for the
+highest-risk glue code without changing the default `qemu_x86_64` smoke flow.
+Because Zephyr's POSIX/native architecture is Linux-only, this sanitizer helper
+is intended for Linux hosts (including GitHub Actions) rather than macOS or
+Windows shells.
 
 ## Shared Harness APIs
 
@@ -808,11 +863,24 @@ This helper:
 
 - configures a lightweight Zephyr target and writes a CMake graphviz file
 - runs focused `cppcheck` analysis on the ACVP, TLS self-test, protocol bench,
-  primitive benchmark, and selected RNG wrapper sources
+  primitive benchmark, PSA driver glue, selected RNG wrapper sources, and the
+  module version/header glue
 - strips common host compiler environment variables before invoking `west`
 
 Use it before large refactors, before cutting a release, or when touching the
 shared ACVP/TLS/benchmark infrastructure.
+
+For memory-safety oriented hardening, pair it with the sanitizer runner:
+
+```bash
+python scripts/run_sanitizer_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD"
+```
+
+By default this builds and runs the ACVP and TLS harness ztests on
+`native_sim/native/64` with ASan and UBSan enabled. Run it from Linux, or use
+the manual `run_sanitizers` toggle in `.github/workflows/extended-checks.yml`.
 
 ## CI
 
@@ -839,7 +907,38 @@ a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
 
 - configure a lightweight Zephyr target and emit a CMake dependency graph
 - run focused `cppcheck` analysis on the ACVP, TLS self-test, protocol bench,
-  primitive benchmark, selected RNG wrappers, and primitive wrapper sources
+  primitive benchmark, selected RNG wrappers, PSA driver glue, and primitive
+  wrapper sources
+- smoke the serial ACVP sample through the host-side driver script on
+  `qemu_x86_64`
+- build-validate the `mps2/an385` MCU profile path through
+  `tests/ztest_primitive` with `overlay-no-entropy.conf`
+
+When launched manually, the extended-checks workflow also accepts:
+
+- a `zephyr_ref` input for trying a newer Zephyr tag/branch/commit
+- a `run_sanitizers` toggle for native_sim ASan/UBSan coverage
+
+Fast CI is therefore pinned to a known-good baseline, while extended checks can
+be used to probe upcoming Zephyr drift before it reaches downstream consumers.
+
+## Release Metadata
+
+Downstream consumers can track the formal module version through:
+
+- `include/pqcp_zephyr/version.h`
+- `CHANGELOG.md`
+
+The current release macro is `PQCP_VERSION_STRING`, which is set to `1.0.0`.
+
+## Zephyr Compatibility
+
+The GitHub workflows currently validate this module against Zephyr `v4.3.0`.
+That is the tested baseline for release-quality integration.
+
+Nearby Zephyr revisions may also work, but they should be treated as
+best-effort until they are exercised explicitly through local testing or the
+manual `zephyr_ref` override in `.github/workflows/extended-checks.yml`.
 
 ## Sample Applications
 
