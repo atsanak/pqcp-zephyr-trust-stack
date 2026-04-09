@@ -24,21 +24,26 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/console/console.h>
 #include <pqcp_zephyr/acvp_cmd.h>
+#include <pqcp_zephyr/mlkem.h>
+#include <pqcp_zephyr/mldsa.h>
 #include <pqcp_zephyr/rng.h>
 
 #include <string.h>
 
-#define MAX_LINE_LEN 8192
-#define MAX_HEX_LEN  (MAX_LINE_LEN / 2)
+#define MAX_RESPONSE_DATA_LEN \
+    (PQCP_MLDSA_PK_SIZE_MAX + PQCP_MLDSA_SK_SIZE_MAX)
+#define MAX_INPUT_DATA_LEN \
+    (PQCP_MLDSA_PK_SIZE_MAX + PQCP_MLDSA_SIG_SIZE_MAX + 1024U)
+#define MAX_LINE_LEN         ((MAX_INPUT_DATA_LEN * 2U) + 64U)
 
 /* Working buffer for hex decoding */
-static uint8_t work_buffer[MAX_HEX_LEN];
+static uint8_t work_buffer[MAX_INPUT_DATA_LEN];
 
 /* Response buffer for output data */
-static uint8_t response_buffer[MAX_HEX_LEN];
+static uint8_t response_buffer[MAX_RESPONSE_DATA_LEN];
 
 /* Hex output buffer (2x data + null) */
-static char response_line[MAX_HEX_LEN * 2 + 64];
+static char response_line[(MAX_RESPONSE_DATA_LEN * 2U) + 64U];
 
 /* Line input buffer */
 static char line_buffer[MAX_LINE_LEN];

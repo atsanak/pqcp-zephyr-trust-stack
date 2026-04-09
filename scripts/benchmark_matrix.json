@@ -11,11 +11,6 @@
       "sample": "pqcp_basic_sig"
     },
     {
-      "board": "mps2/an385",
-      "profile": "MCU_MINIMAL",
-      "sample": "pqcp_basic_kem"
-    },
-    {
       "board": "qemu_x86_64",
       "profile": "GATEWAY",
       "sample": "pqcp_streaming_hash_mldsa"
