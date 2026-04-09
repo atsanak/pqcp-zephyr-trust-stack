@@ -1,1 +1,0 @@
-"mcuboot":"/Users/angelostsanaktsidis/code/PQC/zephyr-ws/bootloader/mcuboot":"/Users/angelostsanaktsidis/code/PQC/zephyr-ws/bootloader/mcuboot/boot/zephyr/sysbuild"

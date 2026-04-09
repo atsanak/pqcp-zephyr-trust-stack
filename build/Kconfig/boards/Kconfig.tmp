@@ -1,2 +1,0 @@
-# Load Zephyr board Kconfig descriptions.
-osource "/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/boards/qemu/x86/Kconfig"
