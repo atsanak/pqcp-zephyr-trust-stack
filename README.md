@@ -211,7 +211,7 @@ coverage is:
 |---------|------------------------|
 | MCU_MINIMAL | `qemu_x86_64`: `tests/ztest_primitive`, `tests/ztest_rng`, `samples/pqcp_basic_kem`; `mps2/an385`: `tests/ztest_primitive` with `overlay-no-entropy.conf` |
 | GATEWAY | `qemu_x86_64`: `tests/ztest_primitive` with `overlay-psa.conf`, `tests/ztest_tls_selftest`, `samples/pqcp_tls_mbedtls_psa` with `overlay-selftest.conf` |
-| NATIVE_LAB | `qemu_x86_64`: `tests/ztest_acvp_serial`, `samples/pqcp_bench_protocol`, `samples/pqcp_kat_deterministic` |
+| NATIVE_LAB | `qemu_x86_64`: `samples/pqcp_basic_sig`, `tests/ztest_acvp_serial`, `samples/pqcp_bench_protocol`, `samples/pqcp_kat_deterministic` |
 
 ### Algorithm Selection
 
@@ -478,7 +478,7 @@ benchmark_results/
 
 The repository includes two machine-readable configuration files:
 
-- `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection
+- `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection, keeping at least one primitive-oriented entry per profile plus protocol/TLS-oriented coverage where that profile supports it
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI
 
 ### Profile Cookbook
@@ -750,23 +750,69 @@ west build -t run
 `overlay-fuzz.conf` test overlays. It is intended for local hardening runs and
 extended workflows, not for the default smoke CI path.
 
+The optional ACVP fuzz overlay keeps the normal command-coverage suite intact
+while adding randomized valid and invalid command sequences plus direct wire
+format stress checks. The TLS fuzz overlay adds repeated self-test runs across
+the enabled KEM/DSA levels to catch state-leak and reinitialization regressions
+without affecting the default qemu smoke path.
+
 ## Shared Harness APIs
 
-The shared TLS helper API is declared in
-`include/pqcp_zephyr/tls_selftest.h`. It provides:
+The shared ACVP and TLS helper APIs are declared in:
 
-- `pqcp_tls_selftest_init_psa()` for explicit PSA setup checks
-- `pqcp_tls_selftest_run()` for offline TLS/PSA/PQCP self-test and protocol-benchmark flows
-- `pqcp_tls_selftest_log_metrics()` for emitting stable `PQCP_METRIC` records
+- `include/pqcp_zephyr/acvp_cmd.h`
+- `include/pqcp_zephyr/tls_selftest.h`
 
-Typical callers are:
+The ACVP command header documents the lab/test-oriented serial-command helpers
+used by:
+
+- `samples/pqcp_serial_acvp`
+- `tests/ztest_acvp_serial`
+
+It provides:
+
+- `pqcp_acvp_response_init()` for bounded caller-owned response buffers
+- `pqcp_acvp_result_str()` and `pqcp_acvp_format_response_line()` for stable
+  `RESULT:*` / `ERROR:*` wire serialization
+- `pqcp_acvp_process_command()` for shared command parsing/execution
+- shared hex helpers used by both the sample and the tests
+
+The TLS helper header documents the shared offline self-test and benchmark flow
+used by:
 
 - `samples/pqcp_tls_mbedtls_psa`
 - `samples/pqcp_bench_protocol`
 - `tests/ztest_tls_selftest`
 
+It provides:
+
+- `pqcp_tls_selftest_init_psa()` for explicit PSA setup checks
+- `pqcp_tls_selftest_run()` for offline TLS/PSA/PQCP self-test and protocol-benchmark flows
+- `pqcp_tls_selftest_log_metrics()` for emitting stable `PQCP_METRIC` records
+
 These callers share the same report structure and metric names, which keeps the
 protocol benchmark and TLS self-test paths aligned.
+
+## Extended Checks
+
+For slower pre-release or refactor-oriented checks, run:
+
+```bash
+python scripts/run_extended_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --strict
+```
+
+This helper:
+
+- configures a lightweight Zephyr target and writes a CMake graphviz file
+- runs focused `cppcheck` analysis on the ACVP, TLS self-test, protocol bench,
+  primitive benchmark, and selected RNG wrapper sources
+- strips common host compiler environment variables before invoking `west`
+
+Use it before large refactors, before cutting a release, or when touching the
+shared ACVP/TLS/benchmark infrastructure.
 
 ## CI
 
@@ -793,7 +839,7 @@ a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
 
 - configure a lightweight Zephyr target and emit a CMake dependency graph
 - run focused `cppcheck` analysis on the ACVP, TLS self-test, protocol bench,
-  and primitive wrapper sources
+  primitive benchmark, selected RNG wrappers, and primitive wrapper sources
 
 ## Sample Applications
 

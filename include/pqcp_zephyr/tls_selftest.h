@@ -66,6 +66,9 @@ typedef struct pqcp_tls_selftest_report {
  * image. `initialize_rng` and `initialize_psa` allow callers to exercise the
  * harness either as a self-contained smoke test or inside a larger benchmark
  * flow where setup already happened earlier.
+ *
+ * This API is intended for offline self-test, benchmark, and CI coverage
+ * flows. It is not a replacement for a production TLS session manager.
  */
 
 /**
@@ -75,6 +78,9 @@ typedef struct pqcp_tls_selftest_report {
  * synthetic client/server payload sizes and derived transcript size used by
  * the offline TLS benchmark path. Memory fields reflect best-effort working
  * set and stack observations available in the current build.
+ *
+ * The report structure is shared by the TLS sample, protocol benchmark sample,
+ * and ztest coverage so those paths stay aligned on metric names and meaning.
  */
 
 /**
@@ -85,6 +91,10 @@ typedef struct pqcp_tls_selftest_report {
  * @param ready Optional pointer that receives whether PSA was initialized.
  *
  * @return 0 on success, negative errno-style code on failure.
+ *
+ * @note Intended for both test/benchmark harnesses and production-oriented
+ *       integrations that want to probe PSA availability before calling the
+ *       shared TLS self-test flow.
  */
 int pqcp_tls_selftest_init_psa(bool *ready);
 
@@ -103,9 +113,17 @@ int pqcp_tls_selftest_init_psa(bool *ready);
  *   `emit_metrics` controlled by the benchmark harness
  *
  * @param config Benchmark/self-test configuration. NULL uses defaults.
- * @param report Output report.
+ * @param report Output report filled on success.
  *
- * @return 0 on success, negative errno-style code on failure.
+ * @retval 0 Self-test flow completed successfully.
+ * @retval -EINVAL Invalid pointers or unsupported algorithm levels.
+ * @retval -ENOTSUP PSA initialization was requested in a build without PSA.
+ * @retval Other negative errno-style codes propagated from RNG or PSA setup.
+ * @retval -EIO One of the underlying PQCP operations failed or produced
+ *         mismatched shared secrets.
+ *
+ * @note Intended for both reusable test/benchmark harnesses and sample code
+ *       paths that want a shared offline TLS/PSA/PQCP validation flow.
  */
 int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
                           pqcp_tls_selftest_report_t *report);
@@ -118,6 +136,9 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
  * alter the field layout.
  *
  * @param report Completed report to log.
+ *
+ * @note Intended for test/benchmark harnesses and sample code paths that emit
+ *       structured metrics for later parsing.
  */
 void pqcp_tls_selftest_log_metrics(const pqcp_tls_selftest_report_t *report);
 

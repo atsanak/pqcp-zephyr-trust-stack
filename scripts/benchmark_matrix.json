@@ -28,6 +28,11 @@
     {
       "board": "qemu_x86_64",
       "profile": "NATIVE_LAB",
+      "sample": "pqcp_basic_sig"
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
       "sample": "pqcp_bench_protocol"
     },
     {

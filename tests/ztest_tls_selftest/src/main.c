@@ -31,6 +31,10 @@ static void reset_capture(void)
     printk_capture_len = 0U;
 }
 
+/*
+ * Stress-oriented TLS coverage is compiled only when overlay-fuzz.conf
+ * enables CONFIG_PQCP_FUZZ_TESTS for this test image.
+ */
 #if defined(CONFIG_PQCP_FUZZ_TESTS)
 static const uint16_t enabled_kem_levels[] = {
 #if defined(CONFIG_PQCP_MLKEM_LEVEL_512)
