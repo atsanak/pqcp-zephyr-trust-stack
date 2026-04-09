@@ -9,6 +9,7 @@ while making them easy to run locally or from a scheduled/manual workflow.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import os
 import shlex
 import shutil
@@ -31,9 +32,13 @@ DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/bench.h",
     "include/pqcp_zephyr/tls_selftest.h",
     "src/acvp_cmd.c",
+    "src/bench_primitive.c",
     "src/bench_protocol.c",
     "src/mlkem_zephyr.c",
     "src/mldsa_zephyr.c",
+    "src/rng_common.c",
+    "src/rng_psa.c",
+    "src/rng_zephyr_entropy.c",
     "src/tls_selftest.c",
 ]
 
@@ -220,10 +225,42 @@ def run_cppcheck(
         "--error-exitcode=2",
         "--inline-suppr",
         "--suppress=missingIncludeSystem",
+        "--template={severity}:{id}:{file}:{line}:{message}",
         f"-I{module_path / 'include'}",
         *[str(module_path / target) for target in targets],
     ]
     return run_command(cmd, cwd=module_path, env=env, verbose=verbose)
+
+
+def summarize_cppcheck(output: str) -> Counter[str]:
+    counts: Counter[str] = Counter()
+
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        parts = line.split(":", 4)
+        if len(parts) != 5:
+            continue
+
+        severity = parts[0].strip()
+        if severity:
+            counts[severity] += 1
+
+    return counts
+
+
+def format_counter_summary(counts: Counter[str]) -> str:
+    if not counts:
+        return "no findings"
+
+    order = ("error", "warning", "style", "performance", "portability", "information")
+    items = [f"{severity}={counts[severity]}" for severity in order if counts[severity]]
+    for severity in sorted(counts):
+        if severity not in order:
+            items.append(f"{severity}={counts[severity]}")
+    return ", ".join(items)
 
 
 def main() -> int:
@@ -243,6 +280,8 @@ def main() -> int:
 
     if not args.skip_graphviz:
         print(f"\n[graphviz] Configuring {args.target} for {args.board}")
+        print(f"[graphviz] Build directory: {build_dir}")
+        print(f"[graphviz] Output path:     {graphviz_out}")
         build_result = configure_graphviz_build(
             west_cmd=west_cmd,
             west_root=west_root,
@@ -278,7 +317,11 @@ def main() -> int:
                 return 1
             print(f"[cppcheck] {message}; skipping")
         else:
+            analysis_paths = [module_path / target for target in DEFAULT_ANALYSIS_PATHS]
             print("\n[cppcheck] Checking focused PQCP sources")
+            print("[cppcheck] Analysed paths:")
+            for path in analysis_paths:
+                print(f"  - {path.relative_to(module_path)}")
             cppcheck_result = run_cppcheck(
                 cppcheck_cmd=cppcheck_cmd,
                 module_path=module_path,
@@ -286,11 +329,18 @@ def main() -> int:
                 verbose=args.verbose,
                 targets=DEFAULT_ANALYSIS_PATHS,
             )
+            cppcheck_summary = format_counter_summary(
+                summarize_cppcheck(cppcheck_result.stdout)
+            )
             if cppcheck_result.returncode != 0:
+                print(f"[cppcheck] Findings summary: {cppcheck_summary}")
                 print(cppcheck_result.stdout)
                 return cppcheck_result.returncode
             if cppcheck_result.stdout.strip():
+                print(f"[cppcheck] Findings summary: {cppcheck_summary}")
                 print(cppcheck_result.stdout)
+            else:
+                print("[cppcheck] Findings summary: no findings")
             print("[cppcheck] Completed without findings")
 
     print("\nExtended checks completed successfully.")

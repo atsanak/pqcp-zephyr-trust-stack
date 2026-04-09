@@ -23,7 +23,12 @@ extern "C" {
  */
 
 /**
- * @brief ACVP command result codes
+ * @brief ACVP command result codes.
+ *
+ * These values are shared by the lab/test-oriented ACVP command helpers, the
+ * serial ACVP sample, and the ztest coverage that validates the stable
+ * `RESULT:*` / `ERROR:*` wire protocol. They are not intended to replace a
+ * production network protocol status model.
  */
 enum pqcp_acvp_result {
     PQCP_ACVP_OK = 0,              /**< Success */
@@ -45,9 +50,10 @@ enum pqcp_acvp_result {
 };
 
 /**
- * @brief ACVP response structure
- * 
- * Holds the result of an ACVP command execution.
+ * @brief ACVP response structure.
+ *
+ * Holds the result of an ACVP command execution together with caller-owned
+ * payload storage used by the lab/test harnesses.
  */
 struct pqcp_acvp_response {
     enum pqcp_acvp_result result;  /**< Result code */
@@ -57,7 +63,18 @@ struct pqcp_acvp_response {
 };
 
 /**
- * @brief Convert error code to string description
+ * @brief Convert a response/result code to its stable wire-format token.
+ *
+ * This helper is shared by the serial sample and ztests to guarantee that the
+ * documented machine-readable `ERROR:<code>` and `RESULT:INVALID` spellings
+ * stay stable over time.
+ *
+ * @param result Result code to stringify.
+ *
+ * @return Non-NULL pointer to a static string. Unknown enum values map to
+ *         `"UNKNOWN"`.
+ *
+ * @note Intended for test/lab harnesses and host-visible diagnostics.
  */
 const char *pqcp_acvp_result_str(enum pqcp_acvp_result result);
 
@@ -79,62 +96,86 @@ const char *pqcp_acvp_result_str(enum pqcp_acvp_result result);
  * @retval 0 Response formatted successfully.
  * @retval -EINVAL Invalid arguments were provided.
  * @retval -ENOSPC @p out is too small for the formatted line.
+ *
+ * @note Intended for test/lab harnesses and both the serial sample and ztest
+ *       coverage. The public wire grammar must remain stable.
  */
 int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
                                    char *out, size_t out_size);
 
 /**
- * @brief Initialize an ACVP response structure
- * 
- * @param resp Response structure to initialize
- * @param buffer Output buffer to use
- * @param buffer_size Size of output buffer
+ * @brief Initialize a response object around caller-owned storage.
+ *
+ * @param resp Response structure to initialize.
+ * @param buffer Payload buffer used for command outputs.
+ * @param buffer_size Capacity of @p buffer in bytes.
+ *
+ * @note Intended for test/lab harnesses and reusable host-driven validation
+ *       flows. Callers retain ownership of @p buffer.
  */
 void pqcp_acvp_response_init(struct pqcp_acvp_response *resp,
                              uint8_t *buffer, size_t buffer_size);
 
 /**
- * @brief Seed the deterministic RNG
- * 
- * @param seed Seed bytes
- * @param seed_len Length of seed
- * @param resp Response structure
- * @return 0 on success, negative errno on failure
+ * @brief Seed the deterministic RNG used by ACVP/KAT-style flows.
+ *
+ * @param seed Seed bytes.
+ * @param seed_len Length of @p seed in bytes.
+ * @param resp Response structure updated with the wire-visible result code.
+ *
+ * @retval 0 Seed accepted successfully.
+ * @retval Negative errno-style code on failure. The corresponding
+ *         `resp->result` value remains machine-readable for wire formatting.
+ *
+ * @note Test/lab only. Production-oriented profiles must not enable the
+ *       deterministic RNG path by default.
  */
 int pqcp_acvp_cmd_seed(const uint8_t *seed, size_t seed_len,
                        struct pqcp_acvp_response *resp);
 
 /**
- * @brief Generate ML-KEM keypair
- * 
- * @param level ML-KEM level (512, 768, or 1024)
- * @param resp Response structure (data = pk||sk)
- * @return 0 on success, negative errno on failure
+ * @brief Generate an ML-KEM keypair for ACVP/KAT handling.
+ *
+ * @param level ML-KEM level (512, 768, or 1024).
+ * @param resp Response structure that receives `pk || sk` on success.
+ *
+ * @retval 0 Keypair generated successfully.
+ * @retval Negative errno-style code on failure.
+ *
+ * @note Intended for test/lab harnesses and host-driven validation flows.
  */
 int pqcp_acvp_cmd_mlkem_keygen(int level, struct pqcp_acvp_response *resp);
 
 /**
- * @brief Encapsulate with ML-KEM
- * 
- * @param level ML-KEM level
- * @param pk Public key
- * @param pk_len Public key length
- * @param resp Response structure (data = ct||ss)
- * @return 0 on success, negative errno on failure
+ * @brief Encapsulate with ML-KEM for ACVP/KAT handling.
+ *
+ * @param level ML-KEM level.
+ * @param pk Public key bytes.
+ * @param pk_len Length of @p pk.
+ * @param resp Response structure that receives `ct || ss` on success.
+ *
+ * @retval 0 Encapsulation completed successfully.
+ * @retval Negative errno-style code on failure.
+ *
+ * @note Intended for test/lab harnesses and host-driven validation flows.
  */
 int pqcp_acvp_cmd_mlkem_encaps(int level, const uint8_t *pk, size_t pk_len,
                                struct pqcp_acvp_response *resp);
 
 /**
- * @brief Decapsulate with ML-KEM
- * 
- * @param level ML-KEM level
- * @param ct Ciphertext
- * @param ct_len Ciphertext length
- * @param sk Secret key
- * @param sk_len Secret key length
- * @param resp Response structure (data = ss)
- * @return 0 on success, negative errno on failure
+ * @brief Decapsulate with ML-KEM for ACVP/KAT handling.
+ *
+ * @param level ML-KEM level.
+ * @param ct Ciphertext bytes.
+ * @param ct_len Length of @p ct.
+ * @param sk Secret key bytes.
+ * @param sk_len Length of @p sk.
+ * @param resp Response structure that receives `ss` on success.
+ *
+ * @retval 0 Decapsulation completed successfully.
+ * @retval Negative errno-style code on failure.
+ *
+ * @note Intended for test/lab harnesses and host-driven validation flows.
  */
 int pqcp_acvp_cmd_mlkem_decaps(int level,
                                const uint8_t *ct, size_t ct_len,
@@ -142,24 +183,32 @@ int pqcp_acvp_cmd_mlkem_decaps(int level,
                                struct pqcp_acvp_response *resp);
 
 /**
- * @brief Generate ML-DSA keypair
- * 
- * @param level ML-DSA level (44, 65, or 87)
- * @param resp Response structure (data = pk||sk)
- * @return 0 on success, negative errno on failure
+ * @brief Generate an ML-DSA keypair for ACVP/KAT handling.
+ *
+ * @param level ML-DSA level (44, 65, or 87).
+ * @param resp Response structure that receives `pk || sk` on success.
+ *
+ * @retval 0 Keypair generated successfully.
+ * @retval Negative errno-style code on failure.
+ *
+ * @note Intended for test/lab harnesses and host-driven validation flows.
  */
 int pqcp_acvp_cmd_mldsa_keygen(int level, struct pqcp_acvp_response *resp);
 
 /**
- * @brief Sign with ML-DSA
- * 
- * @param level ML-DSA level
- * @param sk Secret key
- * @param sk_len Secret key length
- * @param msg Message to sign
- * @param msg_len Message length
- * @param resp Response structure (data = sig)
- * @return 0 on success, negative errno on failure
+ * @brief Sign a message with ML-DSA for ACVP/KAT handling.
+ *
+ * @param level ML-DSA level.
+ * @param sk Secret key bytes.
+ * @param sk_len Length of @p sk.
+ * @param msg Message bytes to sign.
+ * @param msg_len Length of @p msg.
+ * @param resp Response structure that receives the signature on success.
+ *
+ * @retval 0 Signature generated successfully.
+ * @retval Negative errno-style code on failure.
+ *
+ * @note Intended for test/lab harnesses and host-driven validation flows.
  */
 int pqcp_acvp_cmd_mldsa_sign(int level,
                              const uint8_t *sk, size_t sk_len,
@@ -167,17 +216,24 @@ int pqcp_acvp_cmd_mldsa_sign(int level,
                              struct pqcp_acvp_response *resp);
 
 /**
- * @brief Verify with ML-DSA
- * 
- * @param level ML-DSA level
- * @param pk Public key
- * @param pk_len Public key length
- * @param msg Message
- * @param msg_len Message length
- * @param sig Signature
- * @param sig_len Signature length
- * @param resp Response structure (result = OK if valid, VERIFY_INVALID if invalid)
- * @return 0 on success (check resp->result for validity), negative errno on failure
+ * @brief Verify an ML-DSA signature for ACVP/KAT handling.
+ *
+ * @param level ML-DSA level.
+ * @param pk Public key bytes.
+ * @param pk_len Length of @p pk.
+ * @param msg Message bytes.
+ * @param msg_len Length of @p msg.
+ * @param sig Signature bytes.
+ * @param sig_len Length of @p sig.
+ * @param resp Response structure updated to `PQCP_ACVP_OK` for a valid
+ *             signature or `PQCP_ACVP_VERIFY_INVALID` for a clean invalid
+ *             signature result.
+ *
+ * @retval 0 Verification completed successfully. Check `resp->result` to
+ *         distinguish valid from invalid signatures.
+ * @retval Negative errno-style code on parsing or library failures.
+ *
+ * @note Intended for test/lab harnesses and host-driven validation flows.
  */
 int pqcp_acvp_cmd_mldsa_verify(int level,
                                const uint8_t *pk, size_t pk_len,
@@ -186,12 +242,17 @@ int pqcp_acvp_cmd_mldsa_verify(int level,
                                struct pqcp_acvp_response *resp);
 
 /**
- * @brief Run self-test
- * 
- * Runs basic correctness tests for ML-KEM and ML-DSA.
- * 
- * @param resp Response structure
- * @return 0 on success, negative errno on failure
+ * @brief Run the ACVP command-library self-test.
+ *
+ * Runs basic correctness tests for ML-KEM and ML-DSA through the same command
+ * helper layer used by the sample and ztests.
+ *
+ * @param resp Response structure updated with the self-test result.
+ *
+ * @retval 0 Self-test completed successfully.
+ * @retval Negative errno-style code on failure.
+ *
+ * @note Intended for test/lab harnesses.
  */
 int pqcp_acvp_cmd_selftest(struct pqcp_acvp_response *resp);
 
@@ -200,31 +261,41 @@ int pqcp_acvp_cmd_selftest(struct pqcp_acvp_response *resp);
  */
 
 /**
- * @brief Convert hex string to bytes
- * 
- * @param hex Null-terminated hex string
- * @param out Output buffer
- * @param out_len Pointer to receive output length
- * @param max_len Maximum output length
- * @return 0 on success, -EINVAL on invalid hex, -ENOSPC if buffer too small
+ * @brief Convert a hex string to bytes.
+ *
+ * @param hex Null-terminated hex string.
+ * @param out Destination buffer.
+ * @param out_len Pointer that receives the decoded length.
+ * @param max_len Capacity of @p out in bytes.
+ *
+ * @retval 0 Conversion succeeded.
+ * @retval -EINVAL The input string was malformed.
+ * @retval -ENOSPC @p out was too small for the decoded payload.
+ *
+ * @note Shared utility for both test/lab command handling and host-visible
+ *       sample flows.
  */
 int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
                            size_t *out_len, size_t max_len);
 
 /**
- * @brief Convert bytes to hex string
- * 
- * @param data Input data
- * @param len Data length
- * @param out Output buffer (must be at least len*2 + 1 bytes)
+ * @brief Convert bytes to a lowercase hex string.
+ *
+ * @param data Input data.
+ * @param len Length of @p data.
+ * @param out Output buffer. Must be at least `len * 2 + 1` bytes.
+ *
+ * @note Shared utility for both test/lab command handling and host-visible
+ *       sample flows.
  */
 void pqcp_acvp_bytes_to_hex(const uint8_t *data, size_t len, char *out);
 
 /**
- * @brief Parse and execute a command line
- * 
- * Parses a line in the format CMD:ALG:LEVEL:HEX_DATA and executes
- * the corresponding command.
+ * @brief Parse and execute one ACVP command line.
+ *
+ * Parses a line in the format `CMD:ALG:LEVEL:HEX_DATA`, updates @p resp with a
+ * stable machine-readable result, and returns a conventional errno-style code
+ * for callers that want both transport and local-status handling.
  *
  * Supported commands are:
  *
@@ -238,11 +309,19 @@ void pqcp_acvp_bytes_to_hex(const uint8_t *data, size_t len, char *out);
  * - `SELFTEST::`
  * - `HELP::`
  * 
- * @param line Command line (will be modified by strtok)
- * @param work_buf Working buffer for hex decoding
- * @param work_buf_size Size of working buffer
- * @param resp Response structure
- * @return 0 on success, negative errno on failure
+ * @param line Command line buffer. It will be modified in-place during token
+ *             parsing.
+ * @param work_buf Scratch buffer used for hex decoding and concatenated inputs.
+ * @param work_buf_size Capacity of @p work_buf in bytes.
+ * @param resp Response structure updated with the result and any payload.
+ *
+ * @retval 0 Command completed successfully. Check `resp->result` for
+ *         `PQCP_ACVP_VERIFY_INVALID` versus `PQCP_ACVP_OK` when verifying
+ *         signatures.
+ * @retval Negative errno-style code on parse or execution failures.
+ *
+ * @note Intended for test/lab harnesses such as the serial sample and the
+ *       ztest command-coverage suite.
  */
 int pqcp_acvp_process_command(char *line,
                               uint8_t *work_buf, size_t work_buf_size,

@@ -6,6 +6,7 @@
 
 #include <zephyr/ztest.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
 
 #include <pqcp_zephyr/acvp_cmd.h>
 #include <pqcp_zephyr/mldsa.h>
@@ -229,6 +230,86 @@ ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)
     assert_response_line(&resp, "RESULT:OK");
 }
 
+ZTEST(pqcp_acvp_serial, test_result_strings_are_stable)
+{
+    static const struct {
+        enum pqcp_acvp_result result;
+        const char *expected;
+    } cases[] = {
+        { PQCP_ACVP_OK, "OK" },
+        { PQCP_ACVP_ERR_INVALID_HEX, "INVALID_HEX" },
+        { PQCP_ACVP_ERR_INVALID_LEVEL, "INVALID_LEVEL" },
+        { PQCP_ACVP_ERR_INVALID_ALG, "INVALID_ALG" },
+        { PQCP_ACVP_ERR_INVALID_CMD, "INVALID_CMD" },
+        { PQCP_ACVP_ERR_MISSING_ARGS, "MISSING_ARGS" },
+        { PQCP_ACVP_ERR_WRONG_SIZE, "WRONG_SIZE" },
+        { PQCP_ACVP_ERR_KEYGEN, "KEYGEN_FAILED" },
+        { PQCP_ACVP_ERR_ENCAPS, "ENCAPS_FAILED" },
+        { PQCP_ACVP_ERR_DECAPS, "DECAPS_FAILED" },
+        { PQCP_ACVP_ERR_SIGN, "SIGN_FAILED" },
+        { PQCP_ACVP_ERR_VERIFY, "VERIFY_FAILED" },
+        { PQCP_ACVP_ERR_SEED, "SEED_FAILED" },
+        { PQCP_ACVP_ERR_NOT_ENABLED, "NOT_ENABLED" },
+        { PQCP_ACVP_ERR_BUFFER_TOO_SMALL, "BUFFER_TOO_SMALL" },
+        { PQCP_ACVP_VERIFY_INVALID, "INVALID" },
+    };
+
+    for (size_t i = 0U; i < ARRAY_SIZE(cases); ++i) {
+        const char *result_str = pqcp_acvp_result_str(cases[i].result);
+
+        zassert_not_null(result_str);
+        zassert_equal(strcmp(result_str, cases[i].expected), 0,
+                      "unexpected string for ACVP result %d",
+                      (int)cases[i].result);
+    }
+
+    zassert_equal(strcmp(pqcp_acvp_result_str((enum pqcp_acvp_result)999),
+                         "UNKNOWN"),
+                  0);
+}
+
+ZTEST(pqcp_acvp_serial, test_response_formatter_serializes_public_wire_forms)
+{
+    struct pqcp_acvp_response resp;
+    static uint8_t payload[] = { 0x00U, 0xabU, 0x7fU };
+
+    pqcp_acvp_response_init(&resp, payload, sizeof(payload));
+
+    resp.result = PQCP_ACVP_OK;
+    resp.data_len = 0U;
+    assert_response_line(&resp, "RESULT:OK");
+
+    resp.result = PQCP_ACVP_VERIFY_INVALID;
+    resp.data_len = 0U;
+    assert_response_line(&resp, "RESULT:INVALID");
+
+    resp.result = PQCP_ACVP_ERR_INVALID_CMD;
+    resp.data_len = 0U;
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
+
+    resp.result = PQCP_ACVP_OK;
+    resp.data = payload;
+    resp.data_len = sizeof(payload);
+    assert_response_line(&resp, "RESULT:00ab7f");
+}
+
+ZTEST(pqcp_acvp_serial, test_response_formatter_rejects_tiny_buffer)
+{
+    struct pqcp_acvp_response resp;
+    char tiny_buffer[4];
+
+    pqcp_acvp_response_init(&resp, response_buffer, sizeof(response_buffer));
+    resp.result = PQCP_ACVP_ERR_INVALID_CMD;
+
+    zassert_equal(
+        pqcp_acvp_format_response_line(&resp, tiny_buffer, sizeof(tiny_buffer)),
+        -ENOSPC);
+}
+
+/*
+ * Stress-oriented parser coverage is compiled only when overlay-fuzz.conf
+ * enables CONFIG_PQCP_FUZZ_TESTS for this test image.
+ */
 #if defined(CONFIG_PQCP_FUZZ_TESTS)
 static uint32_t fuzz_state = 0x8f23d91bU;
 

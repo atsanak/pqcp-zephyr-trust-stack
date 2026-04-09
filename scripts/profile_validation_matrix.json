@@ -44,6 +44,11 @@
   "NATIVE_LAB": [
     {
       "board": "qemu_x86_64",
+      "target": "samples/pqcp_basic_sig",
+      "notes": "Primitive metric sample under the multilevel lab profile."
+    },
+    {
+      "board": "qemu_x86_64",
       "target": "tests/ztest_acvp_serial",
       "notes": "Programmatic ACVP command and negative-path coverage."
     },
