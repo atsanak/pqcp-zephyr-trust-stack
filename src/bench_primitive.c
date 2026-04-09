@@ -140,10 +140,6 @@ int pqcp_bench_mlkem(uint16_t level,
     default: return -1;
     }
     
-    size_t pk_size = pqcp_mlkem_pk_size(mlkem_level);
-    size_t sk_size = pqcp_mlkem_sk_size(mlkem_level);
-    size_t ct_size = pqcp_mlkem_ct_size(mlkem_level);
-    
     /* Allocate buffers */
     static uint8_t pk[PQCP_MLKEM_PK_SIZE_MAX];
     static uint8_t sk[PQCP_MLKEM_SK_SIZE_MAX];
