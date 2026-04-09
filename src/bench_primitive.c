@@ -71,7 +71,7 @@ uint64_t pqcp_bench_end_timing(uint64_t start)
 
 uint32_t pqcp_bench_get_stack_usage(void)
 {
-#ifdef CONFIG_THREAD_STACK_INFO
+#if defined(CONFIG_THREAD_STACK_INFO) && defined(CONFIG_INIT_STACKS)
     struct k_thread *thread = k_current_get();
     size_t unused = 0;
     

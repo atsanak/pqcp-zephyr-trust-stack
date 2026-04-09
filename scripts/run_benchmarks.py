@@ -15,6 +15,7 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -61,48 +62,59 @@ PROFILES: Dict[str, Dict[str, str]] = {
     },
 }
 
+DEFAULT_BENCHMARK_MATRIX = SCRIPT_DIR / "benchmark_matrix.json"
+DEFAULT_PROFILE_VALIDATION_MATRIX = SCRIPT_DIR / "profile_validation_matrix.json"
+HOST_ENV_BLACKLIST = (
+    "CFLAGS",
+    "CXXFLAGS",
+    "CPPFLAGS",
+    "LDFLAGS",
+    "CPATH",
+    "SDKROOT",
+)
+
 SAMPLES: Dict[str, Dict[str, Any]] = {
     "pqcp_basic_kem": {
         "path": "samples/pqcp_basic_kem",
         "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
-        "run_timeout": 120,
+        "run_timeout": 45,
     },
     "pqcp_basic_sig": {
         "path": "samples/pqcp_basic_sig",
         "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
-        "run_timeout": 120,
+        "run_timeout": 45,
     },
     "pqcp_streaming_hash_mldsa": {
         "path": "samples/pqcp_streaming_hash_mldsa",
         "profiles": ["GATEWAY", "NATIVE_LAB"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
-        "run_timeout": 180,
+        "run_timeout": 60,
     },
     "pqcp_tls_mbedtls_psa": {
         "path": "samples/pqcp_tls_mbedtls_psa",
         "profiles": ["GATEWAY", "NATIVE_LAB"],
         "boards": ["qemu_x86_64"],
         "overlays": ["overlay-selftest.conf"],
-        "run_timeout": 180,
+        "run_timeout": 60,
     },
     "pqcp_bench_protocol": {
         "path": "samples/pqcp_bench_protocol",
         "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
-        "run_timeout": 180,
+        "run_timeout": 60,
     },
     "pqcp_kat_deterministic": {
         "path": "samples/pqcp_kat_deterministic",
         "profiles": ["NATIVE_LAB"],
         "boards": ["qemu_x86_64"],
         "overlays": [],
-        "run_timeout": 180,
+        "run_timeout": 60,
     },
 }
 
@@ -146,6 +158,22 @@ class RunRecord:
 
 def slugify(value: str) -> str:
     return value.replace("/", "_").replace(" ", "_").lower()
+
+
+def default_timeout_for_path(app_path: str) -> int:
+    return 120 if app_path.startswith("tests/") else 60
+
+
+def make_run_id(board: str, profile: str, label: str) -> str:
+    return "__".join([slugify(board), slugify(profile), slugify(label)])
+
+
+def normalize_overlays(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value]
 
 
 def load_config_file(path: Path) -> Dict[str, Any]:
@@ -234,6 +262,7 @@ class BenchmarkRunner:
         self.build_only = build_only
         self.default_timeout = default_timeout
         self.verbose = verbose
+        self.command_env = self._build_command_env()
         self.timestamp = datetime.now(timezone.utc).isoformat()
         self.size_tool = discover_size_tool()
         self.records: List[RunRecord] = []
@@ -242,6 +271,46 @@ class BenchmarkRunner:
 
         (self.output_dir / "runs").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "build").mkdir(parents=True, exist_ok=True)
+
+    def _build_command_env(self) -> Dict[str, str]:
+        env = os.environ.copy()
+        for key in HOST_ENV_BLACKLIST:
+            env.pop(key, None)
+        return env
+
+    def _cleanup_qemu(self, build_dir: Path) -> None:
+        pid_path = build_dir / "qemu.pid"
+        if not pid_path.exists():
+            return
+
+        try:
+            pid = int(pid_path.read_text().strip())
+        except (OSError, ValueError):
+            pid_path.unlink(missing_ok=True)
+            return
+
+        try:
+            ps_result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "command="],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            command = ps_result.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            command = ""
+
+        if "qemu" in command and str(build_dir) in command:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                pass
+
+        pid_path.unlink(missing_ok=True)
 
     def _run_command(
         self,
@@ -261,6 +330,7 @@ class BenchmarkRunner:
                 stderr=subprocess.STDOUT,
                 text=True,
                 timeout=timeout,
+                env=self.command_env,
                 check=False,
             )
             return CommandResult(result.returncode, result.stdout, False)
@@ -316,6 +386,10 @@ class BenchmarkRunner:
             return CommandResult(0, "", False)
 
         build_dir = self.output_dir / "build" / spec.run_id
+        self._cleanup_qemu(build_dir)
+        run_timeout = spec.run_timeout or self.default_timeout
+        if self.default_timeout:
+            run_timeout = min(run_timeout, self.default_timeout) if run_timeout else self.default_timeout
 
         if spec.board.startswith("native_"):
             binary = build_dir / "zephyr/zephyr.exe"
@@ -324,13 +398,13 @@ class BenchmarkRunner:
             return self._run_command(
                 [str(binary)],
                 cwd=self.west_root,
-                timeout=spec.run_timeout or self.default_timeout,
+                timeout=run_timeout,
             )
 
         return self._run_command(
             [*self.west_cmd, "build", "-d", str(build_dir), "-t", "run"],
             cwd=self.west_root,
-            timeout=spec.run_timeout or self.default_timeout,
+            timeout=run_timeout,
         )
 
     def _get_code_size(self, spec: RunSpec) -> Dict[str, int]:
@@ -441,6 +515,7 @@ class BenchmarkRunner:
 
         sizes = self._get_code_size(spec)
         run_result = self._run_sample(spec)
+        self._cleanup_qemu(self.output_dir / "build" / spec.run_id)
         log_text = run_result.stdout
         log_path = run_dir / "run.log"
         log_path.write_text(log_text)
@@ -555,34 +630,73 @@ def expand_runs(
 
 
 def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> List[RunSpec]:
+    if config and all(key in PROFILES for key in config.keys()):
+        specs: List[RunSpec] = []
+        for profile, entries in config.items():
+            for item in entries:
+                target = item["target"]
+                label = item.get("sample", Path(target).name)
+                overlays = normalize_overlays(item.get("overlays"))
+                if item.get("overlay"):
+                    overlays.append(str(item["overlay"]))
+                specs.append(
+                    RunSpec(
+                        run_id=item.get(
+                            "run_id",
+                            make_run_id(item["board"], profile, label),
+                        ),
+                        board=item["board"],
+                        profile=profile,
+                        sample=label,
+                        app_path=target,
+                        overlays=overlays,
+                        extra_kconfig=[
+                            *item.get("extra_kconfig", []),
+                            *cli_kconfig,
+                        ],
+                        run_timeout=int(
+                            item.get("run_timeout", default_timeout_for_path(target))
+                        ),
+                    )
+                )
+        return specs
+
     if "runs" in config:
         specs: List[RunSpec] = []
         for item in config["runs"]:
-            sample = item["sample"]
-            sample_info = SAMPLES[sample]
+            sample = item.get("sample")
+            target = item.get("target")
+            sample_info = SAMPLES.get(sample, {}) if sample else {}
+            app_path = item.get("app_path") or target or sample_info.get("path")
+            if app_path is None:
+                raise KeyError("Each run must define either sample, target, or app_path")
+
+            label = sample or Path(app_path).name
+            overlays = normalize_overlays(item.get("overlays"))
+            if item.get("overlay"):
+                overlays.append(str(item["overlay"]))
             run_id = item.get(
                 "run_id",
-                "__".join(
-                    [
-                        slugify(item["board"]),
-                        slugify(item["profile"]),
-                        slugify(sample),
-                    ]
-                ),
+                make_run_id(item["board"], item["profile"], label),
             )
             specs.append(
                 RunSpec(
                     run_id=run_id,
                     board=item["board"],
                     profile=item["profile"],
-                    sample=sample,
-                    app_path=item.get("app_path", sample_info["path"]),
-                    overlays=item.get("overlays", sample_info.get("overlays", [])),
+                    sample=label,
+                    app_path=app_path,
+                    overlays=overlays or list(sample_info.get("overlays", [])),
                     extra_kconfig=[
                         *item.get("extra_kconfig", []),
                         *cli_kconfig,
                     ],
-                    run_timeout=int(item.get("run_timeout", sample_info.get("run_timeout", 0))),
+                    run_timeout=int(
+                        item.get(
+                            "run_timeout",
+                            sample_info.get("run_timeout", default_timeout_for_path(app_path)),
+                        )
+                    ),
                 )
             )
         return specs
@@ -597,6 +711,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PQCP benchmark matrix runner")
+    mode_group = parser.add_mutually_exclusive_group()
     parser.add_argument("--board", help="Single board")
     parser.add_argument("--boards", nargs="+", help="Boards for matrix mode")
     parser.add_argument("--profile", choices=list(PROFILES), help="Single profile")
@@ -604,7 +719,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample", choices=list(SAMPLES), help="Single sample")
     parser.add_argument("--samples", nargs="+", choices=list(SAMPLES), help="Samples for matrix mode")
     parser.add_argument("--matrix", action="store_true", help="Run a board/profile/sample matrix")
-    parser.add_argument("--config", type=Path, help="JSON or YAML matrix config")
+    mode_group.add_argument("--config", type=Path, help="JSON or YAML matrix config")
+    mode_group.add_argument("--benchmark-matrix", action="store_true",
+                            help="Run the curated benchmark matrix")
+    mode_group.add_argument("--profile-validation", action="store_true",
+                            help="Run the curated profile validation matrix")
     parser.add_argument("--output", "-o", type=Path, default=Path("benchmark_results"), help="Output directory")
     parser.add_argument("--west-root", type=Path, help="West workspace root")
     parser.add_argument("--module-path", type=Path, help="PQCP module path")
@@ -639,7 +758,15 @@ def main() -> int:
     print(f"  west cmd  : {' '.join(west_cmd)}")
     print(f"  output    : {output_dir}")
 
-    if args.config:
+    if args.benchmark_matrix:
+        specs = expand_runs_from_config(
+            load_config_file(DEFAULT_BENCHMARK_MATRIX), args.kconfig
+        )
+    elif args.profile_validation:
+        specs = expand_runs_from_config(
+            load_config_file(DEFAULT_PROFILE_VALIDATION_MATRIX), args.kconfig
+        )
+    elif args.config:
         specs = expand_runs_from_config(load_config_file(args.config), args.kconfig)
     elif args.sample:
         specs = expand_runs(

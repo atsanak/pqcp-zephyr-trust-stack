@@ -29,9 +29,9 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 
 ## Supported Targets
 
-- `native_sim` (for development/testing)
-- `qemu_cortex_m3` (QEMU emulation)
-- Cortex-M4/M7 boards (STM32F4, nRF52840, etc.)
+- `qemu_x86_64` for CI and host-side validation
+- `mps2/an385` for Cortex-M validation, including no-entropy overlays
+- Other Cortex-M4/M7 class boards once stack sizing and entropy sources are tuned for the target
 
 ## Quick Start
 
@@ -154,6 +154,7 @@ pqcp-zephyr-trust-stack/
 ├── samples/
 │   ├── pqcp_basic_kem/         # Basic ML-KEM demo
 │   ├── pqcp_basic_sig/         # Basic ML-DSA demo
+│   ├── pqcp_bench_protocol/    # Protocol benchmark sample
 │   ├── pqcp_kat_deterministic/ # Known Answer Tests
 │   ├── pqcp_streaming_hash_mldsa/
 │   ├── pqcp_tls_mbedtls_psa/   # TLS integration
@@ -161,7 +162,9 @@ pqcp-zephyr-trust-stack/
 │
 ├── tests/
 │   ├── ztest_primitive/        # Primitive operation tests
-│   └── ztest_rng/              # RNG subsystem tests
+│   ├── ztest_rng/              # RNG subsystem tests
+│   ├── ztest_acvp_serial/      # ACVP command-library tests
+│   └── ztest_tls_selftest/     # Shared TLS self-test helper tests
 │
 ├── scripts/
 │   ├── run_benchmarks.py       # Benchmark orchestration
@@ -190,8 +193,25 @@ CONFIG_PQCP_PROFILE_NATIVE_LAB=y
 | Profile | ML-KEM Levels | ML-DSA Levels | PSA | Streaming | Bench | Use Case |
 |---------|---------------|---------------|-----|-----------|-------|----------|
 | MCU_MINIMAL | 768 | 65 | No | No | No | Constrained devices |
-| GATEWAY | 512/768/1024 | 44/65/87 | Yes | Yes | No | Capable devices |
-| NATIVE_LAB | 512/768/1024 | 44/65/87 | No | Yes | Yes | Development/testing |
+| GATEWAY | 512/768/1024 | 44/65/87 | Yes | Yes | No | PSA/TLS-capable devices |
+| NATIVE_LAB | 512/768/1024 | 44/65/87 | No | Yes | Yes | Deterministic tests, ACVP, and protocol benchmarking |
+
+`GATEWAY` and `NATIVE_LAB` use the module's multilevel native build path so one
+image can expose the full set of configured ML-KEM and ML-DSA levels at
+runtime. `MCU_MINIMAL` stays conservative by default and does not enable
+deterministic RNG, ACVP, or protocol benchmarking.
+
+### Validated Profile Coverage
+
+The repository keeps human-readable and machine-readable profile validation in
+sync through `scripts/profile_validation_matrix.json`. The currently validated
+coverage is:
+
+| Profile | Validated combinations |
+|---------|------------------------|
+| MCU_MINIMAL | `qemu_x86_64`: `tests/ztest_primitive`, `tests/ztest_rng`, `samples/pqcp_basic_kem`; `mps2/an385`: `tests/ztest_primitive` with `overlay-no-entropy.conf` |
+| GATEWAY | `qemu_x86_64`: `tests/ztest_primitive` with `overlay-psa.conf`, `tests/ztest_tls_selftest`, `samples/pqcp_tls_mbedtls_psa` with `overlay-selftest.conf` |
+| NATIVE_LAB | `qemu_x86_64`: `tests/ztest_acvp_serial`, `samples/pqcp_bench_protocol`, `samples/pqcp_kat_deterministic` |
 
 ### Algorithm Selection
 
@@ -349,13 +369,26 @@ void init(void)
 python scripts/run_benchmarks.py \
   --board qemu_x86_64 \
   --profile MCU_MINIMAL \
-  --sample pqcp_basic_kem
+  --sample pqcp_basic_kem \
+  --output benchmark_results/quick
 ```
 
-### Full Matrix
+### Curated Benchmark Matrix
 
 ```bash
-python scripts/run_benchmarks.py --matrix --config scripts/benchmark_matrix.json
+python scripts/run_benchmarks.py --benchmark-matrix
+```
+
+### Profile Validation Matrix
+
+```bash
+python scripts/run_benchmarks.py --profile-validation
+```
+
+### Custom Matrix File
+
+```bash
+python scripts/run_benchmarks.py --config scripts/benchmark_matrix.json
 ```
 
 ### Protocol Benchmark Sample
@@ -384,6 +417,9 @@ The runner:
 - captures per-run build logs and runtime logs
 - parses each run with `scripts/parse_logs.py`
 - writes consolidated CSV/JSON datasets for analysis
+- strips common host compiler environment variables such as `CFLAGS`,
+  `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `CPATH`, and `SDKROOT` before invoking
+  `west`, which avoids host toolchain leakage into Zephyr builds
 
 ### Output Layout
 
@@ -411,7 +447,7 @@ benchmark_results/
 
 The repository includes two machine-readable configuration files:
 
-- `scripts/benchmark_matrix.json`: sample benchmark matrix for `run_benchmarks.py`
+- `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI
 
 ### Metric Format
@@ -505,11 +541,32 @@ Common error codes emitted by the ACVP sample and command library:
 > SELFTEST::
 RESULT:OK
 
+> HELP::
+RESULT:OK
+
 > SEED:DRBG:0:0102030405060708090a0b0c0d0e0f10...
 RESULT:OK
 
 > KEYGEN:MLKEM:768:
 RESULT:<pk_hex><sk_hex>
+
+> ENCAPS:MLKEM:768:<pk_hex>
+RESULT:<ct_hex><ss_hex>
+
+> DECAPS:MLKEM:768:<ct_hex><sk_hex>
+RESULT:<ss_hex>
+
+> KEYGEN:MLDSA:65:
+RESULT:<pk_hex><sk_hex>
+
+> SIGN:MLDSA:65:<sk_hex><msg_hex>
+RESULT:<sig_hex>
+
+> VERIFY:MLDSA:65:<pk_hex><msg_hex><sig_hex>
+RESULT:OK
+
+> VERIFY:MLDSA:65:<pk_hex><msg_hex><tampered_sig_hex>
+RESULT:INVALID
 ```
 
 If a command line exceeds the input buffer, the sample rejects it cleanly with:
@@ -549,7 +606,6 @@ The `CONFIG_PQCP_RNG_DETERMINISTIC_TEST` option enables deterministic RNG for te
 
 ```
 # WARNING: Test builds only!
-CONFIG_PQCP_RNG_CUSTOM=y  # Required for deterministic
 CONFIG_PQCP_RNG_DETERMINISTIC_TEST=y
 ```
 
@@ -628,7 +684,10 @@ sets up a Zephyr workspace, installs the Zephyr SDK toolchains needed for
 - `tests/ztest_tls_selftest`
 - `samples/pqcp_basic_kem`
 - `samples/pqcp_basic_sig`
-- `samples/pqcp_bench_protocol`
+
+The sample runs are bounded with `timeout` and checked for expected
+`PQCP_METRIC` lines so CI can validate metric emission without waiting for QEMU
+samples to exit on their own.
 
 ## Sample Applications
 

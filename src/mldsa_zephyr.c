@@ -13,7 +13,10 @@
 #include <string.h>
 
 /* Check if we have the real mldsa-native */
-#if __has_include("mldsa_native.h")
+#if defined(PQCP_MLDSA_MULTILEVEL_BUILD)
+#define HAVE_MLDSA_NATIVE 1
+#include "mldsa_native_all.h"
+#elif __has_include("mldsa_native.h")
 #define HAVE_MLDSA_NATIVE 1
 #include "mldsa_native.h"
 #elif __has_include("mldsa/mldsa_native.h")
@@ -23,6 +26,21 @@
 #error "mldsa-native headers not found. Run ext/setup_libs.py first."
 #endif
 
+/* Validate the requested level matches the compiled level */
+static inline int validate_level(pqcp_mldsa_level_t level)
+{
+#if defined(PQCP_MLDSA_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLDSA_44:
+        return IS_ENABLED(CONFIG_PQCP_MLDSA_LEVEL_44) ? 0 : -1;
+    case PQCP_MLDSA_65:
+        return IS_ENABLED(CONFIG_PQCP_MLDSA_LEVEL_65) ? 0 : -1;
+    case PQCP_MLDSA_87:
+        return IS_ENABLED(CONFIG_PQCP_MLDSA_LEVEL_87) ? 0 : -1;
+    default:
+        return -1;
+    }
+#else
 /*
  * Determine the compile-time configured level from MLD_CONFIG_PARAMETER_SET
  * or fall back to the legacy MLDSA_MODE definition.
@@ -44,10 +62,6 @@
 /* Default to ML-DSA-65 */
 #define PQCP_MLDSA_COMPILED_LEVEL 65
 #endif
-
-/* Validate the requested level matches the compiled level */
-static inline int validate_level(pqcp_mldsa_level_t level)
-{
     switch (level) {
     case PQCP_MLDSA_44:
         return (PQCP_MLDSA_COMPILED_LEVEL == 44) ? 0 : -1;
@@ -58,6 +72,7 @@ static inline int validate_level(pqcp_mldsa_level_t level)
     default:
         return -1;
     }
+#endif
 }
 
 size_t pqcp_mldsa_pk_size(pqcp_mldsa_level_t level)
@@ -118,10 +133,28 @@ int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk)
         return PQCP_MLDSA_ERR_RNG;
     }
     
+    int ret;
+
+#if defined(PQCP_MLDSA_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLDSA_44:
+        ret = mldsa44_keypair(pk, sk);
+        break;
+    case PQCP_MLDSA_65:
+        ret = mldsa65_keypair(pk, sk);
+        break;
+    case PQCP_MLDSA_87:
+        ret = mldsa87_keypair(pk, sk);
+        break;
+    default:
+        return PQCP_MLDSA_ERR_INVALID_ARG;
+    }
+#else
     /* mldsa-native uses namespaced API: crypto_sign_keypair is a macro
      * that expands to the correct function name based on config */
-    int ret = crypto_sign_keypair(pk, sk);
-    
+    ret = crypto_sign_keypair(pk, sk);
+#endif
+
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
 
@@ -148,8 +181,26 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
     
     size_t sig_len = 0;
     
+    int ret;
+
+#if defined(PQCP_MLDSA_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLDSA_44:
+        ret = mldsa44_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
+        break;
+    case PQCP_MLDSA_65:
+        ret = mldsa65_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
+        break;
+    case PQCP_MLDSA_87:
+        ret = mldsa87_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
+        break;
+    default:
+        return PQCP_MLDSA_ERR_INVALID_ARG;
+    }
+#else
     /* mldsa-native signing function: crypto_sign_signature */
-    int ret = crypto_sign_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
+    ret = crypto_sign_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
+#endif
     
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
@@ -180,7 +231,25 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
         return PQCP_MLDSA_ERR_INVALID_ARG;
     }
     
-    int ret = crypto_sign_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
+    int ret;
+
+#if defined(PQCP_MLDSA_MULTILEVEL_BUILD)
+    switch (level) {
+    case PQCP_MLDSA_44:
+        ret = mldsa44_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
+        break;
+    case PQCP_MLDSA_65:
+        ret = mldsa65_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
+        break;
+    case PQCP_MLDSA_87:
+        ret = mldsa87_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
+        break;
+    default:
+        return PQCP_MLDSA_ERR_INVALID_ARG;
+    }
+#else
+    ret = crypto_sign_verify(sig, sig_len, msg, msg_len, ctx, ctx_len, pk);
+#endif
     
     if (ret == 0) {
         return PQCP_MLDSA_SUCCESS;

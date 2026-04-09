@@ -54,28 +54,47 @@ if(CONFIG_PQCP_MLKEM)
     
     # Check for mlkem-native availability
     if(EXISTS ${MLKEM_NATIVE_DIR}/mlkem)
-        zephyr_include_directories(${MLKEM_NATIVE_DIR})
-        zephyr_include_directories(${MLKEM_NATIVE_DIR}/mlkem)
-        zephyr_include_directories(${MLKEM_NATIVE_DIR}/mlkem/src)
-        
-        # Determine security level to build
+        set(PQCP_MLKEM_LEVEL_COUNT 0)
         if(CONFIG_PQCP_MLKEM_LEVEL_512)
-            set(MLKEM_K 2)
-            set(MLK_PARAM_SET 512)
-        elseif(CONFIG_PQCP_MLKEM_LEVEL_768)
-            set(MLKEM_K 3)
-            set(MLK_PARAM_SET 768)
-        elseif(CONFIG_PQCP_MLKEM_LEVEL_1024)
-            set(MLKEM_K 4)
-            set(MLK_PARAM_SET 1024)
-        else()
-            # Default to ML-KEM-768
-            set(MLKEM_K 3)
-            set(MLK_PARAM_SET 768)
+            math(EXPR PQCP_MLKEM_LEVEL_COUNT "${PQCP_MLKEM_LEVEL_COUNT} + 1")
         endif()
-        
-        zephyr_compile_definitions(MLKEM_K=${MLKEM_K})
-        zephyr_compile_definitions(MLK_CONFIG_PARAMETER_SET=${MLK_PARAM_SET})
+        if(CONFIG_PQCP_MLKEM_LEVEL_768)
+            math(EXPR PQCP_MLKEM_LEVEL_COUNT "${PQCP_MLKEM_LEVEL_COUNT} + 1")
+        endif()
+        if(CONFIG_PQCP_MLKEM_LEVEL_1024)
+            math(EXPR PQCP_MLKEM_LEVEL_COUNT "${PQCP_MLKEM_LEVEL_COUNT} + 1")
+        endif()
+
+        if(CONFIG_PQCP_MLKEM_MULTI_LEVEL OR PQCP_MLKEM_LEVEL_COUNT GREATER 1)
+            set(MLKEM_MULTILEVEL_DIR
+                ${MLKEM_NATIVE_DIR}/examples/monolithic_build_multilevel)
+            zephyr_include_directories(${MLKEM_MULTILEVEL_DIR})
+            zephyr_include_directories(${MLKEM_MULTILEVEL_DIR}/mlkem_native)
+            zephyr_include_directories(${MLKEM_MULTILEVEL_DIR}/mlkem_native/src)
+            zephyr_compile_definitions(PQCP_MLKEM_MULTILEVEL_BUILD=1)
+        else()
+            zephyr_include_directories(${MLKEM_NATIVE_DIR})
+            zephyr_include_directories(${MLKEM_NATIVE_DIR}/mlkem)
+            zephyr_include_directories(${MLKEM_NATIVE_DIR}/mlkem/src)
+            # Determine security level to build
+            if(CONFIG_PQCP_MLKEM_LEVEL_512)
+                set(MLKEM_K 2)
+                set(MLK_PARAM_SET 512)
+            elseif(CONFIG_PQCP_MLKEM_LEVEL_768)
+                set(MLKEM_K 3)
+                set(MLK_PARAM_SET 768)
+            elseif(CONFIG_PQCP_MLKEM_LEVEL_1024)
+                set(MLKEM_K 4)
+                set(MLK_PARAM_SET 1024)
+            else()
+                # Default to ML-KEM-768
+                set(MLKEM_K 3)
+                set(MLK_PARAM_SET 768)
+            endif()
+
+            zephyr_compile_definitions(MLKEM_K=${MLKEM_K})
+            zephyr_compile_definitions(MLK_CONFIG_PARAMETER_SET=${MLK_PARAM_SET})
+        endif()
         
         # Backend selection
         if(CONFIG_PQCP_BACKEND_FORCE_C)
@@ -89,9 +108,12 @@ if(CONFIG_PQCP_MLKEM)
             zephyr_compile_definitions(MLKEM_USE_REDUCE_RAM=1)
         endif()
         
-        # Compile the mlkem-native Single Compilation Unit (SCU)
-        # This includes all the crypto implementation
-        zephyr_library_sources(${MLKEM_NATIVE_DIR}/mlkem/mlkem_native.c)
+        # Compile mlkem-native either in single-level or multilevel mode.
+        if(CONFIG_PQCP_MLKEM_MULTI_LEVEL OR PQCP_MLKEM_LEVEL_COUNT GREATER 1)
+            zephyr_library_sources(${MLKEM_MULTILEVEL_DIR}/mlkem_native_all.c)
+        else()
+            zephyr_library_sources(${MLKEM_NATIVE_DIR}/mlkem/mlkem_native.c)
+        endif()
         
         # Compile our Zephyr wrapper
         zephyr_library_sources(${PQCP_SRC}/mlkem_zephyr.c)
@@ -121,28 +143,47 @@ if(CONFIG_PQCP_MLDSA)
     
     # Check for mldsa-native availability
     if(EXISTS ${MLDSA_NATIVE_DIR}/mldsa)
-        zephyr_include_directories(${MLDSA_NATIVE_DIR})
-        zephyr_include_directories(${MLDSA_NATIVE_DIR}/mldsa)
-        zephyr_include_directories(${MLDSA_NATIVE_DIR}/mldsa/src)
-        
-        # Determine security level
+        set(PQCP_MLDSA_LEVEL_COUNT 0)
         if(CONFIG_PQCP_MLDSA_LEVEL_44)
-            set(MLDSA_MODE 2)
-            set(MLD_PARAM_SET 44)
-        elseif(CONFIG_PQCP_MLDSA_LEVEL_65)
-            set(MLDSA_MODE 3)
-            set(MLD_PARAM_SET 65)
-        elseif(CONFIG_PQCP_MLDSA_LEVEL_87)
-            set(MLDSA_MODE 5)
-            set(MLD_PARAM_SET 87)
-        else()
-            # Default to ML-DSA-65
-            set(MLDSA_MODE 3)
-            set(MLD_PARAM_SET 65)
+            math(EXPR PQCP_MLDSA_LEVEL_COUNT "${PQCP_MLDSA_LEVEL_COUNT} + 1")
         endif()
-        
-        zephyr_compile_definitions(MLDSA_MODE=${MLDSA_MODE})
-        zephyr_compile_definitions(MLD_CONFIG_PARAMETER_SET=${MLD_PARAM_SET})
+        if(CONFIG_PQCP_MLDSA_LEVEL_65)
+            math(EXPR PQCP_MLDSA_LEVEL_COUNT "${PQCP_MLDSA_LEVEL_COUNT} + 1")
+        endif()
+        if(CONFIG_PQCP_MLDSA_LEVEL_87)
+            math(EXPR PQCP_MLDSA_LEVEL_COUNT "${PQCP_MLDSA_LEVEL_COUNT} + 1")
+        endif()
+
+        if(CONFIG_PQCP_MLDSA_MULTI_LEVEL OR PQCP_MLDSA_LEVEL_COUNT GREATER 1)
+            set(MLDSA_MULTILEVEL_DIR
+                ${MLDSA_NATIVE_DIR}/examples/monolithic_build_multilevel)
+            zephyr_include_directories(${MLDSA_MULTILEVEL_DIR})
+            zephyr_include_directories(${MLDSA_MULTILEVEL_DIR}/mldsa_native)
+            zephyr_include_directories(${MLDSA_MULTILEVEL_DIR}/mldsa_native/src)
+            zephyr_compile_definitions(PQCP_MLDSA_MULTILEVEL_BUILD=1)
+        else()
+            zephyr_include_directories(${MLDSA_NATIVE_DIR})
+            zephyr_include_directories(${MLDSA_NATIVE_DIR}/mldsa)
+            zephyr_include_directories(${MLDSA_NATIVE_DIR}/mldsa/src)
+            # Determine security level
+            if(CONFIG_PQCP_MLDSA_LEVEL_44)
+                set(MLDSA_MODE 2)
+                set(MLD_PARAM_SET 44)
+            elseif(CONFIG_PQCP_MLDSA_LEVEL_65)
+                set(MLDSA_MODE 3)
+                set(MLD_PARAM_SET 65)
+            elseif(CONFIG_PQCP_MLDSA_LEVEL_87)
+                set(MLDSA_MODE 5)
+                set(MLD_PARAM_SET 87)
+            else()
+                # Default to ML-DSA-65
+                set(MLDSA_MODE 3)
+                set(MLD_PARAM_SET 65)
+            endif()
+
+            zephyr_compile_definitions(MLDSA_MODE=${MLDSA_MODE})
+            zephyr_compile_definitions(MLD_CONFIG_PARAMETER_SET=${MLD_PARAM_SET})
+        endif()
         
         # Backend selection
         if(CONFIG_PQCP_BACKEND_FORCE_C)
@@ -156,9 +197,12 @@ if(CONFIG_PQCP_MLDSA)
             zephyr_compile_definitions(MLDSA_USE_REDUCE_RAM=1)
         endif()
         
-        # Compile the mldsa-native Single Compilation Unit (SCU)
-        # This includes all the crypto implementation
-        zephyr_library_sources(${MLDSA_NATIVE_DIR}/mldsa/mldsa_native.c)
+        # Compile mldsa-native either in single-level or multilevel mode.
+        if(CONFIG_PQCP_MLDSA_MULTI_LEVEL OR PQCP_MLDSA_LEVEL_COUNT GREATER 1)
+            zephyr_library_sources(${MLDSA_MULTILEVEL_DIR}/mldsa_native_all.c)
+        else()
+            zephyr_library_sources(${MLDSA_NATIVE_DIR}/mldsa/mldsa_native.c)
+        endif()
         
         # Compile our Zephyr wrapper
         zephyr_library_sources(${PQCP_SRC}/mldsa_zephyr.c)

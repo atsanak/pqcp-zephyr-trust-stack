@@ -173,6 +173,19 @@ ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
 }
 
+ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)
+{
+    struct pqcp_acvp_response resp;
+
+    zassert_equal(run_command("HELP::", &resp), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    zassert_equal(resp.data_len, 0U);
+
+    zassert_equal(run_command("SELFTEST::", &resp), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    zassert_equal(resp.data_len, 0U);
+}
+
 static void *pqcp_acvp_setup(void)
 {
     return NULL;

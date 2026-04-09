@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from collections import defaultdict
 
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
 
 def parse_pqcp_metric_line(line: str) -> Optional[Dict]:
     """Parse a PQCP_METRIC line.
@@ -116,7 +118,7 @@ def parse_log_file(log_path: Path) -> List[Dict]:
     
     with open(log_path, 'r') as f:
         for line in f:
-            line = line.strip()
+            line = ANSI_ESCAPE_RE.sub('', line).strip()
             
             # Try new PQCP_METRIC format first
             result = parse_pqcp_metric_line(line)

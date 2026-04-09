@@ -477,6 +477,7 @@ int pqcp_acvp_process_command(char *line,
     char *level_str;
     char *data;
     bool too_many_fields;
+    bool cmd_requires_data;
     size_t field_count;
     int level = 0;
 
@@ -569,7 +570,16 @@ int pqcp_acvp_process_command(char *line,
             return -EINVAL;
         }
     }
-    
+
+    cmd_requires_data = (strcmp(cmd, "ENCAPS") == 0) ||
+                        (strcmp(cmd, "DECAPS") == 0) ||
+                        (strcmp(cmd, "SIGN") == 0) ||
+                        (strcmp(cmd, "VERIFY") == 0);
+    if (!cmd_requires_data) {
+        resp->result = PQCP_ACVP_ERR_INVALID_CMD;
+        return -EINVAL;
+    }
+
     /* Commands that require DATA */
     if (data == NULL || data[0] == '\0') {
         resp->result = PQCP_ACVP_ERR_MISSING_ARGS;
