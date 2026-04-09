@@ -183,6 +183,15 @@ if(CONFIG_PQCP_MLDSA)
     zephyr_library_link_libraries(pqcp_common)
 endif()
 
+# Shared TLS self-test helpers
+if(CONFIG_PQCP_MLKEM AND CONFIG_PQCP_MLDSA)
+    zephyr_library_named(pqcp_tls_selftest)
+    zephyr_library_sources(${PQCP_SRC}/tls_selftest.c)
+    zephyr_library_link_libraries(pqcp_common)
+    zephyr_library_link_libraries(pqcp_mlkem)
+    zephyr_library_link_libraries(pqcp_mldsa)
+endif()
+
 # =============================================================================
 # PSA Crypto Driver Shims
 # =============================================================================
@@ -206,6 +215,7 @@ if(CONFIG_PQCP_PSA_DRIVER)
     if(CONFIG_PQCP_MLDSA)
         zephyr_library_link_libraries(pqcp_mldsa)
     endif()
+
 endif()
 
 # =============================================================================
@@ -224,6 +234,10 @@ if(CONFIG_PQCP_ACVP)
     
     if(CONFIG_PQCP_MLDSA)
         zephyr_library_link_libraries(pqcp_mldsa)
+    endif()
+
+    if(CONFIG_PQCP_MLKEM AND CONFIG_PQCP_MLDSA)
+        zephyr_library_link_libraries(pqcp_tls_selftest)
     endif()
 endif()
 

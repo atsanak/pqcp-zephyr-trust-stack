@@ -1,0 +1,19 @@
+{
+  "boards": [
+    "qemu_x86_64",
+    "mps2/an385"
+  ],
+  "profiles": [
+    "MCU_MINIMAL",
+    "GATEWAY",
+    "NATIVE_LAB"
+  ],
+  "samples": [
+    "pqcp_basic_kem",
+    "pqcp_basic_sig",
+    "pqcp_streaming_hash_mldsa",
+    "pqcp_tls_mbedtls_psa",
+    "pqcp_bench_protocol",
+    "pqcp_kat_deterministic"
+  ]
+}

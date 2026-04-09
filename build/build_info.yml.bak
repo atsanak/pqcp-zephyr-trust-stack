@@ -1,0 +1,5 @@
+west:
+  command: /Users/angelostsanaktsidis/code/PQC/zephyr-ws/.venv/bin/west build -p always
+    -b qemu_x86_64 samples/pqcp_bench_protocol -- -DZEPHYR_EXTRA_MODULES=/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack
+  topdir: /Users/angelostsanaktsidis/code/PQC/zephyr-ws
+  version: 1.5.0

@@ -61,6 +61,17 @@ static void print_help(void)
 /* Process and respond to a command */
 static void process_and_respond(char *line)
 {
+    size_t line_len = strlen(line);
+
+    while (line_len > 0U &&
+           (line[line_len - 1U] == '\r' || line[line_len - 1U] == '\n')) {
+        line[--line_len] = '\0';
+    }
+
+    if (line_len == 0U) {
+        return;
+    }
+
     /* Special case: HELP command */
     if (strncmp(line, "HELP", 4) == 0) {
         print_help();
@@ -112,25 +123,36 @@ int main(void)
         
         /* Read line from console */
         int len = 0;
+        bool overflow = false;
         char c;
         
-        while (len < MAX_LINE_LEN - 1) {
+        while (1) {
             c = console_getchar();
             
             if (c == '\r' || c == '\n') {
                 break;
             }
             
-            if (c == '\b' && len > 0) {
+            if ((c == '\b' || c == 0x7f) && len > 0) {
                 len--;
                 continue;
             }
-            
-            line_buffer[len++] = c;
+
+            if (!overflow && len < MAX_LINE_LEN - 1) {
+                line_buffer[len++] = c;
+            } else {
+                overflow = true;
+            }
         }
         
         line_buffer[len] = '\0';
-        
+
+        if (overflow) {
+            printk("ERROR:%s\n",
+                   pqcp_acvp_result_str(PQCP_ACVP_ERR_BUFFER_TOO_SMALL));
+            continue;
+        }
+
         if (len > 0) {
             process_and_respond(line_buffer);
         }

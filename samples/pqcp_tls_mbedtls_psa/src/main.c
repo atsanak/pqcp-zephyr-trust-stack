@@ -10,160 +10,9 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
-#include <pqcp_zephyr/mlkem.h>
 #include <pqcp_zephyr/mldsa.h>
-#include <pqcp_zephyr/rng.h>
-#include <pqcp_zephyr/bench.h>
-
-#ifdef CONFIG_MBEDTLS_PSA_CRYPTO_C
-#include <psa/crypto.h>
-#endif
-
-#include <string.h>
-
-/* Test PSA crypto initialization and RNG */
-static int test_psa_init(void)
-{
-#ifdef CONFIG_MBEDTLS_PSA_CRYPTO_C
-    printk("Initializing PSA Crypto...\n");
-    
-    psa_status_t status = psa_crypto_init();
-    if (status != PSA_SUCCESS) {
-        printk("ERROR: psa_crypto_init failed: %d\n", (int)status);
-        return -1;
-    }
-    
-    printk("PSA Crypto initialized successfully\n");
-    
-    /* Test PSA RNG */
-    uint8_t random_bytes[32];
-    status = psa_generate_random(random_bytes, sizeof(random_bytes));
-    if (status != PSA_SUCCESS) {
-        printk("ERROR: psa_generate_random failed: %d\n", (int)status);
-        return -1;
-    }
-    
-    printk("PSA RNG test: ");
-    for (int i = 0; i < 16; i++) {
-        printk("%02x", random_bytes[i]);
-    }
-    printk("...\n");
-    
-    return 0;
-#else
-    printk("PSA Crypto not enabled\n");
-    return -1;
-#endif
-}
-
-/* Test PQCP operations through PSA-style interface */
-static int test_pqc_operations(void)
-{
-    int64_t t_start, t_end;
-    
-    printk("\n--- Testing PQCP Operations ---\n");
-    
-    /* ML-KEM test */
-    printk("\nML-KEM-768:\n");
-    
-    static uint8_t pk[PQCP_MLKEM_PK_SIZE_MAX];
-    static uint8_t sk[PQCP_MLKEM_SK_SIZE_MAX];
-    static uint8_t ct[PQCP_MLKEM_CT_SIZE_MAX];
-    static uint8_t ss1[PQCP_MLKEM_SS_SIZE];
-    static uint8_t ss2[PQCP_MLKEM_SS_SIZE];
-    
-    t_start = k_uptime_get();
-    int ret = pqcp_mlkem_keypair(PQCP_MLKEM_768, pk, sk);
-    t_end = k_uptime_get();
-    if (ret != PQCP_MLKEM_SUCCESS) {
-        printk("  KeyGen FAILED: %d\n", ret);
-        return -1;
-    }
-    printk("  KeyGen: OK (%lld ms)\n", t_end - t_start);
-    PQCP_LOG_TIME_MS("driver", "keygen", "MLKEM", 768, t_end - t_start);
-    
-    t_start = k_uptime_get();
-    ret = pqcp_mlkem_encapsulate(PQCP_MLKEM_768, pk, ct, ss1);
-    t_end = k_uptime_get();
-    if (ret != PQCP_MLKEM_SUCCESS) {
-        printk("  Encaps FAILED: %d\n", ret);
-        return -1;
-    }
-    printk("  Encaps: OK (%lld ms)\n", t_end - t_start);
-    PQCP_LOG_TIME_MS("driver", "encaps", "MLKEM", 768, t_end - t_start);
-    
-    t_start = k_uptime_get();
-    ret = pqcp_mlkem_decapsulate(PQCP_MLKEM_768, ct, sk, ss2);
-    t_end = k_uptime_get();
-    if (ret != PQCP_MLKEM_SUCCESS) {
-        printk("  Decaps FAILED: %d\n", ret);
-        return -1;
-    }
-    printk("  Decaps: OK (%lld ms)\n", t_end - t_start);
-    PQCP_LOG_TIME_MS("driver", "decaps", "MLKEM", 768, t_end - t_start);
-    
-    if (memcmp(ss1, ss2, PQCP_MLKEM_SS_SIZE) == 0) {
-        printk("  Shared secrets match: OK\n");
-        PQCP_LOG_STATUS("driver", "selftest", "MLKEM", 768, 1);
-    } else {
-        printk("  Shared secrets MISMATCH!\n");
-        PQCP_LOG_STATUS("driver", "selftest", "MLKEM", 768, 0);
-        return -1;
-    }
-    
-    /* Log sizes for TLS planning */
-    PQCP_LOG_SIZE("driver", "size", "MLKEM", 768, "pk", pqcp_mlkem_pk_size(PQCP_MLKEM_768));
-    PQCP_LOG_SIZE("driver", "size", "MLKEM", 768, "ct", pqcp_mlkem_ct_size(PQCP_MLKEM_768));
-    PQCP_LOG_SIZE("driver", "size", "MLKEM", 768, "ss", PQCP_MLKEM_SS_SIZE);
-    
-    /* ML-DSA test */
-    printk("\nML-DSA-65:\n");
-    
-    static uint8_t sig_pk[PQCP_MLDSA_PK_SIZE_MAX];
-    static uint8_t sig_sk[PQCP_MLDSA_SK_SIZE_MAX];
-    static uint8_t sig[PQCP_MLDSA_SIG_SIZE_MAX];
-    const uint8_t msg[] = "Test message for TLS authentication";
-    
-    t_start = k_uptime_get();
-    ret = pqcp_mldsa_keypair(PQCP_MLDSA_65, sig_pk, sig_sk);
-    t_end = k_uptime_get();
-    if (ret != PQCP_MLDSA_SUCCESS) {
-        printk("  KeyGen FAILED: %d\n", ret);
-        return -1;
-    }
-    printk("  KeyGen: OK (%lld ms)\n", t_end - t_start);
-    PQCP_LOG_TIME_MS("driver", "keygen", "MLDSA", 65, t_end - t_start);
-    
-    t_start = k_uptime_get();
-    ret = pqcp_mldsa_sign(PQCP_MLDSA_65, sig_sk, msg, sizeof(msg) - 1, NULL, 0, sig);
-    t_end = k_uptime_get();
-    if (ret != PQCP_MLDSA_SUCCESS) {
-        printk("  Sign FAILED: %d\n", ret);
-        return -1;
-    }
-    printk("  Sign: OK (%lld ms)\n", t_end - t_start);
-    PQCP_LOG_TIME_MS("driver", "sign", "MLDSA", 65, t_end - t_start);
-    
-    t_start = k_uptime_get();
-    ret = pqcp_mldsa_verify(PQCP_MLDSA_65, sig_pk, msg, sizeof(msg) - 1, NULL, 0, sig);
-    t_end = k_uptime_get();
-    if (ret == PQCP_MLDSA_SUCCESS) {
-        printk("  Verify: OK (%lld ms)\n", t_end - t_start);
-        PQCP_LOG_TIME_MS("driver", "verify", "MLDSA", 65, t_end - t_start);
-        PQCP_LOG_STATUS("driver", "selftest", "MLDSA", 65, 1);
-    } else {
-        printk("  Verify FAILED: %d\n", ret);
-        PQCP_LOG_STATUS("driver", "selftest", "MLDSA", 65, 0);
-        return -1;
-    }
-    
-    /* Log sizes for TLS planning */
-    PQCP_LOG_SIZE("driver", "size", "MLDSA", 65, "pk", pqcp_mldsa_pk_size(PQCP_MLDSA_65));
-    PQCP_LOG_SIZE("driver", "size", "MLDSA", 65, "sig", pqcp_mldsa_sig_size(PQCP_MLDSA_65));
-    PQCP_LOG_SIZE("driver", "size", "MLDSA", 65, "sk", pqcp_mldsa_sk_size(PQCP_MLDSA_65));
-    
-    return 0;
-}
+#include <pqcp_zephyr/mlkem.h>
+#include <pqcp_zephyr/tls_selftest.h>
 
 /* Placeholder for actual TLS handshake */
 static void demo_tls_usage(void)
@@ -198,30 +47,65 @@ static void demo_tls_usage(void)
 
 int main(void)
 {
+    pqcp_tls_selftest_config_t cfg = {
+        .kem_level = 768,
+        .sig_level = 65,
+        .initialize_rng = true,
+        .initialize_psa = true,
+        .emit_metrics = true,
+    };
+    pqcp_tls_selftest_report_t report;
+    bool psa_ready = false;
+    int ret;
+
     printk("\n");
     printk("========================================\n");
     printk("  PQCP TLS mbedTLS PSA Sample\n");
     printk("========================================\n\n");
-    
-    /* Initialize RNG */
-    int ret = pqcp_rng_init();
+
+    printk("Initializing shared TLS self-test path...\n");
+
+    ret = pqcp_tls_selftest_init_psa(&psa_ready);
+    if (ret == 0) {
+        printk("PSA Crypto initialized successfully\n");
+        cfg.initialize_psa = false;
+    } else {
+        printk("WARNING: PSA init failed, continuing with PQCP-only flow\n");
+        cfg.initialize_psa = false;
+    }
+
+    ret = pqcp_tls_selftest_run(&cfg, &report);
     if (ret != 0) {
-        printk("ERROR: Failed to initialize RNG: %d\n", ret);
+        printk("\nERROR: PQCP TLS self-test failed: %d\n", ret);
         return -1;
     }
-    
-    /* Initialize PSA Crypto */
-    ret = test_psa_init();
-    if (ret != 0) {
-        printk("WARNING: PSA init failed, continuing with PQCP only\n");
+    report.psa_ready = psa_ready;
+
+    printk("\n--- Shared TLS Self-Test Report ---\n");
+    printk("ML-KEM-%u keygen:   %llu us\n",
+           report.kem_level, report.kem_keygen_us);
+    printk("ML-KEM-%u encaps:   %llu us\n",
+           report.kem_level, report.kem_encaps_us);
+    printk("ML-KEM-%u decaps:   %llu us\n",
+           report.kem_level, report.kem_decaps_us);
+    printk("ML-DSA-%u keygen:   %llu us\n",
+           report.sig_level, report.sig_keygen_us);
+    printk("ML-DSA-%u sign:     %llu us\n",
+           report.sig_level, report.sig_sign_us);
+    printk("ML-DSA-%u verify:   %llu us\n",
+           report.sig_level, report.sig_verify_us);
+    printk("Auth stage:         %llu us\n", report.auth_us);
+    printk("Key exchange stage: %llu us\n", report.key_exchange_us);
+    printk("Handshake total:    %llu us\n", report.handshake_us);
+    printk("Client payload:     %u bytes\n", report.client_bytes);
+    printk("Server payload:     %u bytes\n", report.server_bytes);
+    printk("Transcript total:   %u bytes\n", report.transcript_bytes);
+    printk("Packets (approx):   %u\n", report.packets);
+    if (report.stack_bytes > 0U) {
+        printk("Stack usage:        %u bytes\n", report.stack_bytes);
     }
-    
-    /* Test PQC operations */
-    ret = test_pqc_operations();
-    if (ret != 0) {
-        printk("\nERROR: PQC operations failed\n");
-        return -1;
-    }
+    printk("Working set:        %u bytes\n", report.working_set_bytes);
+    printk("PSA active:         %s\n", psa_ready ? "yes" : "no");
     
     /* Show TLS integration notes */
     demo_tls_usage();

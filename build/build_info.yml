@@ -1,0 +1,59 @@
+cmake:
+  application:
+    configuration-dir: '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/samples/pqcp_bench_protocol'
+    source-dir: '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/samples/pqcp_bench_protocol'
+  board:
+    name: 'qemu_x86_64'
+    path:
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/boards/qemu/x86'
+    qualifiers: 'atom'
+    revision: ''
+  devicetree:
+    bindings-dirs:
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/bindings'
+    files:
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/boards/qemu/x86/qemu_x86_64.dts'
+    include-dirs:
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/ambiq/dts'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/atmel/include'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/bouffalolab/include'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/bouffalolab/include/zephyr'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/gigadevice/include'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/microchip/include'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/microchip/dts'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/nuvoton/dts'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/nxp/dts'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/stm32/dts'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/modules/hal/ti/dts'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/include'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/include'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/include/zephyr'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/common'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/vendor'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/rx'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/x86'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/xtensa'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/sparc'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/riscv'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/posix'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/arm64'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/arm'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts/arc'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/dts'
+  kconfig:
+    files:
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr/boards/qemu/x86/qemu_x86_64_defconfig'
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/samples/pqcp_bench_protocol/prj.conf'
+    user-files:
+     - '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/samples/pqcp_bench_protocol/prj.conf'
+  toolchain:
+    name: 'zephyr'
+    path: '/Users/angelostsanaktsidis/zephyr-sdk-1.0.1'
+  zephyr:
+    version: '4.4.0-rc2'
+    zephyr-base: '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/zephyr'
+version: '0.1.0'
+west:
+  command: '/Users/angelostsanaktsidis/code/PQC/zephyr-ws/.venv/bin/west build -p always -b qemu_x86_64 samples/pqcp_bench_protocol -- -DZEPHYR_EXTRA_MODULES=/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack'
+  topdir: '/Users/angelostsanaktsidis/code/PQC/zephyr-ws'
+  version: '1.5.0'

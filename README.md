@@ -346,18 +346,75 @@ void init(void)
 ### Quick Benchmark
 
 ```bash
-cd scripts/
-python run_benchmarks.py --target native_sim
+python scripts/run_benchmarks.py \
+  --board qemu_x86_64 \
+  --profile MCU_MINIMAL \
+  --sample pqcp_basic_kem
 ```
 
 ### Full Matrix
 
 ```bash
-python run_benchmarks.py --target native_sim --matrix
-python parse_logs.py benchmark_results_*.json --from-json -o results/
+python scripts/run_benchmarks.py --matrix --config scripts/benchmark_matrix.json
 ```
 
-### Output Format
+### Protocol Benchmark Sample
+
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_bench_protocol
+west build -t run
+```
+
+The protocol benchmark sample reuses the shared TLS self-test harness and emits
+`PQCP_METRIC` lines for:
+
+- total handshake latency
+- ML-DSA authentication stage time
+- ML-KEM key exchange stage time
+- client/server payload sizes
+- transcript bytes
+- packet estimates
+- stack and working-set usage where available
+
+The runner:
+
+- auto-discovers a working `west` command
+- injects this module via `-DZEPHYR_EXTRA_MODULES=...`
+- builds each board/profile/sample combination into its own build directory
+- captures per-run build logs and runtime logs
+- parses each run with `scripts/parse_logs.py`
+- writes consolidated CSV/JSON datasets for analysis
+
+### Output Layout
+
+By default results are written under `benchmark_results/`:
+
+```text
+benchmark_results/
+├── consolidated_metrics.csv
+├── consolidated_metrics.json
+├── all_results.json
+├── runs.json
+├── build/
+│   └── <run-id>/...
+└── runs/
+    └── <run-id>/
+        ├── build.log
+        ├── run.log
+        ├── run_metrics.csv
+        ├── run_primitives.csv
+        ├── run_protocols.csv
+        └── run_summary.txt
+```
+
+### Matrix Configuration
+
+The repository includes two machine-readable configuration files:
+
+- `scripts/benchmark_matrix.json`: sample benchmark matrix for `run_benchmarks.py`
+- `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI
+
+### Metric Format
 
 Benchmark logs use two formats:
 
@@ -366,6 +423,7 @@ Benchmark logs use two formats:
 PQCP_METRIC,primitive,keygen,MLKEM,768,cycles,3120,cyc
 PQCP_METRIC,primitive,encaps,MLKEM,768,stack,18392,B
 PQCP_METRIC,primitive,sign,MLDSA,65,time,10,ms
+PQCP_METRIC,protocol,handshake,TLS13,0,transcript_bytes,6661,B
 ```
 
 **Legacy PRIM format:**
@@ -413,24 +471,51 @@ CMD:ALG:LEVEL:HEX_DATA
 ### Response Format
 
 ```
-RESULT:<hex_data>  # Success
-ERROR:<error_code> # Error
+RESULT:<hex_data>  # Success with payload
+RESULT:OK          # Success without payload
+RESULT:INVALID     # Signature verification failed cleanly
+ERROR:<error_code> # Error (stable machine-readable code)
 ```
+
+For compatibility, error responses stay on the `ERROR:<code>` wire format. The
+`<code>` token is stable and suitable for host-side parsing.
+
+### Error Codes
+
+Common error codes emitted by the ACVP sample and command library:
+
+- `INVALID_HEX`
+- `INVALID_LEVEL`
+- `INVALID_ALG`
+- `INVALID_CMD`
+- `MISSING_ARGS`
+- `WRONG_SIZE`
+- `BUFFER_TOO_SMALL`
+- `KEYGEN_FAILED`
+- `ENCAPS_FAILED`
+- `DECAPS_FAILED`
+- `SIGN_FAILED`
+- `VERIFY_FAILED`
+- `SEED_FAILED`
+- `NOT_ENABLED`
 
 ### Example Session
 
 ```
-> SELFTEST:
-Running self-test...
-  ML-KEM-768: PASS
-  ML-DSA-65: PASS
-RESULT:SELFTEST_OK
+> SELFTEST::
+RESULT:OK
 
 > SEED:DRBG:0:0102030405060708090a0b0c0d0e0f10...
 RESULT:OK
 
 > KEYGEN:MLKEM:768:
 RESULT:<pk_hex><sk_hex>
+```
+
+If a command line exceeds the input buffer, the sample rejects it cleanly with:
+
+```
+ERROR:BUFFER_TOO_SMALL
 ```
 
 ### Host Script Example
@@ -506,14 +591,44 @@ The module detects these libraries via `__has_include()` and switches from stub 
 ## Testing
 
 ```bash
-# Run primitive tests (13 tests)
+# Run primitive tests
 west build -p always -b qemu_x86_64 tests/ztest_primitive
 west build -t run
 
-# Run RNG tests (8 tests)
+# Run primitive tests with PSA drivers
+west build -p always -b qemu_x86_64 tests/ztest_primitive -- -DOVERLAY_CONFIG=overlay-psa.conf
+west build -t run
+
+# Run RNG tests
 west build -p always -b qemu_x86_64 tests/ztest_rng
 west build -t run
+
+# Run ACVP command-library tests
+west build -p always -b qemu_x86_64 tests/ztest_acvp_serial
+west build -t run
+
+# Run shared TLS self-test helper tests
+west build -p always -b qemu_x86_64 tests/ztest_tls_selftest
+west build -t run
+
+# Run primitive tests on mps2/an385 without entropy hardware
+west build -p always -b mps2/an385 tests/ztest_primitive -- -DOVERLAY_CONFIG=overlay-no-entropy.conf
+west build -t run
 ```
+
+## CI
+
+GitHub Actions coverage is defined in `.github/workflows/ci.yml`. The workflow
+sets up a Zephyr workspace, installs the Zephyr SDK toolchains needed for
+`qemu_x86_64`, and runs:
+
+- `tests/ztest_rng`
+- `tests/ztest_primitive`
+- `tests/ztest_acvp_serial`
+- `tests/ztest_tls_selftest`
+- `samples/pqcp_basic_kem`
+- `samples/pqcp_basic_sig`
+- `samples/pqcp_bench_protocol`
 
 ## Sample Applications
 
@@ -523,7 +638,8 @@ west build -t run
 | `pqcp_basic_sig` | Basic ML-DSA keygen/sign/verify demo with timing |
 | `pqcp_kat_deterministic` | Known Answer Tests using deterministic RNG |
 | `pqcp_streaming_hash_mldsa` | Streaming signature for large messages |
-| `pqcp_tls_mbedtls_psa` | TLS integration with PSA Crypto |
+| `pqcp_tls_mbedtls_psa` | TLS/PSA self-test path with structured metrics |
+| `pqcp_bench_protocol` | Protocol benchmark sample using the shared TLS self-test harness |
 | `pqcp_serial_acvp` | UART-based ACVP test interface |
 
 ```bash
