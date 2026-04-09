@@ -317,6 +317,14 @@ class BenchmarkRunner:
         (self.output_dir / "runs").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "build").mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _count_pqcp_metric_rows(rows: Iterable[Dict[str, Any]]) -> int:
+        return sum(1 for row in rows if row.get("component") != "build")
+
+    @staticmethod
+    def _count_build_metric_rows(rows: Iterable[Dict[str, Any]]) -> int:
+        return sum(1 for row in rows if row.get("component") == "build")
+
     def _build_command_env(self) -> Dict[str, str]:
         env = os.environ.copy()
         for key in HOST_ENV_BLACKLIST:
@@ -573,6 +581,8 @@ class BenchmarkRunner:
 
         enriched_rows = self._enrich_metric_rows(spec, log_path, parsed, sizes)
         self.metric_rows.extend(enriched_rows)
+        pqcp_metric_count = self._count_pqcp_metric_rows(enriched_rows)
+        build_metric_count = self._count_build_metric_rows(enriched_rows)
 
         record = RunRecord(
             run_id=spec.run_id,
@@ -593,7 +603,10 @@ class BenchmarkRunner:
         self.records.append(record)
 
         status = "timed out with partial output" if run_result.timed_out else "completed"
-        print(f"  run {status}, captured {len(enriched_rows)} consolidated metrics")
+        print(
+            f"  run {status}, captured {pqcp_metric_count} PQCP_METRIC row(s)"
+            f" and {build_metric_count} build metric row(s)"
+        )
 
     def write_outputs(self) -> None:
         record_path = self.output_dir / "runs.json"
@@ -896,10 +909,15 @@ def main() -> int:
 
     print(
         "\nCompleted "
-        f"{len(runner.records)} run(s) with {len(runner.metric_rows)} consolidated metric row(s)."
+        f"{len(runner.records)} run(s) with "
+        f"{runner._count_pqcp_metric_rows(runner.metric_rows)} PQCP_METRIC row(s) "
+        f"and {runner._count_build_metric_rows(runner.metric_rows)} build metric row(s)."
     )
-    if not runner.metric_rows:
-        print("No metrics were emitted; this is expected for build-only or validation-only runs.")
+    if runner._count_pqcp_metric_rows(runner.metric_rows) == 0:
+        print(
+            "No PQCP_METRIC rows were emitted; this is expected for build-only "
+            "or validation-only runs."
+        )
 
     return 0
 
