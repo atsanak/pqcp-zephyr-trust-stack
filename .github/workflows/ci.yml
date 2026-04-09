@@ -45,7 +45,7 @@ jobs:
           west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
           cd zephyrproject
           west update
-          west packages pip --install
+          west packages pip --install --ignore-venv-check
           west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
