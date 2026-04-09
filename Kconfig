@@ -353,6 +353,21 @@ config PQCP_ASSERT
 endmenu
 
 # =============================================================================
+# Extended Validation Support
+# =============================================================================
+menu "Extended Validation Support"
+
+config PQCP_FUZZ_TESTS
+	bool "Enable extended fuzz/stress-style validation tests"
+	default n
+	help
+	  Enable optional stress-oriented tests for the ACVP command parser
+	  and TLS self-test harness. These tests are intended for local runs
+	  and extended CI workflows and are disabled in the default smoke CI.
+
+endmenu
+
+# =============================================================================
 # Build Profiles
 # =============================================================================
 menu "Build Profiles"

@@ -1,0 +1,62 @@
+name: Extended Checks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out module repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ccache \
+            cppcheck \
+            device-tree-compiler \
+            dfu-util \
+            file \
+            gcc \
+            g++ \
+            gperf \
+            libmagic1 \
+            libsdl2-dev \
+            make \
+            ninja-build \
+            qemu-system-x86 \
+            wget \
+            xz-utils
+
+      - name: Install west
+        run: python -m pip install --upgrade west
+
+      - name: Initialize Zephyr workspace
+        working-directory: ${{ runner.temp }}
+        run: |
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          cd zephyrproject
+          west update
+          west packages pip --install --ignore-venv-check
+          west sdk install --toolchains x86_64-zephyr-elf
+          echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
+
+      - name: Run extended checks
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/run_extended_checks.py" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$GITHUB_WORKSPACE" \
+            --strict

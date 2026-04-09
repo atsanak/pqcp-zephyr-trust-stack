@@ -176,6 +176,51 @@ def normalize_overlays(value: Any) -> List[str]:
     return [str(item) for item in value]
 
 
+def is_protocol_label(label: str) -> bool:
+    return label in {
+        "pqcp_bench_protocol",
+        "pqcp_tls_mbedtls_psa",
+        "ztest_tls_selftest",
+    }
+
+
+def is_protocol_run(spec: RunSpec) -> bool:
+    label = spec.sample or Path(spec.app_path).name
+    app_name = Path(spec.app_path).name
+    return is_protocol_label(label) or is_protocol_label(app_name)
+
+
+def filter_specs(
+    specs: Iterable[RunSpec],
+    *,
+    boards: Optional[Iterable[str]] = None,
+    profiles: Optional[Iterable[str]] = None,
+    samples: Optional[Iterable[str]] = None,
+    protocol_only: bool = False,
+    skip_protocol: bool = False,
+) -> List[RunSpec]:
+    board_set = {item for item in boards or []}
+    profile_set = {item for item in profiles or []}
+    sample_set = {item for item in samples or []}
+    filtered: List[RunSpec] = []
+
+    for spec in specs:
+        if board_set and spec.board not in board_set:
+            continue
+        if profile_set and spec.profile not in profile_set:
+            continue
+        if sample_set and spec.sample not in sample_set:
+            continue
+        if protocol_only and not is_protocol_run(spec):
+            continue
+        if skip_protocol and is_protocol_run(spec):
+            continue
+
+        filtered.append(spec)
+
+    return filtered
+
+
 def load_config_file(path: Path) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(path)
@@ -712,18 +757,23 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PQCP benchmark matrix runner")
     mode_group = parser.add_mutually_exclusive_group()
+    protocol_group = parser.add_mutually_exclusive_group()
     parser.add_argument("--board", help="Single board")
     parser.add_argument("--boards", nargs="+", help="Boards for matrix mode")
     parser.add_argument("--profile", choices=list(PROFILES), help="Single profile")
     parser.add_argument("--profiles", nargs="+", choices=list(PROFILES), help="Profiles for matrix mode")
-    parser.add_argument("--sample", choices=list(SAMPLES), help="Single sample")
-    parser.add_argument("--samples", nargs="+", choices=list(SAMPLES), help="Samples for matrix mode")
+    parser.add_argument("--sample", help="Single sample or run label")
+    parser.add_argument("--samples", nargs="+", help="Samples or run labels for matrix mode")
     parser.add_argument("--matrix", action="store_true", help="Run a board/profile/sample matrix")
     mode_group.add_argument("--config", type=Path, help="JSON or YAML matrix config")
     mode_group.add_argument("--benchmark-matrix", action="store_true",
                             help="Run the curated benchmark matrix")
     mode_group.add_argument("--profile-validation", action="store_true",
                             help="Run the curated profile validation matrix")
+    protocol_group.add_argument("--protocol-only", action="store_true",
+                                help="Only run protocol-oriented entries")
+    protocol_group.add_argument("--skip-protocol", action="store_true",
+                                help="Skip protocol-oriented entries")
     parser.add_argument("--output", "-o", type=Path, default=Path("benchmark_results"), help="Output directory")
     parser.add_argument("--west-root", type=Path, help="West workspace root")
     parser.add_argument("--module-path", type=Path, help="PQCP module path")
@@ -749,6 +799,9 @@ def main() -> int:
     west_root = args.west_root.resolve() if args.west_root else detect_west_root(Path.cwd())
     module_path = args.module_path.resolve() if args.module_path else SCRIPT_DIR.parent
     output_dir = args.output.resolve()
+    sample_filters = args.samples or ([args.sample] if args.sample else [])
+    board_filters = args.boards or ([args.board] if args.board else [])
+    profile_filters = args.profiles or ([args.profile] if args.profile else [])
 
     west_cmd = discover_west(args.west, west_root, module_path)
 
@@ -769,6 +822,10 @@ def main() -> int:
     elif args.config:
         specs = expand_runs_from_config(load_config_file(args.config), args.kconfig)
     elif args.sample:
+        if args.sample not in SAMPLES:
+            print(f"Unknown sample: {args.sample}")
+            print(f"Known direct-run samples: {', '.join(sorted(SAMPLES))}")
+            return 2
         specs = expand_runs(
             boards=[args.board or "qemu_x86_64"],
             profiles=[args.profile or "MCU_MINIMAL"],
@@ -776,6 +833,13 @@ def main() -> int:
             extra_kconfig=args.kconfig,
         )
     elif args.matrix or args.samples or args.boards or args.profiles:
+        unknown_samples = [
+            sample for sample in (args.samples or []) if sample not in SAMPLES
+        ]
+        if unknown_samples:
+            print(f"Unknown samples for matrix mode: {', '.join(unknown_samples)}")
+            print(f"Known matrix samples: {', '.join(sorted(SAMPLES))}")
+            return 2
         specs = expand_runs(
             boards=args.boards or ([args.board] if args.board else DEFAULT_BOARDS),
             profiles=args.profiles or ([args.profile] if args.profile else list(PROFILES.keys())),
@@ -789,6 +853,15 @@ def main() -> int:
             samples=["pqcp_basic_kem", "pqcp_basic_sig"],
             extra_kconfig=args.kconfig,
         )
+
+    specs = filter_specs(
+        specs,
+        boards=board_filters,
+        profiles=profile_filters,
+        samples=sample_filters,
+        protocol_only=args.protocol_only,
+        skip_protocol=args.skip_protocol,
+    )
 
     if not specs:
         print("No runnable benchmark combinations matched the selected matrix.")
@@ -808,7 +881,27 @@ def main() -> int:
         runner.run_one(spec)
 
     runner.write_outputs()
-    return 0 if any(record.metric_count > 0 for record in runner.records) else 1
+    failed_records = [
+        record for record in runner.records if not record.build_ok or not record.run_ok
+    ]
+    if failed_records:
+        print("\nOne or more runs failed:")
+        for record in failed_records:
+            print(
+                "  - "
+                f"{record.run_id}: build_ok={record.build_ok} "
+                f"run_ok={record.run_ok} timed_out={record.timed_out}"
+            )
+        return 1
+
+    print(
+        "\nCompleted "
+        f"{len(runner.records)} run(s) with {len(runner.metric_rows)} consolidated metric row(s)."
+    )
+    if not runner.metric_rows:
+        print("No metrics were emitted; this is expected for build-only or validation-only runs.")
+
+    return 0
 
 
 if __name__ == "__main__":

@@ -10,12 +10,12 @@ jobs:
 
     steps:
       - name: Check out module repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -56,7 +56,8 @@ jobs:
         run: |
           python -m py_compile \
             "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
-            "$GITHUB_WORKSPACE/scripts/parse_logs.py"
+            "$GITHUB_WORKSPACE/scripts/parse_logs.py" \
+            "$GITHUB_WORKSPACE/scripts/run_extended_checks.py"
           python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" --help > /dev/null
 
       - name: Run qemu_x86_64 tests
@@ -149,3 +150,29 @@ jobs:
 
           run_sample "samples/pqcp_basic_kem" "build-basic-kem" "PQCP_METRIC,primitive,keygen,MLKEM,"
           run_sample "samples/pqcp_basic_sig" "build-basic-sig" "PQCP_METRIC,primitive,keygen,MLDSA,"
+
+      - name: Run benchmark runner mini-matrix smoke
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
+            --benchmark-matrix \
+            --board qemu_x86_64 \
+            --profile MCU_MINIMAL \
+            --sample pqcp_basic_kem \
+            --timeout 60 \
+            --output "$RUNNER_TEMP/benchmark-matrix-smoke" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$GITHUB_WORKSPACE"
+
+      - name: Run profile-validation build smoke
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
+            --profile-validation \
+            --board qemu_x86_64 \
+            --profile MCU_MINIMAL \
+            --sample ztest_rng \
+            --build-only \
+            --output "$RUNNER_TEMP/profile-validation-smoke" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$GITHUB_WORKSPACE"

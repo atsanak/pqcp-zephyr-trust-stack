@@ -8,7 +8,7 @@
  *
  * Protocol:
  *   Input:  CMD:ALG:LEVEL:HEX_DATA
- *   Output: RESULT:HEX_DATA or ERROR:MSG
+ *   Output: RESULT:HEX_DATA or ERROR:CODE
  *
  * Commands:
  *   SEED:DRBG:0:hexseed - Seed deterministic RNG
@@ -38,7 +38,7 @@ static uint8_t work_buffer[MAX_HEX_LEN];
 static uint8_t response_buffer[MAX_HEX_LEN];
 
 /* Hex output buffer (2x data + null) */
-static char hex_output[MAX_HEX_LEN * 2 + 64];
+static char response_line[MAX_HEX_LEN * 2 + 64];
 
 /* Line input buffer */
 static char line_buffer[MAX_LINE_LEN];
@@ -83,25 +83,16 @@ static void process_and_respond(char *line)
     pqcp_acvp_response_init(&resp, response_buffer, sizeof(response_buffer));
     
     /* Process the command */
-    int ret = pqcp_acvp_process_command(line, work_buffer, sizeof(work_buffer), &resp);
+    pqcp_acvp_process_command(line, work_buffer, sizeof(work_buffer), &resp);
     
-    if (ret != 0 || (resp.result != PQCP_ACVP_OK && 
-                      resp.result != PQCP_ACVP_VERIFY_INVALID)) {
-        /* Error case */
-        printk("ERROR:%s\n", pqcp_acvp_result_str(resp.result));
+    if (pqcp_acvp_format_response_line(&resp, response_line,
+                                       sizeof(response_line)) != 0) {
+        printk("ERROR:%s\n",
+               pqcp_acvp_result_str(PQCP_ACVP_ERR_BUFFER_TOO_SMALL));
         return;
     }
-    
-    /* Success case */
-    if (resp.result == PQCP_ACVP_VERIFY_INVALID) {
-        printk("RESULT:INVALID\n");
-    } else if (resp.data_len > 0) {
-        /* Convert output data to hex */
-        pqcp_acvp_bytes_to_hex(resp.data, resp.data_len, hex_output);
-        printk("RESULT:%s\n", hex_output);
-    } else {
-        printk("RESULT:OK\n");
-    }
+
+    printk("%s\n", response_line);
 }
 
 int main(void)

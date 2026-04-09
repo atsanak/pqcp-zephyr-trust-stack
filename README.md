@@ -391,6 +391,35 @@ python scripts/run_benchmarks.py --profile-validation
 python scripts/run_benchmarks.py --config scripts/benchmark_matrix.json
 ```
 
+### Filtering the Curated Matrices
+
+The benchmark runner accepts the same `--board`, `--profile`, and `--sample`
+filters for curated JSON matrices as it does for ad-hoc runs. This makes it
+easy to iterate on a single entry without copying or editing the matrix file.
+
+```bash
+# Run just one curated benchmark entry
+python scripts/run_benchmarks.py \
+  --benchmark-matrix \
+  --board qemu_x86_64 \
+  --profile MCU_MINIMAL \
+  --sample pqcp_basic_kem
+
+# Run only the protocol-oriented benchmark entries
+python scripts/run_benchmarks.py --benchmark-matrix --protocol-only
+
+# Run only primitive-oriented entries
+python scripts/run_benchmarks.py --benchmark-matrix --skip-protocol
+
+# Smoke-check one profile-validation entry without launching QEMU
+python scripts/run_benchmarks.py \
+  --profile-validation \
+  --board qemu_x86_64 \
+  --profile MCU_MINIMAL \
+  --sample ztest_rng \
+  --build-only
+```
+
 ### Protocol Benchmark Sample
 
 ```bash
@@ -420,6 +449,8 @@ The runner:
 - strips common host compiler environment variables such as `CFLAGS`,
   `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `CPATH`, and `SDKROOT` before invoking
   `west`, which avoids host toolchain leakage into Zephyr builds
+- exits non-zero when any selected build/run fails, while still succeeding for
+  build-only or validation-only matrices that intentionally emit no metrics
 
 ### Output Layout
 
@@ -450,6 +481,26 @@ The repository includes two machine-readable configuration files:
 - `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI
 
+### Profile Cookbook
+
+Common profile-oriented invocations:
+
+```bash
+# Conservative MCU-oriented build
+west build -p always -b qemu_x86_64 samples/pqcp_basic_kem -- \
+  -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
+
+# PSA/TLS-capable gateway-style build
+west build -p always -b qemu_x86_64 samples/pqcp_tls_mbedtls_psa -- \
+  -DOVERLAY_CONFIG=overlay-selftest.conf \
+  -DCONFIG_PQCP_PROFILE_GATEWAY=y
+
+# Lab-style build with deterministic KATs and protocol benchmarking
+python scripts/run_benchmarks.py \
+  --benchmark-matrix \
+  --profile NATIVE_LAB
+```
+
 ### Metric Format
 
 Benchmark logs use two formats:
@@ -475,6 +526,11 @@ python scripts/parse_logs.py sample_output.log -o results/
 ## Serial ACVP Interface
 
 The `pqcp_serial_acvp` sample provides a UART-based interface for running ACVP test vectors and KATs.
+
+The wire-format response serializer is shared by the sample and tests through
+`pqcp_acvp_format_response_line()` in
+`include/pqcp_zephyr/acvp_cmd.h`, so the documented `RESULT:*` / `ERROR:*`
+grammar is enforced in one place.
 
 ### Building
 
@@ -534,6 +590,14 @@ Common error codes emitted by the ACVP sample and command library:
 - `VERIFY_FAILED`
 - `SEED_FAILED`
 - `NOT_ENABLED`
+
+The public ACVP command API is declared in
+`include/pqcp_zephyr/acvp_cmd.h` and includes helpers for:
+
+- bounded response initialization (`pqcp_acvp_response_init`)
+- command execution (`pqcp_acvp_process_command`)
+- stable line serialization (`pqcp_acvp_format_response_line`)
+- shared hex encoding/decoding utilities used by the serial sample and ztests
 
 ### Example Session
 
@@ -667,16 +731,49 @@ west build -t run
 west build -p always -b qemu_x86_64 tests/ztest_tls_selftest
 west build -t run
 
+# Optional stress-oriented ACVP parser coverage
+west build -p always -b qemu_x86_64 tests/ztest_acvp_serial -- \
+  -DOVERLAY_CONFIG=overlay-fuzz.conf
+west build -t run
+
+# Optional stress-oriented TLS self-test coverage
+west build -p always -b qemu_x86_64 tests/ztest_tls_selftest -- \
+  -DOVERLAY_CONFIG=overlay-fuzz.conf
+west build -t run
+
 # Run primitive tests on mps2/an385 without entropy hardware
 west build -p always -b mps2/an385 tests/ztest_primitive -- -DOVERLAY_CONFIG=overlay-no-entropy.conf
 west build -t run
 ```
 
+`CONFIG_PQCP_FUZZ_TESTS` is disabled by default and only enabled by the
+`overlay-fuzz.conf` test overlays. It is intended for local hardening runs and
+extended workflows, not for the default smoke CI path.
+
+## Shared Harness APIs
+
+The shared TLS helper API is declared in
+`include/pqcp_zephyr/tls_selftest.h`. It provides:
+
+- `pqcp_tls_selftest_init_psa()` for explicit PSA setup checks
+- `pqcp_tls_selftest_run()` for offline TLS/PSA/PQCP self-test and protocol-benchmark flows
+- `pqcp_tls_selftest_log_metrics()` for emitting stable `PQCP_METRIC` records
+
+Typical callers are:
+
+- `samples/pqcp_tls_mbedtls_psa`
+- `samples/pqcp_bench_protocol`
+- `tests/ztest_tls_selftest`
+
+These callers share the same report structure and metric names, which keeps the
+protocol benchmark and TLS self-test paths aligned.
+
 ## CI
 
 GitHub Actions coverage is defined in `.github/workflows/ci.yml`. The workflow
 sets up a Zephyr workspace, installs the Zephyr SDK toolchains needed for
-`qemu_x86_64`, and runs:
+`qemu_x86_64`, and runs on `ubuntu-22.04` with Python 3.12 and Zephyr v4.3.0.
+The fast CI path runs:
 
 - `tests/ztest_rng`
 - `tests/ztest_primitive`
@@ -684,10 +781,19 @@ sets up a Zephyr workspace, installs the Zephyr SDK toolchains needed for
 - `tests/ztest_tls_selftest`
 - `samples/pqcp_basic_kem`
 - `samples/pqcp_basic_sig`
+- a filtered `--benchmark-matrix` smoke run
+- a filtered `--profile-validation` build-only smoke run
 
 The sample runs are bounded with `timeout` and checked for expected
 `PQCP_METRIC` lines so CI can validate metric emission without waiting for QEMU
 samples to exit on their own.
+
+For deeper maintenance checks, `.github/workflows/extended-checks.yml` provides
+a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
+
+- configure a lightweight Zephyr target and emit a CMake dependency graph
+- run focused `cppcheck` analysis on the ACVP, TLS self-test, protocol bench,
+  and primitive wrapper sources
 
 ## Sample Applications
 
