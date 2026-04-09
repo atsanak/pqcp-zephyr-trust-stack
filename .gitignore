@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
+build/
+build-*/
+cmake-build-*/
+twister-out/
 benchmark_results/
