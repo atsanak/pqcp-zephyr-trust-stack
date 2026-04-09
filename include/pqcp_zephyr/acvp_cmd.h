@@ -45,11 +45,6 @@ enum pqcp_acvp_result {
 };
 
 /**
- * @brief Convert error code to string description
- */
-const char *pqcp_acvp_result_str(enum pqcp_acvp_result result);
-
-/**
  * @brief ACVP response structure
  * 
  * Holds the result of an ACVP command execution.
@@ -60,6 +55,33 @@ struct pqcp_acvp_response {
     size_t data_len;               /**< Length of output data */
     size_t data_cap;               /**< Capacity of output buffer */
 };
+
+/**
+ * @brief Convert error code to string description
+ */
+const char *pqcp_acvp_result_str(enum pqcp_acvp_result result);
+
+/**
+ * @brief Format a command response into the serial ACVP wire format.
+ *
+ * The formatter preserves the stable host-visible response grammar used by
+ * the serial sample:
+ *
+ * - `RESULT:OK`
+ * - `RESULT:INVALID`
+ * - `RESULT:<hex payload>`
+ * - `ERROR:<error_code>`
+ *
+ * @param resp Parsed command response.
+ * @param out Destination buffer for the formatted line.
+ * @param out_size Capacity of @p out in bytes.
+ *
+ * @retval 0 Response formatted successfully.
+ * @retval -EINVAL Invalid arguments were provided.
+ * @retval -ENOSPC @p out is too small for the formatted line.
+ */
+int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
+                                   char *out, size_t out_size);
 
 /**
  * @brief Initialize an ACVP response structure
@@ -203,6 +225,18 @@ void pqcp_acvp_bytes_to_hex(const uint8_t *data, size_t len, char *out);
  * 
  * Parses a line in the format CMD:ALG:LEVEL:HEX_DATA and executes
  * the corresponding command.
+ *
+ * Supported commands are:
+ *
+ * - `SEED:DRBG:0:<hexseed>`
+ * - `KEYGEN:MLKEM:<512|768|1024>:`
+ * - `ENCAPS:MLKEM:<level>:<pk_hex>`
+ * - `DECAPS:MLKEM:<level>:<ct_hex><sk_hex>`
+ * - `KEYGEN:MLDSA:<44|65|87>:`
+ * - `SIGN:MLDSA:<level>:<sk_hex><msg_hex>`
+ * - `VERIFY:MLDSA:<level>:<pk_hex><msg_hex><sig_hex>`
+ * - `SELFTEST::`
+ * - `HELP::`
  * 
  * @param line Command line (will be modified by strtok)
  * @param work_buf Working buffer for hex decoding

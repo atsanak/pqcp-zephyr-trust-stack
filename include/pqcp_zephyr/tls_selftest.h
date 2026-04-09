@@ -60,6 +60,24 @@ typedef struct pqcp_tls_selftest_report {
 }
 
 /**
+ * @brief Shared TLS self-test configuration.
+ *
+ * `kem_level` and `sig_level` must match levels compiled into the current
+ * image. `initialize_rng` and `initialize_psa` allow callers to exercise the
+ * harness either as a self-contained smoke test or inside a larger benchmark
+ * flow where setup already happened earlier.
+ */
+
+/**
+ * @brief Structured report produced by the TLS self-test harness.
+ *
+ * Timing fields are reported in microseconds. Byte counters capture the
+ * synthetic client/server payload sizes and derived transcript size used by
+ * the offline TLS benchmark path. Memory fields reflect best-effort working
+ * set and stack observations available in the current build.
+ */
+
+/**
  * @brief Initialize PSA crypto for TLS self-tests.
  *
  * When PSA support is not compiled in, the function returns -ENOTSUP.
@@ -77,6 +95,13 @@ int pqcp_tls_selftest_init_psa(bool *ready);
  * self-test mode: ML-DSA key generation/sign/verify and ML-KEM
  * key generation/encaps/decaps, plus transcript and payload accounting.
  *
+ * Callers typically use this in one of two ways:
+ *
+ * - TLS sample self-test mode, with `initialize_rng=true`,
+ *   `initialize_psa=true`, and `emit_metrics=true`
+ * - Protocol benchmark/sample mode, with setup handled externally and
+ *   `emit_metrics` controlled by the benchmark harness
+ *
  * @param config Benchmark/self-test configuration. NULL uses defaults.
  * @param report Output report.
  *
@@ -87,6 +112,10 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
 
 /**
  * @brief Emit structured metrics for a completed TLS self-test run.
+ *
+ * Metric emission preserves the stable eight-field `PQCP_METRIC` wire format
+ * used across the module. The harness only adds new metric names and does not
+ * alter the field layout.
  *
  * @param report Completed report to log.
  */

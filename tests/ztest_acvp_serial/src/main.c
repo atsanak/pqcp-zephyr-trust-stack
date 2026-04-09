@@ -21,6 +21,7 @@ static uint8_t work_buffer[TEST_BUFFER_SIZE];
 static uint8_t response_buffer[TEST_BUFFER_SIZE];
 static char line_buffer[TEST_BUFFER_SIZE * 2];
 static char hex_buffer[TEST_BUFFER_SIZE * 2];
+static char response_line[TEST_BUFFER_SIZE * 2];
 
 static int run_command(const char *fmt, struct pqcp_acvp_response *resp, ...)
 {
@@ -46,6 +47,27 @@ static void bytes_to_hex(const uint8_t *data, size_t len, char *out, size_t out_
     pqcp_acvp_bytes_to_hex(data, len, out);
 }
 
+static void assert_response_line(const struct pqcp_acvp_response *resp,
+                                 const char *expected)
+{
+    zassert_equal(pqcp_acvp_format_response_line(resp, response_line,
+                                                 sizeof(response_line)),
+                  0);
+    zassert_equal(strcmp(response_line, expected), 0,
+                  "unexpected response line: %s", response_line);
+}
+
+static void assert_response_prefix(const struct pqcp_acvp_response *resp,
+                                   const char *expected_prefix)
+{
+    zassert_equal(pqcp_acvp_format_response_line(resp, response_line,
+                                                 sizeof(response_line)),
+                  0);
+    zassert_not_null(strstr(response_line, expected_prefix),
+                     "response line %s missing prefix %s",
+                     response_line, expected_prefix);
+}
+
 ZTEST(pqcp_acvp_serial, test_mlkem_roundtrip_commands)
 {
     struct pqcp_acvp_response resp;
@@ -63,10 +85,12 @@ ZTEST(pqcp_acvp_serial, test_mlkem_roundtrip_commands)
                     "202122232425262728292a2b2c2d2e2f"),
         0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
+    assert_response_line(&resp, "RESULT:OK");
 
     zassert_equal(run_command("KEYGEN:MLKEM:768:", &resp), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, pk_size + sk_size);
+    assert_response_prefix(&resp, "RESULT:");
     memcpy(pk, resp.data, pk_size);
     memcpy(sk, resp.data + pk_size, sk_size);
 
@@ -74,6 +98,7 @@ ZTEST(pqcp_acvp_serial, test_mlkem_roundtrip_commands)
     zassert_equal(run_command("ENCAPS:MLKEM:768:%s", &resp, hex_buffer), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, ct_size + PQCP_MLKEM_SS_SIZE);
+    assert_response_prefix(&resp, "RESULT:");
     memcpy(shared_secret, resp.data + ct_size, sizeof(shared_secret));
 
     memcpy(work_buffer, resp.data, ct_size);
@@ -82,6 +107,7 @@ ZTEST(pqcp_acvp_serial, test_mlkem_roundtrip_commands)
     zassert_equal(run_command("DECAPS:MLKEM:768:%s", &resp, hex_buffer), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, PQCP_MLKEM_SS_SIZE);
+    assert_response_prefix(&resp, "RESULT:");
     zassert_mem_equal(resp.data, shared_secret, PQCP_MLKEM_SS_SIZE);
 }
 
@@ -102,10 +128,12 @@ ZTEST(pqcp_acvp_serial, test_mldsa_roundtrip_and_invalid_signature)
                     "0102030405060708090a0b0c0d0e0f10"),
         0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
+    assert_response_line(&resp, "RESULT:OK");
 
     zassert_equal(run_command("KEYGEN:MLDSA:65:", &resp), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, pk_size + sk_size);
+    assert_response_prefix(&resp, "RESULT:");
     memcpy(pk, resp.data, pk_size);
     memcpy(sk, resp.data + pk_size, sk_size);
 
@@ -116,6 +144,7 @@ ZTEST(pqcp_acvp_serial, test_mldsa_roundtrip_and_invalid_signature)
     zassert_equal(run_command("SIGN:MLDSA:65:%s", &resp, hex_buffer), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, sig_size);
+    assert_response_prefix(&resp, "RESULT:");
 
     memcpy(work_buffer, pk, pk_size);
     memcpy(work_buffer + pk_size, message, sizeof(message) - 1U);
@@ -125,12 +154,14 @@ ZTEST(pqcp_acvp_serial, test_mldsa_roundtrip_and_invalid_signature)
     zassert_equal(run_command("VERIFY:MLDSA:65:%s", &resp, hex_buffer), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, 0U);
+    assert_response_line(&resp, "RESULT:OK");
 
     work_buffer[pk_size + sizeof(message) - 1U + sig_size - 1U] ^= 0x01U;
     bytes_to_hex(work_buffer, pk_size + sig_size + sizeof(message) - 1U,
                  hex_buffer, sizeof(hex_buffer));
     zassert_equal(run_command("VERIFY:MLDSA:65:%s", &resp, hex_buffer), 0);
     zassert_equal(resp.result, PQCP_ACVP_VERIFY_INVALID);
+    assert_response_line(&resp, "RESULT:INVALID");
 }
 
 ZTEST(pqcp_acvp_serial, test_rejects_malformed_commands)
@@ -139,18 +170,23 @@ ZTEST(pqcp_acvp_serial, test_rejects_malformed_commands)
 
     zassert_equal(run_command("KEYGEN:MLKEM", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_MISSING_ARGS);
+    assert_response_line(&resp, "ERROR:MISSING_ARGS");
 
     zassert_equal(run_command("KEYGEN:MLKEM:not-a-level:", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_LEVEL);
+    assert_response_line(&resp, "ERROR:INVALID_LEVEL");
 
     zassert_equal(run_command("KEYGEN:UNKNOWN:768:", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_ALG);
+    assert_response_line(&resp, "ERROR:INVALID_ALG");
 
     zassert_equal(run_command("KEYGEN:MLKEM:768:00", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
 
     zassert_equal(run_command("FOO:MLKEM:768:", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
 }
 
 ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
@@ -159,18 +195,23 @@ ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
 
     zassert_equal(run_command("SEED:DRBG:0:abc", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_HEX);
+    assert_response_line(&resp, "ERROR:INVALID_HEX");
 
     zassert_equal(run_command("ENCAPS:MLKEM:768:zz", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_HEX);
+    assert_response_line(&resp, "ERROR:INVALID_HEX");
 
     zassert_equal(run_command("ENCAPS:MLKEM:999:00", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_LEVEL);
+    assert_response_line(&resp, "ERROR:INVALID_LEVEL");
 
     zassert_equal(run_command("DECAPS:MLKEM:768:00", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
 
     zassert_equal(run_command("VERIFY:MLDSA:65:00", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
 }
 
 ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)
@@ -180,11 +221,78 @@ ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)
     zassert_equal(run_command("HELP::", &resp), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, 0U);
+    assert_response_line(&resp, "RESULT:OK");
 
     zassert_equal(run_command("SELFTEST::", &resp), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_equal(resp.data_len, 0U);
+    assert_response_line(&resp, "RESULT:OK");
 }
+
+#if defined(CONFIG_PQCP_FUZZ_TESTS)
+static uint32_t fuzz_state = 0x8f23d91bU;
+
+static uint32_t fuzz_next(void)
+{
+    fuzz_state = (1103515245U * fuzz_state) + 12345U;
+    return fuzz_state;
+}
+
+ZTEST(pqcp_acvp_serial, test_stress_randomized_command_parsing)
+{
+    static const char *seed_hex =
+        "000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d1e1f"
+        "202122232425262728292a2b2c2d2e2f";
+    struct pqcp_acvp_response resp;
+    int ret;
+
+    for (size_t i = 0U; i < 64U; ++i) {
+        switch (fuzz_next() % 8U) {
+        case 0U:
+            ret = run_command("HELP::", &resp);
+            zassert_equal(ret, 0);
+            break;
+        case 1U:
+            ret = run_command("SELFTEST::", &resp);
+            zassert_equal(ret, 0);
+            break;
+        case 2U:
+            ret = run_command("SEED:DRBG:0:%s", &resp, seed_hex);
+            zassert_equal(ret, 0);
+            break;
+        case 3U:
+            ret = run_command("KEYGEN:MLKEM:768:", &resp);
+            zassert_equal(ret, 0);
+            break;
+        case 4U:
+            ret = run_command("KEYGEN:MLDSA:65:", &resp);
+            zassert_equal(ret, 0);
+            break;
+        case 5U:
+            ret = run_command("VERIFY:MLDSA:65:xyz", &resp);
+            zassert_true(ret < 0);
+            break;
+        case 6U:
+            ret = run_command("ENCAPS:MLKEM:%u:00", &resp,
+                              500U + (fuzz_next() % 700U));
+            zassert_true(ret < 0);
+            break;
+        default:
+            ret = run_command("NOPE:MLKEM:768:00:extra", &resp);
+            zassert_true(ret < 0);
+            break;
+        }
+
+        zassert_equal(pqcp_acvp_format_response_line(&resp, response_line,
+                                                     sizeof(response_line)),
+                      0);
+        zassert_true(strncmp(response_line, "RESULT:", 7) == 0 ||
+                     strncmp(response_line, "ERROR:", 6) == 0,
+                     "unexpected response format: %s", response_line);
+    }
+}
+#endif
 
 static void *pqcp_acvp_setup(void)
 {

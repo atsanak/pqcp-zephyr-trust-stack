@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <stdio.h>
 
 const char *pqcp_acvp_result_str(enum pqcp_acvp_result result)
 {
@@ -45,6 +46,54 @@ void pqcp_acvp_response_init(struct pqcp_acvp_response *resp,
     resp->data = buffer;
     resp->data_len = 0;
     resp->data_cap = buffer_size;
+}
+
+int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
+                                   char *out, size_t out_size)
+{
+    int written;
+
+    if (resp == NULL || out == NULL || out_size == 0U) {
+        return -EINVAL;
+    }
+
+    if (resp->result != PQCP_ACVP_OK &&
+        resp->result != PQCP_ACVP_VERIFY_INVALID) {
+        written = snprintf(out, out_size, "ERROR:%s",
+                           pqcp_acvp_result_str(resp->result));
+        if (written < 0 || (size_t)written >= out_size) {
+            return -ENOSPC;
+        }
+
+        return 0;
+    }
+
+    if (resp->result == PQCP_ACVP_VERIFY_INVALID) {
+        written = snprintf(out, out_size, "RESULT:INVALID");
+        if (written < 0 || (size_t)written >= out_size) {
+            return -ENOSPC;
+        }
+
+        return 0;
+    }
+
+    if (resp->data_len == 0U) {
+        written = snprintf(out, out_size, "RESULT:OK");
+        if (written < 0 || (size_t)written >= out_size) {
+            return -ENOSPC;
+        }
+
+        return 0;
+    }
+
+    if (resp->data == NULL || out_size < (sizeof("RESULT:") - 1U) +
+                                       (resp->data_len * 2U) + 1U) {
+        return -ENOSPC;
+    }
+
+    memcpy(out, "RESULT:", sizeof("RESULT:") - 1U);
+    pqcp_acvp_bytes_to_hex(resp->data, resp->data_len, out + sizeof("RESULT:") - 1U);
+    return 0;
 }
 
 int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
