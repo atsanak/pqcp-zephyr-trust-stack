@@ -81,10 +81,18 @@ typedef struct pqcp_bench_protocol_result {
     
     /* Protocol-specific metrics */
     uint32_t handshake_time_ms;   /* Handshake latency */
+    uint16_t sig_level;           /* Signature/authentication security level */
+    uint32_t client_bytes;        /* Approximate client-to-server payload */
+    uint32_t server_bytes;        /* Approximate server-to-client payload */
     uint32_t transcript_bytes;    /* Total bytes exchanged */
     uint16_t fragments;           /* Number of network fragments */
     uint8_t  cpu_percent;         /* CPU utilization during handshake */
     uint32_t peak_ram_bytes;      /* Peak RAM usage */
+    uint32_t stack_bytes;         /* Peak stack usage (if measurable) */
+    uint32_t heap_bytes;          /* Peak heap usage (if measurable) */
+    uint32_t working_set_bytes;   /* Static working set used by the flow */
+    uint64_t auth_time_us;        /* ML-DSA auth stage time */
+    uint64_t key_exchange_time_us;/* ML-KEM key exchange stage time */
     
     /* Percentiles (in ms) */
     uint32_t p50_latency;

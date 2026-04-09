@@ -12,6 +12,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <limits.h>
 
 const char *pqcp_acvp_result_str(enum pqcp_acvp_result result)
 {
@@ -109,6 +111,54 @@ static pqcp_mldsa_level_t get_mldsa_level(int level)
     case 87: return PQCP_MLDSA_87;
     default: return (pqcp_mldsa_level_t)-1;
     }
+}
+
+static size_t split_fields(char *line, char **fields, size_t max_fields,
+                           bool *too_many_fields)
+{
+    size_t count = 0U;
+    char *cursor = line;
+
+    *too_many_fields = false;
+
+    while (count < max_fields) {
+        char *sep;
+
+        fields[count++] = cursor;
+        sep = strchr(cursor, ':');
+        if (sep == NULL) {
+            return count;
+        }
+
+        *sep = '\0';
+        cursor = sep + 1;
+    }
+
+    if (strchr(cursor, ':') != NULL || cursor[0] != '\0') {
+        *too_many_fields = true;
+    }
+
+    return count;
+}
+
+static int parse_level_token(const char *level_str, int *level)
+{
+    char *endptr;
+    long parsed;
+
+    if (level_str == NULL || level_str[0] == '\0') {
+        return -EINVAL;
+    }
+
+    errno = 0;
+    parsed = strtol(level_str, &endptr, 10);
+    if (errno != 0 || endptr == level_str || *endptr != '\0' ||
+        parsed <= 0 || parsed > INT_MAX) {
+        return -EINVAL;
+    }
+
+    *level = (int)parsed;
+    return 0;
 }
 
 int pqcp_acvp_cmd_seed(const uint8_t *seed, size_t seed_len,
@@ -399,19 +449,19 @@ int pqcp_acvp_cmd_selftest(struct pqcp_acvp_response *resp)
 #ifdef CONFIG_PQCP_RNG_DETERMINISTIC_TEST
     pqcp_rng_deterministic_seed(selftest_seed, sizeof(selftest_seed));
 #endif
-    
+
     ret = pqcp_mldsa_sign(dsa_level, dsa_sk, msg, sizeof(msg)-1, NULL, 0, sig);
     if (ret != PQCP_MLDSA_SUCCESS) {
         resp->result = PQCP_ACVP_ERR_SIGN;
         return -EIO;
     }
-    
+
     ret = pqcp_mldsa_verify(dsa_level, dsa_pk, msg, sizeof(msg)-1, NULL, 0, sig);
     if (ret != PQCP_MLDSA_SUCCESS) {
         resp->result = PQCP_ACVP_ERR_VERIFY;
         return -EIO;
     }
-    
+
     resp->result = PQCP_ACVP_OK;
     resp->data_len = 0;
     return 0;
@@ -421,19 +471,36 @@ int pqcp_acvp_process_command(char *line,
                               uint8_t *work_buf, size_t work_buf_size,
                               struct pqcp_acvp_response *resp)
 {
-    /* Format: CMD:ALG:LEVEL:DATA */
-    char *cmd = strtok(line, ":");
-    char *alg = strtok(NULL, ":");
-    char *level_str = strtok(NULL, ":");
-    char *data = strtok(NULL, ":");
-    
-    if (cmd == NULL || cmd[0] == '\0') {
+    char *fields[4] = { 0 };
+    char *cmd;
+    char *alg;
+    char *level_str;
+    char *data;
+    bool too_many_fields;
+    size_t field_count;
+    int level = 0;
+
+    if (line == NULL || resp == NULL) {
+        return -EINVAL;
+    }
+
+    field_count = split_fields(line, fields, 4U, &too_many_fields);
+    cmd = (field_count > 0U) ? fields[0] : NULL;
+    alg = (field_count > 1U) ? fields[1] : NULL;
+    level_str = (field_count > 2U) ? fields[2] : NULL;
+    data = (field_count > 3U) ? fields[3] : NULL;
+
+    if (too_many_fields || cmd == NULL || cmd[0] == '\0') {
         resp->result = PQCP_ACVP_ERR_INVALID_CMD;
         return -EINVAL;
     }
-    
+
     /* HELP command */
     if (strcmp(cmd, "HELP") == 0) {
+        if (field_count > 1U && alg != NULL && alg[0] != '\0') {
+            resp->result = PQCP_ACVP_ERR_INVALID_CMD;
+            return -EINVAL;
+        }
         resp->result = PQCP_ACVP_OK;
         resp->data_len = 0;
         return 0;
@@ -441,34 +508,58 @@ int pqcp_acvp_process_command(char *line,
     
     /* SELFTEST command */
     if (strcmp(cmd, "SELFTEST") == 0) {
+        if (field_count > 1U && alg != NULL && alg[0] != '\0') {
+            resp->result = PQCP_ACVP_ERR_INVALID_CMD;
+            return -EINVAL;
+        }
         return pqcp_acvp_cmd_selftest(resp);
     }
     
     /* SEED command */
     if (strcmp(cmd, "SEED") == 0) {
         size_t seed_len;
-        int ret = pqcp_acvp_hex_to_bytes(data, work_buf, &seed_len, work_buf_size);
+        int ret;
+
+        if (alg == NULL || strcmp(alg, "DRBG") != 0) {
+            resp->result = PQCP_ACVP_ERR_INVALID_ALG;
+            return -EINVAL;
+        }
+        if (level_str == NULL || strcmp(level_str, "0") != 0) {
+            resp->result = PQCP_ACVP_ERR_INVALID_LEVEL;
+            return -EINVAL;
+        }
+        if (data == NULL || data[0] == '\0') {
+            resp->result = PQCP_ACVP_ERR_MISSING_ARGS;
+            return -EINVAL;
+        }
+
+        ret = pqcp_acvp_hex_to_bytes(data, work_buf, &seed_len, work_buf_size);
         if (ret != 0) {
-            resp->result = PQCP_ACVP_ERR_INVALID_HEX;
+            resp->result = (ret == -ENOSPC) ?
+                PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
             return ret;
         }
         return pqcp_acvp_cmd_seed(work_buf, seed_len, resp);
     }
     
     /* Commands that require ALG and LEVEL */
-    if (alg == NULL || level_str == NULL) {
+    if (alg == NULL || alg[0] == '\0' ||
+        level_str == NULL || level_str[0] == '\0') {
         resp->result = PQCP_ACVP_ERR_MISSING_ARGS;
         return -EINVAL;
     }
     
-    int level = atoi(level_str);
-    if (level <= 0) {
+    if (parse_level_token(level_str, &level) != 0) {
         resp->result = PQCP_ACVP_ERR_INVALID_LEVEL;
         return -EINVAL;
     }
     
     /* KEYGEN command */
     if (strcmp(cmd, "KEYGEN") == 0) {
+        if (data != NULL && data[0] != '\0') {
+            resp->result = PQCP_ACVP_ERR_INVALID_CMD;
+            return -EINVAL;
+        }
         if (strcmp(alg, "MLKEM") == 0) {
             return pqcp_acvp_cmd_mlkem_keygen(level, resp);
         } else if (strcmp(alg, "MLDSA") == 0) {
@@ -480,10 +571,16 @@ int pqcp_acvp_process_command(char *line,
     }
     
     /* Commands that require DATA */
+    if (data == NULL || data[0] == '\0') {
+        resp->result = PQCP_ACVP_ERR_MISSING_ARGS;
+        return -EINVAL;
+    }
+
     size_t data_len = 0;
     int ret = pqcp_acvp_hex_to_bytes(data, work_buf, &data_len, work_buf_size);
     if (ret != 0) {
-        resp->result = PQCP_ACVP_ERR_INVALID_HEX;
+        resp->result = (ret == -ENOSPC) ?
+            PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
         return ret;
     }
     
@@ -498,13 +595,14 @@ int pqcp_acvp_process_command(char *line,
                 return -EINVAL;
             }
             size_t ct_size = pqcp_mlkem_ct_size(mlkem_level);
-            if (data_len <= ct_size) {
+            size_t sk_size = pqcp_mlkem_sk_size(mlkem_level);
+            if (data_len != ct_size + sk_size) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }
             return pqcp_acvp_cmd_mlkem_decaps(level,
                                               work_buf, ct_size,
-                                              work_buf + ct_size, data_len - ct_size,
+                                              work_buf + ct_size, sk_size,
                                               resp);
         }
     }
@@ -518,7 +616,7 @@ int pqcp_acvp_process_command(char *line,
                 return -EINVAL;
             }
             size_t sk_size = pqcp_mldsa_sk_size(mldsa_level);
-            if (data_len <= sk_size) {
+            if (data_len < sk_size) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }
@@ -534,7 +632,7 @@ int pqcp_acvp_process_command(char *line,
             }
             size_t pk_size = pqcp_mldsa_pk_size(mldsa_level);
             size_t sig_size = pqcp_mldsa_sig_size(mldsa_level);
-            if (data_len < pk_size + sig_size + 1) {
+            if (data_len < pk_size + sig_size) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }

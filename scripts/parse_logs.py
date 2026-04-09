@@ -29,7 +29,7 @@ def parse_pqcp_metric_line(line: str) -> Optional[Dict]:
     Format: PQCP_METRIC,<component>,<operation>,<algo>,<level>,<metric>,<value>,<unit>
     """
     pattern = re.compile(
-        r'PQCP_METRIC,(\w+),(\w+),(\w+),(\d+),(\w+),(\w+),(\w*)'
+        r'^PQCP_METRIC,([^,]+),([^,]+),([^,]+),(-?\d+),([^,]+),([^,]*),([^,]*)$'
     )
     
     m = pattern.match(line)
@@ -82,14 +82,14 @@ def parse_protocol_line(line: str) -> Optional[Dict]:
     """Parse a protocol benchmark line."""
     # Format: TLS,MLKEM768+MLDSA65,handshake_ms=150,cpu_pct=45,peak_kib=32,...
     pattern = re.compile(
-        r'TLS,(\w+),handshake_ms=(\d+),'
+        r'^TLS,([^,]+),handshake_ms=(\d+),'
         r'cpu_pct=(\d+),'
         r'peak_kib=(\d+),'
         r'transcript_bytes=(\d+),'
         r'frags=(\d+)'
         r'(?:,p50=(\d+))?'
         r'(?:,p90=(\d+))?'
-        r'(?:,p99=(\d+))?'
+        r'(?:,p99=(\d+))?$'
     )
     
     m = pattern.match(line)
