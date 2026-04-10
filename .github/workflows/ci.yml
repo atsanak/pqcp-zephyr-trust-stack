@@ -176,6 +176,7 @@ jobs:
             --profile MCU_MINIMAL \
             --sample ztest_rng \
             --build-only \
+            --resource-budgets "$GITHUB_WORKSPACE/scripts/resource_budgets.json" \
             --output "$RUNNER_TEMP/profile-validation-smoke" \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE"

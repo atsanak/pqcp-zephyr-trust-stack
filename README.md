@@ -175,7 +175,9 @@ pqcp-zephyr-trust-stack/
 │
 ├── scripts/
 │   ├── run_benchmarks.py       # Benchmark orchestration
-│   └── parse_logs.py           # Log parsing to CSV
+│   ├── parse_logs.py           # Log parsing to CSV
+│   ├── run_extended_checks.py  # Slower validation and compatibility checks
+│   └── resource_budgets.json   # Curated ROM/RAM envelopes for CI smokes
 │
 └── ext/                        # External library integration
 ```
@@ -487,6 +489,35 @@ The repository includes two machine-readable configuration files:
 
 - `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection, keeping at least one primitive-oriented entry per profile plus protocol/TLS-oriented coverage where that profile supports it
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI, including the explicit `mps2/an385` Cortex-M no-entropy validation path
+
+### Resource Budget Enforcement
+
+The curated profile-validation matrix also has an optional checked-in budget file
+at `scripts/resource_budgets.json`. When passed to `scripts/run_benchmarks.py`,
+the runner:
+
+- extracts section-level `text/data/bss` figures from the built ELF using
+  `objdump`
+- runs Zephyr's `rom_report` and `ram_report` targets for matching entries
+- emits `build` rows such as `rom_bytes` and `ram_bytes` in the consolidated
+  metrics output
+- fails non-zero if any matched run exceeds its configured ROM or RAM envelope
+
+For example:
+
+```bash
+python scripts/run_benchmarks.py \
+  --profile-validation \
+  --board qemu_x86_64 \
+  --build-only \
+  --resource-budgets scripts/resource_budgets.json \
+  --output benchmark_results/profile-budget-smoke
+```
+
+The checked-in budgets are based on the current Zephyr `v4.3.0` baseline builds
+with modest headroom for toolchain and configuration drift. Update them
+deliberately when a real feature change increases footprint, and keep the
+profile matrix, README, and release checklist in sync when doing so.
 
 ### Profile Cookbook
 
@@ -1039,7 +1070,8 @@ The fast CI path runs:
 - `samples/pqcp_basic_kem`
 - `samples/pqcp_basic_sig`
 - a filtered `--benchmark-matrix` smoke run
-- a filtered `--profile-validation` build-only smoke run
+- a filtered `--profile-validation` build-only smoke run with
+  `scripts/resource_budgets.json`
 
 The sample runs are bounded with `timeout` and checked for expected
 `PQCP_METRIC` lines so CI can validate metric emission without waiting for QEMU
@@ -1054,10 +1086,13 @@ a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
   wrapper sources
 - smoke the serial ACVP sample through the host-side driver script on
   `qemu_x86_64`
+- enforce the checked-in ROM/RAM budgets for the full `qemu_x86_64`
+  profile-validation matrix
 - build-validate the `mps2/an385` MCU profile path through
-  `tests/ztest_primitive` with `overlay-no-entropy.conf`
+  `tests/ztest_primitive` with `overlay-no-entropy.conf` and matching budgets
 - build-validate the `nucleo_h743zi` MCU profile path through
-  `tests/ztest_primitive` and `samples/pqcp_basic_kem`
+  `tests/ztest_primitive` and `samples/pqcp_basic_kem`, again with matching
+  resource budgets
 - optionally probe a newer Zephyr ref by rebuilding the primitive, ACVP, and
   TLS self-test harnesses through the compatibility-smoke mode
 
@@ -1095,6 +1130,14 @@ python scripts/run_extended_checks.py \
   --west-root /path/to/zephyrproject \
   --module-path "$PWD" \
   --strict
+
+python scripts/run_benchmarks.py \
+  --profile-validation \
+  --build-only \
+  --resource-budgets scripts/resource_budgets.json \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --output benchmark_results/profile-budget-rc
 
 python scripts/run_extended_checks.py \
   --west-root /path/to/zephyrproject \
