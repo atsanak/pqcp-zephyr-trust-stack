@@ -13,6 +13,7 @@ import csv
 import importlib.util
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -154,6 +155,10 @@ class RunRecord:
     size_text: int
     size_data: int
     size_bss: int
+    rom_bytes: int
+    ram_bytes: int
+    budget_ok: bool
+    budget_failures: List[str]
 
 
 def slugify(value: str) -> str:
@@ -281,12 +286,147 @@ def discover_west(explicit: Optional[str], west_root: Path, module_path: Path) -
     )
 
 
-def discover_size_tool() -> Optional[List[str]]:
-    for tool in ("llvm-size", "size"):
+ROM_LIKE_SECTION_NAMES = {
+    ".ARM.exidx",
+    "device_area",
+    "initlevel",
+    "log_backend_area",
+    "log_const_area",
+    "rodata",
+    "rom_start",
+    "sw_isr_table",
+}
+
+RAM_LIKE_SECTION_NAMES = {
+    ".last_ram_section",
+    "data",
+    "datas",
+    "device_states",
+    "k_sem_area",
+    "log_mpsc_pbuf_area",
+    "log_msg_ptr_area",
+    "pagetables",
+}
+
+OBJDUMP_MAC_RE = re.compile(
+    r"^\s*\d+\s+(?P<name>\S+)\s+(?P<size>[0-9a-fA-F]+)\s+"
+    r"(?P<vma>[0-9a-fA-F]+)(?:\s+(?P<lma>[0-9a-fA-F]+))?\s+"
+    r"(?P<section_type>TEXT|DATA|BSS)\s*$"
+)
+
+
+def discover_objdump_tool() -> Optional[List[str]]:
+    for tool in ("llvm-objdump", "objdump"):
         path = shutil.which(tool)
         if path:
             return [path]
     return None
+
+
+def classify_macos_objdump_section(
+    section_name: str,
+    section_type: str,
+    vma: str,
+    lma: Optional[str],
+) -> Optional[str]:
+    if section_type == "TEXT":
+        return "text"
+    if section_type == "BSS":
+        return "bss"
+    if section_type != "DATA":
+        return None
+
+    if lma is not None and vma.lower() != lma.lower():
+        return "data"
+
+    if section_name in ROM_LIKE_SECTION_NAMES or section_name.endswith("_api_area"):
+        return "text"
+    if section_name in RAM_LIKE_SECTION_NAMES:
+        return "data"
+    return "data"
+
+
+def parse_objdump_sections(output: str) -> Dict[str, int]:
+    totals = {"text": 0, "data": 0, "bss": 0}
+    pending_gnu_section: Optional[tuple[str, int]] = None
+
+    for raw_line in output.splitlines():
+        mac_match = OBJDUMP_MAC_RE.match(raw_line)
+        if mac_match is not None:
+            bucket = classify_macos_objdump_section(
+                mac_match.group("name"),
+                mac_match.group("section_type"),
+                mac_match.group("vma"),
+                mac_match.group("lma"),
+            )
+            if bucket is not None:
+                totals[bucket] += int(mac_match.group("size"), 16)
+            pending_gnu_section = None
+            continue
+
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+
+        parts = stripped.split()
+        if parts and parts[0].isdigit() and len(parts) >= 7:
+            try:
+                pending_gnu_section = (parts[1], int(parts[2], 16))
+            except ValueError:
+                pending_gnu_section = None
+            continue
+
+        if pending_gnu_section is None:
+            continue
+
+        section_name, section_size = pending_gnu_section
+        flags = {item.strip() for item in stripped.split(",")}
+        pending_gnu_section = None
+
+        if "ALLOC" not in flags:
+            continue
+        if "CODE" in flags or "READONLY" in flags:
+            totals["text"] += section_size
+        elif "LOAD" in flags:
+            totals["data"] += section_size
+        else:
+            totals["bss"] += section_size
+
+    return totals
+
+
+def load_resource_budgets(path: Path) -> Dict[str, Dict[str, Any]]:
+    raw = json.loads(path.read_text())
+    budgets = raw.get("budgets", raw)
+    if not isinstance(budgets, list):
+        raise RuntimeError("resource budget file must contain a 'budgets' list")
+
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for entry in budgets:
+        if not isinstance(entry, dict):
+            raise RuntimeError("each resource budget entry must be an object")
+
+        limits = entry.get("limits")
+        if not isinstance(limits, dict) or not limits:
+            raise RuntimeError("each resource budget entry must contain non-empty limits")
+
+        run_id = entry.get("run_id")
+        if run_id is None:
+            board = entry.get("board")
+            profile = entry.get("profile")
+            sample = entry.get("sample")
+            if not board or not profile or not sample:
+                raise RuntimeError(
+                    "resource budget entries must define run_id or board/profile/sample"
+                )
+            run_id = make_run_id(str(board), str(profile), str(sample))
+
+        normalized[str(run_id)] = {
+            "description": str(entry.get("description", "")).strip(),
+            "limits": {str(name): int(value) for name, value in limits.items()},
+        }
+
+    return normalized
 
 
 class BenchmarkRunner:
@@ -299,6 +439,7 @@ class BenchmarkRunner:
         build_only: bool,
         default_timeout: int,
         verbose: bool,
+        resource_budgets: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         self.west_root = west_root
         self.module_path = module_path
@@ -309,7 +450,8 @@ class BenchmarkRunner:
         self.verbose = verbose
         self.command_env = self._build_command_env()
         self.timestamp = datetime.now(timezone.utc).isoformat()
-        self.size_tool = discover_size_tool()
+        self.objdump_tool = discover_objdump_tool()
+        self.resource_budgets = resource_budgets or {}
         self.records: List[RunRecord] = []
         self.metric_rows: List[Dict[str, Any]] = []
         self.all_results: List[Dict[str, Any]] = []
@@ -463,24 +605,65 @@ class BenchmarkRunner:
     def _get_code_size(self, spec: RunSpec) -> Dict[str, int]:
         build_dir = self.output_dir / "build" / spec.run_id
         elf_path = build_dir / "zephyr/zephyr.elf"
-        if self.size_tool is None or not elf_path.exists():
+        if self.objdump_tool is None or not elf_path.exists():
             return {}
 
-        result = self._run_command([*self.size_tool, str(elf_path)], cwd=self.west_root)
+        result = self._run_command(
+            [*self.objdump_tool, "-h", str(elf_path)],
+            cwd=self.west_root,
+        )
         if result.returncode != 0:
             return {}
 
-        for line in result.stdout.splitlines():
-            parts = line.split()
-            if len(parts) >= 4 and parts[0].isdigit():
-                return {
-                    "text": int(parts[0]),
-                    "data": int(parts[1]),
-                    "bss": int(parts[2]),
-                    "total": int(parts[3]),
-                }
+        sizes = parse_objdump_sections(result.stdout)
+        sizes["total"] = sizes.get("text", 0) + sizes.get("data", 0) + sizes.get("bss", 0)
+        return sizes
 
-        return {}
+    def _generate_resource_reports(self, spec: RunSpec) -> Dict[str, int]:
+        if spec.run_id not in self.resource_budgets:
+            return {}
+
+        build_dir = self.output_dir / "build" / spec.run_id
+        report_values: Dict[str, int] = {}
+        report_targets = (
+            ("rom_report", "rom.json", "rom"),
+            ("ram_report", "ram.json", "ram"),
+        )
+
+        for target_name, json_name, metric_name in report_targets:
+            report_path = build_dir / json_name
+            result = self._run_command(
+                [*self.west_cmd, "build", "-d", str(build_dir), "-t", target_name],
+                cwd=self.west_root,
+            )
+            if result.returncode != 0 or not report_path.exists():
+                return {}
+
+            payload = json.loads(report_path.read_text())
+            report_values[metric_name] = int(payload["symbols"]["size"])
+
+        return report_values
+
+    def _evaluate_resource_budget(self, spec: RunSpec, sizes: Dict[str, int]) -> List[str]:
+        budget = self.resource_budgets.get(spec.run_id)
+        if budget is None:
+            return []
+
+        failures: List[str] = []
+        for metric, limit in budget["limits"].items():
+            actual = sizes.get(metric)
+            if actual is None:
+                failures.append(f"{metric} missing (limit {limit} B)")
+                continue
+            if actual > limit:
+                failures.append(f"{metric} {actual} B > {limit} B")
+        return failures
+
+    def _budget_description(self, spec: RunSpec) -> str:
+        budget = self.resource_budgets.get(spec.run_id)
+        if budget is None:
+            return ""
+        return budget.get("description", "")
 
     def _enrich_metric_rows(
         self,
@@ -562,11 +745,17 @@ class BenchmarkRunner:
                     size_text=0,
                     size_data=0,
                     size_bss=0,
+                    rom_bytes=0,
+                    ram_bytes=0,
+                    budget_ok=False,
+                    budget_failures=["build failed before budget evaluation"],
                 )
             )
             return
 
         sizes = self._get_code_size(spec)
+        sizes.update(self._generate_resource_reports(spec))
+        budget_failures = self._evaluate_resource_budget(spec, sizes)
         run_result = self._run_sample(spec)
         self._cleanup_qemu(self.output_dir / "build" / spec.run_id)
         log_text = run_result.stdout
@@ -599,6 +788,10 @@ class BenchmarkRunner:
             size_text=sizes.get("text", 0),
             size_data=sizes.get("data", 0),
             size_bss=sizes.get("bss", 0),
+            rom_bytes=sizes.get("rom", 0),
+            ram_bytes=sizes.get("ram", 0),
+            budget_ok=(not budget_failures),
+            budget_failures=budget_failures,
         )
         self.records.append(record)
 
@@ -607,6 +800,16 @@ class BenchmarkRunner:
             f"  run {status}, captured {pqcp_metric_count} PQCP_METRIC row(s)"
             f" and {build_metric_count} build metric row(s)"
         )
+        if spec.run_id in self.resource_budgets:
+            description = self._budget_description(spec)
+            if description:
+                print(f"  budget profile: {description}")
+            if budget_failures:
+                print("  resource budget exceeded:")
+                for failure in budget_failures:
+                    print(f"    - {failure}")
+            else:
+                print("  resource budget: OK")
 
     def write_outputs(self) -> None:
         record_path = self.output_dir / "runs.json"
@@ -791,6 +994,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--west-root", type=Path, help="West workspace root")
     parser.add_argument("--module-path", type=Path, help="PQCP module path")
     parser.add_argument("--west", help="Explicit west binary or command")
+    parser.add_argument(
+        "--resource-budgets",
+        type=Path,
+        help=(
+            "Optional JSON file describing ROM/RAM budget limits for curated "
+            "runs. Matching runs fail if reported footprint exceeds the limit."
+        ),
+    )
     parser.add_argument("--kconfig", action="append", default=[], help="Extra Kconfig line, e.g. CONFIG_FOO=y")
     parser.add_argument("--timeout", type=int, default=180, help="Default run timeout in seconds")
     parser.add_argument("--build-only", action="store_true", help="Build without running")
@@ -815,6 +1026,7 @@ def main() -> int:
     sample_filters = args.samples or ([args.sample] if args.sample else [])
     board_filters = args.boards or ([args.board] if args.board else [])
     profile_filters = args.profiles or ([args.profile] if args.profile else [])
+    resource_budget_path = args.resource_budgets.resolve() if args.resource_budgets else None
 
     west_cmd = discover_west(args.west, west_root, module_path)
 
@@ -823,6 +1035,8 @@ def main() -> int:
     print(f"  module    : {module_path}")
     print(f"  west cmd  : {' '.join(west_cmd)}")
     print(f"  output    : {output_dir}")
+    if resource_budget_path is not None:
+        print(f"  budgets   : {resource_budget_path}")
 
     if args.benchmark_matrix:
         specs = expand_runs_from_config(
@@ -888,6 +1102,11 @@ def main() -> int:
         build_only=args.build_only,
         default_timeout=args.timeout,
         verbose=args.verbose,
+        resource_budgets=(
+            load_resource_budgets(resource_budget_path)
+            if resource_budget_path is not None
+            else None
+        ),
     )
 
     for spec in specs:
@@ -895,7 +1114,9 @@ def main() -> int:
 
     runner.write_outputs()
     failed_records = [
-        record for record in runner.records if not record.build_ok or not record.run_ok
+        record
+        for record in runner.records
+        if not record.build_ok or not record.run_ok or not record.budget_ok
     ]
     if failed_records:
         print("\nOne or more runs failed:")
@@ -903,8 +1124,11 @@ def main() -> int:
             print(
                 "  - "
                 f"{record.run_id}: build_ok={record.build_ok} "
-                f"run_ok={record.run_ok} timed_out={record.timed_out}"
+                f"run_ok={record.run_ok} timed_out={record.timed_out} "
+                f"budget_ok={record.budget_ok}"
             )
+            for failure in record.budget_failures:
+                print(f"      budget: {failure}")
         return 1
 
     print(

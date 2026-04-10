@@ -1,0 +1,134 @@
+{
+  "budgets": [
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "ztest_primitive",
+      "description": "Minimal-profile primitive regression envelope on the default fast-CI board.",
+      "limits": {
+        "rom": 163840,
+        "ram": 520192
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "ztest_rng",
+      "description": "Minimal-profile RNG abstraction envelope on qemu_x86_64.",
+      "limits": {
+        "rom": 126976,
+        "ram": 221184
+      }
+    },
+    {
+      "board": "mps2/an385",
+      "profile": "MCU_MINIMAL",
+      "sample": "ztest_primitive",
+      "description": "No-entropy Cortex-M3 primitive regression envelope.",
+      "limits": {
+        "rom": 65536,
+        "ram": 323584
+      }
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "MCU_MINIMAL",
+      "sample": "ztest_primitive",
+      "description": "STM32H7 primitive regression envelope for build-only validation.",
+      "limits": {
+        "rom": 77824,
+        "ram": 344064
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "description": "Minimal-profile KEM sample footprint on qemu_x86_64.",
+      "limits": {
+        "rom": 122880,
+        "ram": 258048
+      }
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "description": "STM32H7 KEM sample build-only envelope for lab validation.",
+      "limits": {
+        "rom": 49152,
+        "ram": 110592
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "GATEWAY",
+      "sample": "ztest_primitive",
+      "description": "Gateway-profile PSA primitive regression envelope.",
+      "limits": {
+        "rom": 204800,
+        "ram": 614400
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "GATEWAY",
+      "sample": "ztest_tls_selftest",
+      "description": "Gateway-profile shared TLS self-test envelope.",
+      "limits": {
+        "rom": 196608,
+        "ram": 675840
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "GATEWAY",
+      "sample": "pqcp_tls_mbedtls_psa",
+      "description": "Gateway-profile TLS sample build envelope on qemu_x86_64.",
+      "limits": {
+        "rom": 180224,
+        "ram": 491520
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_basic_sig",
+      "description": "Native-lab signature sample envelope on qemu_x86_64.",
+      "limits": {
+        "rom": 139264,
+        "ram": 335872
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "ztest_acvp_serial",
+      "description": "Native-lab ACVP command-library regression envelope.",
+      "limits": {
+        "rom": 196608,
+        "ram": 667648
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol",
+      "description": "Native-lab protocol benchmark envelope on qemu_x86_64.",
+      "limits": {
+        "rom": 167936,
+        "ram": 344064
+      }
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_kat_deterministic",
+      "description": "Native-lab deterministic KAT sample envelope on qemu_x86_64.",
+      "limits": {
+        "rom": 159744,
+        "ram": 360448
+      }
+    }
+  ]
+}

@@ -102,6 +102,18 @@ jobs:
             --json-out "$RUNNER_TEMP/acvp-host-smoke.json" \
             --transcript-out "$RUNNER_TEMP/acvp-host-smoke.log"
 
+      - name: Run qemu_x86_64 profile-validation budget smoke
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
+            --profile-validation \
+            --board qemu_x86_64 \
+            --build-only \
+            --resource-budgets "$GITHUB_WORKSPACE/scripts/resource_budgets.json" \
+            --output "$RUNNER_TEMP/qemu-profile-validation-budget-smoke" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$GITHUB_WORKSPACE"
+
       - name: Run mps2/an385 profile-validation build smoke
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         run: |
@@ -111,6 +123,7 @@ jobs:
             --profile MCU_MINIMAL \
             --sample ztest_primitive \
             --build-only \
+            --resource-budgets "$GITHUB_WORKSPACE/scripts/resource_budgets.json" \
             --output "$RUNNER_TEMP/mps2-profile-validation-smoke" \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE"
@@ -123,6 +136,7 @@ jobs:
             --board nucleo_h743zi \
             --profile MCU_MINIMAL \
             --build-only \
+            --resource-budgets "$GITHUB_WORKSPACE/scripts/resource_budgets.json" \
             --output "$RUNNER_TEMP/nucleo-h743zi-profile-validation-smoke" \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE"
