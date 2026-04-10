@@ -517,6 +517,36 @@ python scripts/run_benchmarks.py \
   --profile NATIVE_LAB
 ```
 
+### Hardware Validation
+
+CI keeps `nucleo_h743zi` in the build-only lane so hosted runs stay bounded,
+but it is the recommended lab board for a real MCU validation pass.
+
+For the primitive sample:
+
+```bash
+west build -p always -b nucleo_h743zi samples/pqcp_basic_kem -- \
+  -DZEPHYR_EXTRA_MODULES="$PWD" \
+  -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
+west flash
+```
+
+Then attach to the board's USB CDC ACM console at 115200 baud and look for
+`PQCP_METRIC,primitive,...` lines from the sample.
+
+For the primitive regression ztest:
+
+```bash
+west build -p always -b nucleo_h743zi tests/ztest_primitive -- \
+  -DZEPHYR_EXTRA_MODULES="$PWD" \
+  -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
+west flash
+```
+
+Treat `PROJECT EXECUTION SUCCESSFUL` on the serial console as the pass signal.
+These hardware runs are recommended for local lab validation only; GitHub
+Actions intentionally keeps this board in build-only mode.
+
 ### Metric Format
 
 Benchmark logs use two formats:
@@ -736,7 +766,20 @@ The example `scripts/acvp_smoke_scenarios.json` format is:
       "kem_level": 768,
       "sig_level": 65,
       "seed_hex": "...",
-      "message_hex": "..."
+      "message_hex": "...",
+      "step_expectations": {
+        "VERIFY_MLDSA_TAMPERED": {
+          "status": "invalid",
+          "response": "RESULT:INVALID"
+        }
+      },
+      "expected_errors": [
+        {
+          "name": "INVALID_SEED_HEX",
+          "command": "SEED:DRBG:0:abc",
+          "response": "ERROR:INVALID_HEX"
+        }
+      ]
     }
   ]
 }
@@ -746,8 +789,15 @@ Each scenario summary includes:
 
 - the requested ML-KEM / ML-DSA levels
 - derived key, ciphertext, and signature sizes
-- per-command status (`ok`, `payload`, or `invalid`)
+- per-command status (`ok`, `payload`, `invalid`, or `error`)
+- optional expectation metadata and mismatch markers when a scenario defines
+  `step_expectations` or `expected_errors`
 - the raw command/response transcript entries
+
+The shipped `scripts/acvp_negative_scenarios.json` file demonstrates how to
+exercise negative-path commands while keeping the stable `RESULT:*` /
+`ERROR:*` grammar intact. The host driver exits non-zero whenever an expected
+outcome does not match what the target returned.
 
 To regression-check the parser itself without booting Zephyr, run:
 
@@ -922,6 +972,8 @@ This helper:
   sources, and the module header/version glue
 - verifies that `PQCP_VERSION_STRING` and the top release entry in
   `CHANGELOG.md` stay in sync
+- checks that the example west manifest snippet still reminds integrators to
+  pin a tag or commit that matches `PQCP_VERSION_STRING` and `CHANGELOG.md`
 - strips common host compiler environment variables before invoking `west`
 
 Use it before large refactors, before cutting a release, or when touching the
@@ -955,7 +1007,23 @@ python scripts/run_extended_checks.py \
 
 That compatibility smoke builds a small, explicit set of PQCP targets against
 the selected Zephyr ref and reports success or failure separately from the
-static-analysis work.
+static-analysis work. By default it covers the primitive, ACVP, and TLS
+self-test harness targets on `qemu_x86_64`.
+
+To probe both the default QEMU path and the STM32H7 build-only path for an
+upcoming Zephyr revision, use:
+
+```bash
+python scripts/run_extended_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --zephyr-ref v4.4.0-rc1 \
+  --skip-graphviz \
+  --skip-cppcheck \
+  --run-compatibility-smoke \
+  --compatibility-board-list qemu_x86_64,nucleo_h743zi \
+  --strict
+```
 
 ## CI
 
@@ -990,6 +1058,8 @@ a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
   `tests/ztest_primitive` with `overlay-no-entropy.conf`
 - build-validate the `nucleo_h743zi` MCU profile path through
   `tests/ztest_primitive` and `samples/pqcp_basic_kem`
+- optionally probe a newer Zephyr ref by rebuilding the primitive, ACVP, and
+  TLS self-test harnesses through the compatibility-smoke mode
 
 When launched manually, the extended-checks workflow also accepts:
 
@@ -1012,7 +1082,43 @@ Downstream consumers can track the formal module version through:
 
 The current release macro is `PQCP_VERSION_STRING`, which is set to `1.0.0`.
 The extended-checks helper now verifies that this macro and the top release
-entry in `CHANGELOG.md` stay aligned.
+entry in `CHANGELOG.md` stay aligned. It also checks that the README's example
+west manifest snippet keeps the release pinning guidance intact for
+integrators.
+
+### Release Candidate Checklist
+
+For a release-candidate pass, run the following sequence from the module root:
+
+```bash
+python scripts/run_extended_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --strict
+
+python scripts/run_extended_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --zephyr-ref v4.4.0-rc1 \
+  --skip-graphviz \
+  --skip-cppcheck \
+  --run-compatibility-smoke \
+  --compatibility-board-list qemu_x86_64,nucleo_h743zi \
+  --strict
+
+python scripts/run_sanitizer_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --build-only
+
+west build -p always -d build-acvp-release -b qemu_x86_64 samples/pqcp_serial_acvp -- \
+  -DZEPHYR_EXTRA_MODULES="$PWD"
+python scripts/run_acvp_serial_session.py \
+  --cwd /path/to/zephyrproject \
+  --run-command "west build -d build-acvp-release -t run" \
+  --scenario-file scripts/acvp_smoke_scenarios.json \
+  --json-out acvp-release-smoke.json
+```
 
 ## Zephyr Compatibility
 

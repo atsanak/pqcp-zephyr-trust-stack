@@ -20,7 +20,11 @@
  * Timing infrastructure
  */
 
-/* Use DWT cycle counter on Cortex-M when the public helper is available. */
+/*
+ * Use Zephyr's public Arm Cortex-M DWT helpers when the helper header is
+ * exported by the current tree. This mirrors Zephyr's own Arm timing code
+ * include style (`<cortex_m/dwt.h>`) instead of depending on private paths.
+ */
 #if defined(CONFIG_CPU_CORTEX_M_HAS_DWT) && defined(CONFIG_PQCP_BENCH_CYCLE_COUNTER) && \
     defined(__has_include)
 #if __has_include(<cortex_m/dwt.h>)
