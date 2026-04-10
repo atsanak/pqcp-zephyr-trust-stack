@@ -20,11 +20,16 @@
  * Timing infrastructure
  */
 
-/* Use DWT cycle counter on Cortex-M if available */
-#if defined(CONFIG_CPU_CORTEX_M_HAS_DWT) && defined(CONFIG_PQCP_BENCH_CYCLE_COUNTER)
-#include <zephyr/arch/arm/cortex_m/cmsis.h>
+/* Use DWT cycle counter on Cortex-M when the public helper is available. */
+#if defined(CONFIG_CPU_CORTEX_M_HAS_DWT) && defined(CONFIG_PQCP_BENCH_CYCLE_COUNTER) && \
+    defined(__has_include)
+#if __has_include(<cortex_m/dwt.h>)
+#include <cortex_m/dwt.h>
 #define USE_DWT_CYCLES 1
-#else
+#endif
+#endif
+
+#ifndef USE_DWT_CYCLES
 #define USE_DWT_CYCLES 0
 #endif
 
@@ -37,10 +42,8 @@ int pqcp_bench_init(void)
     }
     
 #if USE_DWT_CYCLES
-    /* Enable DWT cycle counter */
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    z_arm_dwt_init();
+    z_arm_dwt_init_cycle_counter();
 #endif
     
     bench_initialized = true;
@@ -50,7 +53,7 @@ int pqcp_bench_init(void)
 uint64_t pqcp_bench_start_timing(void)
 {
 #if USE_DWT_CYCLES
-    return DWT->CYCCNT;
+    return z_arm_dwt_get_cycles();
 #else
     return k_cycle_get_32();
 #endif
@@ -59,7 +62,7 @@ uint64_t pqcp_bench_start_timing(void)
 uint64_t pqcp_bench_end_timing(uint64_t start)
 {
 #if USE_DWT_CYCLES
-    uint32_t end = DWT->CYCCNT;
+    uint32_t end = z_arm_dwt_get_cycles();
     return (uint64_t)(end - (uint32_t)start);
 #else
     uint32_t end = k_cycle_get_32();
