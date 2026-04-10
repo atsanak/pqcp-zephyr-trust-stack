@@ -73,6 +73,20 @@ jobs:
           python "$GITHUB_WORKSPACE/scripts/run_extended_checks.py" \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE" \
+            --zephyr-ref "$ZEPHYR_REF" \
+            --strict
+
+      - name: Run manual Zephyr compatibility smoke
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.zephyr_ref != 'v4.3.0' }}
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/run_extended_checks.py" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$GITHUB_WORKSPACE" \
+            --zephyr-ref "$ZEPHYR_REF" \
+            --skip-graphviz \
+            --skip-cppcheck \
+            --run-compatibility-smoke \
             --strict
 
       - name: Run ACVP host-driver smoke
@@ -98,6 +112,18 @@ jobs:
             --sample ztest_primitive \
             --build-only \
             --output "$RUNNER_TEMP/mps2-profile-validation-smoke" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$GITHUB_WORKSPACE"
+
+      - name: Run nucleo_h743zi profile-validation build smoke
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
+            --profile-validation \
+            --board nucleo_h743zi \
+            --profile MCU_MINIMAL \
+            --build-only \
+            --output "$RUNNER_TEMP/nucleo-h743zi-profile-validation-smoke" \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE"
 

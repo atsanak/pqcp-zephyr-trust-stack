@@ -31,6 +31,7 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 
 - `qemu_x86_64` for CI and host-side validation
 - `mps2/an385` for Cortex-M validation, including no-entropy overlays
+- `nucleo_h743zi` for build-only extended-check validation of a realistic STM32H7 MCU path
 - Other Cortex-M4/M7 class boards once stack sizing and entropy sources are tuned for the target
 
 ## Quick Start
@@ -49,12 +50,18 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 manifest:
   projects:
     - name: pqcp-zephyr-trust-stack
-      url: https://github.com/your-org/pqcp-zephyr-trust-stack
-      revision: main
+      url: https://github.com/atsana01/pqcp-zephyr-trust-stack
+      revision: main  # Prefer a pinned tag or commit for release integration
       path: modules/pqcp
 ```
 
 Then run `west update`.
+
+For release-oriented integrations, pin `revision` to the tag or commit that
+matches both `PQCP_VERSION_STRING` in `include/pqcp_zephyr/version.h` and the
+top release entry in `CHANGELOG.md`. That gives downstream applications a
+simple, auditable mapping between the manifest revision and the documented PQCP
+module release.
 
 **Option 2: Via EXTRA_ZEPHYR_MODULES**
 
@@ -209,7 +216,7 @@ coverage is:
 
 | Profile | Validated combinations |
 |---------|------------------------|
-| MCU_MINIMAL | `qemu_x86_64`: `tests/ztest_primitive`, `tests/ztest_rng`, `samples/pqcp_basic_kem`; `mps2/an385`: `tests/ztest_primitive` with `overlay-no-entropy.conf` |
+| MCU_MINIMAL | `qemu_x86_64`: `tests/ztest_primitive`, `tests/ztest_rng`, `samples/pqcp_basic_kem`; `mps2/an385`: `tests/ztest_primitive` with `overlay-no-entropy.conf`; `nucleo_h743zi`: build-only `tests/ztest_primitive` and `samples/pqcp_basic_kem` |
 | GATEWAY | `qemu_x86_64`: `tests/ztest_primitive` with `overlay-psa.conf`, `tests/ztest_tls_selftest`, `samples/pqcp_tls_mbedtls_psa` with `overlay-selftest.conf` |
 | NATIVE_LAB | `qemu_x86_64`: `samples/pqcp_basic_sig`, `tests/ztest_acvp_serial`, `samples/pqcp_bench_protocol`, `samples/pqcp_kat_deterministic` |
 
@@ -495,6 +502,10 @@ west build -p always -b mps2/an385 tests/ztest_primitive -- \
   -DOVERLAY_CONFIG=overlay-no-entropy.conf \
   -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
 
+# Real STM32H7 MCU build-only validation path used in extended checks
+west build -p always -b nucleo_h743zi samples/pqcp_basic_kem -- \
+  -DCONFIG_PQCP_PROFILE_MCU_MINIMAL=y
+
 # PSA/TLS-capable gateway-style build
 west build -p always -b qemu_x86_64 samples/pqcp_tls_mbedtls_psa -- \
   -DOVERLAY_CONFIG=overlay-selftest.conf \
@@ -540,6 +551,8 @@ grammar is enforced in one place.
 For external-tool integration, the repository also includes
 `scripts/run_acvp_serial_session.py`, a small host-side smoke driver that can
 either talk to a real serial port or launch the sample through QEMU/stdin.
+It tolerates prompt prefixes and unrelated debug lines around the stable
+`RESULT:*` / `ERROR:*` records, which makes it friendlier to real lab logs.
 
 ### Building
 
@@ -699,6 +712,48 @@ The script performs a deterministic smoke session covering:
 - ML-KEM `KEYGEN` / `ENCAPS` / `DECAPS`
 - ML-DSA `KEYGEN` / `SIGN` / `VERIFY`
 - a tampered-signature `VERIFY` that must return `RESULT:INVALID`
+
+### Scenario-Driven Host Runs
+
+For repeatable lab sessions, the host driver can also read a small JSON
+scenario file:
+
+```bash
+python scripts/run_acvp_serial_session.py \
+  --cwd /path/to/zephyrproject \
+  --run-command "west build -d build -t run" \
+  --scenario-file scripts/acvp_smoke_scenarios.json \
+  --json-out acvp-session.json
+```
+
+The example `scripts/acvp_smoke_scenarios.json` format is:
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "default-l3-seed-a",
+      "kem_level": 768,
+      "sig_level": 65,
+      "seed_hex": "...",
+      "message_hex": "..."
+    }
+  ]
+}
+```
+
+Each scenario summary includes:
+
+- the requested ML-KEM / ML-DSA levels
+- derived key, ciphertext, and signature sizes
+- per-command status (`ok`, `payload`, or `invalid`)
+- the raw command/response transcript entries
+
+To regression-check the parser itself without booting Zephyr, run:
+
+```bash
+python scripts/run_acvp_serial_session.py --self-test
+```
 
 ## Security Considerations
 
@@ -863,8 +918,10 @@ This helper:
 
 - configures a lightweight Zephyr target and writes a CMake graphviz file
 - runs focused `cppcheck` analysis on the ACVP, TLS self-test, protocol bench,
-  primitive benchmark, PSA driver glue, selected RNG wrapper sources, and the
-  module version/header glue
+  primitive benchmark, streaming helper, PSA driver glue, selected RNG wrapper
+  sources, and the module header/version glue
+- verifies that `PQCP_VERSION_STRING` and the top release entry in
+  `CHANGELOG.md` stay in sync
 - strips common host compiler environment variables before invoking `west`
 
 Use it before large refactors, before cutting a release, or when touching the
@@ -881,6 +938,24 @@ python scripts/run_sanitizer_checks.py \
 By default this builds and runs the ACVP and TLS harness ztests on
 `native_sim/native/64` with ASan and UBSan enabled. Run it from Linux, or use
 the manual `run_sanitizers` toggle in `.github/workflows/extended-checks.yml`.
+
+To probe a newer Zephyr branch or tag before bumping the documented baseline,
+run:
+
+```bash
+python scripts/run_extended_checks.py \
+  --west-root /path/to/zephyrproject \
+  --module-path "$PWD" \
+  --zephyr-ref v4.4.0-rc1 \
+  --skip-graphviz \
+  --skip-cppcheck \
+  --run-compatibility-smoke \
+  --strict
+```
+
+That compatibility smoke builds a small, explicit set of PQCP targets against
+the selected Zephyr ref and reports success or failure separately from the
+static-analysis work.
 
 ## CI
 
@@ -913,11 +988,17 @@ a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
   `qemu_x86_64`
 - build-validate the `mps2/an385` MCU profile path through
   `tests/ztest_primitive` with `overlay-no-entropy.conf`
+- build-validate the `nucleo_h743zi` MCU profile path through
+  `tests/ztest_primitive` and `samples/pqcp_basic_kem`
 
 When launched manually, the extended-checks workflow also accepts:
 
 - a `zephyr_ref` input for trying a newer Zephyr tag/branch/commit
 - a `run_sanitizers` toggle for native_sim ASan/UBSan coverage
+
+If the manual `zephyr_ref` differs from the baseline `v4.3.0`, the workflow
+also runs an explicit compatibility-smoke build step so Zephyr drift is called
+out separately from the default static-analysis output.
 
 Fast CI is therefore pinned to a known-good baseline, while extended checks can
 be used to probe upcoming Zephyr drift before it reaches downstream consumers.
@@ -930,6 +1011,8 @@ Downstream consumers can track the formal module version through:
 - `CHANGELOG.md`
 
 The current release macro is `PQCP_VERSION_STRING`, which is set to `1.0.0`.
+The extended-checks helper now verifies that this macro and the top release
+entry in `CHANGELOG.md` stay aligned.
 
 ## Zephyr Compatibility
 
@@ -939,6 +1022,9 @@ That is the tested baseline for release-quality integration.
 Nearby Zephyr revisions may also work, but they should be treated as
 best-effort until they are exercised explicitly through local testing or the
 manual `zephyr_ref` override in `.github/workflows/extended-checks.yml`.
+
+For early drift checks against a newer tag or branch, use the compatibility
+smoke mode shown in the Extended Checks section above.
 
 ## Sample Applications
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -30,6 +31,8 @@ HOST_ENV_BLACKLIST = (
 DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/acvp_cmd.h",
     "include/pqcp_zephyr/bench.h",
+    "include/pqcp_zephyr/mlkem.h",
+    "include/pqcp_zephyr/mldsa.h",
     "include/pqcp_zephyr/rng.h",
     "include/pqcp_zephyr/tls_selftest.h",
     "include/pqcp_zephyr/version.h",
@@ -37,6 +40,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/bench_primitive.c",
     "src/bench_protocol.c",
     "src/mlkem_zephyr.c",
+    "src/mldsa_streaming.c",
     "src/mldsa_zephyr.c",
     "src/rng_common.c",
     "src/rng_custom.c",
@@ -47,6 +51,14 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/psa_mldsa_driver.c",
     "src/tls_selftest.c",
 ]
+
+DEFAULT_COMPATIBILITY_TARGETS = [
+    "tests/ztest_primitive",
+    "tests/ztest_tls_selftest",
+]
+
+VERSION_STRING_RE = re.compile(r'^#define\s+PQCP_VERSION_STRING\s+"([^"]+)"$', re.MULTILINE)
+CHANGELOG_VERSION_RE = re.compile(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", re.MULTILINE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,8 +85,35 @@ def parse_args() -> argparse.Namespace:
         help="Path for the generated CMake graphviz output",
     )
     parser.add_argument("--cppcheck", help="Explicit cppcheck binary")
+    parser.add_argument(
+        "--zephyr-ref",
+        default=os.environ.get("ZEPHYR_REF", "unknown"),
+        help="Zephyr tag/branch/commit being validated (used in reports)",
+    )
     parser.add_argument("--skip-graphviz", action="store_true", help="Skip graphviz generation")
     parser.add_argument("--skip-cppcheck", action="store_true", help="Skip cppcheck analysis")
+    parser.add_argument(
+        "--run-compatibility-smoke",
+        action="store_true",
+        help="Run a small build-only Zephyr compatibility smoke on selected targets",
+    )
+    parser.add_argument(
+        "--compatibility-board",
+        default="qemu_x86_64",
+        help="Board used for Zephyr compatibility smoke builds",
+    )
+    parser.add_argument(
+        "--compatibility-build-dir-root",
+        type=Path,
+        default=Path("benchmark_results/extended/compatibility"),
+        help="Root directory for compatibility smoke build trees",
+    )
+    parser.add_argument(
+        "--compatibility-target",
+        action="append",
+        dest="compatibility_targets",
+        help="Additional application path to build during compatibility smoke",
+    )
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -238,6 +277,81 @@ def run_cppcheck(
     return run_command(cmd, cwd=module_path, env=env, verbose=verbose)
 
 
+def read_version_string(module_path: Path) -> str:
+    match = VERSION_STRING_RE.search((module_path / "include/pqcp_zephyr/version.h").read_text())
+    if match is None:
+        raise RuntimeError("Unable to find PQCP_VERSION_STRING in include/pqcp_zephyr/version.h")
+    return match.group(1)
+
+
+def read_changelog_version(module_path: Path) -> str:
+    match = CHANGELOG_VERSION_RE.search((module_path / "CHANGELOG.md").read_text())
+    if match is None:
+        raise RuntimeError("Unable to find a release heading in CHANGELOG.md")
+    return match.group(1)
+
+
+def check_version_sync(module_path: Path) -> bool:
+    version_header = read_version_string(module_path)
+    changelog_version = read_changelog_version(module_path)
+    print("\n[release] Checking version metadata")
+    print(f"[release] PQCP_VERSION_STRING : {version_header}")
+    print(f"[release] CHANGELOG top entry : {changelog_version}")
+    if version_header != changelog_version:
+        print("[release] Version metadata is out of sync")
+        return False
+    print("[release] Version metadata is in sync")
+    return True
+
+
+def run_compatibility_smoke(
+    *,
+    west_cmd: List[str],
+    west_root: Path,
+    module_path: Path,
+    board: str,
+    build_dir_root: Path,
+    env: dict[str, str],
+    verbose: bool,
+    zephyr_ref: str,
+    targets: Iterable[str],
+) -> int:
+    selected_targets = list(targets)
+    if not selected_targets:
+        return 0
+
+    build_dir_root.mkdir(parents=True, exist_ok=True)
+    print(f"\n[compat] Zephyr ref : {zephyr_ref}")
+    print(f"[compat] Board      : {board}")
+    print("[compat] Targets:")
+    for target in selected_targets:
+        print(f"  - {target}")
+
+    for target in selected_targets:
+        build_dir = build_dir_root / target.replace("/", "_")
+        cmd = [
+            *west_cmd,
+            "build",
+            "-p",
+            "always",
+            "-d",
+            str(build_dir),
+            "-b",
+            board,
+            str(module_path / target),
+            "--",
+            f"-DZEPHYR_EXTRA_MODULES={module_path}",
+        ]
+        result = run_command(cmd, cwd=west_root, env=env, verbose=verbose)
+        if result.returncode != 0:
+            print(result.stdout)
+            return result.returncode
+        print(f"[compat] Build OK: {target} -> {build_dir}")
+
+    print("[compat] Compatibility smoke completed successfully")
+    return 0
+
+
 def summarize_cppcheck(output: str) -> Counter[str]:
     counts: Counter[str] = Counter()
 
@@ -283,6 +397,10 @@ def main() -> int:
     print(f"  west root : {west_root}")
     print(f"  module    : {module_path}")
     print(f"  west cmd  : {' '.join(west_cmd)}")
+    print(f"  zephyr    : {args.zephyr_ref}")
+
+    if not check_version_sync(module_path):
+        return 1
 
     if not args.skip_graphviz:
         print(f"\n[graphviz] Configuring {args.target} for {args.board}")
@@ -348,6 +466,22 @@ def main() -> int:
             else:
                 print("[cppcheck] Findings summary: no findings")
             print("[cppcheck] Completed without findings")
+
+    if args.run_compatibility_smoke:
+        compatibility_targets = args.compatibility_targets or DEFAULT_COMPATIBILITY_TARGETS
+        compat_result = run_compatibility_smoke(
+            west_cmd=west_cmd,
+            west_root=west_root,
+            module_path=module_path,
+            board=args.compatibility_board,
+            build_dir_root=args.compatibility_build_dir_root.resolve(),
+            env=env,
+            verbose=args.verbose,
+            zephyr_ref=args.zephyr_ref,
+            targets=compatibility_targets,
+        )
+        if compat_result != 0:
+            return compat_result
 
     print("\nExtended checks completed successfully.")
     return 0

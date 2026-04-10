@@ -17,9 +17,19 @@
       "notes": "Entropy-free Cortex-M validation path."
     },
     {
+      "board": "nucleo_h743zi",
+      "target": "tests/ztest_primitive",
+      "notes": "Real STM32H7 MCU primitive regression baseline."
+    },
+    {
       "board": "qemu_x86_64",
       "target": "samples/pqcp_basic_kem",
       "notes": "Metric-emitting sample smoke test."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "target": "samples/pqcp_basic_kem",
+      "notes": "Real STM32H7 MCU sample build for integrator-oriented validation."
     }
   ],
   "GATEWAY": [
