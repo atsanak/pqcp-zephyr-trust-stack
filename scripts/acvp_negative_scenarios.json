@@ -1,0 +1,29 @@
+{
+  "scenarios": [
+    {
+      "name": "negative-protocol-cases",
+      "kem_level": 768,
+      "sig_level": 65,
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "message_hex": "616376702d6e656761746976652d63617365",
+      "step_expectations": {
+        "VERIFY_MLDSA_TAMPERED": {
+          "status": "invalid",
+          "response": "RESULT:INVALID"
+        }
+      },
+      "expected_errors": [
+        {
+          "name": "INVALID_SEED_HEX",
+          "command": "SEED:DRBG:0:abc",
+          "response": "ERROR:INVALID_HEX"
+        },
+        {
+          "name": "UNSUPPORTED_MLKEM_LEVEL",
+          "command": "KEYGEN:MLKEM:999:",
+          "response": "ERROR:INVALID_LEVEL"
+        }
+      ]
+    }
+  ]
+}

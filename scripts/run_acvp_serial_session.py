@@ -19,6 +19,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -63,6 +64,7 @@ PROTOCOL_RESPONSE_RE = re.compile(
     r"(RESULT:(?:OK|INVALID|[0-9a-f]+)|ERROR:[A-Z0-9_]+)\b"
 )
 HEX_RE = re.compile(r"[0-9a-fA-F]*")
+VALID_STEP_STATUSES = {"ok", "invalid", "payload", "error"}
 
 
 @dataclass
@@ -78,6 +80,23 @@ class SmokeScenario:
     sig_level: int
     seed_hex: str
     message_hex: str
+    step_expectations: tuple["StepExpectation", ...] = ()
+    expected_errors: tuple["ExpectedCommand", ...] = ()
+
+
+@dataclass(frozen=True)
+class StepExpectation:
+    name: str
+    status: Optional[str] = None
+    response: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ExpectedCommand:
+    name: str
+    command: str
+    status: Optional[str] = "error"
+    response: Optional[str] = None
 
 
 class SessionError(RuntimeError):
@@ -360,6 +379,143 @@ def normalize_hex_arg(field: str, value: str) -> str:
     return normalized.lower()
 
 
+def normalize_step_status(field: str, value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in VALID_STEP_STATUSES:
+        raise SessionError(
+            f"{field} must be one of: {', '.join(sorted(VALID_STEP_STATUSES))}"
+        )
+    return normalized
+
+
+def normalize_expected_response(field: str, value: str) -> str:
+    normalized = strip_ansi(value).strip()
+    if PROTOCOL_RESPONSE_RE.fullmatch(normalized) is None:
+        raise SessionError(
+            f"{field} must be a single RESULT:* or ERROR:* protocol response"
+        )
+    return normalized
+
+
+def parse_step_expectations(
+    scenario_name: str,
+    raw_expectations: object,
+) -> tuple[StepExpectation, ...]:
+    if raw_expectations is None:
+        return ()
+    if not isinstance(raw_expectations, dict):
+        raise SessionError(f"{scenario_name}.step_expectations must be an object")
+
+    expectations: List[StepExpectation] = []
+    for step_name, raw_value in raw_expectations.items():
+        if not isinstance(step_name, str) or not step_name:
+            raise SessionError(
+                f"{scenario_name}.step_expectations keys must be non-empty strings"
+            )
+
+        if isinstance(raw_value, str):
+            expectation = StepExpectation(
+                name=step_name,
+                response=normalize_expected_response(
+                    f"{scenario_name}.step_expectations.{step_name}",
+                    raw_value,
+                ),
+            )
+        elif isinstance(raw_value, dict):
+            status_value = raw_value.get("status")
+            response_value = raw_value.get("response")
+            if status_value is None and response_value is None:
+                raise SessionError(
+                    f"{scenario_name}.step_expectations.{step_name} must define "
+                    "'status' and/or 'response'"
+                )
+            expectation = StepExpectation(
+                name=step_name,
+                status=(
+                    normalize_step_status(
+                        f"{scenario_name}.step_expectations.{step_name}.status",
+                        str(status_value),
+                    )
+                    if status_value is not None
+                    else None
+                ),
+                response=(
+                    normalize_expected_response(
+                        f"{scenario_name}.step_expectations.{step_name}.response",
+                        str(response_value),
+                    )
+                    if response_value is not None
+                    else None
+                ),
+            )
+        else:
+            raise SessionError(
+                f"{scenario_name}.step_expectations.{step_name} must be a string or object"
+            )
+
+        expectations.append(expectation)
+
+    return tuple(expectations)
+
+
+def parse_expected_commands(
+    scenario_name: str,
+    raw_expected_commands: object,
+) -> tuple[ExpectedCommand, ...]:
+    if raw_expected_commands is None:
+        return ()
+    if not isinstance(raw_expected_commands, list):
+        raise SessionError(f"{scenario_name}.expected_errors must be a list")
+
+    expectations: List[ExpectedCommand] = []
+    for index, raw_item in enumerate(raw_expected_commands, start=1):
+        if not isinstance(raw_item, dict):
+            raise SessionError(
+                f"{scenario_name}.expected_errors[{index}] must be a JSON object"
+            )
+
+        command = str(raw_item.get("command", "")).strip()
+        if not command:
+            raise SessionError(
+                f"{scenario_name}.expected_errors[{index}] must include a command"
+            )
+
+        name = str(raw_item.get("name") or f"expected-error-{index}")
+        status_value = raw_item.get("status", "error")
+        response_value = raw_item.get("response")
+
+        if status_value is None and response_value is None:
+            raise SessionError(
+                f"{scenario_name}.expected_errors[{index}] must define "
+                "'status' and/or 'response'"
+            )
+
+        expectations.append(
+            ExpectedCommand(
+                name=name,
+                command=command,
+                status=(
+                    normalize_step_status(
+                        f"{scenario_name}.expected_errors[{index}].status",
+                        str(status_value),
+                    )
+                    if status_value is not None
+                    else None
+                ),
+                response=(
+                    normalize_expected_response(
+                        f"{scenario_name}.expected_errors[{index}].response",
+                        str(response_value),
+                    )
+                    if response_value is not None
+                    else None
+                ),
+            )
+        )
+
+    return tuple(expectations)
+
+
 def default_scenario(args: argparse.Namespace) -> SmokeScenario:
     return SmokeScenario(
         name="default",
@@ -414,6 +570,12 @@ def load_scenarios(args: argparse.Namespace) -> List[SmokeScenario]:
                     f"{name}.message_hex",
                     str(item.get("message_hex", args.message_hex)),
                 ),
+                step_expectations=parse_step_expectations(
+                    name, item.get("step_expectations")
+                ),
+                expected_errors=parse_expected_commands(
+                    name, item.get("expected_errors")
+                ),
             )
         )
 
@@ -443,6 +605,38 @@ def make_step(name: str, response: str) -> dict[str, object]:
     }
 
 
+def apply_expectation(
+    step: dict[str, object],
+    *,
+    status: Optional[str],
+    response: Optional[str],
+) -> Optional[str]:
+    if status is None and response is None:
+        return None
+
+    mismatches: List[str] = []
+    actual_status = str(step["status"])
+    actual_response = str(step["response"])
+
+    if status is not None:
+        step["expected_status"] = status
+        if actual_status != status:
+            mismatches.append(f"expected status {status}, got {actual_status}")
+
+    if response is not None:
+        step["expected_response"] = response
+        if actual_response != response:
+            mismatches.append(f"expected response {response}, got {actual_response}")
+
+    expectation_met = not mismatches
+    step["expectation_met"] = expectation_met
+
+    if expectation_met:
+        return None
+
+    return f"{step['name']}: " + "; ".join(mismatches)
+
+
 def issue_command(
     transport: BaseTransport,
     command: str,
@@ -451,6 +645,7 @@ def issue_command(
     command_delay: float,
     verbose: bool,
     records: List[CommandRecord],
+    allow_error: bool = False,
 ) -> str:
     if command_delay > 0:
         time.sleep(command_delay)
@@ -467,7 +662,7 @@ def issue_command(
     records.append(CommandRecord(command=command, response=response))
     if verbose:
         print(response)
-    if response.startswith("ERROR:"):
+    if response.startswith("ERROR:") and not allow_error:
         raise SessionError(f"{command} failed with {response}")
     return response
 
@@ -484,6 +679,20 @@ def run_single_scenario(
 ) -> dict[str, object]:
     records: List[CommandRecord] = []
     steps: List[dict[str, object]] = []
+    mismatches: List[str] = []
+    step_expectations = {item.name: item for item in scenario.step_expectations}
+
+    def record_step(name: str, response: str) -> None:
+        step = make_step(name, response)
+        expectation = step_expectations.get(name)
+        mismatch = apply_expectation(
+            step,
+            status=expectation.status if expectation is not None else None,
+            response=expectation.response if expectation is not None else None,
+        )
+        if mismatch is not None:
+            mismatches.append(mismatch)
+        steps.append(step)
 
     response = issue_command(
         transport,
@@ -494,7 +703,7 @@ def run_single_scenario(
         records=records,
     )
     expect_result_ok(response)
-    steps.append(make_step("SELFTEST", response))
+    record_step("SELFTEST", response)
 
     response = issue_command(
         transport,
@@ -505,7 +714,7 @@ def run_single_scenario(
         records=records,
     )
     expect_result_ok(response)
-    steps.append(make_step("SEED", response))
+    record_step("SEED", response)
 
     response = issue_command(
         transport,
@@ -515,7 +724,7 @@ def run_single_scenario(
         verbose=args.verbose,
         records=records,
     )
-    steps.append(make_step("KEYGEN_MLKEM", response))
+    record_step("KEYGEN_MLKEM", response)
     mlkem_keygen = extract_hex_payload(response)
     mlkem_pk_hex_len = MLKEM_SIZES[scenario.kem_level]["pk"] * 2
     mlkem_pk_hex = mlkem_keygen[:mlkem_pk_hex_len]
@@ -529,7 +738,7 @@ def run_single_scenario(
         verbose=args.verbose,
         records=records,
     )
-    steps.append(make_step("ENCAPS_MLKEM", response))
+    record_step("ENCAPS_MLKEM", response)
     mlkem_encaps = extract_hex_payload(response)
     mlkem_ct_hex_len = MLKEM_SIZES[scenario.kem_level]["ct"] * 2
     mlkem_ct_hex = mlkem_encaps[:mlkem_ct_hex_len]
@@ -543,7 +752,7 @@ def run_single_scenario(
         verbose=args.verbose,
         records=records,
     )
-    steps.append(make_step("DECAPS_MLKEM", response))
+    record_step("DECAPS_MLKEM", response)
     mlkem_decaps = extract_hex_payload(response)
     if mlkem_decaps != mlkem_ss_hex:
         raise SessionError("ML-KEM shared secrets did not match")
@@ -556,7 +765,7 @@ def run_single_scenario(
         verbose=args.verbose,
         records=records,
     )
-    steps.append(make_step("KEYGEN_MLDSA", response))
+    record_step("KEYGEN_MLDSA", response)
     mldsa_keygen = extract_hex_payload(response)
     mldsa_pk_hex_len = MLDSA_SIZES[scenario.sig_level]["pk"] * 2
     mldsa_pk_hex = mldsa_keygen[:mldsa_pk_hex_len]
@@ -570,7 +779,7 @@ def run_single_scenario(
         verbose=args.verbose,
         records=records,
     )
-    steps.append(make_step("SIGN_MLDSA", response))
+    record_step("SIGN_MLDSA", response)
     mldsa_sig = extract_hex_payload(response)
 
     response = issue_command(
@@ -582,7 +791,7 @@ def run_single_scenario(
         records=records,
     )
     expect_result_ok(response)
-    steps.append(make_step("VERIFY_MLDSA", response))
+    record_step("VERIFY_MLDSA", response)
 
     response = issue_command(
         transport,
@@ -593,11 +802,31 @@ def run_single_scenario(
         records=records,
     )
     expect_result_invalid(response)
-    steps.append(make_step("VERIFY_MLDSA_TAMPERED", response))
+    record_step("VERIFY_MLDSA_TAMPERED", response)
+
+    for expected in scenario.expected_errors:
+        response = issue_command(
+            transport,
+            expected.command,
+            timeout=args.response_timeout,
+            command_delay=args.command_delay,
+            verbose=args.verbose,
+            records=records,
+            allow_error=True,
+        )
+        step = make_step(expected.name, response)
+        mismatch = apply_expectation(
+            step,
+            status=expected.status,
+            response=expected.response,
+        )
+        if mismatch is not None:
+            mismatches.append(mismatch)
+        steps.append(step)
 
     return {
         "name": scenario.name,
-        "status": "ok",
+        "status": "ok" if not mismatches else "mismatch",
         "kem_level": scenario.kem_level,
         "sig_level": scenario.sig_level,
         "message_hex": scenario.message_hex,
@@ -609,6 +838,7 @@ def run_single_scenario(
         "mldsa_pk_bytes": len(mldsa_pk_hex) // 2,
         "mldsa_sk_bytes": len(mldsa_sk_hex) // 2,
         "mldsa_sig_bytes": len(mldsa_sig) // 2,
+        "mismatches": mismatches,
         "steps": steps,
         "commands": [asdict(record) for record in records],
     }
@@ -622,10 +852,12 @@ def run_smoke_session(transport: BaseTransport, args: argparse.Namespace) -> dic
     if args.scenario_file is None:
         return results[0]
 
+    mismatch_count = sum(1 for item in results if item.get("status") != "ok")
     return {
-        "status": "ok",
+        "status": "ok" if mismatch_count == 0 else "mismatch",
         "scenario_file": str(args.scenario_file.resolve()),
         "scenario_count": len(results),
+        "mismatch_count": mismatch_count,
         "scenarios": results,
     }
 
@@ -643,6 +875,17 @@ def run_self_tests(verbose: bool) -> int:
         ("*** Booting Zephyr... Ready for commands (type HELP::)", True),
         ("uart: Type HELP:: for syntax", True),
         ("random debug line", False),
+    ]
+    normalize_hex_cases = [
+        ("seed_hex", "AA00ff", "aa00ff"),
+        ("message_hex", " 0011 ", "0011"),
+    ]
+    response_status_cases = [
+        ("RESULT:OK", "ok"),
+        ("RESULT:INVALID", "invalid"),
+        ("RESULT:deadbeef", "payload"),
+        ("ERROR:INVALID_LEVEL", "error"),
+        ("debug only", "unknown"),
     ]
 
     for raw, expected in response_cases:
@@ -663,6 +906,79 @@ def run_self_tests(verbose: bool) -> int:
             )
         if verbose:
             print(f"[self-test] startup case OK: {raw!r} -> {actual!r}")
+
+    for field, raw, expected in normalize_hex_cases:
+        actual = normalize_hex_arg(field, raw)
+        if actual != expected:
+            raise SessionError(
+                f"normalize_hex_arg({field!r}, {raw!r}) produced {actual!r}, "
+                f"expected {expected!r}"
+            )
+        if verbose:
+            print(f"[self-test] normalize_hex_arg OK: {raw!r} -> {actual!r}")
+
+    for field, raw in (("seed_hex", "abc"), ("message_hex", "00xz")):
+        try:
+            normalize_hex_arg(field, raw)
+        except SessionError:
+            pass
+        else:
+            raise SessionError(
+                f"normalize_hex_arg({field!r}, {raw!r}) should have failed"
+            )
+
+    for raw, expected in response_status_cases:
+        actual = response_status(raw)
+        if actual != expected:
+            raise SessionError(
+                f"response_status({raw!r}) produced {actual!r}, expected {expected!r}"
+            )
+        if verbose:
+            print(f"[self-test] response_status OK: {raw!r} -> {actual!r}")
+
+    scenario_data = {
+        "scenarios": [
+            {
+                "name": "self-test-scenario",
+                "kem_level": 768,
+                "sig_level": 65,
+                "seed_hex": DEFAULT_SEED_HEX,
+                "message_hex": DEFAULT_MESSAGE_HEX,
+                "step_expectations": {
+                    "VERIFY_MLDSA_TAMPERED": {
+                        "status": "invalid",
+                        "response": "RESULT:INVALID",
+                    }
+                },
+                "expected_errors": [
+                    {
+                        "name": "INVALID_LEVEL",
+                        "command": "KEYGEN:MLKEM:999:",
+                        "response": "ERROR:INVALID_LEVEL",
+                    }
+                ],
+            }
+        ]
+    }
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        scenario_path = Path(tmp_dir) / "scenarios.json"
+        scenario_path.write_text(json.dumps(scenario_data))
+        scenario_args = argparse.Namespace(
+            scenario_file=scenario_path,
+            kem_level=768,
+            sig_level=65,
+            seed_hex=DEFAULT_SEED_HEX,
+            message_hex=DEFAULT_MESSAGE_HEX,
+        )
+        scenarios = load_scenarios(scenario_args)
+        if len(scenarios) != 1:
+            raise SessionError("load_scenarios did not return the expected scenario count")
+        if scenarios[0].step_expectations[0].response != "RESULT:INVALID":
+            raise SessionError("step_expectations were not parsed correctly")
+        if scenarios[0].expected_errors[0].response != "ERROR:INVALID_LEVEL":
+            raise SessionError("expected_errors were not parsed correctly")
+        if verbose:
+            print("[self-test] load_scenarios parsed expectations successfully")
 
     print("ACVP host-driver self-tests passed.")
     return 0
@@ -714,6 +1030,11 @@ def main() -> int:
 
     if args.json_out:
         args.json_out.write_text(json.dumps(summary, indent=2) + "\n")
+
+    if summary.get("status") != "ok":
+        print("ACVP smoke session completed with expectation mismatches.", file=sys.stderr)
+        print(json.dumps(summary, indent=2))
+        return 1
 
     print("ACVP smoke session completed successfully.")
     print(json.dumps(summary, indent=2))

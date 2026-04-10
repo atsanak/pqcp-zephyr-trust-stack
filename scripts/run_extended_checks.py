@@ -54,11 +54,18 @@ DEFAULT_ANALYSIS_PATHS = [
 
 DEFAULT_COMPATIBILITY_TARGETS = [
     "tests/ztest_primitive",
+    "tests/ztest_acvp_serial",
     "tests/ztest_tls_selftest",
 ]
 
 VERSION_STRING_RE = re.compile(r'^#define\s+PQCP_VERSION_STRING\s+"([^"]+)"$', re.MULTILINE)
 CHANGELOG_VERSION_RE = re.compile(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", re.MULTILINE)
+README_MANIFEST_REQUIRED_SNIPPETS = [
+    "url: https://github.com/atsana01/pqcp-zephyr-trust-stack",
+    "revision: main  # Prefer a pinned tag or commit for release integration",
+    "matches both `PQCP_VERSION_STRING`",
+    "top release entry in `CHANGELOG.md`",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -101,6 +108,15 @@ def parse_args() -> argparse.Namespace:
         "--compatibility-board",
         default="qemu_x86_64",
         help="Board used for Zephyr compatibility smoke builds",
+    )
+    parser.add_argument(
+        "--compatibility-board-list",
+        action="append",
+        dest="compatibility_boards",
+        help=(
+            "Optional comma-separated board list for compatibility smoke "
+            "(for example: qemu_x86_64,nucleo_h743zi)"
+        ),
     )
     parser.add_argument(
         "--compatibility-build-dir-root",
@@ -304,12 +320,49 @@ def check_version_sync(module_path: Path) -> bool:
     return True
 
 
+def check_manifest_guidance(module_path: Path) -> bool:
+    readme_text = (module_path / "README.md").read_text()
+
+    print("[release] README manifest guidance")
+    missing = [
+        snippet for snippet in README_MANIFEST_REQUIRED_SNIPPETS
+        if snippet not in readme_text
+    ]
+    if missing:
+        for snippet in missing:
+            print(f"[release] Missing README snippet: {snippet}")
+        return False
+
+    print("[release] README manifest snippet and pinning guidance are present")
+    return True
+
+
+def parse_compatibility_boards(
+    single_board: str,
+    board_values: Optional[List[str]],
+) -> List[str]:
+    if not board_values:
+        return [single_board]
+
+    boards: List[str] = []
+    for raw_value in board_values:
+        for item in raw_value.split(","):
+            board = item.strip()
+            if board:
+                boards.append(board)
+
+    if not boards:
+        raise RuntimeError("compatibility board list must contain at least one board")
+
+    return boards
+
+
 def run_compatibility_smoke(
     *,
     west_cmd: List[str],
     west_root: Path,
     module_path: Path,
-    board: str,
+    boards: Iterable[str],
     build_dir_root: Path,
     env: dict[str, str],
     verbose: bool,
@@ -322,31 +375,35 @@ def run_compatibility_smoke(
 
     build_dir_root.mkdir(parents=True, exist_ok=True)
     print(f"\n[compat] Zephyr ref : {zephyr_ref}")
-    print(f"[compat] Board      : {board}")
+    print("[compat] Boards:")
+    for board in boards:
+        print(f"  - {board}")
     print("[compat] Targets:")
     for target in selected_targets:
         print(f"  - {target}")
 
-    for target in selected_targets:
-        build_dir = build_dir_root / target.replace("/", "_")
-        cmd = [
-            *west_cmd,
-            "build",
-            "-p",
-            "always",
-            "-d",
-            str(build_dir),
-            "-b",
-            board,
-            str(module_path / target),
-            "--",
-            f"-DZEPHYR_EXTRA_MODULES={module_path}",
-        ]
-        result = run_command(cmd, cwd=west_root, env=env, verbose=verbose)
-        if result.returncode != 0:
-            print(result.stdout)
-            return result.returncode
-        print(f"[compat] Build OK: {target} -> {build_dir}")
+    for board in boards:
+        board_dir = build_dir_root / board.replace("/", "_")
+        for target in selected_targets:
+            build_dir = board_dir / target.replace("/", "_")
+            cmd = [
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-d",
+                str(build_dir),
+                "-b",
+                board,
+                str(module_path / target),
+                "--",
+                f"-DZEPHYR_EXTRA_MODULES={module_path}",
+            ]
+            result = run_command(cmd, cwd=west_root, env=env, verbose=verbose)
+            if result.returncode != 0:
+                print(result.stdout)
+                return result.returncode
+            print(f"[compat] Build OK: {board} / {target} -> {build_dir}")
 
     print("[compat] Compatibility smoke completed successfully")
     return 0
@@ -400,6 +457,8 @@ def main() -> int:
     print(f"  zephyr    : {args.zephyr_ref}")
 
     if not check_version_sync(module_path):
+        return 1
+    if not check_manifest_guidance(module_path):
         return 1
 
     if not args.skip_graphviz:
@@ -469,11 +528,15 @@ def main() -> int:
 
     if args.run_compatibility_smoke:
         compatibility_targets = args.compatibility_targets or DEFAULT_COMPATIBILITY_TARGETS
+        compatibility_boards = parse_compatibility_boards(
+            args.compatibility_board,
+            args.compatibility_boards,
+        )
         compat_result = run_compatibility_smoke(
             west_cmd=west_cmd,
             west_root=west_root,
             module_path=module_path,
-            board=args.compatibility_board,
+            boards=compatibility_boards,
             build_dir_root=args.compatibility_build_dir_root.resolve(),
             env=env,
             verbose=args.verbose,
