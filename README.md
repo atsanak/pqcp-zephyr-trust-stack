@@ -451,10 +451,30 @@ The protocol benchmark sample reuses the shared TLS self-test harness and emits
 - total handshake latency
 - ML-DSA authentication stage time
 - ML-KEM key exchange stage time
+- derived provider/framework overhead after subtracting the direct ML-KEM and
+  ML-DSA stage timings
+- certificate and key-exchange payload bytes plus transport-overhead bytes
 - client/server payload sizes
 - transcript bytes
 - packet estimates
 - stack and working-set usage where available
+
+To add lightweight RTOS-aware context during manual protocol runs, enable the
+sample overlay:
+
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_bench_protocol -- \
+  -DOVERLAY_CONFIG=overlay-rtos-metrics.conf
+west build -t run
+```
+
+That overlay keeps the normal benchmark path intact but adds opt-in
+`PQCP_METRIC` handshake rows for:
+
+- `rtos_isr_count`: periodic timer expiries observed during the handshake
+- `rtos_yield_count`: background load-thread yields during the run
+- `rtos_jitter_p50`, `rtos_jitter_p90`, `rtos_jitter_p99`: wake-up jitter of
+  the low-priority load thread in microseconds
 
 The runner:
 
@@ -587,7 +607,12 @@ That produces:
   `key_exchange_algorithm`, `key_exchange_level`, `handshake_time`,
   `handshake_p50`, `handshake_p90`, `handshake_p99`,
   `handshake_transcript_bytes`, `handshake_packets`, `auth_time`,
-  `key_exchange_time`, `rom_bytes`, and `ram_bytes`
+  `key_exchange_time`, `handshake_provider_overhead`,
+  `handshake_certificate_bytes`, `handshake_key_exchange_bytes`,
+  `handshake_transport_overhead_bytes`, `handshake_rtos_isr_count`,
+  `handshake_rtos_yield_count`, `handshake_rtos_jitter_p50`,
+  `handshake_rtos_jitter_p90`, `handshake_rtos_jitter_p99`, `rom_bytes`, and
+  `ram_bytes`
 
 Example interpretation:
 
@@ -597,8 +622,8 @@ board,profile,sample,implementation,backend,run_mode,text_bytes,rom_bytes,ram_by
 nucleo_h743zi,MCU_MINIMAL,pqcp_basic_kem,pqcp,force_c,build_only,<text>,<rom>,<ram>
 
 cost_of_assurance_protocols.csv
-board,profile,sample,implementation,backend,suite,suite_mode,handshake_time,auth_time,key_exchange_time
-qemu_x86_64,NATIVE_LAB,pqcp_bench_protocol,pqcp,force_native,MLKEM768+MLDSA65,pure_pq,<time>,<auth>,<kex>
+board,profile,sample,implementation,backend,suite,suite_mode,handshake_time,auth_time,key_exchange_time,handshake_provider_overhead
+qemu_x86_64,NATIVE_LAB,pqcp_bench_protocol,pqcp,force_native,MLKEM768+MLDSA65,pure_pq,<time>,<auth>,<kex>,<provider_us>
 ```
 
 For cost-of-assurance runs that do not invoke Zephyr's dedicated `rom_report` and
@@ -620,6 +645,11 @@ grep '^qemu_x86_64,MCU_MINIMAL,pqcp_basic_kem' \
 # Inspect only build-only STM32H7 rows
 grep '^nucleo_h743zi' \
   benchmark_results/cost-of-assurance/cost_of_assurance_builds.csv
+
+# Inspect protocol overhead and optional RTOS metrics for the protocol sample
+csvcut -c board,sample,backend,suite,handshake_provider_overhead,handshake_rtos_isr_count,handshake_rtos_jitter_p90 \
+  benchmark_results/cost-of-assurance/cost_of_assurance_protocols.csv | \
+  grep '^qemu_x86_64,pqcp_bench_protocol'
 
 # If csvkit is available, compare qemu_x86_64 build footprints by backend
 csvcut -c board,profile,sample,implementation,backend,run_mode,text_bytes,total_bytes \
@@ -780,6 +810,11 @@ CMD:ALG:LEVEL:HEX_DATA
 | SELFTEST | `SELFTEST::` | Run internal self-test |
 | HELP | `HELP::` | Show command help |
 
+`HELP` and `SELFTEST` are intentionally accepted only in their exact public
+forms (`HELP`, `HELP::`, `SELFTEST`, `SELFTEST::`). Malformed variants such as
+`HELP:` are rejected with `ERROR:INVALID_CMD`, which keeps the serial harness
+more predictable under noisy lab tooling or partial-line glitches.
+
 ### Response Format
 
 ```
@@ -810,6 +845,11 @@ Common error codes emitted by the ACVP sample and command library:
 - `VERIFY_FAILED`
 - `SEED_FAILED`
 - `NOT_ENABLED`
+
+The shipped negative-scenario file at `scripts/acvp_negative_scenarios.json`
+now exercises truncated commands, strict `HELP` form handling, wrong-size
+signing input, invalid seed hex, unsupported levels, and extra-field framing
+errors through the full QEMU serial sample path.
 
 The public ACVP command API is declared in
 `include/pqcp_zephyr/acvp_cmd.h` and includes helpers for:
@@ -1143,6 +1183,9 @@ This helper:
 - checks that the example west manifest snippet still reminds integrators to
   pin a tag or commit that matches `PQCP_VERSION_STRING` and `CHANGELOG.md`
 - strips common host compiler environment variables before invoking `west`
+- runs a tiny non-quantitative cost-of-assurance smoke on `qemu_x86_64`
+  (`pqcp_basic_kem` + `pqcp_bench_protocol`, `backend=auto`) and then verifies
+  that the build, primitive, and protocol CSV artifacts were produced
 
 Use it before large refactors, before cutting a release, or when touching the
 shared ACVP/TLS/benchmark infrastructure.

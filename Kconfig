@@ -313,6 +313,42 @@ config PQCP_BENCH_PROTOCOL
 	  Enable protocol-level benchmarks (TLS/DTLS handshakes).
 	  Requires networking support.
 
+config PQCP_BENCH_PROTOCOL_RTOS_METRICS
+	bool "RTOS-aware protocol benchmark metrics"
+	default n
+	help
+	  Add opt-in scheduler/interrupt context metrics to the offline protocol
+	  benchmark harness. When enabled, the benchmark spawns a lightweight
+	  background load thread and periodic timer so the emitted PQCP_METRIC
+	  stream can capture timer ISR counts, yield counts, and wake-up jitter
+	  while the PQC handshake runs.
+
+	  This option is intended for manual cost-of-assurance experiments and is
+	  kept disabled by default so existing CI and product-style builds keep
+	  their stable behavior.
+
+if PQCP_BENCH_PROTOCOL_RTOS_METRICS
+
+config PQCP_BENCH_PROTOCOL_RTOS_LOAD_PERIOD_MS
+	int "RTOS load period (ms)"
+	default 2
+	range 1 1000
+	help
+	  Period for the background benchmark load thread and timer ISR probe.
+	  Lower values increase the amount of RTOS scheduling pressure applied
+	  during each handshake measurement.
+
+config PQCP_BENCH_PROTOCOL_RTOS_LOAD_BUSY_WAIT_US
+	int "RTOS load busy-wait per wake-up (us)"
+	default 250
+	range 0 100000
+	help
+	  Busy-wait time performed by the background load thread after each wake-up.
+	  This keeps the RTOS-aware benchmark mode lightweight but observable on
+	  qemu_x86_64 and supported MCU boards during manual experiments.
+
+endif # PQCP_BENCH_PROTOCOL_RTOS_METRICS
+
 endif # PQCP_BENCH
 endmenu
 

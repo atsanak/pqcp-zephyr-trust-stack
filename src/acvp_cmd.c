@@ -117,7 +117,7 @@ int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
     }
     
     for (size_t i = 0; i < byte_len; i++) {
-        char byte_str[3] = { hex[i*2], hex[i*2+1], 0 };
+        const char byte_str[3] = { hex[i * 2], hex[i * 2 + 1], 0 };
         char *endptr;
         unsigned long val = strtoul(byte_str, &endptr, 16);
         if (*endptr != '\0') {
@@ -521,10 +521,10 @@ int pqcp_acvp_process_command(char *line,
                               struct pqcp_acvp_response *resp)
 {
     char *fields[4] = { 0 };
-    char *cmd;
-    char *alg;
-    char *level_str;
-    char *data;
+    const char *cmd;
+    const char *alg;
+    const char *level_str;
+    const char *data;
     bool too_many_fields;
     bool cmd_requires_data;
     size_t field_count;
@@ -547,7 +547,12 @@ int pqcp_acvp_process_command(char *line,
 
     /* HELP command */
     if (strcmp(cmd, "HELP") == 0) {
-        if (field_count > 1U && alg != NULL && alg[0] != '\0') {
+        bool exact_help = (field_count == 1U) ||
+            (field_count == 3U &&
+             alg != NULL && alg[0] == '\0' &&
+             level_str != NULL && level_str[0] == '\0');
+
+        if (!exact_help) {
             resp->result = PQCP_ACVP_ERR_INVALID_CMD;
             return -EINVAL;
         }
@@ -558,7 +563,12 @@ int pqcp_acvp_process_command(char *line,
     
     /* SELFTEST command */
     if (strcmp(cmd, "SELFTEST") == 0) {
-        if (field_count > 1U && alg != NULL && alg[0] != '\0') {
+        bool exact_selftest = (field_count == 1U) ||
+            (field_count == 3U &&
+             alg != NULL && alg[0] == '\0' &&
+             level_str != NULL && level_str[0] == '\0');
+
+        if (!exact_selftest) {
             resp->result = PQCP_ACVP_ERR_INVALID_CMD;
             return -EINVAL;
         }

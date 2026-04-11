@@ -39,10 +39,14 @@ typedef struct pqcp_tls_selftest_report {
     uint64_t auth_us;
     uint64_t key_exchange_us;
     uint64_t handshake_us;
+    uint64_t provider_overhead_us;
 
     uint32_t client_bytes;
     uint32_t server_bytes;
     uint32_t transcript_bytes;
+    uint32_t certificate_bytes;
+    uint32_t key_exchange_bytes;
+    uint32_t transport_overhead_bytes;
     uint16_t packets;
 
     uint32_t working_set_bytes;
@@ -76,8 +80,16 @@ typedef struct pqcp_tls_selftest_report {
  *
  * Timing fields are reported in microseconds. Byte counters capture the
  * synthetic client/server payload sizes and derived transcript size used by
- * the offline TLS benchmark path. Memory fields reflect best-effort working
- * set and stack observations available in the current build.
+ * the offline TLS benchmark path. `provider_overhead_us` is the residual
+ * handshake time after subtracting the direct ML-KEM and ML-DSA stage costs,
+ * which makes it easier to separate primitive cost from the surrounding
+ * framework state machine when analyzing protocol metrics.
+ *
+ * `certificate_bytes`, `key_exchange_bytes`, and
+ * `transport_overhead_bytes` provide a lightweight handshake size
+ * decomposition without changing the stable PQCP_METRIC wire format.
+ * Memory fields reflect best-effort working set and stack observations
+ * available in the current build.
  *
  * The report structure is shared by the TLS sample, protocol benchmark sample,
  * and ztest coverage so those paths stay aligned on metric names and meaning.

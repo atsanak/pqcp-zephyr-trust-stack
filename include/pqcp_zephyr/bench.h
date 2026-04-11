@@ -93,6 +93,15 @@ typedef struct pqcp_bench_protocol_result {
     uint32_t working_set_bytes;   /* Static working set used by the flow */
     uint64_t auth_time_us;        /* ML-DSA auth stage time */
     uint64_t key_exchange_time_us;/* ML-KEM key exchange stage time */
+    uint64_t provider_overhead_us;/* Handshake time not spent in PQCP primitives */
+    uint32_t certificate_bytes;   /* ML-DSA public key + signature footprint */
+    uint32_t key_exchange_bytes;  /* ML-KEM public key + ciphertext footprint */
+    uint32_t transport_overhead_bytes; /* Transcript bytes outside PQ payloads */
+    uint32_t rtos_isr_count;      /* Timer ISR expiries observed during the run */
+    uint32_t rtos_yield_count;    /* Background load thread yields */
+    uint32_t rtos_jitter_p50_us;  /* Background load wake-up jitter p50 */
+    uint32_t rtos_jitter_p90_us;  /* Background load wake-up jitter p90 */
+    uint32_t rtos_jitter_p99_us;  /* Background load wake-up jitter p99 */
     
     /* Percentiles (in ms) */
     uint32_t p50_latency;
