@@ -4,6 +4,7 @@
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_kem",
+      "implementation": "pqcp",
       "backend": "auto",
       "notes": "Default backend policy for ML-KEM primitive comparison."
     },
@@ -11,6 +12,7 @@
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_kem",
+      "implementation": "pqcp",
       "backend": "force_c",
       "notes": "Portable C backend for ML-KEM primitive comparison."
     },
@@ -18,6 +20,7 @@
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_kem",
+      "implementation": "pqcp",
       "backend": "force_native",
       "notes": "Native backend for ML-KEM primitive comparison."
     },
@@ -25,6 +28,7 @@
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_sig",
+      "implementation": "pqcp",
       "backend": "auto",
       "notes": "Default backend policy for ML-DSA primitive comparison."
     },
@@ -32,6 +36,7 @@
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_sig",
+      "implementation": "pqcp",
       "backend": "force_c",
       "notes": "Portable C backend for ML-DSA primitive comparison."
     },
@@ -39,6 +44,7 @@
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_sig",
+      "implementation": "pqcp",
       "backend": "force_native",
       "notes": "Native backend for ML-DSA primitive comparison."
     },
@@ -46,6 +52,7 @@
       "board": "qemu_x86_64",
       "profile": "NATIVE_LAB",
       "sample": "pqcp_bench_protocol",
+      "implementation": "pqcp",
       "backend": "auto",
       "notes": "Shared TLS/protocol benchmark using the default backend policy."
     },
@@ -53,6 +60,7 @@
       "board": "qemu_x86_64",
       "profile": "NATIVE_LAB",
       "sample": "pqcp_bench_protocol",
+      "implementation": "pqcp",
       "backend": "force_c",
       "notes": "Shared TLS/protocol benchmark with the portable C backend."
     },
@@ -60,8 +68,69 @@
       "board": "qemu_x86_64",
       "profile": "NATIVE_LAB",
       "sample": "pqcp_bench_protocol",
+      "implementation": "pqcp",
       "backend": "force_native",
       "notes": "Shared TLS/protocol benchmark with the native backend."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "implementation": "pqcp",
+      "backend": "auto",
+      "run_mode": "build_only",
+      "app_path": "samples/pqcp_basic_kem",
+      "notes": "Real STM32H7 build-only footprint capture for ML-KEM on the default backend policy."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "implementation": "pqcp",
+      "backend": "force_c",
+      "run_mode": "build_only",
+      "app_path": "samples/pqcp_basic_kem",
+      "notes": "Real STM32H7 build-only footprint capture for ML-KEM with the portable C backend."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "implementation": "pqcp",
+      "backend": "auto",
+      "run_mode": "build_only",
+      "app_path": "samples/pqcp_basic_sig",
+      "notes": "Real STM32H7 build-only footprint capture for ML-DSA on the default backend policy."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "implementation": "pqcp",
+      "backend": "force_c",
+      "run_mode": "build_only",
+      "app_path": "samples/pqcp_basic_sig",
+      "notes": "Real STM32H7 build-only footprint capture for ML-DSA with the portable C backend."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol",
+      "implementation": "pqcp",
+      "backend": "auto",
+      "run_mode": "build_only",
+      "app_path": "samples/pqcp_bench_protocol",
+      "notes": "Real STM32H7 build-only footprint capture for the protocol benchmark on the default backend policy."
+    },
+    {
+      "board": "nucleo_h743zi",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol",
+      "implementation": "pqcp",
+      "backend": "force_c",
+      "run_mode": "build_only",
+      "app_path": "samples/pqcp_bench_protocol",
+      "notes": "Real STM32H7 build-only footprint capture for the protocol benchmark with the portable C backend."
     }
   ]
 }
