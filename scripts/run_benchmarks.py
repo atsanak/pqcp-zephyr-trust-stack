@@ -63,7 +63,23 @@ PROFILES: Dict[str, Dict[str, str]] = {
     },
 }
 
+BACKEND_POLICIES: Dict[str, Dict[str, Any]] = {
+    "auto": {
+        "kconfig": [],
+        "description": "Automatic backend selection for the current target",
+    },
+    "force_c": {
+        "kconfig": ["CONFIG_PQCP_BACKEND_FORCE_C=y"],
+        "description": "Portable C backend forced for comparison runs",
+    },
+    "force_native": {
+        "kconfig": ["CONFIG_PQCP_BACKEND_FORCE_NATIVE=y"],
+        "description": "Native backend forced for comparison runs",
+    },
+}
+
 DEFAULT_BENCHMARK_MATRIX = SCRIPT_DIR / "benchmark_matrix.json"
+DEFAULT_COST_OF_ASSURANCE_MATRIX = SCRIPT_DIR / "cost_of_assurance_matrix.json"
 DEFAULT_PROFILE_VALIDATION_MATRIX = SCRIPT_DIR / "profile_validation_matrix.json"
 HOST_ENV_BLACKLIST = (
     "CFLAGS",
@@ -133,6 +149,7 @@ class RunSpec:
     board: str
     profile: str
     sample: str
+    backend: str
     app_path: str
     overlays: List[str]
     extra_kconfig: List[str]
@@ -145,6 +162,7 @@ class RunRecord:
     board: str
     profile: str
     sample: str
+    backend: str
     app_path: str
     build_dir: str
     log_path: str
@@ -169,8 +187,22 @@ def default_timeout_for_path(app_path: str) -> int:
     return 120 if app_path.startswith("tests/") else 60
 
 
-def make_run_id(board: str, profile: str, label: str) -> str:
-    return "__".join([slugify(board), slugify(profile), slugify(label)])
+def normalize_backend_policy(value: Optional[str]) -> str:
+    policy = str(value or "auto").strip().lower().replace("-", "_")
+    if policy not in BACKEND_POLICIES:
+        raise ValueError(
+            f"Unknown backend policy '{value}'. Expected one of: "
+            f"{', '.join(sorted(BACKEND_POLICIES))}"
+        )
+    return policy
+
+
+def make_run_id(board: str, profile: str, label: str, backend: Optional[str] = None) -> str:
+    parts = [slugify(board), slugify(profile), slugify(label)]
+    backend_policy = normalize_backend_policy(backend)
+    if backend_policy != "auto":
+        parts.append(slugify(backend_policy))
+    return "__".join(parts)
 
 
 def normalize_overlays(value: Any) -> List[str]:
@@ -201,12 +233,14 @@ def filter_specs(
     boards: Optional[Iterable[str]] = None,
     profiles: Optional[Iterable[str]] = None,
     samples: Optional[Iterable[str]] = None,
+    backends: Optional[Iterable[str]] = None,
     protocol_only: bool = False,
     skip_protocol: bool = False,
 ) -> List[RunSpec]:
     board_set = {item for item in boards or []}
     profile_set = {item for item in profiles or []}
     sample_set = {item for item in samples or []}
+    backend_set = {normalize_backend_policy(item) for item in backends or []}
     filtered: List[RunSpec] = []
 
     for spec in specs:
@@ -215,6 +249,8 @@ def filter_specs(
         if profile_set and spec.profile not in profile_set:
             continue
         if sample_set and spec.sample not in sample_set:
+            continue
+        if backend_set and spec.backend not in backend_set:
             continue
         if protocol_only and not is_protocol_run(spec):
             continue
@@ -679,6 +715,7 @@ class BenchmarkRunner:
             "board": spec.board,
             "profile": spec.profile,
             "sample": spec.sample,
+            "backend": spec.backend,
             "app_path": spec.app_path,
             "overlays": ";".join(spec.overlays),
             "extra_kconfig": ";".join(spec.extra_kconfig),
@@ -723,7 +760,10 @@ class BenchmarkRunner:
         run_dir = self.output_dir / "runs" / spec.run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"\n[{spec.run_id}] {spec.board} / {spec.profile} / {spec.sample}")
+        print(
+            f"\n[{spec.run_id}] {spec.board} / {spec.profile} / "
+            f"{spec.sample} / backend={spec.backend}"
+        )
         build_result = self._build(spec, run_dir)
         (run_dir / "build.log").write_text(build_result.stdout)
 
@@ -735,6 +775,7 @@ class BenchmarkRunner:
                     board=spec.board,
                     profile=spec.profile,
                     sample=spec.sample,
+                    backend=spec.backend,
                     app_path=spec.app_path,
                     build_dir=str(self.output_dir / "build" / spec.run_id),
                     log_path=str(run_dir / "run.log"),
@@ -778,6 +819,7 @@ class BenchmarkRunner:
             board=spec.board,
             profile=spec.profile,
             sample=spec.sample,
+            backend=spec.backend,
             app_path=spec.app_path,
             build_dir=str(self.output_dir / "build" / spec.run_id),
             log_path=str(log_path),
@@ -830,6 +872,7 @@ class BenchmarkRunner:
             "board",
             "profile",
             "sample",
+            "backend",
             "app_path",
             "overlays",
             "extra_kconfig",
@@ -858,9 +901,12 @@ def expand_runs(
     boards: Iterable[str],
     profiles: Iterable[str],
     samples: Iterable[str],
+    backend: str,
     extra_kconfig: List[str],
 ) -> List[RunSpec]:
     specs: List[RunSpec] = []
+    backend_policy = normalize_backend_policy(backend)
+    backend_kconfig = list(BACKEND_POLICIES[backend_policy]["kconfig"])
 
     for board in boards:
         for profile in profiles:
@@ -871,18 +917,17 @@ def expand_runs(
                 if profile not in sample_info["profiles"]:
                     continue
 
-                run_id = "__".join(
-                    [slugify(board), slugify(profile), slugify(sample)]
-                )
+                run_id = make_run_id(board, profile, sample, backend_policy)
                 specs.append(
                     RunSpec(
                         run_id=run_id,
                         board=board,
                         profile=profile,
                         sample=sample,
+                        backend=backend_policy,
                         app_path=sample_info["path"],
                         overlays=list(sample_info.get("overlays", [])),
-                        extra_kconfig=list(extra_kconfig),
+                        extra_kconfig=[*backend_kconfig, *extra_kconfig],
                         run_timeout=int(sample_info.get("run_timeout", 0)),
                     )
                 )
@@ -897,6 +942,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
             for item in entries:
                 target = item["target"]
                 label = item.get("sample", Path(target).name)
+                backend_policy = normalize_backend_policy(item.get("backend"))
                 overlays = normalize_overlays(item.get("overlays"))
                 if item.get("overlay"):
                     overlays.append(str(item["overlay"]))
@@ -904,14 +950,16 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     RunSpec(
                         run_id=item.get(
                             "run_id",
-                            make_run_id(item["board"], profile, label),
+                            make_run_id(item["board"], profile, label, backend_policy),
                         ),
                         board=item["board"],
                         profile=profile,
                         sample=label,
+                        backend=backend_policy,
                         app_path=target,
                         overlays=overlays,
                         extra_kconfig=[
+                            *BACKEND_POLICIES[backend_policy]["kconfig"],
                             *item.get("extra_kconfig", []),
                             *cli_kconfig,
                         ],
@@ -927,6 +975,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
         for item in config["runs"]:
             sample = item.get("sample")
             target = item.get("target")
+            backend_policy = normalize_backend_policy(item.get("backend"))
             sample_info = SAMPLES.get(sample, {}) if sample else {}
             app_path = item.get("app_path") or target or sample_info.get("path")
             if app_path is None:
@@ -938,7 +987,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                 overlays.append(str(item["overlay"]))
             run_id = item.get(
                 "run_id",
-                make_run_id(item["board"], item["profile"], label),
+                make_run_id(item["board"], item["profile"], label, backend_policy),
             )
             specs.append(
                 RunSpec(
@@ -946,9 +995,11 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     board=item["board"],
                     profile=item["profile"],
                     sample=label,
+                    backend=backend_policy,
                     app_path=app_path,
                     overlays=overlays or list(sample_info.get("overlays", [])),
                     extra_kconfig=[
+                        *BACKEND_POLICIES[backend_policy]["kconfig"],
                         *item.get("extra_kconfig", []),
                         *cli_kconfig,
                     ],
@@ -966,6 +1017,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
         boards=config.get("boards", DEFAULT_BOARDS),
         profiles=config.get("profiles", list(PROFILES.keys())),
         samples=config.get("samples", DEFAULT_MATRIX_SAMPLES),
+        backend=config.get("backend", "auto"),
         extra_kconfig=[*config.get("extra_kconfig", []), *cli_kconfig],
     )
 
@@ -978,12 +1030,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boards", nargs="+", help="Boards for matrix mode")
     parser.add_argument("--profile", choices=list(PROFILES), help="Single profile")
     parser.add_argument("--profiles", nargs="+", choices=list(PROFILES), help="Profiles for matrix mode")
+    parser.add_argument("--backend-policy", choices=list(BACKEND_POLICIES), help="Single backend policy")
+    parser.add_argument("--backend-policies", nargs="+", choices=list(BACKEND_POLICIES), help="Backend policies for matrix filtering")
     parser.add_argument("--sample", help="Single sample or run label")
     parser.add_argument("--samples", nargs="+", help="Samples or run labels for matrix mode")
     parser.add_argument("--matrix", action="store_true", help="Run a board/profile/sample matrix")
     mode_group.add_argument("--config", type=Path, help="JSON or YAML matrix config")
     mode_group.add_argument("--benchmark-matrix", action="store_true",
                             help="Run the curated benchmark matrix")
+    mode_group.add_argument("--cost-of-assurance-matrix", action="store_true",
+                            help="Run the curated backend-comparison benchmark matrix")
     mode_group.add_argument("--profile-validation", action="store_true",
                             help="Run the curated profile validation matrix")
     protocol_group.add_argument("--protocol-only", action="store_true",
@@ -1026,6 +1082,7 @@ def main() -> int:
     sample_filters = args.samples or ([args.sample] if args.sample else [])
     board_filters = args.boards or ([args.board] if args.board else [])
     profile_filters = args.profiles or ([args.profile] if args.profile else [])
+    backend_filters = args.backend_policies or ([args.backend_policy] if args.backend_policy else [])
     resource_budget_path = args.resource_budgets.resolve() if args.resource_budgets else None
 
     west_cmd = discover_west(args.west, west_root, module_path)
@@ -1042,6 +1099,10 @@ def main() -> int:
         specs = expand_runs_from_config(
             load_config_file(DEFAULT_BENCHMARK_MATRIX), args.kconfig
         )
+    elif args.cost_of_assurance_matrix:
+        specs = expand_runs_from_config(
+            load_config_file(DEFAULT_COST_OF_ASSURANCE_MATRIX), args.kconfig
+        )
     elif args.profile_validation:
         specs = expand_runs_from_config(
             load_config_file(DEFAULT_PROFILE_VALIDATION_MATRIX), args.kconfig
@@ -1057,6 +1118,7 @@ def main() -> int:
             boards=[args.board or "qemu_x86_64"],
             profiles=[args.profile or "MCU_MINIMAL"],
             samples=[args.sample],
+            backend=args.backend_policy or "auto",
             extra_kconfig=args.kconfig,
         )
     elif args.matrix or args.samples or args.boards or args.profiles:
@@ -1071,6 +1133,7 @@ def main() -> int:
             boards=args.boards or ([args.board] if args.board else DEFAULT_BOARDS),
             profiles=args.profiles or ([args.profile] if args.profile else list(PROFILES.keys())),
             samples=args.samples or DEFAULT_MATRIX_SAMPLES,
+            backend=args.backend_policy or "auto",
             extra_kconfig=args.kconfig,
         )
     else:
@@ -1078,6 +1141,7 @@ def main() -> int:
             boards=[args.board or "qemu_x86_64"],
             profiles=[args.profile or "MCU_MINIMAL"],
             samples=["pqcp_basic_kem", "pqcp_basic_sig"],
+            backend=args.backend_policy or "auto",
             extra_kconfig=args.kconfig,
         )
 
@@ -1086,6 +1150,7 @@ def main() -> int:
         boards=board_filters,
         profiles=profile_filters,
         samples=sample_filters,
+        backends=backend_filters,
         protocol_only=args.protocol_only,
         skip_protocol=args.skip_protocol,
     )
@@ -1125,7 +1190,7 @@ def main() -> int:
                 "  - "
                 f"{record.run_id}: build_ok={record.build_ok} "
                 f"run_ok={record.run_ok} timed_out={record.timed_out} "
-                f"budget_ok={record.budget_ok}"
+                f"budget_ok={record.budget_ok} backend={record.backend}"
             )
             for failure in record.budget_failures:
                 print(f"      budget: {failure}")

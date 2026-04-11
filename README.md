@@ -176,6 +176,8 @@ pqcp-zephyr-trust-stack/
 ├── scripts/
 │   ├── run_benchmarks.py       # Benchmark orchestration
 │   ├── parse_logs.py           # Log parsing to CSV
+│   ├── summarize_cost_of_assurance.py
+│   │                          # Backend-comparison report generation
 │   ├── run_extended_checks.py  # Slower validation and compatibility checks
 │   └── resource_budgets.json   # Curated ROM/RAM envelopes for CI smokes
 │
@@ -403,8 +405,10 @@ python scripts/run_benchmarks.py --config scripts/benchmark_matrix.json
 ### Filtering the Curated Matrices
 
 The benchmark runner accepts the same `--board`, `--profile`, and `--sample`
-filters for curated JSON matrices as it does for ad-hoc runs. This makes it
-easy to iterate on a single entry without copying or editing the matrix file.
+filters for curated JSON matrices as it does for ad-hoc runs. Backend-policy
+comparison runs also accept `--backend-policy` / `--backend-policies`. This
+makes it easy to iterate on a single entry without copying or editing the
+matrix file.
 
 ```bash
 # Run just one curated benchmark entry
@@ -427,6 +431,11 @@ python scripts/run_benchmarks.py \
   --profile MCU_MINIMAL \
   --sample ztest_rng \
   --build-only
+
+# Run only the forced-native rows from the cost-of-assurance matrix
+python scripts/run_benchmarks.py \
+  --cost-of-assurance-matrix \
+  --backend-policy force_native
 ```
 
 ### Protocol Benchmark Sample
@@ -488,7 +497,58 @@ benchmark_results/
 The repository includes two machine-readable configuration files:
 
 - `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection, keeping at least one primitive-oriented entry per profile plus protocol/TLS-oriented coverage where that profile supports it
+- `scripts/cost_of_assurance_matrix.json`: curated backend-policy comparison runs for the in-tree PQCP implementations (`auto`, `force_c`, `force_native`) on the currently validated QEMU path
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI, including the explicit `mps2/an385` Cortex-M no-entropy validation path
+
+### Cost-of-Assurance Matrix
+
+The repository now includes an opt-in backend-comparison matrix that measures the
+cost of using the currently supported PQCP backend policies under identical
+Zephyr builds:
+
+- `auto`: the default target-dependent PQCP backend policy
+- `force_c`: the portable C backend forced on
+- `force_native`: the native backend forced on
+
+This is the in-tree "cost of assurance" comparison that can be automated today.
+The module does not yet ship a second non-PQCP cryptographic provider, so the
+comparison currently stays within the PQCP family rather than claiming a
+PQClean/liboqs baseline.
+
+Run the curated matrix with:
+
+```bash
+python scripts/run_benchmarks.py \
+  --cost-of-assurance-matrix \
+  --output benchmark_results/cost-of-assurance
+```
+
+Each run carries a `backend` field in `runs.json`,
+`consolidated_metrics.json`, and `consolidated_metrics.csv`, so the raw metric
+rows are already keyed by `(board, profile, sample, backend, algorithm, level)`.
+
+To flatten those raw rows into comparison-oriented CSVs, run:
+
+```bash
+python scripts/summarize_cost_of_assurance.py \
+  --input-dir benchmark_results/cost-of-assurance
+```
+
+That produces:
+
+- `cost_of_assurance_primitives.csv`: one row per primitive algorithm/level with
+  columns such as `keygen_cycles`, `sign_cycles`, `total_stack`, `text_bytes`,
+  `rom_bytes`, and `ram_bytes`
+- `cost_of_assurance_protocols.csv`: one row per protocol suite block with
+  columns such as `handshake_time`, `handshake_p50`, `handshake_p90`,
+  `handshake_p99`, `handshake_transcript_bytes`, `handshake_packets`,
+  `auth_time`, `key_exchange_time`, `rom_bytes`, and `ram_bytes`
+
+The current curated matrix intentionally keeps the automated comparison on
+`qemu_x86_64`, where all three backend policies are reproducible and fully
+runnable. Use the existing profile-validation matrix and board budgets for MCU
+resource validation, then extend the cost matrix only after the new board/path
+is proven stable.
 
 ### Resource Budget Enforcement
 

@@ -1,0 +1,67 @@
+{
+  "runs": [
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "backend": "auto",
+      "notes": "Default backend policy for ML-KEM primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "backend": "force_c",
+      "notes": "Portable C backend for ML-KEM primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "backend": "force_native",
+      "notes": "Native backend for ML-KEM primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "backend": "auto",
+      "notes": "Default backend policy for ML-DSA primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "backend": "force_c",
+      "notes": "Portable C backend for ML-DSA primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "backend": "force_native",
+      "notes": "Native backend for ML-DSA primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol",
+      "backend": "auto",
+      "notes": "Shared TLS/protocol benchmark using the default backend policy."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol",
+      "backend": "force_c",
+      "notes": "Shared TLS/protocol benchmark with the portable C backend."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "NATIVE_LAB",
+      "sample": "pqcp_bench_protocol",
+      "backend": "force_native",
+      "notes": "Shared TLS/protocol benchmark with the native backend."
+    }
+  ]
+}
