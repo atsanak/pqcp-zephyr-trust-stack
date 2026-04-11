@@ -16,6 +16,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/atomic.h>
 #include <pqcp_zephyr/bench.h>
 #include <pqcp_zephyr/rng.h>
 #include <pqcp_zephyr/tls_selftest.h>
@@ -35,10 +36,123 @@
 
 typedef struct {
     uint32_t latency_samples[100];
+    uint32_t rtos_jitter_samples[128];
     uint16_t sample_count;
+    uint16_t rtos_jitter_count;
 } protocol_bench_ctx_t;
 
 static protocol_bench_ctx_t bench_ctx;
+
+static uint32_t percentile(uint32_t *samples, uint16_t count, uint8_t p);
+
+#if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)
+#define PQCP_PROTOCOL_RTOS_LOAD_STACK_SIZE 1024
+
+typedef struct {
+    struct k_timer timer;
+    struct k_thread thread;
+    atomic_t stop;
+    atomic_t isr_count;
+    atomic_t yield_count;
+} protocol_rtos_probe_t;
+
+K_THREAD_STACK_DEFINE(protocol_rtos_load_stack, PQCP_PROTOCOL_RTOS_LOAD_STACK_SIZE);
+static protocol_rtos_probe_t protocol_rtos_probe;
+
+static uint32_t saturating_us_delta(uint64_t actual, uint64_t expected)
+{
+    uint64_t delta = (actual > expected) ? (actual - expected) : (expected - actual);
+
+    if (delta > UINT32_MAX) {
+        return UINT32_MAX;
+    }
+
+    return (uint32_t)delta;
+}
+
+static void protocol_rtos_timer_handler(struct k_timer *timer)
+{
+    protocol_rtos_probe_t *probe = k_timer_user_data_get(timer);
+
+    if (probe != NULL) {
+        atomic_inc(&probe->isr_count);
+    }
+}
+
+static void protocol_rtos_load_thread(void *p1, void *p2, void *p3)
+{
+    protocol_rtos_probe_t *probe = p1;
+    const uint64_t period_us =
+        (uint64_t)CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_PERIOD_MS * USEC_PER_MSEC;
+    uint64_t expected_wake_us = k_cyc_to_us_floor64(k_cycle_get_64()) + period_us;
+
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    while (atomic_get(&probe->stop) == 0) {
+        k_sleep(K_MSEC(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_PERIOD_MS));
+
+        if (atomic_get(&probe->stop) != 0) {
+            break;
+        }
+
+        if (bench_ctx.rtos_jitter_count < ARRAY_SIZE(bench_ctx.rtos_jitter_samples)) {
+            uint64_t actual_wake_us = k_cyc_to_us_floor64(k_cycle_get_64());
+
+            bench_ctx.rtos_jitter_samples[bench_ctx.rtos_jitter_count++] =
+                saturating_us_delta(actual_wake_us, expected_wake_us);
+        }
+        expected_wake_us += period_us;
+
+#if CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_BUSY_WAIT_US > 0
+        k_busy_wait(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_BUSY_WAIT_US);
+#endif
+        atomic_inc(&probe->yield_count);
+        k_yield();
+    }
+}
+
+static void protocol_rtos_probe_start(void)
+{
+    memset(&protocol_rtos_probe, 0, sizeof(protocol_rtos_probe));
+    atomic_clear(&protocol_rtos_probe.stop);
+    atomic_clear(&protocol_rtos_probe.isr_count);
+    atomic_clear(&protocol_rtos_probe.yield_count);
+    bench_ctx.rtos_jitter_count = 0U;
+
+    k_timer_init(&protocol_rtos_probe.timer, protocol_rtos_timer_handler, NULL);
+    k_timer_user_data_set(&protocol_rtos_probe.timer, &protocol_rtos_probe);
+    k_timer_start(&protocol_rtos_probe.timer,
+                  K_MSEC(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_PERIOD_MS),
+                  K_MSEC(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_PERIOD_MS));
+
+    (void)k_thread_create(&protocol_rtos_probe.thread,
+                          protocol_rtos_load_stack,
+                          K_THREAD_STACK_SIZEOF(protocol_rtos_load_stack),
+                          protocol_rtos_load_thread,
+                          &protocol_rtos_probe, NULL, NULL,
+                          K_LOWEST_APPLICATION_THREAD_PRIO,
+                          0,
+                          K_NO_WAIT);
+}
+
+static void protocol_rtos_probe_stop(pqcp_bench_protocol_result_t *result)
+{
+    atomic_set(&protocol_rtos_probe.stop, 1);
+    k_timer_stop(&protocol_rtos_probe.timer);
+    k_sleep(K_MSEC(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_LOAD_PERIOD_MS + 1));
+    k_thread_abort(&protocol_rtos_probe.thread);
+
+    result->rtos_isr_count = (uint32_t)atomic_get(&protocol_rtos_probe.isr_count);
+    result->rtos_yield_count = (uint32_t)atomic_get(&protocol_rtos_probe.yield_count);
+    result->rtos_jitter_p50_us = percentile(bench_ctx.rtos_jitter_samples,
+                                            bench_ctx.rtos_jitter_count, 50);
+    result->rtos_jitter_p90_us = percentile(bench_ctx.rtos_jitter_samples,
+                                            bench_ctx.rtos_jitter_count, 90);
+    result->rtos_jitter_p99_us = percentile(bench_ctx.rtos_jitter_samples,
+                                            bench_ctx.rtos_jitter_count, 99);
+}
+#endif
 
 static inline uint32_t div_round_up_u32(uint32_t value, uint32_t divisor)
 {
@@ -56,12 +170,20 @@ void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result
                      result->sig_level, result->auth_time_us);
     PQCP_LOG_TIME_US("protocol", "key_exchange", "MLKEM",
                      result->base.level, result->key_exchange_time_us);
+    PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                    "provider_overhead", result->provider_overhead_us, "us");
     PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
                   "client_bytes", result->client_bytes);
     PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
                   "server_bytes", result->server_bytes);
     PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
                   "transcript_bytes", result->transcript_bytes);
+    PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
+                  "certificate_bytes", result->certificate_bytes);
+    PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
+                  "key_exchange_bytes", result->key_exchange_bytes);
+    PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
+                  "transport_overhead_bytes", result->transport_overhead_bytes);
     PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
                     "packets", result->fragments, "pkt");
     PQCP_LOG_SIZE("protocol", "handshake", suite, 0,
@@ -86,6 +208,21 @@ void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result
                         "p90", result->p90_latency, "ms");
         PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
                         "p99", result->p99_latency, "ms");
+    }
+
+    if (result->rtos_isr_count > 0U || result->rtos_yield_count > 0U ||
+        result->rtos_jitter_p50_us > 0U || result->rtos_jitter_p90_us > 0U ||
+        result->rtos_jitter_p99_us > 0U) {
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "rtos_isr_count", result->rtos_isr_count, "count");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "rtos_yield_count", result->rtos_yield_count, "count");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "rtos_jitter_p50", result->rtos_jitter_p50_us, "us");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "rtos_jitter_p90", result->rtos_jitter_p90_us, "us");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "rtos_jitter_p99", result->rtos_jitter_p99_us, "us");
     }
 
     /* Also emit legacy format for backward compatibility */
@@ -149,10 +286,13 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
     uint32_t total_transcript = 0U;
     uint32_t total_client_bytes = 0U;
     uint32_t total_server_bytes = 0U;
+    uint32_t total_certificate_bytes = 0U;
+    uint32_t total_key_exchange_bytes = 0U;
+    uint32_t total_transport_overhead_bytes = 0U;
     uint32_t peak_stack = 0U;
     uint32_t peak_heap = 0U;
     uint32_t peak_working_set = 0U;
-    uint32_t max_time_ms = 0U;
+    uint64_t total_provider_overhead_us = 0U;
     uint64_t min_time_us = UINT64_MAX;
     uint64_t max_time_us = 0U;
     uint32_t actual_iterations;
@@ -179,6 +319,10 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
         }
     }
 
+#if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)
+    protocol_rtos_probe_start();
+#endif
+
     for (uint32_t i = 0U; i < iterations; i++) {
         pqcp_tls_selftest_report_t report;
         uint32_t elapsed_ms;
@@ -201,6 +345,10 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
         total_transcript += report.transcript_bytes;
         total_client_bytes += report.client_bytes;
         total_server_bytes += report.server_bytes;
+        total_provider_overhead_us += report.provider_overhead_us;
+        total_certificate_bytes += report.certificate_bytes;
+        total_key_exchange_bytes += report.key_exchange_bytes;
+        total_transport_overhead_bytes += report.transport_overhead_bytes;
 
         if (report.stack_bytes > peak_stack) {
             peak_stack = report.stack_bytes;
@@ -210,9 +358,6 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
         }
         if (report.working_set_bytes > peak_working_set) {
             peak_working_set = report.working_set_bytes;
-        }
-        if (elapsed_ms > max_time_ms) {
-            max_time_ms = elapsed_ms;
         }
         if (report.handshake_us < min_time_us) {
             min_time_us = report.handshake_us;
@@ -229,6 +374,11 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
     result->client_bytes = total_client_bytes / actual_iterations;
     result->server_bytes = total_server_bytes / actual_iterations;
     result->transcript_bytes = total_transcript / actual_iterations;
+    result->provider_overhead_us = total_provider_overhead_us / actual_iterations;
+    result->certificate_bytes = total_certificate_bytes / actual_iterations;
+    result->key_exchange_bytes = total_key_exchange_bytes / actual_iterations;
+    result->transport_overhead_bytes =
+        total_transport_overhead_bytes / actual_iterations;
     result->fragments = (uint16_t)div_round_up_u32(result->client_bytes, 1400U) +
                         (uint16_t)div_round_up_u32(result->server_bytes, 1400U);
     result->cpu_percent = 95;
@@ -250,6 +400,10 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
     result->base.stack_used = peak_stack;
     result->base.heap_used = peak_heap;
     result->base.time_unit = 1;
+
+#if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)
+    protocol_rtos_probe_stop(result);
+#endif
 
     return 0;
 }

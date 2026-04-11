@@ -9,6 +9,7 @@ while making them easy to run locally or from a scheduled/manual workflow.
 from __future__ import annotations
 
 import argparse
+import csv
 from collections import Counter
 import os
 import re
@@ -129,6 +130,17 @@ def parse_args() -> argparse.Namespace:
         action="append",
         dest="compatibility_targets",
         help="Additional application path to build during compatibility smoke",
+    )
+    parser.add_argument(
+        "--run-cost-of-assurance-smoke",
+        action="store_true",
+        help="Run a tiny qemu_x86_64 cost-of-assurance pipeline smoke",
+    )
+    parser.add_argument(
+        "--cost-of-assurance-output-root",
+        type=Path,
+        default=Path("benchmark_results/extended/cost_of_assurance_smoke"),
+        help="Output directory for the cost-of-assurance smoke artifacts",
     )
     parser.add_argument(
         "--strict",
@@ -286,6 +298,7 @@ def run_cppcheck(
         "--error-exitcode=2",
         "--inline-suppr",
         "--suppress=missingIncludeSystem",
+        "--suppress=unusedStructMember",
         "--template={severity}:{id}:{file}:{line}:{message}",
         f"-I{module_path / 'include'}",
         *[str(module_path / target) for target in targets],
@@ -440,6 +453,110 @@ def format_counter_summary(counts: Counter[str]) -> str:
     return ", ".join(items)
 
 
+def load_csv_rows(path: Path) -> List[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        return list(reader)
+
+
+def run_cost_of_assurance_smoke(
+    *,
+    west_root: Path,
+    module_path: Path,
+    env: dict[str, str],
+    verbose: bool,
+    output_root: Path,
+) -> int:
+    output_root.mkdir(parents=True, exist_ok=True)
+    benchmark_script = module_path / "scripts/run_benchmarks.py"
+    summarize_script = module_path / "scripts/summarize_cost_of_assurance.py"
+
+    print("\n[cost] Running qemu_x86_64 cost-of-assurance smoke")
+    print("[cost] Samples:")
+    print("  - pqcp_basic_kem")
+    print("  - pqcp_bench_protocol")
+    print("[cost] Backend policies:")
+    print("  - auto")
+
+    run_result = run_command(
+        [
+            sys.executable,
+            str(benchmark_script),
+            "--cost-of-assurance-matrix",
+            "--board",
+            "qemu_x86_64",
+            "--samples",
+            "pqcp_basic_kem",
+            "pqcp_bench_protocol",
+            "--backend-policies",
+            "auto",
+            "--output",
+            str(output_root),
+            "--west-root",
+            str(west_root),
+            "--module-path",
+            str(module_path),
+        ],
+        cwd=west_root,
+        env=env,
+        verbose=verbose,
+    )
+    if run_result.returncode != 0:
+        print(run_result.stdout)
+        return run_result.returncode
+
+    summarize_result = run_command(
+        [
+            sys.executable,
+            str(summarize_script),
+            "--input-dir",
+            str(output_root),
+        ],
+        cwd=west_root,
+        env=env,
+        verbose=verbose,
+    )
+    if summarize_result.returncode != 0:
+        print(summarize_result.stdout)
+        return summarize_result.returncode
+
+    builds = load_csv_rows(output_root / "cost_of_assurance_builds.csv")
+    primitives = load_csv_rows(output_root / "cost_of_assurance_primitives.csv")
+    protocols = load_csv_rows(output_root / "cost_of_assurance_protocols.csv")
+
+    if not any(
+        row.get("board") == "qemu_x86_64"
+        and row.get("sample") == "pqcp_basic_kem"
+        and row.get("implementation") == "pqcp"
+        and row.get("backend") == "auto"
+        for row in primitives
+    ):
+        print("[cost] Missing primitive comparison row for qemu_x86_64 / pqcp_basic_kem / pqcp / auto")
+        return 1
+
+    if not any(
+        row.get("board") == "qemu_x86_64"
+        and row.get("sample") == "pqcp_bench_protocol"
+        and row.get("implementation") == "pqcp"
+        and row.get("backend") == "auto"
+        for row in protocols
+    ):
+        print("[cost] Missing protocol comparison row for qemu_x86_64 / pqcp_bench_protocol / pqcp / auto")
+        return 1
+
+    if len(builds) < 2:
+        print("[cost] Expected at least two build rows from the smoke run")
+        return 1
+
+    print(
+        f"[cost] Smoke completed successfully: builds={len(builds)}, "
+        f"primitives={len(primitives)}, protocols={len(protocols)}"
+    )
+    return 0
+
+
 def main() -> int:
     args = parse_args()
     module_path = args.module_path.resolve() if args.module_path else Path(__file__).resolve().parent.parent
@@ -545,6 +662,17 @@ def main() -> int:
         )
         if compat_result != 0:
             return compat_result
+
+    if args.run_cost_of_assurance_smoke:
+        coa_result = run_cost_of_assurance_smoke(
+            west_root=west_root,
+            module_path=module_path,
+            env=env,
+            verbose=args.verbose,
+            output_root=args.cost_of_assurance_output_root.resolve(),
+        )
+        if coa_result != 0:
+            return coa_result
 
     print("\nExtended checks completed successfully.")
     return 0

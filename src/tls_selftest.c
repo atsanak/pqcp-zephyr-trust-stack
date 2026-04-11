@@ -105,6 +105,20 @@ static uint32_t working_set_bytes(pqcp_mlkem_level_t mlkem, pqcp_mldsa_level_t m
         pqcp_mldsa_sig_size(mldsa));
 }
 
+static uint32_t certificate_bytes(pqcp_mldsa_level_t mldsa)
+{
+    return (uint32_t)(
+        pqcp_mldsa_pk_size(mldsa) +
+        pqcp_mldsa_sig_size(mldsa));
+}
+
+static uint32_t key_exchange_bytes(pqcp_mlkem_level_t mlkem)
+{
+    return (uint32_t)(
+        pqcp_mlkem_pk_size(mlkem) +
+        pqcp_mlkem_ct_size(mlkem));
+}
+
 int pqcp_tls_selftest_init_psa(bool *ready)
 {
 #ifdef CONFIG_MBEDTLS_PSA_CRYPTO_C
@@ -174,6 +188,11 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
 
     if (cfg.initialize_psa) {
         ret = pqcp_tls_selftest_init_psa(&report->psa_ready);
+        /* cppcheck-suppress knownConditionTrueFalse
+         * The helper can return 0 or a negative errno depending on the active
+         * PSA configuration, but cppcheck sometimes folds the preprocessor
+         * paths into a false-positive "always true" branch here.
+         */
         if (ret != 0) {
             return ret;
         }
@@ -236,6 +255,10 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
                               report->kem_encaps_us +
                               report->kem_decaps_us;
     report->handshake_us = timer_elapsed_us(handshake_start);
+    if (report->handshake_us > (report->auth_us + report->key_exchange_us)) {
+        report->provider_overhead_us =
+            report->handshake_us - report->auth_us - report->key_exchange_us;
+    }
 
     report->client_bytes = PQCP_TLS_SELFTEST_CLIENTHELLO_BYTES +
                            (uint32_t)pqcp_mlkem_ct_size(mlkem);
@@ -244,6 +267,15 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
                            (uint32_t)pqcp_mldsa_pk_size(mldsa) +
                            (uint32_t)pqcp_mldsa_sig_size(mldsa);
     report->transcript_bytes = report->client_bytes + report->server_bytes;
+    report->certificate_bytes = certificate_bytes(mldsa);
+    report->key_exchange_bytes = key_exchange_bytes(mlkem);
+    if (report->transcript_bytes >
+        (report->certificate_bytes + report->key_exchange_bytes)) {
+        report->transport_overhead_bytes =
+            report->transcript_bytes -
+            report->certificate_bytes -
+            report->key_exchange_bytes;
+    }
     report->packets = (uint16_t)(
         div_round_up_u32(report->client_bytes, PQCP_TLS_SELFTEST_MTU_BYTES) +
         div_round_up_u32(report->server_bytes, PQCP_TLS_SELFTEST_MTU_BYTES));
@@ -286,12 +318,20 @@ void pqcp_tls_selftest_log_metrics(const pqcp_tls_selftest_report_t *report)
                      report->kem_level, report->key_exchange_us);
     PQCP_LOG_TIME_US("protocol", "handshake", "TLS13", 0,
                      report->handshake_us);
+    PQCP_LOG_METRIC("protocol", "handshake", "TLS13", 0,
+                    "provider_overhead", report->provider_overhead_us, "us");
     PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,
                   "client_bytes", report->client_bytes);
     PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,
                   "server_bytes", report->server_bytes);
     PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,
                   "transcript_bytes", report->transcript_bytes);
+    PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,
+                  "certificate_bytes", report->certificate_bytes);
+    PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,
+                  "key_exchange_bytes", report->key_exchange_bytes);
+    PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,
+                  "transport_overhead_bytes", report->transport_overhead_bytes);
     PQCP_LOG_METRIC("protocol", "handshake", "TLS13", 0,
                     "packets", report->packets, "pkt");
     PQCP_LOG_SIZE("protocol", "handshake", "TLS13", 0,

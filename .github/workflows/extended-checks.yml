@@ -74,6 +74,7 @@ jobs:
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE" \
             --zephyr-ref "$ZEPHYR_REF" \
+            --run-cost-of-assurance-smoke \
             --strict
 
       - name: Run manual Zephyr compatibility smoke

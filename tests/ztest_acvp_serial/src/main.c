@@ -188,6 +188,18 @@ ZTEST(pqcp_acvp_serial, test_rejects_malformed_commands)
     zassert_equal(run_command("FOO:MLKEM:768:", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
     assert_response_line(&resp, "ERROR:INVALID_CMD");
+
+    zassert_equal(run_command("HELP:", &resp), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
+
+    zassert_equal(run_command("SELFTEST:", &resp), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
+
+    zassert_equal(run_command("VERIFY:MLDSA:65:00:11", &resp), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
 }
 
 ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
@@ -213,6 +225,17 @@ ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
     zassert_equal(run_command("VERIFY:MLDSA:65:00", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
     assert_response_line(&resp, "ERROR:WRONG_SIZE");
+}
+
+ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_oversize_payload)
+{
+    size_t out_len = 0U;
+    uint8_t small_buffer[4];
+
+    zassert_equal(
+        pqcp_acvp_hex_to_bytes("001122334455", small_buffer, &out_len,
+                               sizeof(small_buffer)),
+        -ENOSPC);
 }
 
 ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)

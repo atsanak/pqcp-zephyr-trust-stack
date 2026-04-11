@@ -159,7 +159,7 @@ int pqcp_mldsa_sign_stream_init(pqcp_mldsa_stream_ctx_t *ctx,
     hash_init(sctx);
     
     /* Include domain separator and context in hash */
-    uint8_t header[2] = { 0x01, (uint8_t)ctx_len };  /* Pure ML-DSA */
+    const uint8_t header[2] = { 0x01, (uint8_t)ctx_len };  /* Pure ML-DSA */
     hash_update(sctx, header, 2);
     if (ctx_len > 0) {
         hash_update(sctx, sctx->context, ctx_len);
@@ -254,7 +254,7 @@ int pqcp_mldsa_verify_stream_init(pqcp_mldsa_stream_ctx_t *ctx,
     hash_init(sctx);
     
     /* Include domain separator and context */
-    uint8_t header[2] = { 0x01, (uint8_t)ctx_len };
+    const uint8_t header[2] = { 0x01, (uint8_t)ctx_len };
     hash_update(sctx, header, 2);
     if (ctx_len > 0) {
         hash_update(sctx, sctx->context, ctx_len);

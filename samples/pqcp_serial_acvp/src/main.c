@@ -63,6 +63,11 @@ static void print_help(void)
     printk("RESULT:OK\n");
 }
 
+static bool is_help_command(const char *line)
+{
+    return strcmp(line, "HELP") == 0 || strcmp(line, "HELP::") == 0;
+}
+
 /* Process and respond to a command */
 static void process_and_respond(char *line)
 {
@@ -78,7 +83,7 @@ static void process_and_respond(char *line)
     }
 
     /* Special case: HELP command */
-    if (strncmp(line, "HELP", 4) == 0) {
+    if (is_help_command(line)) {
         print_help();
         return;
     }

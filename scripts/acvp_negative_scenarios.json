@@ -19,9 +19,29 @@
           "response": "ERROR:INVALID_HEX"
         },
         {
+          "name": "TRUNCATED_KEYGEN",
+          "command": "KEYGEN:MLKEM",
+          "response": "ERROR:MISSING_ARGS"
+        },
+        {
           "name": "UNSUPPORTED_MLKEM_LEVEL",
           "command": "KEYGEN:MLKEM:999:",
           "response": "ERROR:INVALID_LEVEL"
+        },
+        {
+          "name": "TOO_MANY_VERIFY_FIELDS",
+          "command": "VERIFY:MLDSA:65:00:11",
+          "response": "ERROR:INVALID_CMD"
+        },
+        {
+          "name": "STRICT_HELP_FORM",
+          "command": "HELP:",
+          "response": "ERROR:INVALID_CMD"
+        },
+        {
+          "name": "WRONG_SIZE_SIGN",
+          "command": "SIGN:MLDSA:65:00",
+          "response": "ERROR:WRONG_SIZE"
         }
       ]
     }
