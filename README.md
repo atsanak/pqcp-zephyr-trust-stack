@@ -497,14 +497,21 @@ benchmark_results/
 The repository includes two machine-readable configuration files:
 
 - `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection, keeping at least one primitive-oriented entry per profile plus protocol/TLS-oriented coverage where that profile supports it
-- `scripts/cost_of_assurance_matrix.json`: curated backend-policy comparison runs for the in-tree PQCP implementations (`auto`, `force_c`, `force_native`) on the currently validated QEMU path
+- `scripts/cost_of_assurance_matrix.json`: curated cost-of-assurance comparison runs for the in-tree PQCP implementation across runnable QEMU paths and build-only MCU footprint captures
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI, including the explicit `mps2/an385` Cortex-M no-entropy validation path
 
 ### Cost-of-Assurance Matrix
 
-The repository now includes an opt-in backend-comparison matrix that measures the
+The repository now includes an opt-in cost-of-assurance matrix that measures the
 cost of using the currently supported PQCP backend policies under identical
-Zephyr builds:
+Zephyr builds. Each run now carries:
+
+- `implementation`: the cryptographic provider family. Today this is always
+  `pqcp`, but the field is present in `runs.json` and all derived CSVs so a
+  future non-PQCP provider can be compared without a disruptive schema change.
+- `backend`: the backend-selection policy within that implementation family.
+- `run_mode`: whether the row is a fully runnable benchmark (`run`) or a
+  build-only footprint capture (`build_only`).
 
 - `auto`: the default target-dependent PQCP backend policy
 - `force_c`: the portable C backend forced on
@@ -523,9 +530,39 @@ python scripts/run_benchmarks.py \
   --output benchmark_results/cost-of-assurance
 ```
 
-Each run carries a `backend` field in `runs.json`,
-`consolidated_metrics.json`, and `consolidated_metrics.csv`, so the raw metric
-rows are already keyed by `(board, profile, sample, backend, algorithm, level)`.
+Useful filtered variants:
+
+```bash
+# Only the runnable QEMU rows
+python scripts/run_benchmarks.py \
+  --cost-of-assurance-matrix \
+  --board qemu_x86_64
+
+# Only the real-board STM32H7 build-only footprint rows
+python scripts/run_benchmarks.py \
+  --cost-of-assurance-matrix \
+  --board nucleo_h743zi
+```
+
+The curated matrix currently contains:
+
+- fully runnable `qemu_x86_64` rows for primitive and protocol comparisons
+- build-only `nucleo_h743zi` rows that capture real MCU footprint and code-size
+  deltas without claiming hardware runtime measurements
+
+The `mps2/an385` sample path is intentionally not part of the curated
+cost-of-assurance matrix yet. Those samples currently depend on a production
+entropy-backed RNG path that the board does not provide, and the project keeps
+deterministic test RNG isolated from production-oriented comparison runs.
+
+Each run carries `implementation`, `backend`, and `run_mode` fields in
+`runs.json`, `consolidated_metrics.json`, and `consolidated_metrics.csv`, so
+the raw metric rows are already keyed by `(board, profile, sample,
+implementation, backend, algorithm, level)`.
+
+Older artifact directories that predate this schema still summarize cleanly:
+the summarizer falls back to the legacy `build_only` flag when `run_mode` is
+not present in `runs.json`.
 
 To flatten those raw rows into comparison-oriented CSVs, run:
 
@@ -536,19 +573,59 @@ python scripts/summarize_cost_of_assurance.py \
 
 That produces:
 
+- `cost_of_assurance_builds.csv`: one row per run with `board`, `profile`,
+  `sample`, `implementation`, `backend`, `run_mode`, and build/resource columns
+  such as `text_bytes`, `data_bytes`, `bss_bytes`, `total_bytes`, `rom_bytes`,
+  and `ram_bytes`
 - `cost_of_assurance_primitives.csv`: one row per primitive algorithm/level with
-  columns such as `keygen_cycles`, `sign_cycles`, `total_stack`, `text_bytes`,
-  `rom_bytes`, and `ram_bytes`
+  columns such as `board`, `profile`, `sample`, `implementation`, `backend`,
+  `algorithm`, `level`, `keygen_cycles`, `sign_cycles`, `total_stack`,
+  `text_bytes`, `rom_bytes`, and `ram_bytes`
 - `cost_of_assurance_protocols.csv`: one row per protocol suite block with
-  columns such as `handshake_time`, `handshake_p50`, `handshake_p90`,
-  `handshake_p99`, `handshake_transcript_bytes`, `handshake_packets`,
-  `auth_time`, `key_exchange_time`, `rom_bytes`, and `ram_bytes`
+  columns such as `board`, `profile`, `sample`, `implementation`, `backend`,
+  `suite`, `suite_mode`, `auth_algorithm`, `auth_level`,
+  `key_exchange_algorithm`, `key_exchange_level`, `handshake_time`,
+  `handshake_p50`, `handshake_p90`, `handshake_p99`,
+  `handshake_transcript_bytes`, `handshake_packets`, `auth_time`,
+  `key_exchange_time`, `rom_bytes`, and `ram_bytes`
 
-The current curated matrix intentionally keeps the automated comparison on
-`qemu_x86_64`, where all three backend policies are reproducible and fully
-runnable. Use the existing profile-validation matrix and board budgets for MCU
-resource validation, then extend the cost matrix only after the new board/path
-is proven stable.
+Example interpretation:
+
+```text
+cost_of_assurance_builds.csv
+board,profile,sample,implementation,backend,run_mode,text_bytes,rom_bytes,ram_bytes
+nucleo_h743zi,MCU_MINIMAL,pqcp_basic_kem,pqcp,force_c,build_only,<text>,<rom>,<ram>
+
+cost_of_assurance_protocols.csv
+board,profile,sample,implementation,backend,suite,suite_mode,handshake_time,auth_time,key_exchange_time
+qemu_x86_64,NATIVE_LAB,pqcp_bench_protocol,pqcp,force_native,MLKEM768+MLDSA65,pure_pq,<time>,<auth>,<kex>
+```
+
+For cost-of-assurance runs that do not invoke Zephyr's dedicated `rom_report` and
+`ram_report` targets, the runner still records `rom_bytes` and `ram_bytes` using
+the standard Zephyr section approximation (`rom = text + data`, `ram = data +
+bss`) so board-to-board build-footprint rows stay self-contained.
+
+Use the existing profile-validation matrix and checked-in resource budgets for
+policy-enforced MCU validation, and use the cost-of-assurance matrix when you
+want reproducible backend-policy comparisons plus real-board build footprints.
+
+Quick inspection patterns:
+
+```bash
+# Compare qemu_x86_64 primitive rows across backend policy
+grep '^qemu_x86_64,MCU_MINIMAL,pqcp_basic_kem' \
+  benchmark_results/cost-of-assurance/cost_of_assurance_primitives.csv
+
+# Inspect only build-only STM32H7 rows
+grep '^nucleo_h743zi' \
+  benchmark_results/cost-of-assurance/cost_of_assurance_builds.csv
+
+# If csvkit is available, compare qemu_x86_64 build footprints by backend
+csvcut -c board,profile,sample,implementation,backend,run_mode,text_bytes,total_bytes \
+  benchmark_results/cost-of-assurance/cost_of_assurance_builds.csv | \
+  grep '^qemu_x86_64'
+```
 
 ### Resource Budget Enforcement
 

@@ -152,7 +152,6 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
     uint32_t peak_stack = 0U;
     uint32_t peak_heap = 0U;
     uint32_t peak_working_set = 0U;
-    uint32_t min_time_ms = UINT32_MAX;
     uint32_t max_time_ms = 0U;
     uint64_t min_time_us = UINT64_MAX;
     uint64_t max_time_us = 0U;
@@ -212,9 +211,6 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
         if (report.working_set_bytes > peak_working_set) {
             peak_working_set = report.working_set_bytes;
         }
-        if (elapsed_ms < min_time_ms) {
-            min_time_ms = elapsed_ms;
-        }
         if (elapsed_ms > max_time_ms) {
             max_time_ms = elapsed_ms;
         }
@@ -254,10 +250,6 @@ int pqcp_bench_tls_handshake(uint16_t kem_level,
     result->base.stack_used = peak_stack;
     result->base.heap_used = peak_heap;
     result->base.time_unit = 1;
-
-    if (min_time_ms == UINT32_MAX) {
-        min_time_ms = 0U;
-    }
 
     return 0;
 }

@@ -149,11 +149,14 @@ class RunSpec:
     board: str
     profile: str
     sample: str
+    implementation: str
     backend: str
     app_path: str
     overlays: List[str]
     extra_kconfig: List[str]
     run_timeout: int
+    run_mode: str
+    build_only: bool
 
 
 @dataclass
@@ -162,6 +165,7 @@ class RunRecord:
     board: str
     profile: str
     sample: str
+    implementation: str
     backend: str
     app_path: str
     build_dir: str
@@ -169,6 +173,8 @@ class RunRecord:
     build_ok: bool
     run_ok: bool
     timed_out: bool
+    run_mode: str
+    build_only: bool
     metric_count: int
     size_text: int
     size_data: int
@@ -197,8 +203,40 @@ def normalize_backend_policy(value: Optional[str]) -> str:
     return policy
 
 
-def make_run_id(board: str, profile: str, label: str, backend: Optional[str] = None) -> str:
+def normalize_implementation_name(value: Optional[str]) -> str:
+    implementation = str(value or "pqcp").strip().lower().replace("-", "_")
+    if not implementation:
+        raise ValueError("Implementation name must not be empty")
+    if not re.fullmatch(r"[a-z0-9_]+", implementation):
+        raise ValueError(
+            f"Invalid implementation '{value}'. Use lowercase letters, digits, or underscores."
+        )
+    return implementation
+
+
+def normalize_run_mode(value: Optional[str], *, build_only: bool = False) -> str:
+    if value is None:
+        return "build_only" if build_only else "run"
+
+    run_mode = str(value).strip().lower().replace("-", "_")
+    if run_mode not in {"run", "build_only"}:
+        raise ValueError(
+            f"Unknown run mode '{value}'. Expected one of: run, build_only"
+        )
+    return run_mode
+
+
+def make_run_id(
+    board: str,
+    profile: str,
+    label: str,
+    backend: Optional[str] = None,
+    implementation: Optional[str] = None,
+) -> str:
     parts = [slugify(board), slugify(profile), slugify(label)]
+    implementation_name = normalize_implementation_name(implementation)
+    if implementation_name != "pqcp":
+        parts.append(slugify(implementation_name))
     backend_policy = normalize_backend_policy(backend)
     if backend_policy != "auto":
         parts.append(slugify(backend_policy))
@@ -613,7 +651,7 @@ class BenchmarkRunner:
         return self._run_command(cmd, cwd=self.west_root)
 
     def _run_sample(self, spec: RunSpec) -> CommandResult:
-        if self.build_only:
+        if self.build_only or spec.build_only:
             return CommandResult(0, "", False)
 
         build_dir = self.output_dir / "build" / spec.run_id
@@ -652,6 +690,8 @@ class BenchmarkRunner:
             return {}
 
         sizes = parse_objdump_sections(result.stdout)
+        sizes["rom"] = sizes.get("text", 0) + sizes.get("data", 0)
+        sizes["ram"] = sizes.get("data", 0) + sizes.get("bss", 0)
         sizes["total"] = sizes.get("text", 0) + sizes.get("data", 0) + sizes.get("bss", 0)
         return sizes
 
@@ -715,10 +755,13 @@ class BenchmarkRunner:
             "board": spec.board,
             "profile": spec.profile,
             "sample": spec.sample,
+            "implementation": spec.implementation,
             "backend": spec.backend,
             "app_path": spec.app_path,
             "overlays": ";".join(spec.overlays),
             "extra_kconfig": ";".join(spec.extra_kconfig),
+            "run_mode": spec.run_mode,
+            "build_only": spec.build_only,
             "log_path": str(log_path),
         }
 
@@ -762,7 +805,8 @@ class BenchmarkRunner:
 
         print(
             f"\n[{spec.run_id}] {spec.board} / {spec.profile} / "
-            f"{spec.sample} / backend={spec.backend}"
+            f"{spec.sample} / implementation={spec.implementation} / "
+            f"backend={spec.backend} / run_mode={spec.run_mode}"
         )
         build_result = self._build(spec, run_dir)
         (run_dir / "build.log").write_text(build_result.stdout)
@@ -775,6 +819,7 @@ class BenchmarkRunner:
                     board=spec.board,
                     profile=spec.profile,
                     sample=spec.sample,
+                    implementation=spec.implementation,
                     backend=spec.backend,
                     app_path=spec.app_path,
                     build_dir=str(self.output_dir / "build" / spec.run_id),
@@ -782,6 +827,8 @@ class BenchmarkRunner:
                     build_ok=False,
                     run_ok=False,
                     timed_out=False,
+                    run_mode=spec.run_mode,
+                    build_only=spec.build_only,
                     metric_count=0,
                     size_text=0,
                     size_data=0,
@@ -819,6 +866,7 @@ class BenchmarkRunner:
             board=spec.board,
             profile=spec.profile,
             sample=spec.sample,
+            implementation=spec.implementation,
             backend=spec.backend,
             app_path=spec.app_path,
             build_dir=str(self.output_dir / "build" / spec.run_id),
@@ -826,6 +874,8 @@ class BenchmarkRunner:
             build_ok=True,
             run_ok=(run_result.returncode == 0 or run_result.timed_out),
             timed_out=run_result.timed_out,
+            run_mode=spec.run_mode,
+            build_only=spec.build_only,
             metric_count=len(enriched_rows),
             size_text=sizes.get("text", 0),
             size_data=sizes.get("data", 0),
@@ -837,7 +887,10 @@ class BenchmarkRunner:
         )
         self.records.append(record)
 
-        status = "timed out with partial output" if run_result.timed_out else "completed"
+        if self.build_only or spec.build_only:
+            status = "build-only completed"
+        else:
+            status = "timed out with partial output" if run_result.timed_out else "completed"
         print(
             f"  run {status}, captured {pqcp_metric_count} PQCP_METRIC row(s)"
             f" and {build_metric_count} build metric row(s)"
@@ -872,10 +925,13 @@ class BenchmarkRunner:
             "board",
             "profile",
             "sample",
+            "implementation",
             "backend",
             "app_path",
             "overlays",
             "extra_kconfig",
+            "run_mode",
+            "build_only",
             "component",
             "operation",
             "algorithm",
@@ -901,10 +957,12 @@ def expand_runs(
     boards: Iterable[str],
     profiles: Iterable[str],
     samples: Iterable[str],
+    implementation: str,
     backend: str,
     extra_kconfig: List[str],
 ) -> List[RunSpec]:
     specs: List[RunSpec] = []
+    implementation_name = normalize_implementation_name(implementation)
     backend_policy = normalize_backend_policy(backend)
     backend_kconfig = list(BACKEND_POLICIES[backend_policy]["kconfig"])
 
@@ -917,20 +975,29 @@ def expand_runs(
                 if profile not in sample_info["profiles"]:
                     continue
 
-                run_id = make_run_id(board, profile, sample, backend_policy)
+                run_id = make_run_id(
+                    board,
+                    profile,
+                    sample,
+                    backend_policy,
+                    implementation_name,
+                )
                 specs.append(
                     RunSpec(
-                        run_id=run_id,
-                        board=board,
-                        profile=profile,
-                        sample=sample,
-                        backend=backend_policy,
-                        app_path=sample_info["path"],
-                        overlays=list(sample_info.get("overlays", [])),
-                        extra_kconfig=[*backend_kconfig, *extra_kconfig],
-                        run_timeout=int(sample_info.get("run_timeout", 0)),
-                    )
+                    run_id=run_id,
+                    board=board,
+                    profile=profile,
+                    sample=sample,
+                    implementation=implementation_name,
+                    backend=backend_policy,
+                    app_path=sample_info["path"],
+                    overlays=list(sample_info.get("overlays", [])),
+                    extra_kconfig=[*backend_kconfig, *extra_kconfig],
+                    run_timeout=int(sample_info.get("run_timeout", 0)),
+                    run_mode="run",
+                    build_only=False,
                 )
+            )
 
     return specs
 
@@ -942,6 +1009,13 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
             for item in entries:
                 target = item["target"]
                 label = item.get("sample", Path(target).name)
+                implementation_name = normalize_implementation_name(
+                    item.get("implementation")
+                )
+                run_mode = normalize_run_mode(
+                    item.get("run_mode"),
+                    build_only=bool(item.get("build_only", False)),
+                )
                 backend_policy = normalize_backend_policy(item.get("backend"))
                 overlays = normalize_overlays(item.get("overlays"))
                 if item.get("overlay"):
@@ -950,11 +1024,18 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     RunSpec(
                         run_id=item.get(
                             "run_id",
-                            make_run_id(item["board"], profile, label, backend_policy),
+                            make_run_id(
+                                item["board"],
+                                profile,
+                                label,
+                                backend_policy,
+                                implementation_name,
+                            ),
                         ),
                         board=item["board"],
                         profile=profile,
                         sample=label,
+                        implementation=implementation_name,
                         backend=backend_policy,
                         app_path=target,
                         overlays=overlays,
@@ -966,6 +1047,8 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                         run_timeout=int(
                             item.get("run_timeout", default_timeout_for_path(target))
                         ),
+                        run_mode=run_mode,
+                        build_only=(run_mode == "build_only"),
                     )
                 )
         return specs
@@ -975,6 +1058,13 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
         for item in config["runs"]:
             sample = item.get("sample")
             target = item.get("target")
+            implementation_name = normalize_implementation_name(
+                item.get("implementation")
+            )
+            run_mode = normalize_run_mode(
+                item.get("run_mode"),
+                build_only=bool(item.get("build_only", False)),
+            )
             backend_policy = normalize_backend_policy(item.get("backend"))
             sample_info = SAMPLES.get(sample, {}) if sample else {}
             app_path = item.get("app_path") or target or sample_info.get("path")
@@ -987,7 +1077,13 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                 overlays.append(str(item["overlay"]))
             run_id = item.get(
                 "run_id",
-                make_run_id(item["board"], item["profile"], label, backend_policy),
+                make_run_id(
+                    item["board"],
+                    item["profile"],
+                    label,
+                    backend_policy,
+                    implementation_name,
+                ),
             )
             specs.append(
                 RunSpec(
@@ -995,6 +1091,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     board=item["board"],
                     profile=item["profile"],
                     sample=label,
+                    implementation=implementation_name,
                     backend=backend_policy,
                     app_path=app_path,
                     overlays=overlays or list(sample_info.get("overlays", [])),
@@ -1009,6 +1106,8 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                             sample_info.get("run_timeout", default_timeout_for_path(app_path)),
                         )
                     ),
+                    run_mode=run_mode,
+                    build_only=(run_mode == "build_only"),
                 )
             )
         return specs
@@ -1017,6 +1116,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
         boards=config.get("boards", DEFAULT_BOARDS),
         profiles=config.get("profiles", list(PROFILES.keys())),
         samples=config.get("samples", DEFAULT_MATRIX_SAMPLES),
+        implementation=config.get("implementation", "pqcp"),
         backend=config.get("backend", "auto"),
         extra_kconfig=[*config.get("extra_kconfig", []), *cli_kconfig],
     )
@@ -1030,6 +1130,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boards", nargs="+", help="Boards for matrix mode")
     parser.add_argument("--profile", choices=list(PROFILES), help="Single profile")
     parser.add_argument("--profiles", nargs="+", choices=list(PROFILES), help="Profiles for matrix mode")
+    parser.add_argument(
+        "--implementation",
+        default="pqcp",
+        help="Implementation identity label for generated run metadata",
+    )
     parser.add_argument("--backend-policy", choices=list(BACKEND_POLICIES), help="Single backend policy")
     parser.add_argument("--backend-policies", nargs="+", choices=list(BACKEND_POLICIES), help="Backend policies for matrix filtering")
     parser.add_argument("--sample", help="Single sample or run label")
@@ -1118,6 +1223,7 @@ def main() -> int:
             boards=[args.board or "qemu_x86_64"],
             profiles=[args.profile or "MCU_MINIMAL"],
             samples=[args.sample],
+            implementation=args.implementation,
             backend=args.backend_policy or "auto",
             extra_kconfig=args.kconfig,
         )
@@ -1133,6 +1239,7 @@ def main() -> int:
             boards=args.boards or ([args.board] if args.board else DEFAULT_BOARDS),
             profiles=args.profiles or ([args.profile] if args.profile else list(PROFILES.keys())),
             samples=args.samples or DEFAULT_MATRIX_SAMPLES,
+            implementation=args.implementation,
             backend=args.backend_policy or "auto",
             extra_kconfig=args.kconfig,
         )
@@ -1141,6 +1248,7 @@ def main() -> int:
             boards=[args.board or "qemu_x86_64"],
             profiles=[args.profile or "MCU_MINIMAL"],
             samples=["pqcp_basic_kem", "pqcp_basic_sig"],
+            implementation=args.implementation,
             backend=args.backend_policy or "auto",
             extra_kconfig=args.kconfig,
         )
@@ -1190,7 +1298,8 @@ def main() -> int:
                 "  - "
                 f"{record.run_id}: build_ok={record.build_ok} "
                 f"run_ok={record.run_ok} timed_out={record.timed_out} "
-                f"budget_ok={record.budget_ok} backend={record.backend}"
+                f"budget_ok={record.budget_ok} implementation={record.implementation} "
+                f"backend={record.backend} run_mode={record.run_mode}"
             )
             for failure in record.budget_failures:
                 print(f"      budget: {failure}")

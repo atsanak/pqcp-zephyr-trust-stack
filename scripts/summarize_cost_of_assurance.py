@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-Summarize backend-comparison benchmark runs into comparison-friendly CSVs.
+Summarize cost-of-assurance benchmark runs into comparison-friendly CSVs.
 
 This helper consumes the JSON artifacts written by scripts/run_benchmarks.py
-and flattens the primitive and protocol metrics into one row per algorithm/suite
-so backend-policy comparisons are easy to chart.
+and emits:
+  - one build/resource row per run,
+  - one primitive row per algorithm/level,
+  - one protocol row per TLS suite block.
+
+The schema already distinguishes implementation identity from backend policy so
+future non-PQCP providers can be added without a disruptive format change.
 """
 
 from __future__ import annotations
@@ -68,12 +73,15 @@ def write_csv(rows: List[Dict[str, Any]], output_path: Path) -> None:
         "board",
         "profile",
         "sample",
+        "implementation",
         "backend",
+        "run_mode",
         "component",
         "algorithm",
         "level",
         "suite_index",
         "suite",
+        "suite_mode",
         "auth_algorithm",
         "auth_level",
         "key_exchange_algorithm",
@@ -111,14 +119,47 @@ def collect_build_metrics(
 
 
 def base_row(run: Dict[str, Any], component: str) -> Dict[str, Any]:
+    run_mode = run.get("run_mode")
+    if not run_mode:
+        run_mode = "build_only" if run.get("build_only") else "run"
     return {
         "run_id": run["run_id"],
         "board": run["board"],
         "profile": run["profile"],
         "sample": run["sample"],
+        "implementation": run.get("implementation", "pqcp"),
         "backend": run.get("backend", "auto"),
+        "run_mode": run_mode,
         "component": component,
     }
+
+
+def summarize_builds(
+    runs: Dict[str, Dict[str, Any]],
+    build_metrics: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for run_id, run in runs.items():
+        row = {
+            **base_row(run, "build"),
+            "build_ok": run.get("build_ok"),
+            "run_ok": run.get("run_ok"),
+            "timed_out": run.get("timed_out"),
+        }
+        row.update(build_metrics.get(run_id, {}))
+        rows.append(row)
+
+    return sorted(
+        rows,
+        key=lambda item: (
+            item["board"],
+            item["profile"],
+            item["sample"],
+            item["implementation"],
+            item["backend"],
+            item["run_id"],
+        ),
+    )
 
 
 def summarize_primitives(
@@ -156,6 +197,7 @@ def summarize_primitives(
             item["board"],
             item["profile"],
             item["sample"],
+            item["implementation"],
             item["backend"],
             item["algorithm"],
             item["level"],
@@ -172,6 +214,13 @@ def finalize_protocol_row(
             f"{row['key_exchange_algorithm']}{row['key_exchange_level']}"
             f"+{row['auth_algorithm']}{row['auth_level']}"
         )
+        if (
+            str(row.get("key_exchange_algorithm", "")).upper().startswith("MLKEM")
+            and str(row.get("auth_algorithm", "")).upper().startswith("MLDSA")
+        ):
+            row["suite_mode"] = "pure_pq"
+        else:
+            row["suite_mode"] = "hybrid_or_other"
     row.update(build_metrics.get(row["run_id"], {}))
     return row
 
@@ -234,6 +283,7 @@ def summarize_protocol(
             item["board"],
             item["profile"],
             item["sample"],
+            item["implementation"],
             item["backend"],
             item["suite_index"],
         ),
@@ -247,15 +297,19 @@ def main() -> int:
     metrics, runs = load_inputs(input_dir)
     build_metrics = collect_build_metrics(metrics)
 
+    build_rows = summarize_builds(runs, build_metrics)
     primitive_rows = summarize_primitives(metrics, runs, build_metrics)
     protocol_rows = summarize_protocol(metrics, runs, build_metrics)
 
+    build_path = output_dir / "cost_of_assurance_builds.csv"
     primitive_path = output_dir / "cost_of_assurance_primitives.csv"
     protocol_path = output_dir / "cost_of_assurance_protocols.csv"
 
+    write_csv(build_rows, build_path)
     write_csv(primitive_rows, primitive_path)
     write_csv(protocol_rows, protocol_path)
 
+    print(f"Wrote {len(build_rows)} build comparison row(s) to {build_path}")
     print(f"Wrote {len(primitive_rows)} primitive comparison row(s) to {primitive_path}")
     print(f"Wrote {len(protocol_rows)} protocol comparison row(s) to {protocol_path}")
     return 0

@@ -25,11 +25,13 @@
  * exported by the current tree. This mirrors Zephyr's own Arm timing code
  * include style (`<cortex_m/dwt.h>`) instead of depending on private paths.
  */
-#if defined(CONFIG_CPU_CORTEX_M_HAS_DWT) && defined(CONFIG_PQCP_BENCH_CYCLE_COUNTER) && \
-    defined(__has_include)
+#if defined(CONFIG_CPU_CORTEX_M_HAS_DWT) && defined(CONFIG_PQCP_BENCH_CYCLE_COUNTER)
+#if defined(__has_include)
+/* cppcheck-suppress preprocessorErrorDirective */
 #if __has_include(<cortex_m/dwt.h>)
 #include <cortex_m/dwt.h>
 #define USE_DWT_CYCLES 1
+#endif
 #endif
 #endif
 
@@ -207,7 +209,7 @@ int pqcp_bench_mlkem(uint16_t level,
     }
     
     /* Fill results */
-    pqcp_bench_op_t ops[3] = {
+    static const pqcp_bench_op_t ops[3] = {
         PQCP_BENCH_MLKEM_KEYPAIR,
         PQCP_BENCH_MLKEM_ENCAPS,
         PQCP_BENCH_MLKEM_DECAPS
@@ -221,7 +223,10 @@ int pqcp_bench_mlkem(uint16_t level,
         results[i].min_time = min_times[i];
         results[i].max_time = max_times[i];
         results[i].avg_time = times[i] / cfg.iterations;
-        results[i].stack_used = cfg.measure_stack ? pqcp_bench_get_stack_usage() : 0;
+        results[i].stack_used = 0;
+        if (cfg.measure_stack) {
+            results[i].stack_used = pqcp_bench_get_stack_usage();
+        }
         results[i].heap_used = 0;
         results[i].text_size = 0;  /* Filled by scripts */
         results[i].data_size = 0;
@@ -332,7 +337,7 @@ int pqcp_bench_mldsa(uint16_t level,
     }
     
     /* Fill results */
-    pqcp_bench_op_t ops[3] = {
+    static const pqcp_bench_op_t ops[3] = {
         PQCP_BENCH_MLDSA_KEYPAIR,
         PQCP_BENCH_MLDSA_SIGN,
         PQCP_BENCH_MLDSA_VERIFY
@@ -346,7 +351,10 @@ int pqcp_bench_mldsa(uint16_t level,
         results[i].min_time = min_times[i];
         results[i].max_time = max_times[i];
         results[i].avg_time = times[i] / cfg.iterations;
-        results[i].stack_used = cfg.measure_stack ? pqcp_bench_get_stack_usage() : 0;
+        results[i].stack_used = 0;
+        if (cfg.measure_stack) {
+            results[i].stack_used = pqcp_bench_get_stack_usage();
+        }
         results[i].heap_used = 0;
         results[i].text_size = 0;
         results[i].data_size = 0;

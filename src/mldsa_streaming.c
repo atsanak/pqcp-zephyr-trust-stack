@@ -66,6 +66,7 @@ static void hash_update(struct pqcp_mldsa_stream_ctx *ctx,
 {
     /* Accumulate into buffer, "absorb" when full */
     size_t pos = 0;
+    const size_t absorb_len = MIN(STREAMING_BUFFER_SIZE, sizeof(ctx->hash_state));
     
     while (pos < len) {
         size_t to_copy = len - pos;
@@ -81,7 +82,7 @@ static void hash_update(struct pqcp_mldsa_stream_ctx *ctx,
         
         if (ctx->buffer_pos == STREAMING_BUFFER_SIZE) {
             /* "Absorb" - XOR into state (simplified) */
-            for (size_t i = 0; i < STREAMING_BUFFER_SIZE && i < 200; i++) {
+            for (size_t i = 0; i < absorb_len; i++) {
                 ctx->hash_state[i] ^= ctx->buffer[i];
             }
             ctx->buffer_pos = 0;
@@ -95,6 +96,8 @@ static void hash_final(struct pqcp_mldsa_stream_ctx *ctx,
                        uint8_t *out, size_t out_len)
 {
     /* Pad and finalize (simplified SHAKE256 padding) */
+    const size_t absorb_len = MIN(STREAMING_BUFFER_SIZE, sizeof(ctx->hash_state));
+
     ctx->buffer[ctx->buffer_pos++] = 0x1F;  /* SHAKE256 domain separator */
     
     while (ctx->buffer_pos < STREAMING_BUFFER_SIZE - 1) {
@@ -103,7 +106,7 @@ static void hash_final(struct pqcp_mldsa_stream_ctx *ctx,
     ctx->buffer[ctx->buffer_pos] = 0x80;
     
     /* Final absorb */
-    for (size_t i = 0; i < STREAMING_BUFFER_SIZE && i < 200; i++) {
+    for (size_t i = 0; i < absorb_len; i++) {
         ctx->hash_state[i] ^= ctx->buffer[i];
     }
     
