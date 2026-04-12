@@ -286,6 +286,40 @@ static int validate_mldsa_verify_payload_len(pqcp_mldsa_level_t level,
     return 0;
 }
 
+int pqcp_acvp_validate_command_line(const char *line, size_t line_len)
+{
+    if (line == NULL) {
+        return -EINVAL;
+    }
+
+    if (line_len == 0U) {
+        return 0;
+    }
+
+    if (line_len >= PQCP_ACVP_COMMAND_LINE_CHARS_MAX) {
+        return -ENOSPC;
+    }
+
+    for (size_t i = 0; i < line_len; i++) {
+        char ch = line[i];
+
+        if (ch == '\0') {
+            return -EINVAL;
+        }
+
+        if ((ch >= '0' && ch <= '9') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            (ch >= 'a' && ch <= 'z') ||
+            ch == ':' || ch == '-') {
+            continue;
+        }
+
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 int pqcp_acvp_cmd_seed(const uint8_t *seed, size_t seed_len,
                        struct pqcp_acvp_response *resp)
 {

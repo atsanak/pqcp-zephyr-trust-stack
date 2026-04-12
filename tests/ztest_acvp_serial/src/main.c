@@ -28,6 +28,7 @@ static int run_command(const char *fmt, struct pqcp_acvp_response *resp, ...)
 {
     va_list args;
     int written;
+    int ret;
 
     pqcp_acvp_response_init(resp, response_buffer, sizeof(response_buffer));
 
@@ -37,6 +38,13 @@ static int run_command(const char *fmt, struct pqcp_acvp_response *resp, ...)
 
     zassert_true(written >= 0 && written < (int)sizeof(line_buffer),
                  "command buffer overflow");
+
+    ret = pqcp_acvp_validate_command_line(line_buffer, strlen(line_buffer));
+    if (ret != 0) {
+        resp->result = (ret == -ENOSPC) ?
+            PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_CMD;
+        return ret;
+    }
 
     return pqcp_acvp_process_command(line_buffer, work_buffer,
                                      sizeof(work_buffer), resp);
@@ -324,6 +332,19 @@ ZTEST(pqcp_acvp_serial, test_mlkem_negative_paths_recover_cleanly)
     zassert_equal(run_command("DECAPS:MLKEM:768:%s", &resp, hex_buffer), 0);
     zassert_equal(resp.result, PQCP_ACVP_OK);
     zassert_mem_equal(resp.data, shared_secret, PQCP_MLKEM_SS_SIZE);
+}
+
+ZTEST(pqcp_acvp_serial, test_serial_line_garbage_rejected_and_recovered)
+{
+    struct pqcp_acvp_response resp;
+
+    zassert_equal(run_command("%s", &resp, "\x1b[31mKEYGEN:MLKEM:768:"), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_CMD);
+    assert_response_line(&resp, "ERROR:INVALID_CMD");
+
+    zassert_equal(run_command("KEYGEN:MLKEM:768:", &resp), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    assert_response_prefix(&resp, "RESULT:");
 }
 
 ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_oversize_payload)

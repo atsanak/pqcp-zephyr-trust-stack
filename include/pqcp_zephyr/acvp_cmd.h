@@ -114,6 +114,8 @@ struct pqcp_acvp_response {
     PQCP_ACVP_MLDSA_VERIFY_REQUEST_BYTES_MAX
 #define PQCP_ACVP_RESPONSE_BYTES_MAX \
     PQCP_ACVP_MLDSA_KEYGEN_RESPONSE_BYTES_MAX
+#define PQCP_ACVP_COMMAND_LINE_CHARS_MAX \
+    ((PQCP_ACVP_INPUT_BYTES_MAX * 2U) + 64U)
 
 /**
  * @brief Convert a response/result code to its stable wire-format token.
@@ -342,6 +344,28 @@ int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
  *       sample flows.
  */
 void pqcp_acvp_bytes_to_hex(const uint8_t *data, size_t len, char *out);
+
+/**
+ * @brief Validate a raw ACVP serial command line before parsing.
+ *
+ * This helper is intended for serial-facing transports that need to reject
+ * line noise or truncated/oversize frames before handing them to the command
+ * parser. It keeps the transport-layer framing rules shared between the serial
+ * sample and ztests without changing the stable ACVP wire format.
+ *
+ * Accepted lines are bounded to @ref PQCP_ACVP_COMMAND_LINE_CHARS_MAX and may
+ * only contain ASCII letters, digits, `-`, and `:` separators. Empty lines are
+ * allowed so callers can continue to ignore blank serial reads.
+ *
+ * @param line Raw command line bytes without trailing CR/LF.
+ * @param line_len Number of bytes in @p line.
+ *
+ * @retval 0 The line is safe to pass to @ref pqcp_acvp_process_command.
+ * @retval -EINVAL The line contains unexpected serial garbage or framing
+ *         characters.
+ * @retval -ENOSPC The line exceeds the supported serial command length.
+ */
+int pqcp_acvp_validate_command_line(const char *line, size_t line_len);
 
 /**
  * @brief Parse and execute one ACVP command line.

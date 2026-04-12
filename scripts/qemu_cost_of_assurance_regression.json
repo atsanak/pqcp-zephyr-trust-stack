@@ -152,6 +152,76 @@
           "max_ratio": 4.0
         }
       }
+    },
+    {
+      "name": "pqcp-vs-baseline-protocol-mlkem768-mldsa65",
+      "row_type": "protocol",
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_bench_protocol",
+      "selectors": {
+        "key_exchange_algorithm": "MLKEM",
+        "key_exchange_level": 768,
+        "auth_algorithm": "MLDSA",
+        "auth_level": 65,
+        "suite_mode": "pure_pq"
+      },
+      "candidate": {
+        "implementation": "pqcp",
+        "backend": "auto",
+        "run_mode": "run"
+      },
+      "baseline": {
+        "implementation": "baseline",
+        "backend": "clean",
+        "run_mode": "run"
+      },
+      "metrics": {
+        "handshake_time": {
+          "max_ratio": 6.0
+        },
+        "rom_bytes": {
+          "max_ratio": 2.5
+        },
+        "ram_bytes": {
+          "max_ratio": 2.5
+        }
+      }
+    },
+    {
+      "name": "pqcp-vs-baseline-protocol-mlkem512-mldsa87",
+      "row_type": "protocol",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_bench_protocol",
+      "selectors": {
+        "key_exchange_algorithm": "MLKEM",
+        "key_exchange_level": 512,
+        "auth_algorithm": "MLDSA",
+        "auth_level": 87,
+        "suite_mode": "pure_pq"
+      },
+      "candidate": {
+        "implementation": "pqcp",
+        "backend": "auto",
+        "run_mode": "run"
+      },
+      "baseline": {
+        "implementation": "baseline",
+        "backend": "clean",
+        "run_mode": "run"
+      },
+      "metrics": {
+        "handshake_time": {
+          "max_ratio": 6.0
+        },
+        "rom_bytes": {
+          "max_ratio": 2.5
+        },
+        "ram_bytes": {
+          "max_ratio": 2.5
+        }
+      }
     }
   ]
 }
