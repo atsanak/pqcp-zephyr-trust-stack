@@ -22,6 +22,23 @@ static bool verify_ss(const uint8_t *ss1, const uint8_t *ss2)
     return memcmp(ss1, ss2, PQCP_MLKEM_SS_SIZE) == 0;
 }
 
+static pqcp_mlkem_level_t sample_mlkem_level(void)
+{
+#if defined(CONFIG_PQCP_MLKEM_MULTI_LEVEL)
+    return PQCP_MLKEM_768;
+#elif defined(CONFIG_PQCP_MLKEM_LEVEL_512) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_768) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
+    return PQCP_MLKEM_512;
+#elif defined(CONFIG_PQCP_MLKEM_LEVEL_1024) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_512) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_768)
+    return PQCP_MLKEM_1024;
+#else
+    return PQCP_MLKEM_768;
+#endif
+}
+
 /* Print hex bytes */
 static void print_hex(const char *label, const uint8_t *data, size_t len)
 {
@@ -50,8 +67,7 @@ int main(void)
     }
     printk("RNG initialized successfully\n");
     
-    /* Test ML-KEM-768 (default) */
-    pqcp_mlkem_level_t level = PQCP_MLKEM_768;
+    pqcp_mlkem_level_t level = sample_mlkem_level();
     
     printk("\nUsing %s\n", pqcp_mlkem_level_name(level));
     printk("  Public key size: %zu bytes\n", pqcp_mlkem_pk_size(level));

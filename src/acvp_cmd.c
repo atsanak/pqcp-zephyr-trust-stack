@@ -210,6 +210,45 @@ static int parse_level_token(const char *level_str, int *level)
     return 0;
 }
 
+static int validate_exact_payload_len(size_t payload_len,
+                                      size_t expected_len,
+                                      size_t max_len)
+{
+    if (payload_len > max_len) {
+        return -EMSGSIZE;
+    }
+
+    if (payload_len != expected_len) {
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+static int validate_mlkem_encaps_payload_len(pqcp_mlkem_level_t level,
+                                             size_t payload_len)
+{
+    return validate_exact_payload_len(
+        payload_len,
+        pqcp_mlkem_pk_size(level),
+        PQCP_ACVP_MLKEM_ENCAPS_REQUEST_BYTES_MAX
+    );
+}
+
+static int validate_mlkem_decaps_payload_len(pqcp_mlkem_level_t level,
+                                             size_t payload_len,
+                                             size_t *ct_size,
+                                             size_t *sk_size)
+{
+    *ct_size = pqcp_mlkem_ct_size(level);
+    *sk_size = pqcp_mlkem_sk_size(level);
+    return validate_exact_payload_len(
+        payload_len,
+        *ct_size + *sk_size,
+        PQCP_ACVP_MLKEM_DECAPS_REQUEST_BYTES_MAX
+    );
+}
+
 static int validate_mldsa_sign_payload_len(pqcp_mldsa_level_t level,
                                            size_t payload_len,
                                            size_t *msg_len)
@@ -307,7 +346,7 @@ int pqcp_acvp_cmd_mlkem_encaps(int level, const uint8_t *pk, size_t pk_len,
         return -EINVAL;
     }
     
-    if (pk_len != pqcp_mlkem_pk_size(mlkem_level)) {
+    if (validate_mlkem_encaps_payload_len(mlkem_level, pk_len) != 0) {
         resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
         return -EINVAL;
     }
@@ -700,9 +739,10 @@ int pqcp_acvp_process_command(char *line,
                 resp->result = PQCP_ACVP_ERR_INVALID_LEVEL;
                 return -EINVAL;
             }
-            size_t ct_size = pqcp_mlkem_ct_size(mlkem_level);
-            size_t sk_size = pqcp_mlkem_sk_size(mlkem_level);
-            if (data_len != ct_size + sk_size) {
+            size_t ct_size;
+            size_t sk_size;
+            if (validate_mlkem_decaps_payload_len(mlkem_level, data_len,
+                                                  &ct_size, &sk_size) != 0) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }

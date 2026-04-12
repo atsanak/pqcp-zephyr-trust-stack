@@ -3,7 +3,7 @@
  *
  * PQCP Zephyr Trust Stack - ML-DSA baseline wrapper
  *
- * This QEMU-oriented baseline uses the vendored PQClean clean ML-DSA-65
+ * This QEMU-oriented baseline uses a vendored PQClean clean ML-DSA
  * implementation behind the stable Zephyr-facing PQCP ML-DSA API.
  */
 
@@ -14,11 +14,43 @@
 
 #include <string.h>
 
+#if defined(CONFIG_PQCP_MLDSA_LEVEL_65) && \
+    !defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+    !defined(CONFIG_PQCP_MLDSA_LEVEL_87)
 #include "mldsa65_clean/api.h"
+#define PQCP_MLDSA_BASELINE_LEVEL PQCP_MLDSA_65
+#define PQCP_MLDSA_BASELINE_SIG_SIZE PQCP_MLDSA_65_SIG_SIZE
+#define PQCP_MLDSA_BASELINE_KEYPAIR PQCLEAN_MLDSA65_CLEAN_crypto_sign_keypair
+#define PQCP_MLDSA_BASELINE_SIGN PQCLEAN_MLDSA65_CLEAN_crypto_sign_signature_ctx
+#define PQCP_MLDSA_BASELINE_VERIFY PQCLEAN_MLDSA65_CLEAN_crypto_sign_verify_ctx
+#elif defined(CONFIG_PQCP_MLDSA_LEVEL_87) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_65)
+#include "mldsa87_clean/api.h"
+#define PQCP_MLDSA_BASELINE_LEVEL PQCP_MLDSA_87
+#define PQCP_MLDSA_BASELINE_SIG_SIZE PQCP_MLDSA_87_SIG_SIZE
+#define PQCP_MLDSA_BASELINE_KEYPAIR PQCLEAN_MLDSA87_CLEAN_crypto_sign_keypair
+#define PQCP_MLDSA_BASELINE_SIGN PQCLEAN_MLDSA87_CLEAN_crypto_sign_signature_ctx
+#define PQCP_MLDSA_BASELINE_VERIFY PQCLEAN_MLDSA87_CLEAN_crypto_sign_verify_ctx
+#elif defined(__CPPCHECK__)
+/*
+ * Focused static analysis does not inherit the baseline provider's Kconfig
+ * selection, so fall back to one supported single-level mapping there while
+ * keeping the real build-time contract strict for compiled configurations.
+ */
+#include "mldsa65_clean/api.h"
+#define PQCP_MLDSA_BASELINE_LEVEL PQCP_MLDSA_65
+#define PQCP_MLDSA_BASELINE_SIG_SIZE PQCP_MLDSA_65_SIG_SIZE
+#define PQCP_MLDSA_BASELINE_KEYPAIR PQCLEAN_MLDSA65_CLEAN_crypto_sign_keypair
+#define PQCP_MLDSA_BASELINE_SIGN PQCLEAN_MLDSA65_CLEAN_crypto_sign_signature_ctx
+#define PQCP_MLDSA_BASELINE_VERIFY PQCLEAN_MLDSA65_CLEAN_crypto_sign_verify_ctx
+#else
+#error "PQCP baseline ML-DSA provider requires a single supported level (65 or 87)"
+#endif
 
 static inline int validate_level(pqcp_mldsa_level_t level)
 {
-    return (level == PQCP_MLDSA_65) ? 0 : -1;
+    return (level == PQCP_MLDSA_BASELINE_LEVEL) ? 0 : -1;
 }
 
 size_t pqcp_mldsa_pk_size(pqcp_mldsa_level_t level)
@@ -89,7 +121,7 @@ int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk)
         return PQCP_MLDSA_ERR_RNG;
     }
 
-    return PQCLEAN_MLDSA65_CLEAN_crypto_sign_keypair(pk, sk) == 0 ?
+    return PQCP_MLDSA_BASELINE_KEYPAIR(pk, sk) == 0 ?
         PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
 
@@ -117,10 +149,10 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
         return PQCP_MLDSA_ERR_RNG;
     }
 
-    ret = PQCLEAN_MLDSA65_CLEAN_crypto_sign_signature_ctx(
+    ret = PQCP_MLDSA_BASELINE_SIGN(
         sig, &sig_len, msg, msg_len, ctx, ctx_len, sk
     );
-    if (ret != 0 || sig_len != PQCP_MLDSA_65_SIG_SIZE) {
+    if (ret != 0 || sig_len != PQCP_MLDSA_BASELINE_SIG_SIZE) {
         return PQCP_MLDSA_ERR_INTERNAL;
     }
 
@@ -147,8 +179,8 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
         return PQCP_MLDSA_ERR_INVALID_ARG;
     }
 
-    ret = PQCLEAN_MLDSA65_CLEAN_crypto_sign_verify_ctx(
-        sig, PQCP_MLDSA_65_SIG_SIZE, msg, msg_len, ctx, ctx_len, pk
+    ret = PQCP_MLDSA_BASELINE_VERIFY(
+        sig, PQCP_MLDSA_BASELINE_SIG_SIZE, msg, msg_len, ctx, ctx_len, pk
     );
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_VERIFY;
 }

@@ -61,17 +61,23 @@ if(CONFIG_PQCP_MLKEM)
     zephyr_library_named(pqcp_mlkem)
 
     if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
-        zephyr_include_directories(${PQCLEAN_BASELINE_DIR}/mlkem768_clean)
+        if(CONFIG_PQCP_MLKEM_LEVEL_512)
+            set(PQCLEAN_MLKEM_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mlkem512_clean)
+        else()
+            set(PQCLEAN_MLKEM_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mlkem768_clean)
+        endif()
+
+        zephyr_include_directories(${PQCLEAN_MLKEM_BASELINE_DIR})
         zephyr_library_sources(
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/cbd.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/indcpa.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/kem.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/ntt.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/poly.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/polyvec.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/reduce.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/symmetric-shake.c
-            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/verify.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/cbd.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/indcpa.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/kem.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/ntt.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/poly.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/polyvec.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/reduce.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/symmetric-shake.c
+            ${PQCLEAN_MLKEM_BASELINE_DIR}/verify.c
             ${PQCP_SRC}/mlkem_baseline.c
         )
     # Check for mlkem-native availability
@@ -164,16 +170,22 @@ if(CONFIG_PQCP_MLDSA)
     zephyr_library_named(pqcp_mldsa)
 
     if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
-        zephyr_include_directories(${PQCLEAN_BASELINE_DIR}/mldsa65_clean)
+        if(CONFIG_PQCP_MLDSA_LEVEL_87)
+            set(PQCLEAN_MLDSA_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mldsa87_clean)
+        else()
+            set(PQCLEAN_MLDSA_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mldsa65_clean)
+        endif()
+
+        zephyr_include_directories(${PQCLEAN_MLDSA_BASELINE_DIR})
         zephyr_library_sources(
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/ntt.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/packing.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/poly.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/polyvec.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/reduce.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/rounding.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/sign.c
-            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/symmetric-shake.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/ntt.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/packing.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/poly.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/polyvec.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/reduce.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/rounding.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/sign.c
+            ${PQCLEAN_MLDSA_BASELINE_DIR}/symmetric-shake.c
             ${PQCP_SRC}/mldsa_baseline.c
         )
     # Check for mldsa-native availability

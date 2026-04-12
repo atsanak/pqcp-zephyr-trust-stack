@@ -543,7 +543,8 @@ The curated QEMU matrix now includes:
 - `implementation=pqcp` rows using the normal PQCP wrappers and backend-policy
   switches (`auto`, `force_c`, `force_native`)
 - `implementation=baseline` rows using a vendored PQClean-derived clean
-  reference provider for ML-KEM-768 and ML-DSA-65 on `qemu_x86_64`
+  reference provider for ML-KEM-512 / ML-KEM-768 and ML-DSA-65 / ML-DSA-87 on
+  `qemu_x86_64`
 
 That means the QEMU cost-of-assurance flow can now compare PQCP against a real
 second implementation family instead of only comparing PQCP backend variants to
@@ -575,9 +576,13 @@ The curated matrix currently contains:
 
 - fully runnable `qemu_x86_64` rows for primitive and protocol comparisons,
   including `implementation=baseline` clean-reference rows for ML-KEM-768,
-  ML-DSA-65, and the single-level protocol benchmark
+  ML-KEM-512, ML-DSA-65, ML-DSA-87, and the single-level protocol benchmark
 - build-only `nucleo_h743zi` rows that capture real MCU footprint and code-size
   deltas without claiming hardware runtime measurements
+- analysis-only `COA_QEMU_SINGLE_LEVEL` rows that override the sample defaults
+  without using the production profile `select` paths, so extra QEMU comparison
+  levels do not silently change the semantics of `MCU_MINIMAL`, `GATEWAY`, or
+  `NATIVE_LAB`
 
 The `mps2/an385` sample path is intentionally not part of the curated
 cost-of-assurance matrix yet. Those samples currently depend on a production
@@ -637,10 +642,10 @@ qemu_x86_64,NATIVE_LAB,pqcp_bench_protocol,pqcp,force_native,MLKEM768+MLDSA65,pu
 
 The checked-in QEMU smoke for Extended Checks also reads
 `scripts/qemu_cost_of_assurance_regression.json`, which defines conservative
-PQCP-vs-baseline ratio limits for one ML-KEM-768 row and one ML-DSA-65 row.
-Those thresholds are intentionally loose: they are there to catch obvious
-catastrophes such as a multi-x slowdown or a footprint explosion, not to act as
-a precise performance benchmark gate.
+PQCP-vs-baseline ratio limits for ML-KEM-768, ML-KEM-512, ML-DSA-65, and
+ML-DSA-87 comparison rows. Those thresholds are intentionally loose: they are
+there to catch obvious catastrophes such as a multi-x slowdown or a footprint
+explosion, not to act as a precise performance benchmark gate.
 
 For cost-of-assurance runs that do not invoke Zephyr's dedicated `rom_report` and
 `ram_report` targets, the runner still records `rom_bytes` and `ram_bytes` using
@@ -688,6 +693,12 @@ python scripts/run_extended_checks.py \
   --run-cost-of-assurance-smoke
 ```
 
+The `baseline` implementation in the matrix is strictly a QEMU-only comparison
+provider. It exists to quantify the cost of assurance against a second
+implementation family under the same Zephyr-facing APIs; it is not a supported
+production provider, not part of the PSA validation path, and not intended for
+MCU deployment.
+
 ### Resource Budget Enforcement
 
 The curated profile-validation matrix also has an optional checked-in budget file
@@ -718,6 +729,23 @@ deliberately when a real feature change increases footprint, and keep the
 profile matrix, README, and release checklist in sync when doing so.
 
 ### Profile Cookbook
+
+### Production Profiles
+
+The project keeps the production profile story deliberately explicit:
+
+| Profile | Status | Intended use | Notes |
+|---------|--------|--------------|-------|
+| `MCU_MINIMAL` | Production-supported | Resource-constrained MCU firmware | Single-level ML-KEM-768 + ML-DSA-65 with Zephyr entropy RNG and no lab/test features enabled by default. |
+| `GATEWAY` | Production-supported | Gateway-class devices with more memory | Multi-level ML-KEM / ML-DSA plus PSA-driver support and streaming enabled for richer integrations. |
+| `NATIVE_LAB` | Lab/test only | Desktop, QEMU, ACVP, benchmarking, and development workflows | Enables broader benchmarking and lab-oriented workflows; not the profile to ship verbatim into production firmware. |
+| `COA_QEMU_SINGLE_LEVEL` | Analysis-only runner label | Cost-of-assurance QEMU experiments | Not a Kconfig profile at all. This runner-only label exists so the comparison matrix can switch single levels without mutating the production profile `select` behavior. |
+
+Recommended production defaults:
+
+- Constrained MCU products: start from `MCU_MINIMAL`, keep Zephyr entropy or PSA RNG, and stay on ML-KEM-768 + ML-DSA-65 unless a documented product requirement pushes you higher.
+- Gateway-style products: start from `GATEWAY`, keep PSA enabled, and selectively trim unused levels only after validating the new footprint against `scripts/resource_budgets.json`.
+- ACVP, comparative benchmarking, and host validation: use `NATIVE_LAB` or the dedicated cost-of-assurance matrix paths instead of trying to repurpose production profiles.
 
 Common profile-oriented invocations:
 
@@ -1081,6 +1109,27 @@ Configure adequate stack sizes:
 ```
 CONFIG_MAIN_STACK_SIZE=131072  # 128KB for ML-DSA-65
 ```
+
+### Stable API Surface
+
+Headers intended for external application use and versioned dependency:
+
+- `include/pqcp_zephyr/mlkem.h`: stable ML-KEM keypair / encapsulate / decapsulate API and size helpers.
+- `include/pqcp_zephyr/mldsa.h`: stable ML-DSA sign / verify / hash / streaming API plus size helpers.
+- `include/pqcp_zephyr/rng.h`: stable RNG abstraction hooks for Zephyr entropy, PSA RNG, or a caller-supplied RNG backend.
+- `include/pqcp_zephyr/version.h`: stable version macros such as `PQCP_VERSION_STRING` for downstream integration and release pinning.
+
+Headers that are intentionally more specialized and should be treated as
+lab-oriented or internal-module surfaces unless you own both sides of the
+integration:
+
+- `include/pqcp_zephyr/acvp_cmd.h`: stable wire grammar for the serial ACVP harness, but still a lab/test command API rather than a production transport interface.
+- `include/pqcp_zephyr/bench.h`: structured `PQCP_METRIC` logging helpers used by samples, profiling, and thesis-style analysis flows.
+- `include/pqcp_zephyr/tls_selftest.h`: reusable TLS self-test helpers shared by the offline TLS sample and ztests; suitable for harness integration, but still primarily a validation surface rather than a general-purpose application API.
+
+If you change a stable header, public Kconfig option, or production profile
+meaning, update this README, the affected samples/tests, and the relevant
+cost-of-assurance or resource-budget documentation in the same change.
 
 ## Integration with External Libraries
 
