@@ -1,0 +1,25 @@
+manifest:
+  version: 1.2
+
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+    - name: pq-code-package
+      url-base: https://github.com/pq-code-package
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.3.0
+      import: true
+    - name: mlkem-native
+      remote: pq-code-package
+      revision: main
+      path: pqcp-zephyr-trust-stack/ext/mlkem-native
+    - name: mldsa-native
+      remote: pq-code-package
+      revision: main
+      path: pqcp-zephyr-trust-stack/ext/mldsa-native
+
+  self:
+    path: pqcp-zephyr-trust-stack

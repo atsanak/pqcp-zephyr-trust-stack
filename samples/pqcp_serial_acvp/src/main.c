@@ -33,6 +33,8 @@
 #define MAX_RESPONSE_DATA_LEN PQCP_ACVP_RESPONSE_BYTES_MAX
 #define MAX_INPUT_DATA_LEN    PQCP_ACVP_INPUT_BYTES_MAX
 #define MAX_LINE_LEN         PQCP_ACVP_COMMAND_LINE_CHARS_MAX
+#define CONSOLE_RX_THREAD_STACK_SIZE 1024
+#define CONSOLE_RX_THREAD_PRIORITY 5
 
 /* Working buffer for hex decoding */
 static uint8_t work_buffer[MAX_INPUT_DATA_LEN];
@@ -45,6 +47,78 @@ static char response_line[(MAX_RESPONSE_DATA_LEN * 2U) + 64U];
 
 /* Line input buffer */
 static char line_buffer[MAX_LINE_LEN];
+
+K_MSGQ_DEFINE(console_rx_msgq, sizeof(char), MAX_LINE_LEN, 4);
+K_THREAD_STACK_DEFINE(console_rx_thread_stack, CONSOLE_RX_THREAD_STACK_SIZE);
+static struct k_thread console_rx_thread_data;
+
+static void console_rx_thread(void *arg1, void *arg2, void *arg3)
+{
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+
+    while (1) {
+        char ch = console_getchar();
+
+        (void)k_msgq_put(&console_rx_msgq, &ch, K_FOREVER);
+    }
+}
+
+static int uart_readline(char *line, size_t line_size, size_t *line_len)
+{
+    struct pqcp_acvp_serial_line_state state;
+    struct k_timer inactivity_timer;
+    bool timer_armed = false;
+    char ch;
+    int ret;
+
+    pqcp_acvp_serial_line_reset(&state);
+    *line_len = 0U;
+    line[0] = '\0';
+
+    k_timer_init(&inactivity_timer, NULL, NULL);
+
+    while (1) {
+        k_timeout_t timeout = K_FOREVER;
+
+        if (timer_armed) {
+            uint32_t remaining_ms = k_timer_remaining_get(&inactivity_timer);
+
+            timeout = K_MSEC((remaining_ms == 0U) ? 1U : remaining_ms);
+        }
+
+        ret = k_msgq_get(&console_rx_msgq, &ch, timeout);
+        if (ret == -EAGAIN) {
+            ret = pqcp_acvp_serial_line_timeout(&state, line, line_size);
+            k_timer_stop(&inactivity_timer);
+            timer_armed = false;
+            if (ret == -ETIMEDOUT) {
+                return ret;
+            }
+            continue;
+        } else if (ret != 0) {
+            return ret;
+        }
+
+        ret = pqcp_acvp_serial_line_consume_char(&state, ch, line, line_size,
+                                                 line_len);
+        if (ret != 0) {
+            k_timer_stop(&inactivity_timer);
+            return ret;
+        }
+
+        if (state.active || state.overflow) {
+            k_timer_start(&inactivity_timer,
+                          K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS),
+                          K_NO_WAIT);
+            timer_armed = true;
+        } else {
+            k_timer_stop(&inactivity_timer);
+            timer_armed = false;
+        }
+    }
+}
 
 /* Print help text */
 static void print_help(void)
@@ -116,6 +190,8 @@ static void process_and_respond(char *line)
 
 int main(void)
 {
+    int ret;
+
     printk("\n");
     printk("PQCP Serial ACVP Interface\n");
     printk("==========================\n");
@@ -127,43 +203,35 @@ int main(void)
     pqcp_rng_init();
     
     console_init();
+    k_thread_create(&console_rx_thread_data, console_rx_thread_stack,
+                    K_THREAD_STACK_SIZEOF(console_rx_thread_stack),
+                    console_rx_thread,
+                    NULL, NULL, NULL,
+                    CONSOLE_RX_THREAD_PRIORITY, 0, K_NO_WAIT);
     
     while (1) {
+        size_t line_len = 0U;
+
         printk("> ");
-        
-        /* Read line from console */
-        int len = 0;
-        bool overflow = false;
-        char c;
-        
-        while (1) {
-            c = console_getchar();
-            
-            if (c == '\r' || c == '\n') {
-                break;
-            }
-            
-            if ((c == '\b' || c == 0x7f) && len > 0) {
-                len--;
-                continue;
-            }
 
-            if (!overflow && len < MAX_LINE_LEN - 1) {
-                line_buffer[len++] = c;
-            } else {
-                overflow = true;
-            }
-        }
-        
-        line_buffer[len] = '\0';
-
-        if (overflow) {
+        ret = uart_readline(line_buffer, sizeof(line_buffer), &line_len);
+        if (ret == -ENOSPC) {
             printk("ERROR:%s\n",
                    pqcp_acvp_result_str(PQCP_ACVP_ERR_BUFFER_TOO_SMALL));
             continue;
         }
 
-        if (len > 0) {
+        if (ret == -ETIMEDOUT) {
+            printk("ERROR:%s\n",
+                   pqcp_acvp_result_str(PQCP_ACVP_ERR_TIMEOUT));
+            continue;
+        }
+
+        if (ret != 1) {
+            continue;
+        }
+
+        if (line_len > 0U) {
             process_and_respond(line_buffer);
         }
     }

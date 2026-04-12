@@ -410,6 +410,20 @@ config PQCP_ACVP
 	  This provides reusable command handlers for SEED, KEYGEN,
 	  ENCAPS, DECAPS, SIGN, VERIFY operations.
 
+if PQCP_ACVP
+
+config PQCP_ACVP_READLINE_TIMEOUT_MS
+	int "Serial ACVP frame timeout (ms)"
+	default 5000
+	range 100 600000
+	help
+	  Timeout used by the serial ACVP sample once a host starts sending a
+	  command line. If the newline terminator does not arrive within this
+	  window, the sample drops the partial frame, emits ERROR:TIMEOUT, and
+	  waits for the next command.
+
+endif # PQCP_ACVP
+
 endmenu
 
 # =============================================================================

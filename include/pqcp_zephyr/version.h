@@ -12,20 +12,32 @@ extern "C" {
 #endif
 
 /** @brief Major version of the PQCP Zephyr module. */
-#define PQCP_VERSION_MAJOR 1
+#define PQCP_ZEPHYR_VERSION_MAJOR 0
 
 /** @brief Minor version of the PQCP Zephyr module. */
-#define PQCP_VERSION_MINOR 0
+#define PQCP_ZEPHYR_VERSION_MINOR 9
 
 /** @brief Patch version of the PQCP Zephyr module. */
-#define PQCP_VERSION_PATCH 0
+#define PQCP_ZEPHYR_VERSION_PATCH 0
 
 /** @brief Packed semantic version for simple compile-time comparisons. */
-#define PQCP_VERSION_HEX \
-    ((PQCP_VERSION_MAJOR << 16) | (PQCP_VERSION_MINOR << 8) | PQCP_VERSION_PATCH)
+#define PQCP_ZEPHYR_VERSION_HEX \
+    ((PQCP_ZEPHYR_VERSION_MAJOR << 16) | \
+     (PQCP_ZEPHYR_VERSION_MINOR << 8) | \
+     PQCP_ZEPHYR_VERSION_PATCH)
 
 /** @brief Human-readable semantic version string. */
-#define PQCP_VERSION_STRING "1.0.0"
+#define PQCP_ZEPHYR_VERSION_STRING "0.9.0"
+
+/*
+ * Backward-compatible version aliases retained for existing tooling and
+ * downstream consumers that already key off the shorter macro names.
+ */
+#define PQCP_VERSION_MAJOR PQCP_ZEPHYR_VERSION_MAJOR
+#define PQCP_VERSION_MINOR PQCP_ZEPHYR_VERSION_MINOR
+#define PQCP_VERSION_PATCH PQCP_ZEPHYR_VERSION_PATCH
+#define PQCP_VERSION_HEX PQCP_ZEPHYR_VERSION_HEX
+#define PQCP_VERSION_STRING "0.9.0"
 
 #ifdef __cplusplus
 }

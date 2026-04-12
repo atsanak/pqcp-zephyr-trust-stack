@@ -2,34 +2,40 @@
 
 All notable changes to this module are documented in this file.
 
-The format is intentionally lightweight and geared toward downstream Zephyr
-integrators who want a concise release-oriented summary of what changed.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+with entries grouped so downstream Zephyr integrators can quickly map a
+release tag to the validation and provider surface it introduced.
 
-## [1.0.0] - 2026-04-09
+## [Unreleased]
+
+## [0.9.0] - 2026-04-13
 
 ### Added
 
-- Stable ML-KEM and ML-DSA wrapper APIs with selectable RNG backends for
-  production, PSA-backed, custom, and deterministic test flows.
-- Deterministic KAT coverage, streaming ML-DSA support, PSA driver shims, and
-  ztest coverage for primitives, RNG backends, ACVP command handling, and the
-  shared TLS self-test harness.
-- Structured `PQCP_METRIC` logging across primitive, KAT, streaming, TLS, and
-  protocol benchmark paths together with `scripts/parse_logs.py` and the
-  curated `scripts/run_benchmarks.py` matrix runner.
-- Shared TLS self-test / protocol benchmark helpers used by the TLS sample, the
-  dedicated protocol benchmark sample, and the TLS ztests.
-- Refactored ACVP command library with a stable `RESULT:*` / `ERROR:*` wire
-  grammar, optional fuzz-oriented overlays, and a thin host-side ACVP smoke
-  driver for lab integration.
-- Weekly/manual extended checks with graphviz generation, focused `cppcheck`,
-  optional sanitizer builds, and selective ARM-profile validation.
+- A production-oriented PQCP provider family for ML-KEM and ML-DSA together
+  with RNG abstraction, PSA driver shims, deterministic KAT coverage, and the
+  stable `PQCP_METRIC` logging surface used by the primitive and protocol
+  samples.
+- A QEMU-only clean baseline provider for ML-KEM-512/768 and ML-DSA-65/87 so
+  cost-of-assurance runs can compare PQCP against a second implementation
+  through the same Zephyr-facing APIs and shared RNG hooks.
+- A shared TLS self-test / protocol benchmark harness with RTOS-aware jitter
+  counters, TLS layer-decomposition metrics, and a three-CSV
+  cost-of-assurance pipeline for runnable QEMU slices plus build-only MCU
+  footprint captures.
+- A reusable ACVP command library, serial ACVP sample, host-side smoke driver,
+  negative scenario set, and ztest coverage for malformed commands, oversize
+  frames, and partial-frame timeout recovery.
+- `scripts/release_check.py` for one-command release validation, plus checked-in
+  ROM/RAM resource budgets and QEMU cost-of-assurance regression thresholds.
+- A root `west.yml` manifest so new users can bootstrap a Zephyr workspace
+  directly from this repository.
 
 ### Changed
 
-- Profile validation now covers both primitive-oriented and protocol-oriented
-  NATIVE_LAB paths while keeping MCU_MINIMAL conservative and GATEWAY aligned
-  with PSA/TLS use cases.
-- Documentation now includes a version header, changelog, extended checks,
-  curated benchmark/profile cookbook guidance, and explicit Zephyr version
-  validation notes.
+- Extended Checks now enforce resource budgets, version/changelog alignment,
+  cost-of-assurance smoke coverage, and conservative PQCP-vs-baseline
+  protocol/primitive regression guardrails on QEMU.
+- The README now documents production profiles, stable API expectations,
+  release criteria, west workspace setup, and the current pre-release version
+  anchor for downstream consumers.

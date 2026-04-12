@@ -34,6 +34,7 @@ const char *pqcp_acvp_result_str(enum pqcp_acvp_result result)
     case PQCP_ACVP_ERR_SEED:         return "SEED_FAILED";
     case PQCP_ACVP_ERR_NOT_ENABLED:  return "NOT_ENABLED";
     case PQCP_ACVP_ERR_BUFFER_TOO_SMALL: return "BUFFER_TOO_SMALL";
+    case PQCP_ACVP_ERR_TIMEOUT:      return "TIMEOUT";
     case PQCP_ACVP_VERIFY_INVALID:   return "INVALID";
     default: return "UNKNOWN";
     }
@@ -318,6 +319,78 @@ int pqcp_acvp_validate_command_line(const char *line, size_t line_len)
     }
 
     return 0;
+}
+
+void pqcp_acvp_serial_line_reset(struct pqcp_acvp_serial_line_state *state)
+{
+    if (state == NULL) {
+        return;
+    }
+
+    state->len = 0U;
+    state->active = false;
+    state->overflow = false;
+}
+
+int pqcp_acvp_serial_line_consume_char(struct pqcp_acvp_serial_line_state *state,
+                                       char ch,
+                                       char *line, size_t line_size,
+                                       size_t *line_len)
+{
+    if (state == NULL || line == NULL || line_len == NULL || line_size == 0U) {
+        return -EINVAL;
+    }
+
+    if (ch == '\r' || ch == '\n') {
+        int ret = 1;
+
+        if (state->overflow) {
+            ret = -ENOSPC;
+        }
+
+        line[state->len < line_size ? state->len : line_size - 1U] = '\0';
+        *line_len = state->len;
+        pqcp_acvp_serial_line_reset(state);
+        return ret;
+    }
+
+    if (ch == '\b' || ch == 0x7f) {
+        if (state->len > 0U && !state->overflow) {
+            state->len--;
+            line[state->len] = '\0';
+        }
+        return 0;
+    }
+
+    state->active = true;
+
+    if (!state->overflow) {
+        if (state->len < line_size - 1U) {
+            line[state->len++] = ch;
+            line[state->len] = '\0';
+            return 0;
+        }
+
+        state->overflow = true;
+    }
+
+    return 0;
+}
+
+int pqcp_acvp_serial_line_timeout(struct pqcp_acvp_serial_line_state *state,
+                                  char *line, size_t line_size)
+{
+    if (state == NULL || line == NULL || line_size == 0U) {
+        return -EINVAL;
+    }
+
+    if (!state->active && !state->overflow && state->len == 0U) {
+        return 0;
+    }
+
+    line[0] = '\0';
+    pqcp_acvp_serial_line_reset(state);
+    return -ETIMEDOUT;
 }
 
 int pqcp_acvp_cmd_seed(const uint8_t *seed, size_t seed_len,

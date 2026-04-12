@@ -42,6 +42,29 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 - West meta-tool configured
 - Python 3.8+
 
+### West Workspace Setup
+
+For a fresh workspace, this repository now ships a root `west.yml` manifest that
+pulls Zephyr plus the two PQ Code Package backends into the layout expected by
+the module:
+
+```bash
+west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack --mr main pqcp-ws
+cd pqcp-ws
+west update
+west manifest --resolve > /dev/null
+```
+
+That leaves the manifest repository at `pqcp-zephyr-trust-stack/`, Zephyr at
+`zephyr/`, and the PQCP backend projects at:
+
+- `pqcp-zephyr-trust-stack/ext/mlkem-native`
+- `pqcp-zephyr-trust-stack/ext/mldsa-native`
+
+For release-oriented integrations, pin the manifest repo revision to the tag or
+commit that matches the documented version macros in
+`include/pqcp_zephyr/version.h` and the top release entry in `CHANGELOG.md`.
+
 ### Adding to Your Zephyr Project
 
 **Option 1: Via west.yml**
@@ -1394,6 +1417,12 @@ The fast CI path runs:
 - a filtered `--profile-validation` build-only smoke run with
   `scripts/resource_budgets.json`
 
+In addition, a `release-gate` advisory job now runs on every push to `main` and
+every pull request targeting `main`. It executes `python scripts/release_check.py`
+and uploads the resulting log/artifact bundle so maintainers can spot release
+workflow regressions early without turning the full release sequence into a
+brittle hard gate for every branch push.
+
 The sample runs are bounded with `timeout` and checked for expected
 `PQCP_METRIC` lines so CI can validate metric emission without waiting for QEMU
 samples to exit on their own.
@@ -1436,10 +1465,11 @@ Downstream consumers can track the formal module version through:
 - `include/pqcp_zephyr/version.h`
 - `CHANGELOG.md`
 
-The current release macro is `PQCP_VERSION_STRING`, which is set to `1.0.0`.
-The extended-checks helper now verifies that this macro and the top release
-entry in `CHANGELOG.md` stay aligned. It also checks that the README's example
-west manifest snippet keeps the release pinning guidance intact for
+The current pre-release version is `0.9.0`, exported through both
+`PQCP_ZEPHYR_VERSION_STRING` and the compatibility alias `PQCP_VERSION_STRING`.
+The extended-checks helper verifies that the compatibility macro and the top
+release entry in `CHANGELOG.md` stay aligned. It also checks that the README's
+example west manifest snippet keeps the release pinning guidance intact for
 integrators.
 
 ### Release Candidate Checklist

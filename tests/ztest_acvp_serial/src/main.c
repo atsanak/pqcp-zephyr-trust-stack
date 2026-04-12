@@ -347,6 +347,55 @@ ZTEST(pqcp_acvp_serial, test_serial_line_garbage_rejected_and_recovered)
     assert_response_prefix(&resp, "RESULT:");
 }
 
+ZTEST(pqcp_acvp_serial, test_serial_line_timeout_rejected_and_recovered)
+{
+    static const char *partial = "KEYGEN:MLKEM:768:";
+    static const char *complete = "KEYGEN:MLKEM:768:\n";
+    struct pqcp_acvp_serial_line_state state;
+    struct pqcp_acvp_response resp;
+    size_t line_len = 0U;
+    char serial_line[64];
+
+    pqcp_acvp_serial_line_reset(&state);
+    serial_line[0] = '\0';
+
+    for (size_t i = 0U; i < strlen(partial); ++i) {
+        zassert_equal(
+            pqcp_acvp_serial_line_consume_char(&state, partial[i],
+                                               serial_line, sizeof(serial_line),
+                                               &line_len),
+            0);
+    }
+
+    zassert_equal(
+        pqcp_acvp_serial_line_timeout(&state, serial_line, sizeof(serial_line)),
+        -ETIMEDOUT);
+    zassert_equal(serial_line[0], '\0');
+    zassert_false(state.active);
+    zassert_false(state.overflow);
+    zassert_equal(state.len, 0U);
+
+    for (size_t i = 0U; i < strlen(complete) - 1U; ++i) {
+        zassert_equal(
+            pqcp_acvp_serial_line_consume_char(&state, complete[i],
+                                               serial_line, sizeof(serial_line),
+                                               &line_len),
+            0);
+    }
+
+    zassert_equal(
+        pqcp_acvp_serial_line_consume_char(&state, '\n',
+                                           serial_line, sizeof(serial_line),
+                                           &line_len),
+        1);
+    zassert_equal(strcmp(serial_line, partial), 0);
+    zassert_equal(line_len, strlen(partial));
+
+    zassert_equal(run_command("KEYGEN:MLKEM:768:", &resp), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    assert_response_prefix(&resp, "RESULT:");
+}
+
 ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_oversize_payload)
 {
     size_t out_len = 0U;
@@ -394,6 +443,7 @@ ZTEST(pqcp_acvp_serial, test_result_strings_are_stable)
         { PQCP_ACVP_ERR_SEED, "SEED_FAILED" },
         { PQCP_ACVP_ERR_NOT_ENABLED, "NOT_ENABLED" },
         { PQCP_ACVP_ERR_BUFFER_TOO_SMALL, "BUFFER_TOO_SMALL" },
+        { PQCP_ACVP_ERR_TIMEOUT, "TIMEOUT" },
         { PQCP_ACVP_VERIFY_INVALID, "INVALID" },
     };
 
