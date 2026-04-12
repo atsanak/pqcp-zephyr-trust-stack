@@ -1,0 +1,81 @@
+{
+  "description": "Conservative qemu_x86_64 cost-of-assurance regression guardrails. These ratios are intentionally loose and exist only to catch catastrophic regressions in the PQCP-vs-baseline comparison path.",
+  "comparisons": [
+    {
+      "name": "pqcp-vs-baseline-mlkem768",
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "algorithm": "MLKEM",
+      "level": 768,
+      "candidate": {
+        "implementation": "pqcp",
+        "backend": "auto",
+        "run_mode": "run"
+      },
+      "baseline": {
+        "implementation": "baseline",
+        "backend": "clean",
+        "run_mode": "run"
+      },
+      "metrics": {
+        "keygen_cycles": {
+          "max_ratio": 5.0
+        },
+        "encaps_cycles": {
+          "max_ratio": 5.0
+        },
+        "decaps_cycles": {
+          "max_ratio": 5.0
+        },
+        "rom_bytes": {
+          "max_ratio": 2.0
+        },
+        "ram_bytes": {
+          "max_ratio": 2.0
+        },
+        "total_stack": {
+          "max_ratio": 3.0
+        }
+      }
+    },
+    {
+      "name": "pqcp-vs-baseline-mldsa65",
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "algorithm": "MLDSA",
+      "level": 65,
+      "candidate": {
+        "implementation": "pqcp",
+        "backend": "auto",
+        "run_mode": "run"
+      },
+      "baseline": {
+        "implementation": "baseline",
+        "backend": "clean",
+        "run_mode": "run"
+      },
+      "metrics": {
+        "keygen_cycles": {
+          "max_ratio": 5.0
+        },
+        "sign_cycles": {
+          "max_ratio": 5.0
+        },
+        "verify_cycles": {
+          "max_ratio": 5.0
+        },
+        "rom_bytes": {
+          "max_ratio": 2.0
+        },
+        "ram_bytes": {
+          "max_ratio": 2.0
+        },
+        "total_stack": {
+          "max_ratio": 3.0
+        }
+      }
+    }
+  ]
+}

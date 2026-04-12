@@ -27,6 +27,14 @@
     {
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_kem",
+      "implementation": "baseline",
+      "backend": "clean",
+      "notes": "QEMU-only clean reference baseline for ML-KEM-768 primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_sig",
       "implementation": "pqcp",
       "backend": "auto",
@@ -47,6 +55,14 @@
       "implementation": "pqcp",
       "backend": "force_native",
       "notes": "Native backend for ML-DSA primitive comparison."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_basic_sig",
+      "implementation": "baseline",
+      "backend": "clean",
+      "notes": "QEMU-only clean reference baseline for ML-DSA-65 primitive comparison."
     },
     {
       "board": "qemu_x86_64",
@@ -71,6 +87,22 @@
       "implementation": "pqcp",
       "backend": "force_native",
       "notes": "Shared TLS/protocol benchmark with the native backend."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_bench_protocol",
+      "implementation": "pqcp",
+      "backend": "auto",
+      "notes": "Single-level PQCP protocol benchmark for direct comparison with the clean baseline."
+    },
+    {
+      "board": "qemu_x86_64",
+      "profile": "MCU_MINIMAL",
+      "sample": "pqcp_bench_protocol",
+      "implementation": "baseline",
+      "backend": "clean",
+      "notes": "QEMU-only clean reference baseline for the single-level protocol benchmark."
     },
     {
       "board": "nucleo_h743zi",

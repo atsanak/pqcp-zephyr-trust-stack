@@ -180,12 +180,39 @@ endmenu
 # =============================================================================
 menu "Implementation Backend Configuration"
 
+choice PQCP_IMPLEMENTATION_PROVIDER
+	prompt "Cryptographic provider family"
+	default PQCP_IMPLEMENTATION_PQCP
+
+config PQCP_IMPLEMENTATION_PQCP
+	bool "PQ Code Package (default)"
+	help
+	  Use the in-tree PQ Code Package implementations (`mlkem-native` and
+	  `mldsa-native`). This is the production-oriented default and the only
+	  provider family validated across the full MCU profile and PSA paths.
+
+config PQCP_IMPLEMENTATION_BASELINE
+	bool "Baseline clean reference provider (QEMU only)"
+	depends on BOARD_QEMU_X86_64
+	depends on PQCP_MLKEM_LEVEL_768 && !PQCP_MLKEM_LEVEL_512 && !PQCP_MLKEM_LEVEL_1024
+	depends on PQCP_MLDSA_LEVEL_65 && !PQCP_MLDSA_LEVEL_44 && !PQCP_MLDSA_LEVEL_87
+	depends on !PQCP_MLKEM_MULTI_LEVEL && !PQCP_MLDSA_MULTI_LEVEL
+	help
+	  Use a small PQClean-derived clean reference baseline for ML-KEM-768 and
+	  ML-DSA-65. This provider is intended only for host-side cost-of-assurance
+	  comparisons on qemu_x86_64 so the same Zephyr harnesses can compare PQCP
+	  against a second implementation family without introducing deterministic
+	  RNG or MCU-only shortcuts into production-style runs.
+
+endchoice
+
 choice PQCP_BACKEND
 	prompt "Implementation Backend"
 	default PQCP_BACKEND_AUTO
 
 config PQCP_BACKEND_AUTO
 	bool "Automatic (detect ISA features)"
+	depends on PQCP_IMPLEMENTATION_PQCP
 	help
 	  Automatically select the best available backend based on detected
 	  ISA features at compile time. Uses native assembly backends when
@@ -194,17 +221,28 @@ config PQCP_BACKEND_AUTO
 
 config PQCP_BACKEND_FORCE_C
 	bool "Force portable C backend"
+	depends on PQCP_IMPLEMENTATION_PQCP
 	help
 	  Force use of the portable C backend even when native backends
 	  are available. This is useful for testing and comparison purposes.
 
 config PQCP_BACKEND_FORCE_NATIVE
 	bool "Force native backend (advanced)"
+	depends on PQCP_IMPLEMENTATION_PQCP
 	help
 	  Force use of native assembly backends. This may cause build
 	  failures or runtime errors on unsupported architectures.
 	  Only use this if you know your target supports the required
 	  ISA extensions.
+
+config PQCP_BACKEND_CLEAN
+	bool "Clean/reference backend label"
+	depends on PQCP_IMPLEMENTATION_BASELINE
+	help
+	  Metadata-only backend label used by the QEMU baseline implementation
+	  family in cost-of-assurance experiments. The baseline provider has a
+	  single clean C backend, so this option exists mainly to keep benchmark
+	  metadata explicit and comparable to the PQCP provider family.
 
 endchoice
 

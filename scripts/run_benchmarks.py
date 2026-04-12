@@ -76,6 +76,21 @@ BACKEND_POLICIES: Dict[str, Dict[str, Any]] = {
         "kconfig": ["CONFIG_PQCP_BACKEND_FORCE_NATIVE=y"],
         "description": "Native backend forced for comparison runs",
     },
+    "clean": {
+        "kconfig": ["CONFIG_PQCP_BACKEND_CLEAN=y"],
+        "description": "Clean/reference backend used by the QEMU baseline provider",
+    },
+}
+
+IMPLEMENTATION_FAMILIES: Dict[str, Dict[str, Any]] = {
+    "pqcp": {
+        "kconfig": [],
+        "description": "PQ Code Package provider family",
+    },
+    "baseline": {
+        "kconfig": ["CONFIG_PQCP_IMPLEMENTATION_BASELINE=y"],
+        "description": "QEMU-only clean reference baseline provider",
+    },
 }
 
 DEFAULT_BENCHMARK_MATRIX = SCRIPT_DIR / "benchmark_matrix.json"
@@ -212,6 +227,10 @@ def normalize_implementation_name(value: Optional[str]) -> str:
             f"Invalid implementation '{value}'. Use lowercase letters, digits, or underscores."
         )
     return implementation
+
+
+def implementation_kconfig_lines(implementation: str) -> List[str]:
+    return list(IMPLEMENTATION_FAMILIES.get(implementation, {}).get("kconfig", []))
 
 
 def normalize_run_mode(value: Optional[str], *, build_only: bool = False) -> str:
@@ -965,6 +984,7 @@ def expand_runs(
     implementation_name = normalize_implementation_name(implementation)
     backend_policy = normalize_backend_policy(backend)
     backend_kconfig = list(BACKEND_POLICIES[backend_policy]["kconfig"])
+    implementation_kconfig = implementation_kconfig_lines(implementation_name)
 
     for board in boards:
         for profile in profiles:
@@ -992,7 +1012,11 @@ def expand_runs(
                     backend=backend_policy,
                     app_path=sample_info["path"],
                     overlays=list(sample_info.get("overlays", [])),
-                    extra_kconfig=[*backend_kconfig, *extra_kconfig],
+                    extra_kconfig=[
+                        *implementation_kconfig,
+                        *backend_kconfig,
+                        *extra_kconfig,
+                    ],
                     run_timeout=int(sample_info.get("run_timeout", 0)),
                     run_mode="run",
                     build_only=False,
@@ -1040,6 +1064,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                         app_path=target,
                         overlays=overlays,
                         extra_kconfig=[
+                            *implementation_kconfig_lines(implementation_name),
                             *BACKEND_POLICIES[backend_policy]["kconfig"],
                             *item.get("extra_kconfig", []),
                             *cli_kconfig,
@@ -1096,6 +1121,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     app_path=app_path,
                     overlays=overlays or list(sample_info.get("overlays", [])),
                     extra_kconfig=[
+                        *implementation_kconfig_lines(implementation_name),
                         *BACKEND_POLICIES[backend_policy]["kconfig"],
                         *item.get("extra_kconfig", []),
                         *cli_kconfig,

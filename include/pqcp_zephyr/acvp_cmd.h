@@ -63,6 +63,16 @@ struct pqcp_acvp_response {
 };
 
 /**
+ * @brief Maximum message payload accepted by the serial ACVP sign/verify helpers.
+ *
+ * The ACVP serial harness is intentionally a lab-oriented command interface, not
+ * a streaming transport. Keeping a bounded message payload makes malformed host
+ * traffic easier to reject predictably and prevents accidental "benchmark" runs
+ * from turning the harness into an unbounded message tunnel.
+ */
+#define PQCP_ACVP_MAX_MESSAGE_BYTES 1024U
+
+/**
  * @brief Convert a response/result code to its stable wire-format token.
  *
  * This helper is shared by the serial sample and ztests to guarantee that the

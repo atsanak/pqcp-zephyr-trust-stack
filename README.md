@@ -517,7 +517,7 @@ benchmark_results/
 The repository includes two machine-readable configuration files:
 
 - `scripts/benchmark_matrix.json`: curated benchmark runs for thesis and performance data collection, keeping at least one primitive-oriented entry per profile plus protocol/TLS-oriented coverage where that profile supports it
-- `scripts/cost_of_assurance_matrix.json`: curated cost-of-assurance comparison runs for the in-tree PQCP implementation across runnable QEMU paths and build-only MCU footprint captures
+- `scripts/cost_of_assurance_matrix.json`: curated cost-of-assurance comparison runs for runnable QEMU PQCP-vs-baseline experiments and build-only MCU footprint captures
 - `scripts/profile_validation_matrix.json`: recommended board/test coverage per profile for humans and CI, including the explicit `mps2/an385` Cortex-M no-entropy validation path
 
 ### Cost-of-Assurance Matrix
@@ -527,8 +527,8 @@ cost of using the currently supported PQCP backend policies under identical
 Zephyr builds. Each run now carries:
 
 - `implementation`: the cryptographic provider family. Today this is always
-  `pqcp`, but the field is present in `runs.json` and all derived CSVs so a
-  future non-PQCP provider can be compared without a disruptive schema change.
+  `pqcp` for the production implementation family and `baseline` for the
+  QEMU-only clean reference comparator.
 - `backend`: the backend-selection policy within that implementation family.
 - `run_mode`: whether the row is a fully runnable benchmark (`run`) or a
   build-only footprint capture (`build_only`).
@@ -538,9 +538,16 @@ Zephyr builds. Each run now carries:
 - `force_native`: the native backend forced on
 
 This is the in-tree "cost of assurance" comparison that can be automated today.
-The module does not yet ship a second non-PQCP cryptographic provider, so the
-comparison currently stays within the PQCP family rather than claiming a
-PQClean/liboqs baseline.
+The curated QEMU matrix now includes:
+
+- `implementation=pqcp` rows using the normal PQCP wrappers and backend-policy
+  switches (`auto`, `force_c`, `force_native`)
+- `implementation=baseline` rows using a vendored PQClean-derived clean
+  reference provider for ML-KEM-768 and ML-DSA-65 on `qemu_x86_64`
+
+That means the QEMU cost-of-assurance flow can now compare PQCP against a real
+second implementation family instead of only comparing PQCP backend variants to
+each other.
 
 Run the curated matrix with:
 
@@ -553,7 +560,7 @@ python scripts/run_benchmarks.py \
 Useful filtered variants:
 
 ```bash
-# Only the runnable QEMU rows
+# Only the runnable QEMU rows (PQCP + baseline)
 python scripts/run_benchmarks.py \
   --cost-of-assurance-matrix \
   --board qemu_x86_64
@@ -566,7 +573,9 @@ python scripts/run_benchmarks.py \
 
 The curated matrix currently contains:
 
-- fully runnable `qemu_x86_64` rows for primitive and protocol comparisons
+- fully runnable `qemu_x86_64` rows for primitive and protocol comparisons,
+  including `implementation=baseline` clean-reference rows for ML-KEM-768,
+  ML-DSA-65, and the single-level protocol benchmark
 - build-only `nucleo_h743zi` rows that capture real MCU footprint and code-size
   deltas without claiming hardware runtime measurements
 
@@ -626,6 +635,13 @@ board,profile,sample,implementation,backend,suite,suite_mode,handshake_time,auth
 qemu_x86_64,NATIVE_LAB,pqcp_bench_protocol,pqcp,force_native,MLKEM768+MLDSA65,pure_pq,<time>,<auth>,<kex>,<provider_us>
 ```
 
+The checked-in QEMU smoke for Extended Checks also reads
+`scripts/qemu_cost_of_assurance_regression.json`, which defines conservative
+PQCP-vs-baseline ratio limits for one ML-KEM-768 row and one ML-DSA-65 row.
+Those thresholds are intentionally loose: they are there to catch obvious
+catastrophes such as a multi-x slowdown or a footprint explosion, not to act as
+a precise performance benchmark gate.
+
 For cost-of-assurance runs that do not invoke Zephyr's dedicated `rom_report` and
 `ram_report` targets, the runner still records `rom_bytes` and `ram_bytes` using
 the standard Zephyr section approximation (`rom = text + data`, `ram = data +
@@ -642,6 +658,10 @@ Quick inspection patterns:
 grep '^qemu_x86_64,MCU_MINIMAL,pqcp_basic_kem' \
   benchmark_results/cost-of-assurance/cost_of_assurance_primitives.csv
 
+# Compare PQCP vs baseline for the same qemu_x86_64 primitive sample
+grep '^qemu_x86_64,MCU_MINIMAL,pqcp_basic_sig' \
+  benchmark_results/cost-of-assurance/cost_of_assurance_primitives.csv
+
 # Inspect only build-only STM32H7 rows
 grep '^nucleo_h743zi' \
   benchmark_results/cost-of-assurance/cost_of_assurance_builds.csv
@@ -655,6 +675,17 @@ csvcut -c board,sample,backend,suite,handshake_provider_overhead,handshake_rtos_
 csvcut -c board,profile,sample,implementation,backend,run_mode,text_bytes,total_bytes \
   benchmark_results/cost-of-assurance/cost_of_assurance_builds.csv | \
   grep '^qemu_x86_64'
+```
+
+When the checked-in QEMU baseline or the PQCP implementation changes
+intentionally, update `scripts/qemu_cost_of_assurance_regression.json` together
+with the code change. Keep the ratio thresholds conservative, explain the reason
+in the commit or changelog entry, and re-run:
+
+```bash
+python scripts/run_extended_checks.py \
+  --strict \
+  --run-cost-of-assurance-smoke
 ```
 
 ### Resource Budget Enforcement
@@ -848,8 +879,14 @@ Common error codes emitted by the ACVP sample and command library:
 
 The shipped negative-scenario file at `scripts/acvp_negative_scenarios.json`
 now exercises truncated commands, strict `HELP` form handling, wrong-size
-signing input, invalid seed hex, unsupported levels, and extra-field framing
-errors through the full QEMU serial sample path.
+signing input, invalid seed hex, unsupported levels, truncated verify payloads,
+invalid ML-DSA sign hex, and extra-field framing errors through the full QEMU
+serial sample path.
+
+The ML-DSA `SIGN` / `VERIFY` command family is also bounded by
+`PQCP_ACVP_MAX_MESSAGE_BYTES` in the shared command library. That keeps the
+serial harness from silently turning into an unbounded message tunnel while
+still allowing realistic lab-side sign/verify payloads.
 
 The public ACVP command API is declared in
 `include/pqcp_zephyr/acvp_cmd.h` and includes helpers for:
@@ -1183,9 +1220,10 @@ This helper:
 - checks that the example west manifest snippet still reminds integrators to
   pin a tag or commit that matches `PQCP_VERSION_STRING` and `CHANGELOG.md`
 - strips common host compiler environment variables before invoking `west`
-- runs a tiny non-quantitative cost-of-assurance smoke on `qemu_x86_64`
-  (`pqcp_basic_kem` + `pqcp_bench_protocol`, `backend=auto`) and then verifies
-  that the build, primitive, and protocol CSV artifacts were produced
+- runs a tiny cost-of-assurance smoke on `qemu_x86_64` that exercises both the
+  PQCP and baseline implementations for ML-KEM and ML-DSA, keeps the protocol
+  path alive, and checks conservative PQCP-vs-baseline numeric guardrails from
+  `scripts/qemu_cost_of_assurance_regression.json`
 
 Use it before large refactors, before cutting a release, or when touching the
 shared ACVP/TLS/benchmark infrastructure.
