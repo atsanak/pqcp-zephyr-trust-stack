@@ -10,6 +10,7 @@
 #ifndef PQCP_ZEPHYR_ACVP_CMD_H_
 #define PQCP_ZEPHYR_ACVP_CMD_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -49,6 +50,7 @@ enum pqcp_acvp_result {
     PQCP_ACVP_ERR_SEED,            /**< RNG seeding failed */
     PQCP_ACVP_ERR_NOT_ENABLED,     /**< Feature not enabled in build */
     PQCP_ACVP_ERR_BUFFER_TOO_SMALL,/**< Output buffer too small */
+    PQCP_ACVP_ERR_TIMEOUT,         /**< Serial frame timed out before newline */
     PQCP_ACVP_VERIFY_INVALID,      /**< Signature is invalid (not an error) */
 };
 
@@ -116,6 +118,19 @@ struct pqcp_acvp_response {
     PQCP_ACVP_MLDSA_KEYGEN_RESPONSE_BYTES_MAX
 #define PQCP_ACVP_COMMAND_LINE_CHARS_MAX \
     ((PQCP_ACVP_INPUT_BYTES_MAX * 2U) + 64U)
+
+/**
+ * @brief Incremental serial line state for the lab-oriented ACVP sample.
+ *
+ * This state machine keeps UART framing behavior shared between the serial
+ * sample, the host-side timeout scenarios, and ztest coverage. It is not a
+ * general-purpose production transport API.
+ */
+struct pqcp_acvp_serial_line_state {
+    size_t len;       /**< Current buffered line length */
+    bool active;      /**< True after the first non-newline character arrives */
+    bool overflow;    /**< True after the frame exceeds the configured buffer */
+};
 
 /**
  * @brief Convert a response/result code to its stable wire-format token.
@@ -366,6 +381,58 @@ void pqcp_acvp_bytes_to_hex(const uint8_t *data, size_t len, char *out);
  * @retval -ENOSPC The line exceeds the supported serial command length.
  */
 int pqcp_acvp_validate_command_line(const char *line, size_t line_len);
+
+/**
+ * @brief Reset the shared serial line state.
+ *
+ * @param state Line state object to reset.
+ */
+void pqcp_acvp_serial_line_reset(struct pqcp_acvp_serial_line_state *state);
+
+/**
+ * @brief Feed one character into the shared serial line state machine.
+ *
+ * Supported editing/framing behavior mirrors the serial ACVP sample:
+ *
+ * - `\r` or `\n` completes the current frame
+ * - backspace / DEL removes the most recent buffered character
+ * - oversize frames continue consuming bytes until newline, then return
+ *   `-ENOSPC`
+ *
+ * @param state Shared serial line state.
+ * @param ch Input character.
+ * @param line Destination buffer for the assembled line.
+ * @param line_size Capacity of @p line.
+ * @param line_len Receives the completed line length on success.
+ *
+ * @retval 0 Frame is still in progress.
+ * @retval 1 A full line is ready in @p line.
+ * @retval -EINVAL Invalid arguments were provided.
+ * @retval -ENOSPC The frame exceeded @p line_size before newline.
+ *
+ * @note Intended for the lab/test ACVP serial harness and ztest coverage.
+ */
+int pqcp_acvp_serial_line_consume_char(struct pqcp_acvp_serial_line_state *state,
+                                       char ch,
+                                       char *line, size_t line_size,
+                                       size_t *line_len);
+
+/**
+ * @brief Drop the current partial serial frame after a transport timeout.
+ *
+ * @param state Shared serial line state.
+ * @param line Destination buffer used for the current frame.
+ * @param line_size Capacity of @p line.
+ *
+ * @retval 0 No partial frame was active.
+ * @retval -EINVAL Invalid arguments were provided.
+ * @retval -ETIMEDOUT A partial frame was discarded and the caller should emit
+ *         `ERROR:TIMEOUT`.
+ *
+ * @note Intended for the lab/test ACVP serial harness and ztest coverage.
+ */
+int pqcp_acvp_serial_line_timeout(struct pqcp_acvp_serial_line_state *state,
+                                  char *line, size_t line_size);
 
 /**
  * @brief Parse and execute one ACVP command line.

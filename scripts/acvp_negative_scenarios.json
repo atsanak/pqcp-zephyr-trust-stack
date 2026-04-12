@@ -34,6 +34,13 @@
           "response": "ERROR:INVALID_CMD"
         },
         {
+          "name": "PARTIAL_FRAME_TIMEOUT",
+          "command": "KEYGEN:MLKEM:768:",
+          "append_newline": false,
+          "response_timeout": 7.0,
+          "response": "ERROR:TIMEOUT"
+        },
+        {
           "name": "INVALID_MLKEM_ENCAPS_HEX",
           "command": "ENCAPS:MLKEM:768:zz",
           "response": "ERROR:INVALID_HEX"

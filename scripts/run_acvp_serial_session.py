@@ -97,6 +97,8 @@ class ExpectedCommand:
     command: str
     status: Optional[str] = "error"
     response: Optional[str] = None
+    append_newline: bool = True
+    response_timeout: Optional[float] = None
 
 
 class SessionError(RuntimeError):
@@ -105,6 +107,9 @@ class SessionError(RuntimeError):
 
 class BaseTransport:
     def send_line(self, line: str) -> None:
+        self.send_text(line, append_newline=True)
+
+    def send_text(self, text: str, *, append_newline: bool) -> None:
         raise NotImplementedError
 
     def wait_for(self, predicate: Callable[[str], bool], timeout: float) -> str:
@@ -170,10 +175,10 @@ class SubprocessTransport(BaseTransport):
                 self._queue.put(line)
                 self._partial = ""
 
-    def send_line(self, line: str) -> None:
+    def send_text(self, text: str, *, append_newline: bool) -> None:
         if self._proc.stdin is None:
             raise SessionError("subprocess stdin is unavailable")
-        payload = line + "\n"
+        payload = text + ("\n" if append_newline else "")
         if self._char_delay > 0:
             for char in payload:
                 self._proc.stdin.write(char)
@@ -232,8 +237,8 @@ class SerialTransport(BaseTransport):
         self._char_delay = max(char_delay, 0.0)
         self._transcript: List[str] = []
 
-    def send_line(self, line: str) -> None:
-        payload = line + "\n"
+    def send_text(self, text: str, *, append_newline: bool) -> None:
+        payload = text + ("\n" if append_newline else "")
         if self._char_delay > 0:
             for char in payload:
                 self._serial.write(char.encode("ascii"))
@@ -483,6 +488,30 @@ def parse_expected_commands(
         name = str(raw_item.get("name") or f"expected-error-{index}")
         status_value = raw_item.get("status", "error")
         response_value = raw_item.get("response")
+        append_newline_value = raw_item.get("append_newline", True)
+        response_timeout_value = raw_item.get("response_timeout")
+
+        if not isinstance(append_newline_value, bool):
+            raise SessionError(
+                f"{scenario_name}.expected_errors[{index}].append_newline "
+                "must be a boolean"
+            )
+
+        if response_timeout_value is not None:
+            try:
+                parsed_timeout = float(response_timeout_value)
+            except (TypeError, ValueError) as exc:
+                raise SessionError(
+                    f"{scenario_name}.expected_errors[{index}].response_timeout "
+                    "must be a positive number"
+                ) from exc
+            if parsed_timeout <= 0:
+                raise SessionError(
+                    f"{scenario_name}.expected_errors[{index}].response_timeout "
+                    "must be a positive number"
+                )
+        else:
+            parsed_timeout = None
 
         if status_value is None and response_value is None:
             raise SessionError(
@@ -510,6 +539,8 @@ def parse_expected_commands(
                     if response_value is not None
                     else None
                 ),
+                append_newline=append_newline_value,
+                response_timeout=parsed_timeout,
             )
         )
 
@@ -646,12 +677,13 @@ def issue_command(
     verbose: bool,
     records: List[CommandRecord],
     allow_error: bool = False,
+    append_newline: bool = True,
 ) -> str:
     if command_delay > 0:
         time.sleep(command_delay)
     if verbose:
         print(f"> {command}")
-    transport.send_line(command)
+    transport.send_text(command, append_newline=append_newline)
     response_line = transport.wait_for(
         lambda line: extract_protocol_response(line) is not None,
         timeout,
@@ -808,11 +840,16 @@ def run_single_scenario(
         response = issue_command(
             transport,
             expected.command,
-            timeout=args.response_timeout,
+            timeout=(
+                expected.response_timeout
+                if expected.response_timeout is not None
+                else args.response_timeout
+            ),
             command_delay=args.command_delay,
             verbose=args.verbose,
             records=records,
             allow_error=True,
+            append_newline=expected.append_newline,
         )
         step = make_step(expected.name, response)
         mismatch = apply_expectation(
@@ -955,6 +992,13 @@ def run_self_tests(verbose: bool) -> int:
                         "name": "INVALID_LEVEL",
                         "command": "KEYGEN:MLKEM:999:",
                         "response": "ERROR:INVALID_LEVEL",
+                    },
+                    {
+                        "name": "PARTIAL_TIMEOUT",
+                        "command": "KEYGEN:MLKEM:768:",
+                        "append_newline": False,
+                        "response_timeout": 7.0,
+                        "response": "ERROR:TIMEOUT",
                     }
                 ],
             }
@@ -977,6 +1021,10 @@ def run_self_tests(verbose: bool) -> int:
             raise SessionError("step_expectations were not parsed correctly")
         if scenarios[0].expected_errors[0].response != "ERROR:INVALID_LEVEL":
             raise SessionError("expected_errors were not parsed correctly")
+        if scenarios[0].expected_errors[1].append_newline is not False:
+            raise SessionError("append_newline was not parsed correctly")
+        if scenarios[0].expected_errors[1].response_timeout != 7.0:
+            raise SessionError("response_timeout was not parsed correctly")
         if verbose:
             print("[self-test] load_scenarios parsed expectations successfully")
 
