@@ -76,6 +76,82 @@
           "max_ratio": 3.0
         }
       }
+    },
+    {
+      "name": "pqcp-vs-baseline-mlkem512",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_basic_kem",
+      "algorithm": "MLKEM",
+      "level": 512,
+      "candidate": {
+        "implementation": "pqcp",
+        "backend": "auto",
+        "run_mode": "run"
+      },
+      "baseline": {
+        "implementation": "baseline",
+        "backend": "clean",
+        "run_mode": "run"
+      },
+      "metrics": {
+        "keygen_cycles": {
+          "max_ratio": 6.0
+        },
+        "encaps_cycles": {
+          "max_ratio": 6.0
+        },
+        "decaps_cycles": {
+          "max_ratio": 6.0
+        },
+        "rom_bytes": {
+          "max_ratio": 2.5
+        },
+        "ram_bytes": {
+          "max_ratio": 2.5
+        },
+        "total_stack": {
+          "max_ratio": 3.5
+        }
+      }
+    },
+    {
+      "name": "pqcp-vs-baseline-mldsa87",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_basic_sig",
+      "algorithm": "MLDSA",
+      "level": 87,
+      "candidate": {
+        "implementation": "pqcp",
+        "backend": "auto",
+        "run_mode": "run"
+      },
+      "baseline": {
+        "implementation": "baseline",
+        "backend": "clean",
+        "run_mode": "run"
+      },
+      "metrics": {
+        "keygen_cycles": {
+          "max_ratio": 6.0
+        },
+        "sign_cycles": {
+          "max_ratio": 6.0
+        },
+        "verify_cycles": {
+          "max_ratio": 6.0
+        },
+        "rom_bytes": {
+          "max_ratio": 2.5
+        },
+        "ram_bytes": {
+          "max_ratio": 2.5
+        },
+        "total_stack": {
+          "max_ratio": 4.0
+        }
+      }
     }
   ]
 }

@@ -61,6 +61,14 @@ PROFILES: Dict[str, Dict[str, str]] = {
         "kconfig": "CONFIG_PQCP_PROFILE_NATIVE_LAB=y",
         "description": "Lab/development profile with benchmarking",
     },
+    "COA_QEMU_SINGLE_LEVEL": {
+        "kconfig": "",
+        "description": (
+            "Analysis-only qemu_x86_64 single-level profile label used by "
+            "cost-of-assurance runs that must override the production profile "
+            "level selects without changing their semantics"
+        ),
+    },
 }
 
 BACKEND_POLICIES: Dict[str, Dict[str, Any]] = {
@@ -108,14 +116,14 @@ HOST_ENV_BLACKLIST = (
 SAMPLES: Dict[str, Dict[str, Any]] = {
     "pqcp_basic_kem": {
         "path": "samples/pqcp_basic_kem",
-        "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB"],
+        "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB", "COA_QEMU_SINGLE_LEVEL"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
         "run_timeout": 45,
     },
     "pqcp_basic_sig": {
         "path": "samples/pqcp_basic_sig",
-        "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB"],
+        "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB", "COA_QEMU_SINGLE_LEVEL"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
         "run_timeout": 45,
@@ -136,7 +144,7 @@ SAMPLES: Dict[str, Dict[str, Any]] = {
     },
     "pqcp_bench_protocol": {
         "path": "samples/pqcp_bench_protocol",
-        "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB"],
+        "profiles": ["MCU_MINIMAL", "GATEWAY", "NATIVE_LAB", "COA_QEMU_SINGLE_LEVEL"],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
         "run_timeout": 60,

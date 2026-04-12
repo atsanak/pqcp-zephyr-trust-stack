@@ -205,11 +205,16 @@ ZTEST(pqcp_acvp_serial, test_rejects_malformed_commands)
 ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
 {
     struct pqcp_acvp_response resp;
-    size_t sk_size = pqcp_mldsa_sk_size(PQCP_MLDSA_65);
-    size_t pk_size = pqcp_mldsa_pk_size(PQCP_MLDSA_65);
+    size_t kem_pk_size = pqcp_mlkem_pk_size(PQCP_MLKEM_768);
+    size_t ct_size = pqcp_mlkem_ct_size(PQCP_MLKEM_768);
+    size_t kem_sk_size = pqcp_mlkem_sk_size(PQCP_MLKEM_768);
+    size_t sig_sk_size = pqcp_mldsa_sk_size(PQCP_MLDSA_65);
+    size_t sig_pk_size = pqcp_mldsa_pk_size(PQCP_MLDSA_65);
     size_t sig_size = pqcp_mldsa_sig_size(PQCP_MLDSA_65);
-    size_t oversize_sign_len = sk_size + PQCP_ACVP_MAX_MESSAGE_BYTES + 1U;
-    size_t oversize_verify_len = pk_size + sig_size + PQCP_ACVP_MAX_MESSAGE_BYTES + 1U;
+    size_t oversize_encaps_len = kem_pk_size + 1U;
+    size_t oversize_decaps_len = ct_size + kem_sk_size + 1U;
+    size_t oversize_sign_len = sig_sk_size + PQCP_ACVP_MAX_MESSAGE_BYTES + 1U;
+    size_t oversize_verify_len = sig_pk_size + sig_size + PQCP_ACVP_MAX_MESSAGE_BYTES + 1U;
 
     zassert_equal(run_command("SEED:DRBG:0:abc", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_HEX);
@@ -224,6 +229,18 @@ ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
     assert_response_line(&resp, "ERROR:INVALID_LEVEL");
 
     zassert_equal(run_command("DECAPS:MLKEM:768:00", &resp), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memset(work_buffer, 0x11, oversize_encaps_len);
+    bytes_to_hex(work_buffer, oversize_encaps_len, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("ENCAPS:MLKEM:768:%s", &resp, hex_buffer), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memset(work_buffer, 0x22, oversize_decaps_len);
+    bytes_to_hex(work_buffer, oversize_decaps_len, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("DECAPS:MLKEM:768:%s", &resp, hex_buffer), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
     assert_response_line(&resp, "ERROR:WRONG_SIZE");
 
@@ -242,6 +259,71 @@ ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
     zassert_equal(run_command("VERIFY:MLDSA:65:%s", &resp, hex_buffer), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
     assert_response_line(&resp, "ERROR:WRONG_SIZE");
+}
+
+ZTEST(pqcp_acvp_serial, test_mlkem_negative_paths_recover_cleanly)
+{
+    struct pqcp_acvp_response resp;
+    size_t pk_size = pqcp_mlkem_pk_size(PQCP_MLKEM_768);
+    size_t sk_size = pqcp_mlkem_sk_size(PQCP_MLKEM_768);
+    size_t ct_size = pqcp_mlkem_ct_size(PQCP_MLKEM_768);
+    uint8_t pk[PQCP_MLKEM_PK_SIZE_MAX];
+    uint8_t sk[PQCP_MLKEM_SK_SIZE_MAX];
+    uint8_t ciphertext[PQCP_MLKEM_CT_SIZE_MAX];
+    uint8_t shared_secret[PQCP_MLKEM_SS_SIZE];
+
+    zassert_equal(
+        run_command("SEED:DRBG:0:%s", &resp,
+                    "000102030405060708090a0b0c0d0e0f"
+                    "101112131415161718191a1b1c1d1e1f"
+                    "202122232425262728292a2b2c2d2e2f"),
+        0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+
+    zassert_equal(run_command("KEYGEN:MLKEM:768:", &resp), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    memcpy(pk, resp.data, pk_size);
+    memcpy(sk, resp.data + pk_size, sk_size);
+
+    bytes_to_hex(pk, pk_size - 1U, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("ENCAPS:MLKEM:768:%s", &resp, hex_buffer), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memcpy(work_buffer, pk, pk_size);
+    work_buffer[pk_size] = 0x5aU;
+    bytes_to_hex(work_buffer, pk_size + 1U, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("ENCAPS:MLKEM:768:%s", &resp, hex_buffer), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    bytes_to_hex(pk, pk_size, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("ENCAPS:MLKEM:768:%s", &resp, hex_buffer), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    memcpy(ciphertext, resp.data, ct_size);
+    memcpy(shared_secret, resp.data + ct_size, PQCP_MLKEM_SS_SIZE);
+
+    memcpy(work_buffer, ciphertext, ct_size);
+    memcpy(work_buffer + ct_size, sk, sk_size - 1U);
+    bytes_to_hex(work_buffer, ct_size + sk_size - 1U, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("DECAPS:MLKEM:768:%s", &resp, hex_buffer), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memcpy(work_buffer, ciphertext, ct_size);
+    memcpy(work_buffer + ct_size, sk, sk_size);
+    work_buffer[ct_size + sk_size] = 0xa5U;
+    bytes_to_hex(work_buffer, ct_size + sk_size + 1U, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("DECAPS:MLKEM:768:%s", &resp, hex_buffer), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memcpy(work_buffer, ciphertext, ct_size);
+    memcpy(work_buffer + ct_size, sk, sk_size);
+    bytes_to_hex(work_buffer, ct_size + sk_size, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("DECAPS:MLKEM:768:%s", &resp, hex_buffer), 0);
+    zassert_equal(resp.result, PQCP_ACVP_OK);
+    zassert_mem_equal(resp.data, shared_secret, PQCP_MLKEM_SS_SIZE);
 }
 
 ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_oversize_payload)

@@ -33,6 +33,23 @@ static void print_hex(const char *label, const uint8_t *data, size_t len)
     printk("\n");
 }
 
+static pqcp_mldsa_level_t sample_mldsa_level(void)
+{
+#if defined(CONFIG_PQCP_MLDSA_MULTI_LEVEL)
+    return PQCP_MLDSA_65;
+#elif defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_65) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_87)
+    return PQCP_MLDSA_44;
+#elif defined(CONFIG_PQCP_MLDSA_LEVEL_87) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_65)
+    return PQCP_MLDSA_87;
+#else
+    return PQCP_MLDSA_65;
+#endif
+}
+
 int main(void)
 {
     printk("\n");
@@ -48,8 +65,7 @@ int main(void)
     }
     printk("RNG initialized successfully\n");
     
-    /* Test ML-DSA-65 (default) */
-    pqcp_mldsa_level_t level = PQCP_MLDSA_65;
+    pqcp_mldsa_level_t level = sample_mldsa_level();
     
     printk("\nUsing %s\n", pqcp_mldsa_level_name(level));
     printk("  Public key size: %zu bytes\n", pqcp_mldsa_pk_size(level));

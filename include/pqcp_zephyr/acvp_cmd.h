@@ -13,6 +13,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <pqcp_zephyr/mlkem.h>
+#include <pqcp_zephyr/mldsa.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -71,6 +74,46 @@ struct pqcp_acvp_response {
  * from turning the harness into an unbounded message tunnel.
  */
 #define PQCP_ACVP_MAX_MESSAGE_BYTES 1024U
+
+/**
+ * @brief Maximum ML-KEM ACVP request/response sizes accepted by the lab harness.
+ *
+ * These bounds intentionally mirror the fixed-size ML-KEM request and response
+ * shapes used by the serial ACVP helpers. Keeping them explicit in the public
+ * header lets the reusable command library, serial sample, and ztests share the
+ * same limits for keypair, encapsulation, and decapsulation handling.
+ */
+#define PQCP_ACVP_MLKEM_KEYGEN_RESPONSE_BYTES_MAX \
+    (PQCP_MLKEM_PK_SIZE_MAX + PQCP_MLKEM_SK_SIZE_MAX)
+#define PQCP_ACVP_MLKEM_ENCAPS_REQUEST_BYTES_MAX \
+    PQCP_MLKEM_PK_SIZE_MAX
+#define PQCP_ACVP_MLKEM_ENCAPS_RESPONSE_BYTES_MAX \
+    (PQCP_MLKEM_CT_SIZE_MAX + PQCP_MLKEM_SS_SIZE)
+#define PQCP_ACVP_MLKEM_DECAPS_REQUEST_BYTES_MAX \
+    (PQCP_MLKEM_CT_SIZE_MAX + PQCP_MLKEM_SK_SIZE_MAX)
+#define PQCP_ACVP_MLKEM_DECAPS_RESPONSE_BYTES_MAX \
+    PQCP_MLKEM_SS_SIZE
+
+/**
+ * @brief Maximum ML-DSA ACVP request/response sizes accepted by the lab harness.
+ */
+#define PQCP_ACVP_MLDSA_KEYGEN_RESPONSE_BYTES_MAX \
+    (PQCP_MLDSA_PK_SIZE_MAX + PQCP_MLDSA_SK_SIZE_MAX)
+#define PQCP_ACVP_MLDSA_SIGN_REQUEST_BYTES_MAX \
+    (PQCP_MLDSA_SK_SIZE_MAX + PQCP_ACVP_MAX_MESSAGE_BYTES)
+#define PQCP_ACVP_MLDSA_SIGN_RESPONSE_BYTES_MAX \
+    PQCP_MLDSA_SIG_SIZE_MAX
+#define PQCP_ACVP_MLDSA_VERIFY_REQUEST_BYTES_MAX \
+    (PQCP_MLDSA_PK_SIZE_MAX + PQCP_MLDSA_SIG_SIZE_MAX + \
+     PQCP_ACVP_MAX_MESSAGE_BYTES)
+
+/**
+ * @brief Maximum decoded input and encoded response payloads for the serial harness.
+ */
+#define PQCP_ACVP_INPUT_BYTES_MAX \
+    PQCP_ACVP_MLDSA_VERIFY_REQUEST_BYTES_MAX
+#define PQCP_ACVP_RESPONSE_BYTES_MAX \
+    PQCP_ACVP_MLDSA_KEYGEN_RESPONSE_BYTES_MAX
 
 /**
  * @brief Convert a response/result code to its stable wire-format token.

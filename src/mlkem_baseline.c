@@ -3,7 +3,7 @@
  *
  * PQCP Zephyr Trust Stack - ML-KEM baseline wrapper
  *
- * This QEMU-oriented baseline uses the vendored PQClean clean ML-KEM-768
+ * This QEMU-oriented baseline uses a vendored PQClean clean ML-KEM
  * implementation behind the stable Zephyr-facing PQCP ML-KEM API.
  */
 
@@ -14,11 +14,40 @@
 
 #include <string.h>
 
+#if defined(CONFIG_PQCP_MLKEM_LEVEL_512) && \
+    !defined(CONFIG_PQCP_MLKEM_LEVEL_768) && \
+    !defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
+#include "mlkem512_clean/api.h"
+#define PQCP_MLKEM_BASELINE_LEVEL PQCP_MLKEM_512
+#define PQCP_MLKEM_BASELINE_KEYPAIR PQCLEAN_MLKEM512_CLEAN_crypto_kem_keypair
+#define PQCP_MLKEM_BASELINE_ENCAPS PQCLEAN_MLKEM512_CLEAN_crypto_kem_enc
+#define PQCP_MLKEM_BASELINE_DECAPS PQCLEAN_MLKEM512_CLEAN_crypto_kem_dec
+#elif defined(CONFIG_PQCP_MLKEM_LEVEL_768) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_512) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
 #include "mlkem768_clean/api.h"
+#define PQCP_MLKEM_BASELINE_LEVEL PQCP_MLKEM_768
+#define PQCP_MLKEM_BASELINE_KEYPAIR PQCLEAN_MLKEM768_CLEAN_crypto_kem_keypair
+#define PQCP_MLKEM_BASELINE_ENCAPS PQCLEAN_MLKEM768_CLEAN_crypto_kem_enc
+#define PQCP_MLKEM_BASELINE_DECAPS PQCLEAN_MLKEM768_CLEAN_crypto_kem_dec
+#elif defined(__CPPCHECK__)
+/*
+ * Focused static analysis does not inherit the baseline provider's Kconfig
+ * selection, so fall back to one supported single-level mapping there while
+ * keeping the real build-time contract strict for compiled configurations.
+ */
+#include "mlkem768_clean/api.h"
+#define PQCP_MLKEM_BASELINE_LEVEL PQCP_MLKEM_768
+#define PQCP_MLKEM_BASELINE_KEYPAIR PQCLEAN_MLKEM768_CLEAN_crypto_kem_keypair
+#define PQCP_MLKEM_BASELINE_ENCAPS PQCLEAN_MLKEM768_CLEAN_crypto_kem_enc
+#define PQCP_MLKEM_BASELINE_DECAPS PQCLEAN_MLKEM768_CLEAN_crypto_kem_dec
+#else
+#error "PQCP baseline ML-KEM provider requires a single supported level (512 or 768)"
+#endif
 
 static inline int validate_level(pqcp_mlkem_level_t level)
 {
-    return (level == PQCP_MLKEM_768) ? 0 : -1;
+    return (level == PQCP_MLKEM_BASELINE_LEVEL) ? 0 : -1;
 }
 
 size_t pqcp_mlkem_pk_size(pqcp_mlkem_level_t level)
@@ -89,7 +118,7 @@ int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
         return PQCP_MLKEM_ERR_RNG;
     }
 
-    return PQCLEAN_MLKEM768_CLEAN_crypto_kem_keypair(pk, sk) == 0 ?
+    return PQCP_MLKEM_BASELINE_KEYPAIR(pk, sk) == 0 ?
         PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
 
@@ -106,7 +135,7 @@ int pqcp_mlkem_encapsulate(pqcp_mlkem_level_t level, const uint8_t *pk,
         return PQCP_MLKEM_ERR_RNG;
     }
 
-    return PQCLEAN_MLKEM768_CLEAN_crypto_kem_enc(ct, ss, pk) == 0 ?
+    return PQCP_MLKEM_BASELINE_ENCAPS(ct, ss, pk) == 0 ?
         PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
 
@@ -120,7 +149,7 @@ int pqcp_mlkem_decapsulate(pqcp_mlkem_level_t level, const uint8_t *ct,
         return PQCP_MLKEM_ERR_INVALID_ARG;
     }
 
-    return PQCLEAN_MLKEM768_CLEAN_crypto_kem_dec(ss, ct, sk) == 0 ?
+    return PQCP_MLKEM_BASELINE_DECAPS(ss, ct, sk) == 0 ?
         PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
 
