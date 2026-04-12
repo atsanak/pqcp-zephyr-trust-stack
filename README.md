@@ -584,12 +584,27 @@ The curated matrix currently contains:
   without using the production profile `select` paths, so extra QEMU comparison
   levels do not silently change the semantics of `MCU_MINIMAL`, `GATEWAY`, or
   `NATIVE_LAB`
+- analysis-only `COA_MCU_SINGLE_LEVEL` rows that do the same for build-only MCU
+  footprint captures, so the ML-KEM-512 + ML-DSA-87 protocol build is labeled
+  honestly instead of masquerading as `MCU_MINIMAL`
 
 The curated protocol rows intentionally enable
 `samples/pqcp_bench_protocol/overlay-rtos-metrics.conf`, so
 `cost_of_assurance_protocols.csv` includes the RTOS load counters, jitter
 percentiles, and TLS layer-decomposition fields for both
 `implementation=pqcp` and `implementation=baseline`.
+
+#### MCU protocol footprint
+
+For the current `nucleo_h743zi` build-only protocol slice, the default
+`implementation=pqcp`, `backend=auto` rows land at `rom_bytes=61176` and
+`ram_bytes=175257` for the production-style ML-KEM-768 + ML-DSA-65 build, and
+`rom_bytes=61068` plus `ram_bytes=240793` for the analysis-only ML-KEM-512 +
+ML-DSA-87 build. Those numbers come directly from
+`cost_of_assurance_builds.csv`, and the current `force_c` rows match them on
+this board, so the builds CSV is the right place to watch MCU protocol
+footprints evolve without pretending we already have production-grade runtime
+measurements on hardware.
 
 The `mps2/an385` sample path is intentionally not part of the curated
 cost-of-assurance matrix yet. Those samples currently depend on a production
@@ -651,9 +666,12 @@ The checked-in QEMU smoke for Extended Checks also reads
 `scripts/qemu_cost_of_assurance_regression.json`, which defines conservative
 PQCP-vs-baseline ratio limits for ML-KEM-768, ML-KEM-512, ML-DSA-65, and
 ML-DSA-87 primitive rows plus the ML-KEM-768 + ML-DSA-65 and ML-KEM-512 +
-ML-DSA-87 protocol rows. Those thresholds are intentionally loose: they are
-there to catch obvious catastrophes such as a multi-x slowdown or a footprint
-explosion, not to act as a precise performance benchmark gate.
+ML-DSA-87 protocol rows. The protocol guardrails now cover not just handshake
+latency and ROM/RAM, but also `handshake_provider_overhead`,
+`handshake_transport_overhead_bytes`, and `handshake_rtos_jitter_p90`. Those
+thresholds are intentionally loose: they are there to catch obvious
+catastrophes such as a multi-x slowdown or a footprint explosion, not to act as
+a precise performance benchmark gate.
 
 For cost-of-assurance runs that do not invoke Zephyr's dedicated `rom_report` and
 `ram_report` targets, the runner still records `rom_bytes` and `ram_bytes` using
@@ -748,6 +766,7 @@ The project keeps the production profile story deliberately explicit:
 | `GATEWAY` | Production-supported | Gateway-class devices with more memory | Multi-level ML-KEM / ML-DSA plus PSA-driver support and streaming enabled for richer integrations. |
 | `NATIVE_LAB` | Lab/test only | Desktop, QEMU, ACVP, benchmarking, and development workflows | Enables broader benchmarking and lab-oriented workflows; not the profile to ship verbatim into production firmware. |
 | `COA_QEMU_SINGLE_LEVEL` | Analysis-only runner label | Cost-of-assurance QEMU experiments | Not a Kconfig profile at all. This runner-only label exists so the comparison matrix can switch single levels without mutating the production profile `select` behavior. |
+| `COA_MCU_SINGLE_LEVEL` | Analysis-only runner label | Cost-of-assurance MCU build-only experiments | Also not a Kconfig profile. It exists so build-only MCU footprint rows can pin a single protocol suite such as ML-KEM-512 + ML-DSA-87 without pretending that `MCU_MINIMAL` changed. |
 
 Recommended production defaults:
 
@@ -1158,6 +1177,9 @@ true:
 - `python scripts/run_extended_checks.py --strict --run-cost-of-assurance-smoke`
   passes, proving that the PQCP-vs-baseline QEMU comparison slice still builds,
   summarizes, and stays within the conservative regression guardrails.
+- `python scripts/release_check.py` passes before tagging, so the strict
+  extended checks, cost-of-assurance smoke, ACVP ztest run, and budget-enforced
+  profile validation have all been exercised in one repeatable sequence.
 - The baseline provider is still clearly documented as QEMU-only and
   benchmarking-only. It is never a supported production provider and must not
   be used to justify deterministic RNG or MCU-only shortcuts in production
