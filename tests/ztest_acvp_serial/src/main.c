@@ -205,6 +205,11 @@ ZTEST(pqcp_acvp_serial, test_rejects_malformed_commands)
 ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
 {
     struct pqcp_acvp_response resp;
+    size_t sk_size = pqcp_mldsa_sk_size(PQCP_MLDSA_65);
+    size_t pk_size = pqcp_mldsa_pk_size(PQCP_MLDSA_65);
+    size_t sig_size = pqcp_mldsa_sig_size(PQCP_MLDSA_65);
+    size_t oversize_sign_len = sk_size + PQCP_ACVP_MAX_MESSAGE_BYTES + 1U;
+    size_t oversize_verify_len = pk_size + sig_size + PQCP_ACVP_MAX_MESSAGE_BYTES + 1U;
 
     zassert_equal(run_command("SEED:DRBG:0:abc", &resp), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_INVALID_HEX);
@@ -223,6 +228,18 @@ ZTEST(pqcp_acvp_serial, test_rejects_invalid_hex_and_wrong_sizes)
     assert_response_line(&resp, "ERROR:WRONG_SIZE");
 
     zassert_equal(run_command("VERIFY:MLDSA:65:00", &resp), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memset(work_buffer, 0x5a, oversize_sign_len);
+    bytes_to_hex(work_buffer, oversize_sign_len, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("SIGN:MLDSA:65:%s", &resp, hex_buffer), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+
+    memset(work_buffer, 0xa5, oversize_verify_len);
+    bytes_to_hex(work_buffer, oversize_verify_len, hex_buffer, sizeof(hex_buffer));
+    zassert_equal(run_command("VERIFY:MLDSA:65:%s", &resp, hex_buffer), -EINVAL);
     zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
     assert_response_line(&resp, "ERROR:WRONG_SIZE");
 }

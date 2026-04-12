@@ -210,6 +210,43 @@ static int parse_level_token(const char *level_str, int *level)
     return 0;
 }
 
+static int validate_mldsa_sign_payload_len(pqcp_mldsa_level_t level,
+                                           size_t payload_len,
+                                           size_t *msg_len)
+{
+    size_t sk_size = pqcp_mldsa_sk_size(level);
+
+    if (payload_len < sk_size) {
+        return -EINVAL;
+    }
+
+    *msg_len = payload_len - sk_size;
+    if (*msg_len > PQCP_ACVP_MAX_MESSAGE_BYTES) {
+        return -EMSGSIZE;
+    }
+
+    return 0;
+}
+
+static int validate_mldsa_verify_payload_len(pqcp_mldsa_level_t level,
+                                             size_t payload_len,
+                                             size_t *msg_len)
+{
+    size_t pk_size = pqcp_mldsa_pk_size(level);
+    size_t sig_size = pqcp_mldsa_sig_size(level);
+
+    if (payload_len < pk_size + sig_size) {
+        return -EINVAL;
+    }
+
+    *msg_len = payload_len - pk_size - sig_size;
+    if (*msg_len > PQCP_ACVP_MAX_MESSAGE_BYTES) {
+        return -EMSGSIZE;
+    }
+
+    return 0;
+}
+
 int pqcp_acvp_cmd_seed(const uint8_t *seed, size_t seed_len,
                        struct pqcp_acvp_response *resp)
 {
@@ -680,32 +717,40 @@ int pqcp_acvp_process_command(char *line,
     if (strcmp(alg, "MLDSA") == 0) {
         if (strcmp(cmd, "SIGN") == 0) {
             pqcp_mldsa_level_t mldsa_level = get_mldsa_level(level);
+            size_t sk_size;
+            size_t msg_len;
+
             if ((int)mldsa_level < 0) {
                 resp->result = PQCP_ACVP_ERR_INVALID_LEVEL;
                 return -EINVAL;
             }
-            size_t sk_size = pqcp_mldsa_sk_size(mldsa_level);
-            if (data_len < sk_size) {
+
+            sk_size = pqcp_mldsa_sk_size(mldsa_level);
+            if (validate_mldsa_sign_payload_len(mldsa_level, data_len, &msg_len) != 0) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }
             return pqcp_acvp_cmd_mldsa_sign(level,
                                             work_buf, sk_size,
-                                            work_buf + sk_size, data_len - sk_size,
+                                            work_buf + sk_size, msg_len,
                                             resp);
         } else if (strcmp(cmd, "VERIFY") == 0) {
             pqcp_mldsa_level_t mldsa_level = get_mldsa_level(level);
+            size_t pk_size;
+            size_t sig_size;
+            size_t msg_len;
+
             if ((int)mldsa_level < 0) {
                 resp->result = PQCP_ACVP_ERR_INVALID_LEVEL;
                 return -EINVAL;
             }
-            size_t pk_size = pqcp_mldsa_pk_size(mldsa_level);
-            size_t sig_size = pqcp_mldsa_sig_size(mldsa_level);
-            if (data_len < pk_size + sig_size) {
+
+            pk_size = pqcp_mldsa_pk_size(mldsa_level);
+            sig_size = pqcp_mldsa_sig_size(mldsa_level);
+            if (validate_mldsa_verify_payload_len(mldsa_level, data_len, &msg_len) != 0) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }
-            size_t msg_len = data_len - pk_size - sig_size;
             return pqcp_acvp_cmd_mldsa_verify(level,
                                               work_buf, pk_size,
                                               work_buf + pk_size, msg_len,

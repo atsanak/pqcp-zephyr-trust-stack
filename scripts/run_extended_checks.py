@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import Counter
+import json
 import os
 import re
 import shlex
@@ -40,9 +41,12 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/acvp_cmd.c",
     "src/bench_primitive.c",
     "src/bench_protocol.c",
+    "src/mlkem_baseline.c",
     "src/mlkem_zephyr.c",
+    "src/mldsa_baseline.c",
     "src/mldsa_streaming.c",
     "src/mldsa_zephyr.c",
+    "src/pqclean_randombytes.c",
     "src/rng_common.c",
     "src/rng_custom.c",
     "src/rng_deterministic.c",
@@ -67,6 +71,10 @@ README_MANIFEST_REQUIRED_SNIPPETS = [
     "matches both `PQCP_VERSION_STRING`",
     "top release entry in `CHANGELOG.md`",
 ]
+
+DEFAULT_COST_OF_ASSURANCE_REGRESSION_FILE = Path(
+    "scripts/qemu_cost_of_assurance_regression.json"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,6 +149,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("benchmark_results/extended/cost_of_assurance_smoke"),
         help="Output directory for the cost-of-assurance smoke artifacts",
+    )
+    parser.add_argument(
+        "--cost-of-assurance-regression-file",
+        type=Path,
+        default=DEFAULT_COST_OF_ASSURANCE_REGRESSION_FILE,
+        help="Checked-in qemu_x86_64 cost-of-assurance regression thresholds",
     )
     parser.add_argument(
         "--strict",
@@ -461,6 +475,112 @@ def load_csv_rows(path: Path) -> List[dict[str, str]]:
         return list(reader)
 
 
+def load_json(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text())
+
+
+def find_matching_row(
+    rows: List[dict[str, str]],
+    selectors: dict[str, object],
+) -> Optional[dict[str, str]]:
+    for row in rows:
+        if all(str(row.get(key, "")) == str(value) for key, value in selectors.items()):
+            return row
+    return None
+
+
+def parse_numeric_metric(row: dict[str, str], metric: str, label: str) -> float:
+    raw = row.get(metric, "")
+    if raw == "":
+        raise RuntimeError(f"{label} is missing metric '{metric}'")
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{label} metric '{metric}' is not numeric: {raw}") from exc
+
+
+def evaluate_cost_of_assurance_regressions(
+    *,
+    module_path: Path,
+    primitive_rows: List[dict[str, str]],
+    regression_file: Path,
+) -> int:
+    config_path = (
+        regression_file.resolve()
+        if regression_file.is_absolute()
+        else (module_path / regression_file).resolve()
+    )
+    config = load_json(config_path)
+    comparisons = config.get("comparisons", [])
+    if not isinstance(comparisons, list) or not comparisons:
+        raise RuntimeError(
+            f"cost-of-assurance regression file {config_path} has no comparisons"
+        )
+
+    print(f"[cost] Numeric regression thresholds: {config_path}")
+
+    for item in comparisons:
+        if not isinstance(item, dict):
+            raise RuntimeError("cost-of-assurance regression entries must be objects")
+
+        name = str(item.get("name", "unnamed-comparison"))
+        candidate_selectors = dict(item.get("candidate", {}))
+        baseline_selectors = dict(item.get("baseline", {}))
+        shared_selectors = {
+            "board": item.get("board"),
+            "profile": item.get("profile"),
+            "sample": item.get("sample"),
+            "algorithm": item.get("algorithm"),
+            "level": item.get("level"),
+        }
+        candidate_selectors.update(shared_selectors)
+        baseline_selectors.update(shared_selectors)
+
+        candidate = find_matching_row(primitive_rows, candidate_selectors)
+        baseline = find_matching_row(primitive_rows, baseline_selectors)
+        if candidate is None:
+            raise RuntimeError(
+                f"[cost] Missing candidate row for {name}: {candidate_selectors}"
+            )
+        if baseline is None:
+            raise RuntimeError(
+                f"[cost] Missing baseline row for {name}: {baseline_selectors}"
+            )
+
+        metrics = item.get("metrics", {})
+        if not isinstance(metrics, dict) or not metrics:
+            raise RuntimeError(f"[cost] Comparison {name} has no metrics configured")
+
+        print(f"[cost] Regression comparison: {name}")
+        for metric_name, raw_rule in metrics.items():
+            if not isinstance(raw_rule, dict) or "max_ratio" not in raw_rule:
+                raise RuntimeError(
+                    f"[cost] Comparison {name} metric {metric_name} is missing max_ratio"
+                )
+
+            max_ratio = float(raw_rule["max_ratio"])
+            candidate_value = parse_numeric_metric(candidate, metric_name, f"{name} candidate")
+            baseline_value = parse_numeric_metric(baseline, metric_name, f"{name} baseline")
+            if baseline_value <= 0.0:
+                raise RuntimeError(
+                    f"[cost] Baseline metric {metric_name} for {name} must be > 0"
+                )
+
+            ratio = candidate_value / baseline_value
+            print(
+                f"  - {metric_name}: candidate={candidate_value:.2f}, "
+                f"baseline={baseline_value:.2f}, ratio={ratio:.2f} (limit {max_ratio:.2f})"
+            )
+            if ratio > max_ratio:
+                print(
+                    f"[cost] Regression detected for {name} metric {metric_name}: "
+                    f"{ratio:.2f} > {max_ratio:.2f}"
+                )
+                return 1
+
+    return 0
+
+
 def run_cost_of_assurance_smoke(
     *,
     west_root: Path,
@@ -468,6 +588,7 @@ def run_cost_of_assurance_smoke(
     env: dict[str, str],
     verbose: bool,
     output_root: Path,
+    regression_file: Path,
 ) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     benchmark_script = module_path / "scripts/run_benchmarks.py"
@@ -476,9 +597,11 @@ def run_cost_of_assurance_smoke(
     print("\n[cost] Running qemu_x86_64 cost-of-assurance smoke")
     print("[cost] Samples:")
     print("  - pqcp_basic_kem")
+    print("  - pqcp_basic_sig")
     print("  - pqcp_bench_protocol")
-    print("[cost] Backend policies:")
-    print("  - auto")
+    print("[cost] Implementations/backends:")
+    print("  - pqcp / auto")
+    print("  - baseline / clean")
 
     run_result = run_command(
         [
@@ -489,9 +612,11 @@ def run_cost_of_assurance_smoke(
             "qemu_x86_64",
             "--samples",
             "pqcp_basic_kem",
+            "pqcp_basic_sig",
             "pqcp_bench_protocol",
             "--backend-policies",
             "auto",
+            "clean",
             "--output",
             str(output_root),
             "--west-root",
@@ -526,29 +651,67 @@ def run_cost_of_assurance_smoke(
     primitives = load_csv_rows(output_root / "cost_of_assurance_primitives.csv")
     protocols = load_csv_rows(output_root / "cost_of_assurance_protocols.csv")
 
-    if not any(
-        row.get("board") == "qemu_x86_64"
-        and row.get("sample") == "pqcp_basic_kem"
-        and row.get("implementation") == "pqcp"
-        and row.get("backend") == "auto"
-        for row in primitives
-    ):
-        print("[cost] Missing primitive comparison row for qemu_x86_64 / pqcp_basic_kem / pqcp / auto")
+    required_primitive_rows = [
+        {
+            "board": "qemu_x86_64",
+            "sample": "pqcp_basic_kem",
+            "implementation": "pqcp",
+            "backend": "auto",
+        },
+        {
+            "board": "qemu_x86_64",
+            "sample": "pqcp_basic_kem",
+            "implementation": "baseline",
+            "backend": "clean",
+        },
+        {
+            "board": "qemu_x86_64",
+            "sample": "pqcp_basic_sig",
+            "implementation": "pqcp",
+            "backend": "auto",
+        },
+        {
+            "board": "qemu_x86_64",
+            "sample": "pqcp_basic_sig",
+            "implementation": "baseline",
+            "backend": "clean",
+        },
+    ]
+    for selectors in required_primitive_rows:
+        if find_matching_row(primitives, selectors) is None:
+            print(f"[cost] Missing primitive comparison row: {selectors}")
+            return 1
+
+    required_protocol_rows = [
+        {
+            "board": "qemu_x86_64",
+            "sample": "pqcp_bench_protocol",
+            "implementation": "pqcp",
+            "backend": "auto",
+        },
+        {
+            "board": "qemu_x86_64",
+            "sample": "pqcp_bench_protocol",
+            "implementation": "baseline",
+            "backend": "clean",
+        },
+    ]
+    for selectors in required_protocol_rows:
+        if find_matching_row(protocols, selectors) is None:
+            print(f"[cost] Missing protocol comparison row: {selectors}")
+            return 1
+
+    if len(builds) < 4:
+        print("[cost] Expected at least four build rows from the smoke run")
         return 1
 
-    if not any(
-        row.get("board") == "qemu_x86_64"
-        and row.get("sample") == "pqcp_bench_protocol"
-        and row.get("implementation") == "pqcp"
-        and row.get("backend") == "auto"
-        for row in protocols
-    ):
-        print("[cost] Missing protocol comparison row for qemu_x86_64 / pqcp_bench_protocol / pqcp / auto")
-        return 1
-
-    if len(builds) < 2:
-        print("[cost] Expected at least two build rows from the smoke run")
-        return 1
+    regression_result = evaluate_cost_of_assurance_regressions(
+        module_path=module_path,
+        primitive_rows=primitives,
+        regression_file=regression_file,
+    )
+    if regression_result != 0:
+        return regression_result
 
     print(
         f"[cost] Smoke completed successfully: builds={len(builds)}, "
@@ -670,6 +833,7 @@ def main() -> int:
             env=env,
             verbose=args.verbose,
             output_root=args.cost_of_assurance_output_root.resolve(),
+            regression_file=args.cost_of_assurance_regression_file,
         )
         if coa_result != 0:
             return coa_result

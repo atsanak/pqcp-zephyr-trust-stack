@@ -20,6 +20,7 @@ set(PQCP_EXT ${PQCP_DIR}/ext)
 # External library paths (submodules or FetchContent)
 set(MLKEM_NATIVE_DIR ${PQCP_EXT}/mlkem-native)
 set(MLDSA_NATIVE_DIR ${PQCP_EXT}/mldsa-native)
+set(PQCLEAN_BASELINE_DIR ${PQCP_EXT}/pqclean-baseline)
 
 # =============================================================================
 # Include Paths
@@ -46,14 +47,35 @@ endif()
 # Common RNG interface
 zephyr_library_sources(${PQCP_SRC}/rng_common.c)
 
+if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
+    zephyr_include_directories(${PQCLEAN_BASELINE_DIR})
+    zephyr_include_directories(${PQCLEAN_BASELINE_DIR}/common)
+    zephyr_library_sources(${PQCLEAN_BASELINE_DIR}/common/fips202.c)
+    zephyr_library_sources(${PQCP_SRC}/pqclean_randombytes.c)
+endif()
+
 # =============================================================================
 # ML-KEM Library
 # =============================================================================
 if(CONFIG_PQCP_MLKEM)
     zephyr_library_named(pqcp_mlkem)
-    
+
+    if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
+        zephyr_include_directories(${PQCLEAN_BASELINE_DIR}/mlkem768_clean)
+        zephyr_library_sources(
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/cbd.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/indcpa.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/kem.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/ntt.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/poly.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/polyvec.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/reduce.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/symmetric-shake.c
+            ${PQCLEAN_BASELINE_DIR}/mlkem768_clean/verify.c
+            ${PQCP_SRC}/mlkem_baseline.c
+        )
     # Check for mlkem-native availability
-    if(EXISTS ${MLKEM_NATIVE_DIR}/mlkem)
+    elseif(EXISTS ${MLKEM_NATIVE_DIR}/mlkem)
         set(PQCP_MLKEM_LEVEL_COUNT 0)
         if(CONFIG_PQCP_MLKEM_LEVEL_512)
             math(EXPR PQCP_MLKEM_LEVEL_COUNT "${PQCP_MLKEM_LEVEL_COUNT} + 1")
@@ -140,9 +162,22 @@ endif()
 # =============================================================================
 if(CONFIG_PQCP_MLDSA)
     zephyr_library_named(pqcp_mldsa)
-    
+
+    if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
+        zephyr_include_directories(${PQCLEAN_BASELINE_DIR}/mldsa65_clean)
+        zephyr_library_sources(
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/ntt.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/packing.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/poly.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/polyvec.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/reduce.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/rounding.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/sign.c
+            ${PQCLEAN_BASELINE_DIR}/mldsa65_clean/symmetric-shake.c
+            ${PQCP_SRC}/mldsa_baseline.c
+        )
     # Check for mldsa-native availability
-    if(EXISTS ${MLDSA_NATIVE_DIR}/mldsa)
+    elseif(EXISTS ${MLDSA_NATIVE_DIR}/mldsa)
         set(PQCP_MLDSA_LEVEL_COUNT 0)
         if(CONFIG_PQCP_MLDSA_LEVEL_44)
             math(EXPR PQCP_MLDSA_LEVEL_COUNT "${PQCP_MLDSA_LEVEL_COUNT} + 1")

@@ -42,6 +42,16 @@
           "name": "WRONG_SIZE_SIGN",
           "command": "SIGN:MLDSA:65:00",
           "response": "ERROR:WRONG_SIZE"
+        },
+        {
+          "name": "INVALID_SIGN_HEX",
+          "command": "SIGN:MLDSA:65:zz",
+          "response": "ERROR:INVALID_HEX"
+        },
+        {
+          "name": "TRUNCATED_VERIFY_PAYLOAD",
+          "command": "VERIFY:MLDSA:65:001122",
+          "response": "ERROR:WRONG_SIZE"
         }
       ]
     }
