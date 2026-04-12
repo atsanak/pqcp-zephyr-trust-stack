@@ -180,6 +180,15 @@
         "handshake_time": {
           "max_ratio": 6.0
         },
+        "handshake_provider_overhead": {
+          "max_ratio": 8.0
+        },
+        "handshake_transport_overhead_bytes": {
+          "max_ratio": 2.0
+        },
+        "handshake_rtos_jitter_p90": {
+          "max_ratio": 4.0
+        },
         "rom_bytes": {
           "max_ratio": 2.5
         },
@@ -214,6 +223,15 @@
       "metrics": {
         "handshake_time": {
           "max_ratio": 6.0
+        },
+        "handshake_provider_overhead": {
+          "max_ratio": 8.0
+        },
+        "handshake_transport_overhead_bytes": {
+          "max_ratio": 2.0
+        },
+        "handshake_rtos_jitter_p90": {
+          "max_ratio": 4.0
         },
         "rom_bytes": {
           "max_ratio": 2.5
