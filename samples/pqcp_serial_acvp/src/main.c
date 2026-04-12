@@ -32,7 +32,7 @@
 
 #define MAX_RESPONSE_DATA_LEN PQCP_ACVP_RESPONSE_BYTES_MAX
 #define MAX_INPUT_DATA_LEN    PQCP_ACVP_INPUT_BYTES_MAX
-#define MAX_LINE_LEN         ((MAX_INPUT_DATA_LEN * 2U) + 64U)
+#define MAX_LINE_LEN         PQCP_ACVP_COMMAND_LINE_CHARS_MAX
 
 /* Working buffer for hex decoding */
 static uint8_t work_buffer[MAX_INPUT_DATA_LEN];
@@ -70,6 +70,7 @@ static bool is_help_command(const char *line)
 static void process_and_respond(char *line)
 {
     size_t line_len = strlen(line);
+    int ret;
 
     while (line_len > 0U &&
            (line[line_len - 1U] == '\r' || line[line_len - 1U] == '\n')) {
@@ -77,6 +78,16 @@ static void process_and_respond(char *line)
     }
 
     if (line_len == 0U) {
+        return;
+    }
+
+    ret = pqcp_acvp_validate_command_line(line, line_len);
+    if (ret != 0) {
+        enum pqcp_acvp_result error_result =
+            (ret == -ENOSPC) ? PQCP_ACVP_ERR_BUFFER_TOO_SMALL :
+                               PQCP_ACVP_ERR_INVALID_CMD;
+
+        printk("ERROR:%s\n", pqcp_acvp_result_str(error_result));
         return;
     }
 

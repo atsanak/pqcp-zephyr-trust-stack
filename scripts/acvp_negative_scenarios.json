@@ -29,6 +29,11 @@
           "response": "ERROR:INVALID_LEVEL"
         },
         {
+          "name": "SERIAL_GARBAGE_PREFIX",
+          "command": "\u001b[31mKEYGEN:MLKEM:768:",
+          "response": "ERROR:INVALID_CMD"
+        },
+        {
           "name": "INVALID_MLKEM_ENCAPS_HEX",
           "command": "ENCAPS:MLKEM:768:zz",
           "response": "ERROR:INVALID_HEX"

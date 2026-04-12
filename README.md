@@ -576,13 +576,20 @@ The curated matrix currently contains:
 
 - fully runnable `qemu_x86_64` rows for primitive and protocol comparisons,
   including `implementation=baseline` clean-reference rows for ML-KEM-768,
-  ML-KEM-512, ML-DSA-65, ML-DSA-87, and the single-level protocol benchmark
+  ML-KEM-512, ML-DSA-65, ML-DSA-87, the ML-KEM-768 + ML-DSA-65 protocol suite,
+  and the single-level ML-KEM-512 + ML-DSA-87 protocol benchmark
 - build-only `nucleo_h743zi` rows that capture real MCU footprint and code-size
   deltas without claiming hardware runtime measurements
 - analysis-only `COA_QEMU_SINGLE_LEVEL` rows that override the sample defaults
   without using the production profile `select` paths, so extra QEMU comparison
   levels do not silently change the semantics of `MCU_MINIMAL`, `GATEWAY`, or
   `NATIVE_LAB`
+
+The curated protocol rows intentionally enable
+`samples/pqcp_bench_protocol/overlay-rtos-metrics.conf`, so
+`cost_of_assurance_protocols.csv` includes the RTOS load counters, jitter
+percentiles, and TLS layer-decomposition fields for both
+`implementation=pqcp` and `implementation=baseline`.
 
 The `mps2/an385` sample path is intentionally not part of the curated
 cost-of-assurance matrix yet. Those samples currently depend on a production
@@ -643,7 +650,8 @@ qemu_x86_64,NATIVE_LAB,pqcp_bench_protocol,pqcp,force_native,MLKEM768+MLDSA65,pu
 The checked-in QEMU smoke for Extended Checks also reads
 `scripts/qemu_cost_of_assurance_regression.json`, which defines conservative
 PQCP-vs-baseline ratio limits for ML-KEM-768, ML-KEM-512, ML-DSA-65, and
-ML-DSA-87 comparison rows. Those thresholds are intentionally loose: they are
+ML-DSA-87 primitive rows plus the ML-KEM-768 + ML-DSA-65 and ML-KEM-512 +
+ML-DSA-87 protocol rows. Those thresholds are intentionally loose: they are
 there to catch obvious catastrophes such as a multi-x slowdown or a footprint
 explosion, not to act as a precise performance benchmark gate.
 
@@ -1130,6 +1138,30 @@ integration:
 If you change a stable header, public Kconfig option, or production profile
 meaning, update this README, the affected samples/tests, and the relevant
 cost-of-assurance or resource-budget documentation in the same change.
+
+### Release Checklist / v1.0 Criteria
+
+Before tagging a release, we should be able to say all of the following are
+true:
+
+- `MCU_MINIMAL` and `GATEWAY` still match the documented production-supported
+  profile intent, while `NATIVE_LAB`, ACVP helpers, and the QEMU-only
+  `baseline` provider remain lab/analysis-only.
+- The stable external API surface is still limited to
+  `include/pqcp_zephyr/mlkem.h`, `include/pqcp_zephyr/mldsa.h`,
+  `include/pqcp_zephyr/rng.h`, and `include/pqcp_zephyr/version.h`, with any
+  change shipped alongside updated samples, tests, and README guidance.
+- Fast CI passes, including the existing ztests, ACVP/QEMU smokes, and the
+  profile-validation budget checks.
+- `python scripts/run_extended_checks.py --strict` passes, including the
+  focused static-analysis and release-metadata checks.
+- `python scripts/run_extended_checks.py --strict --run-cost-of-assurance-smoke`
+  passes, proving that the PQCP-vs-baseline QEMU comparison slice still builds,
+  summarizes, and stays within the conservative regression guardrails.
+- The baseline provider is still clearly documented as QEMU-only and
+  benchmarking-only. It is never a supported production provider and must not
+  be used to justify deterministic RNG or MCU-only shortcuts in production
+  firmware.
 
 ## Integration with External Libraries
 

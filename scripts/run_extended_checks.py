@@ -503,6 +503,7 @@ def evaluate_cost_of_assurance_regressions(
     *,
     module_path: Path,
     primitive_rows: List[dict[str, str]],
+    protocol_rows: List[dict[str, str]],
     regression_file: Path,
 ) -> int:
     config_path = (
@@ -524,20 +525,24 @@ def evaluate_cost_of_assurance_regressions(
             raise RuntimeError("cost-of-assurance regression entries must be objects")
 
         name = str(item.get("name", "unnamed-comparison"))
+        row_type = str(item.get("row_type", "primitive")).strip().lower()
+        if row_type not in {"primitive", "protocol"}:
+            raise RuntimeError(
+                f"[cost] Comparison {name} has unsupported row_type '{row_type}'"
+            )
+        selected_rows = primitive_rows if row_type == "primitive" else protocol_rows
         candidate_selectors = dict(item.get("candidate", {}))
         baseline_selectors = dict(item.get("baseline", {}))
-        shared_selectors = {
-            "board": item.get("board"),
-            "profile": item.get("profile"),
-            "sample": item.get("sample"),
-            "algorithm": item.get("algorithm"),
-            "level": item.get("level"),
-        }
+        shared_selectors = dict(item.get("selectors", {}))
+        for key in ("board", "profile", "sample", "algorithm", "level"):
+            value = item.get(key)
+            if value is not None:
+                shared_selectors[key] = value
         candidate_selectors.update(shared_selectors)
         baseline_selectors.update(shared_selectors)
 
-        candidate = find_matching_row(primitive_rows, candidate_selectors)
-        baseline = find_matching_row(primitive_rows, baseline_selectors)
+        candidate = find_matching_row(selected_rows, candidate_selectors)
+        baseline = find_matching_row(selected_rows, baseline_selectors)
         if candidate is None:
             raise RuntimeError(
                 f"[cost] Missing candidate row for {name}: {candidate_selectors}"
@@ -685,15 +690,51 @@ def run_cost_of_assurance_smoke(
     required_protocol_rows = [
         {
             "board": "qemu_x86_64",
+            "profile": "MCU_MINIMAL",
             "sample": "pqcp_bench_protocol",
             "implementation": "pqcp",
             "backend": "auto",
+            "key_exchange_algorithm": "MLKEM",
+            "key_exchange_level": 768,
+            "auth_algorithm": "MLDSA",
+            "auth_level": 65,
+            "suite_mode": "pure_pq",
         },
         {
             "board": "qemu_x86_64",
+            "profile": "MCU_MINIMAL",
             "sample": "pqcp_bench_protocol",
             "implementation": "baseline",
             "backend": "clean",
+            "key_exchange_algorithm": "MLKEM",
+            "key_exchange_level": 768,
+            "auth_algorithm": "MLDSA",
+            "auth_level": 65,
+            "suite_mode": "pure_pq",
+        },
+        {
+            "board": "qemu_x86_64",
+            "profile": "COA_QEMU_SINGLE_LEVEL",
+            "sample": "pqcp_bench_protocol",
+            "implementation": "pqcp",
+            "backend": "auto",
+            "key_exchange_algorithm": "MLKEM",
+            "key_exchange_level": 512,
+            "auth_algorithm": "MLDSA",
+            "auth_level": 87,
+            "suite_mode": "pure_pq",
+        },
+        {
+            "board": "qemu_x86_64",
+            "profile": "COA_QEMU_SINGLE_LEVEL",
+            "sample": "pqcp_bench_protocol",
+            "implementation": "baseline",
+            "backend": "clean",
+            "key_exchange_algorithm": "MLKEM",
+            "key_exchange_level": 512,
+            "auth_algorithm": "MLDSA",
+            "auth_level": 87,
+            "suite_mode": "pure_pq",
         },
     ]
     for selectors in required_protocol_rows:
@@ -708,6 +749,7 @@ def run_cost_of_assurance_smoke(
     regression_result = evaluate_cost_of_assurance_regressions(
         module_path=module_path,
         primitive_rows=primitives,
+        protocol_rows=protocols,
         regression_file=regression_file,
     )
     if regression_result != 0:
