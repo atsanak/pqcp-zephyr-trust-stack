@@ -435,6 +435,7 @@ if PQCP_ACVP
 
 config PQCP_ACVP_READLINE_TIMEOUT_MS
 	int "Serial ACVP frame timeout (ms)"
+	depends on PQCP_ACVP
 	default 5000
 	range 100 600000
 	help
