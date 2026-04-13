@@ -306,6 +306,26 @@ endif # PQCP_PSA_DRIVER
 endmenu
 
 # =============================================================================
+# Shared TLS Self-Test Support
+# =============================================================================
+menu "Shared TLS Self-Test Support"
+
+config PQCP_TLS_SELFTEST
+	bool "Enable shared TLS self-test helper"
+	depends on PQCP_MLKEM && PQCP_MLDSA
+	default y if PQCP_PROFILE_GATEWAY
+	help
+	  Enable the shared offline TLS self-test helper used by the TLS sample,
+	  protocol benchmark sample, and dedicated ztest coverage.
+
+	  This helper exercises the same PQC-heavy ML-KEM and ML-DSA flow across
+	  those paths and emits structured PQCP_METRIC rows when requested.
+	  PSA initialization inside the helper remains optional at runtime and is
+	  only available in builds that also enable MBEDTLS_PSA_CRYPTO_C or TFM.
+
+endmenu
+
+# =============================================================================
 # Benchmarking Configuration
 # =============================================================================
 menu "Benchmarking Configuration"
@@ -313,6 +333,7 @@ menu "Benchmarking Configuration"
 config PQCP_BENCH
 	bool "Enable benchmarking support"
 	default n
+	select PQCP_TLS_SELFTEST
 	help
 	  Enable the PQCP benchmarking harness for measuring performance
 	  of cryptographic operations.
