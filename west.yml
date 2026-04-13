@@ -14,11 +14,11 @@ manifest:
       import: true
     - name: mlkem-native
       remote: pq-code-package
-      revision: main
+      revision: e07bff537f38b457601e524038f2395e235b011b
       path: pqcp-zephyr-trust-stack/ext/mlkem-native
     - name: mldsa-native
       remote: pq-code-package
-      revision: main
+      revision: 0f8b8e074b2525eb844b022b03b962bf888d51aa
       path: pqcp-zephyr-trust-stack/ext/mldsa-native
 
   self:

@@ -8,6 +8,11 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
+### Changed
+
+- Pinned `mlkem-native` and `mldsa-native` to reproducible commit SHAs in the
+  root `west.yml` manifest and `ext/setup_libs.py` bootstrap helper.
+
 ## [0.9.0] - 2026-04-13
 
 ### Added

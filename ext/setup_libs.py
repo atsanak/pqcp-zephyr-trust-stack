@@ -13,12 +13,12 @@ LIBRARIES = [
     {
         "name": "mlkem-native",
         "url": "https://github.com/pq-code-package/mlkem-native",
-        "tag": None,  # Use latest main
+        "tag": "e07bff537f38b457601e524038f2395e235b011b",
     },
     {
         "name": "mldsa-native",
         "url": "https://github.com/pq-code-package/mldsa-native",
-        "tag": None,  # Use latest main
+        "tag": "0f8b8e074b2525eb844b022b03b962bf888d51aa",
     },
 ]
 
