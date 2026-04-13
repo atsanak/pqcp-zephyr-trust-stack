@@ -245,6 +245,16 @@ jobs:
             --output-root "$RUNNER_TEMP/release-check-output" \
             | tee "$RUNNER_TEMP/release-check.log"
 
+      - name: Publish release gate JUnit
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: ${{ runner.temp }}/release-check-output/release_check_results.xml
+          require_tests: true
+          fail_on_failure: false
+          detailed_summary: true
+          check_name: Release Gate JUnit
+
       - name: Upload release gate artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -252,4 +262,5 @@ jobs:
           name: release-gate-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/release-check.log
+            ${{ runner.temp }}/release-check-output/release_check_results.xml
             ${{ runner.temp }}/release-check-output

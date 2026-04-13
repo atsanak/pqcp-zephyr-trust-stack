@@ -1514,7 +1514,8 @@ The fast CI path runs:
 
 In addition, a `release-gate` advisory job now runs on every push to `main` and
 every pull request targeting `main`. It executes `python scripts/release_check.py`
-and uploads the resulting log/artifact bundle so maintainers can spot release
+and uploads the resulting log/artifact bundle, including the structured
+`release_check_results.xml` JUnit report, so maintainers can spot release
 workflow regressions early without turning the full release sequence into a
 brittle hard gate for every branch push.
 

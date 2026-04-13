@@ -11,9 +11,11 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+from xml.etree import ElementTree as ET
 
 HOST_ENV_BLACKLIST = (
     "CFLAGS",
@@ -32,6 +34,14 @@ class Step:
     cwd: Path
     timeout: Optional[int] = None
     success_markers: tuple[str, ...] = ()
+
+
+@dataclass
+class StepResult:
+    name: str
+    returncode: int
+    output: str
+    duration_seconds: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -110,11 +120,49 @@ def build_env() -> dict[str, str]:
     return env
 
 
-def run_step(step: Step, env: dict[str, str], verbose: bool) -> int:
+def write_junit_report(results: List[StepResult], output_path: Path) -> None:
+    testsuite = ET.Element(
+        "testsuite",
+        name="release_check",
+        tests=str(len(results)),
+        failures=str(sum(1 for result in results if result.returncode != 0)),
+        errors="0",
+        skipped="0",
+        time=f"{sum(result.duration_seconds for result in results):.3f}",
+    )
+    for result in results:
+        testcase = ET.SubElement(
+            testsuite,
+            "testcase",
+            classname="release_check",
+            name=result.name,
+            time=f"{result.duration_seconds:.3f}",
+        )
+        if result.returncode != 0:
+            failure = ET.SubElement(
+                testcase,
+                "failure",
+                message=f"Step exited with code {result.returncode}",
+                type="failure",
+            )
+            failure.text = result.output
+        system_out = ET.SubElement(testcase, "system-out")
+        system_out.text = result.output
+
+    root = ET.Element("testsuites")
+    root.append(testsuite)
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tree.write(output_path, encoding="utf-8", xml_declaration=True)
+
+
+def run_step(step: Step, env: dict[str, str], verbose: bool) -> StepResult:
     print(f"[RUN ] {step.name}")
     if verbose:
         print("       " + " ".join(shlex.quote(part) for part in step.cmd))
 
+    started = time.perf_counter()
     try:
         result = subprocess.run(
             step.cmd,
@@ -135,19 +183,31 @@ def run_step(step: Step, env: dict[str, str], verbose: bool) -> int:
             stdout = stdout.decode(errors="replace")
         returncode = 124
 
+    duration_seconds = time.perf_counter() - started
+
     if stdout:
         print(stdout, end="" if stdout.endswith("\n") else "\n")
 
     if returncode == 124 and step.success_markers:
         if all(marker in stdout for marker in step.success_markers):
             print(f"[PASS] {step.name} (completed with timed-out QEMU teardown)")
-            return 0
+            return StepResult(
+                name=step.name,
+                returncode=0,
+                output=stdout,
+                duration_seconds=duration_seconds,
+            )
 
     if returncode == 0:
         print(f"[PASS] {step.name}")
     else:
         print(f"[FAIL] {step.name} (exit {returncode})")
-    return returncode
+    return StepResult(
+        name=step.name,
+        returncode=returncode,
+        output=stdout,
+        duration_seconds=duration_seconds,
+    )
 
 
 def main() -> int:
@@ -163,6 +223,7 @@ def main() -> int:
     nucleo_protocol_default_dir = output_root / "nucleo_protocol_default"
     nucleo_protocol_single_level_dir = output_root / "nucleo_protocol_single_level"
     profile_output_dir = output_root / "profile_validation"
+    junit_output = output_root / "release_check_results.xml"
 
     steps = [
         Step(
@@ -295,11 +356,17 @@ def main() -> int:
     print(f"  west cmd  : {' '.join(west_cmd)}")
     print(f"  output    : {output_root}")
 
+    results: List[StepResult] = []
     for step in steps:
-        returncode = run_step(step, env, args.verbose)
-        if returncode != 0:
-            return returncode
+        result = run_step(step, env, args.verbose)
+        results.append(result)
+        write_junit_report(results, junit_output)
+        if result.returncode != 0:
+            print(f"[INFO] Wrote JUnit report to {junit_output}")
+            return result.returncode
 
+    write_junit_report(results, junit_output)
+    print(f"[INFO] Wrote JUnit report to {junit_output}")
     print("[PASS] Release validation sequence completed successfully.")
     return 0
 
