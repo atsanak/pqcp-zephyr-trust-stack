@@ -558,30 +558,63 @@ def evaluate_cost_of_assurance_regressions(
 
         print(f"[cost] Regression comparison: {name}")
         for metric_name, raw_rule in metrics.items():
-            if not isinstance(raw_rule, dict) or "max_ratio" not in raw_rule:
+            if not isinstance(raw_rule, dict):
                 raise RuntimeError(
-                    f"[cost] Comparison {name} metric {metric_name} is missing max_ratio"
+                    f"[cost] Comparison {name} metric {metric_name} must be an object"
+                )
+            if "max_ratio" not in raw_rule and "max_candidate" not in raw_rule:
+                raise RuntimeError(
+                    f"[cost] Comparison {name} metric {metric_name} must define "
+                    "max_ratio and/or max_candidate"
                 )
 
-            max_ratio = float(raw_rule["max_ratio"])
             candidate_value = parse_numeric_metric(candidate, metric_name, f"{name} candidate")
-            baseline_value = parse_numeric_metric(baseline, metric_name, f"{name} baseline")
-            if baseline_value <= 0.0:
-                raise RuntimeError(
-                    f"[cost] Baseline metric {metric_name} for {name} must be > 0"
+            baseline_value: float | None = None
+            if "max_ratio" in raw_rule:
+                baseline_value = parse_numeric_metric(
+                    baseline, metric_name, f"{name} baseline"
                 )
+                if baseline_value <= 0.0:
+                    raise RuntimeError(
+                        f"[cost] Baseline metric {metric_name} for {name} must be > 0"
+                    )
 
-            ratio = candidate_value / baseline_value
-            print(
-                f"  - {metric_name}: candidate={candidate_value:.2f}, "
-                f"baseline={baseline_value:.2f}, ratio={ratio:.2f} (limit {max_ratio:.2f})"
-            )
-            if ratio > max_ratio:
-                print(
-                    f"[cost] Regression detected for {name} metric {metric_name}: "
-                    f"{ratio:.2f} > {max_ratio:.2f}"
+            status_bits: list[str] = [f"candidate={candidate_value:.2f}"]
+            if baseline_value is not None:
+                ratio = candidate_value / baseline_value
+                max_ratio = float(raw_rule["max_ratio"])
+                status_bits.extend(
+                    [
+                        f"baseline={baseline_value:.2f}",
+                        f"ratio={ratio:.2f} (limit {max_ratio:.2f})",
+                    ]
                 )
-                return 1
+                if ratio > max_ratio:
+                    print(
+                        f"  - {metric_name}: " + ", ".join(status_bits)
+                    )
+                    print(
+                        f"[cost] Regression detected for {name} metric {metric_name}: "
+                        f"{ratio:.2f} > {max_ratio:.2f}"
+                    )
+                    return 1
+
+            if "max_candidate" in raw_rule:
+                max_candidate = float(raw_rule["max_candidate"])
+                status_bits.append(
+                    f"absolute_limit={max_candidate:.2f}"
+                )
+                if candidate_value > max_candidate:
+                    print(
+                        f"  - {metric_name}: " + ", ".join(status_bits)
+                    )
+                    print(
+                        f"[cost] Regression detected for {name} metric {metric_name}: "
+                        f"candidate {candidate_value:.2f} > absolute limit {max_candidate:.2f}"
+                    )
+                    return 1
+
+            print(f"  - {metric_name}: " + ", ".join(status_bits))
 
     return 0
 

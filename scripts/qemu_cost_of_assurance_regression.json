@@ -181,13 +181,16 @@
           "max_ratio": 6.0
         },
         "handshake_provider_overhead": {
-          "max_ratio": 8.0
+          "max_ratio": 8.0,
+          "max_candidate": 250.0
         },
         "handshake_transport_overhead_bytes": {
-          "max_ratio": 2.0
+          "max_ratio": 2.0,
+          "max_candidate": 1024.0
         },
         "handshake_rtos_jitter_p90": {
-          "max_ratio": 4.0
+          "max_ratio": 4.0,
+          "max_candidate": 50000.0
         },
         "rom_bytes": {
           "max_ratio": 2.5
@@ -225,13 +228,16 @@
           "max_ratio": 6.0
         },
         "handshake_provider_overhead": {
-          "max_ratio": 8.0
+          "max_ratio": 8.0,
+          "max_candidate": 250.0
         },
         "handshake_transport_overhead_bytes": {
-          "max_ratio": 2.0
+          "max_ratio": 2.0,
+          "max_candidate": 1024.0
         },
         "handshake_rtos_jitter_p90": {
-          "max_ratio": 4.0
+          "max_ratio": 4.0,
+          "max_candidate": 50000.0
         },
         "rom_bytes": {
           "max_ratio": 2.5
