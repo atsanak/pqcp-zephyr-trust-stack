@@ -99,6 +99,75 @@ export EXTRA_ZEPHYR_MODULES=/path/to/pqcp-zephyr-trust-stack
 west build -p always -b qemu_x86_64 samples/pqcp_basic_kem
 ```
 
+### Module Integration
+
+Downstream Zephyr applications can treat this repository as a normal external
+module. The module registration file lives at `zephyr/module.yml` and exposes:
+
+- `build.cmake: .`
+- `build.kconfig: Kconfig`
+- module name: `pqcp_zephyr_trust_stack`
+
+That means a consumer does not need custom CMake glue once the repository is
+present in the west workspace or injected through `ZEPHYR_EXTRA_MODULES`.
+
+For a minimal application-side integration, add the module to your workspace
+manifest and then enable the symbols you actually need in the app:
+
+```yaml
+manifest:
+  projects:
+    - name: pqcp-zephyr-trust-stack
+      url: https://github.com/atsana01/pqcp-zephyr-trust-stack
+      revision: <pinned-tag-or-commit>
+      path: modules/pqcp
+```
+
+```conf
+CONFIG_PQCP=y
+CONFIG_PQCP_ACVP=y
+CONFIG_PQCP_PROFILE_NATIVE_LAB=y
+```
+
+The ACVP command library can also be enabled without the native/lab profile if
+your application needs just the parser/formatter surface, but production-style
+builds should still keep deterministic RNG disabled and select a production RNG
+backend such as `CONFIG_PQCP_RNG_ZEPHYR_ENTROPY=y` or `CONFIG_PQCP_RNG_PSA=y`.
+
+For a lightweight consumer smoke test, a trivial Zephyr app can include:
+
+```c
+#include <pqcp_zephyr/acvp_cmd.h>
+
+int main(void)
+{
+    return pqcp_acvp_result_str(PQCP_ACVP_OK) != NULL ? 0 : 1;
+}
+```
+
+and build it with:
+
+```bash
+west build -p always -b qemu_x86_64 /path/to/app
+```
+
+If you are not using the repository root `west.yml`, the equivalent explicit
+module injection flow is:
+
+```bash
+west build -p always -b qemu_x86_64 /path/to/app -- \
+  -DZEPHYR_EXTRA_MODULES=/path/to/pqcp-zephyr-trust-stack
+```
+
+That consumer app path is what we validate locally when checking that the
+module registration remains healthy.
+
+The repo's own samples and tests also self-register this local module before
+calling `find_package(Zephyr)`, so commands such as
+`west build -p always -b qemu_x86_64 tests/ztest_acvp_serial` work even when
+this repository is present in a workspace directory but not yet added to that
+workspace manifest.
+
 ### Building and Running Samples
 
 **Basic ML-KEM Demo:**
