@@ -275,7 +275,7 @@ if(CONFIG_PQCP_MLDSA)
 endif()
 
 # Shared TLS self-test helpers
-if(CONFIG_PQCP_MLKEM AND CONFIG_PQCP_MLDSA)
+if(CONFIG_PQCP_TLS_SELFTEST)
     zephyr_library_named(pqcp_tls_selftest)
     zephyr_library_sources(${PQCP_SRC}/tls_selftest.c)
     zephyr_library_link_libraries(pqcp_common)
@@ -327,7 +327,7 @@ if(CONFIG_PQCP_ACVP)
         zephyr_library_link_libraries(pqcp_mldsa)
     endif()
 
-    if(CONFIG_PQCP_MLKEM AND CONFIG_PQCP_MLDSA)
+    if(CONFIG_PQCP_TLS_SELFTEST)
         zephyr_library_link_libraries(pqcp_tls_selftest)
     endif()
 endif()
@@ -342,7 +342,9 @@ if(CONFIG_PQCP_BENCH)
     
     # Protocol benchmark is always included (simulated mode)
     # Real networking benchmarks require CONFIG_PQCP_BENCH_PROTOCOL
-    zephyr_library_sources(${PQCP_SRC}/bench_protocol.c)
+    if(CONFIG_PQCP_TLS_SELFTEST)
+        zephyr_library_sources(${PQCP_SRC}/bench_protocol.c)
+    endif()
     
     zephyr_library_link_libraries(pqcp_common)
     
@@ -352,6 +354,10 @@ if(CONFIG_PQCP_BENCH)
     
     if(CONFIG_PQCP_MLDSA)
         zephyr_library_link_libraries(pqcp_mldsa)
+    endif()
+
+    if(CONFIG_PQCP_TLS_SELFTEST)
+        zephyr_library_link_libraries(pqcp_tls_selftest)
     endif()
 endif()
 
