@@ -698,6 +698,28 @@ this board, so the builds CSV is the right place to watch MCU protocol
 footprints evolve without pretending we already have production-grade runtime
 measurements on hardware.
 
+For manual confirmation, the two protocol footprint configurations are:
+
+```bash
+west build -p always -b nucleo_h743zi samples/pqcp_bench_protocol --cmake-only -- \
+  -DOVERLAY_CONFIG=overlay-rtos-metrics.conf
+
+west build -p always -b nucleo_h743zi samples/pqcp_bench_protocol --cmake-only -- \
+  -DOVERLAY_CONFIG=overlay-rtos-metrics.conf \
+  -DCONFIG_PQCP_MLKEM_LEVEL_512=y \
+  -DCONFIG_PQCP_MLKEM_LEVEL_768=n \
+  -DCONFIG_PQCP_MLKEM_LEVEL_1024=n \
+  -DCONFIG_PQCP_MLDSA_LEVEL_44=n \
+  -DCONFIG_PQCP_MLDSA_LEVEL_65=n \
+  -DCONFIG_PQCP_MLDSA_LEVEL_87=y \
+  -DCONFIG_MAIN_STACK_SIZE=196608
+```
+
+`python scripts/release_check.py` now runs both of those
+`nucleo_h743zi` protocol configurations as `west build --cmake-only` steps, so
+the release path keeps a lightweight check on the real-MCU protocol footprint
+lane even though hosted CI still treats those rows as build-only analysis data.
+
 The `mps2/an385` sample path is intentionally not part of the curated
 cost-of-assurance matrix yet. Those samples currently depend on a production
 entropy-backed RNG path that the board does not provide, and the project keeps

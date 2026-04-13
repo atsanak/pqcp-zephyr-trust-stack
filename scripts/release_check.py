@@ -160,6 +160,8 @@ def main() -> int:
     west_cmd = discover_west(args.west, west_root, module_path)
     env = build_env()
     ztest_build_dir = output_root / "ztest_acvp_serial_qemu"
+    nucleo_protocol_default_dir = output_root / "nucleo_protocol_default"
+    nucleo_protocol_single_level_dir = output_root / "nucleo_protocol_single_level"
     profile_output_dir = output_root / "profile_validation"
 
     steps = [
@@ -223,6 +225,49 @@ def main() -> int:
                 "TESTSUITE pqcp_acvp_serial succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
+        ),
+        Step(
+            name="MCU protocol CMake-only (nucleo_h743zi ML-KEM-768 + ML-DSA-65)",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "nucleo_h743zi",
+                str(module_path / "samples/pqcp_bench_protocol"),
+                "-d",
+                str(nucleo_protocol_default_dir),
+                "--cmake-only",
+                "--",
+                "-DOVERLAY_CONFIG=overlay-rtos-metrics.conf",
+            ],
+            cwd=west_root,
+        ),
+        Step(
+            name="MCU protocol CMake-only (nucleo_h743zi ML-KEM-512 + ML-DSA-87)",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "nucleo_h743zi",
+                str(module_path / "samples/pqcp_bench_protocol"),
+                "-d",
+                str(nucleo_protocol_single_level_dir),
+                "--cmake-only",
+                "--",
+                "-DOVERLAY_CONFIG=overlay-rtos-metrics.conf",
+                "-DCONFIG_PQCP_MLKEM_LEVEL_512=y",
+                "-DCONFIG_PQCP_MLKEM_LEVEL_768=n",
+                "-DCONFIG_PQCP_MLKEM_LEVEL_1024=n",
+                "-DCONFIG_PQCP_MLDSA_LEVEL_44=n",
+                "-DCONFIG_PQCP_MLDSA_LEVEL_65=n",
+                "-DCONFIG_PQCP_MLDSA_LEVEL_87=y",
+                "-DCONFIG_MAIN_STACK_SIZE=196608",
+            ],
+            cwd=west_root,
         ),
         Step(
             name="Profile validation with resource budgets",
