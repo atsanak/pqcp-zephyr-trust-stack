@@ -785,7 +785,11 @@ latency and ROM/RAM, but also `handshake_provider_overhead`,
 `handshake_transport_overhead_bytes`, and `handshake_rtos_jitter_p90`. Those
 thresholds are intentionally loose: they are there to catch obvious
 catastrophes such as a multi-x slowdown or a footprint explosion, not to act as
-a precise performance benchmark gate.
+a precise performance benchmark gate. For the RTOS/TLS decomposition fields the
+checked-in regression file now uses both relative and absolute ceilings, so a
+run can fail either because PQCP grew far beyond the baseline provider or
+because the raw provider-overhead / transport-overhead / p90 jitter numbers
+blew past a conservative upper bound.
 
 For cost-of-assurance runs that do not invoke Zephyr's dedicated `rom_report` and
 `ram_report` targets, the runner still records `rom_bytes` and `ram_bytes` using
