@@ -9,6 +9,7 @@ import argparse
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -163,8 +164,9 @@ def run_step(step: Step, env: dict[str, str], verbose: bool) -> StepResult:
         print("       " + " ".join(shlex.quote(part) for part in step.cmd))
 
     started = time.perf_counter()
+    proc: subprocess.Popen[str] | None = None
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             step.cmd,
             cwd=str(step.cwd),
             env=env,
@@ -172,15 +174,30 @@ def run_step(step: Step, env: dict[str, str], verbose: bool) -> StepResult:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            timeout=step.timeout,
-            check=False,
+            start_new_session=True,
         )
-        stdout = result.stdout or ""
-        returncode = result.returncode
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or ""
-        if isinstance(stdout, bytes):
-            stdout = stdout.decode(errors="replace")
+        stdout, _ = proc.communicate(timeout=step.timeout)
+        stdout = stdout or ""
+        returncode = proc.returncode
+    except subprocess.TimeoutExpired:
+        stdout = ""
+        if proc is not None:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                pass
+            try:
+                stdout, _ = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    pass
+                stdout, _ = proc.communicate()
         returncode = 124
 
     duration_seconds = time.perf_counter() - started

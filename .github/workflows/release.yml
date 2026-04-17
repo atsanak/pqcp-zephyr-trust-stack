@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out module repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ccache \
+            cppcheck \
+            device-tree-compiler \
+            dfu-util \
+            file \
+            gcc \
+            g++ \
+            gperf \
+            libmagic1 \
+            libsdl2-dev \
+            make \
+            ninja-build \
+            qemu-system-x86 \
+            wget \
+            xz-utils
+
+      - name: Install west
+        run: python -m pip install --upgrade west
+
+      - name: Initialize Zephyr workspace
+        working-directory: ${{ runner.temp }}
+        run: |
+          west init -m "$GITHUB_WORKSPACE" --mr "$GITHUB_SHA" release-workspace
+          cd release-workspace
+          west update
+          west packages pip --install --ignore-venv-check
+          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
+          echo "MODULE_PATH=$PWD/pqcp-zephyr-trust-stack" >> "$GITHUB_ENV"
+
+      - name: Run release gate
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        shell: bash
+        run: |
+          set -o pipefail
+          python "$MODULE_PATH/scripts/release_check.py" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$MODULE_PATH" \
+            --output-root "$RUNNER_TEMP/release-check-output" \
+            | tee "$RUNNER_TEMP/release-check.log"
+
+      - name: Build all qemu_x86_64 samples and ztests
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          logs_dir="$RUNNER_TEMP/release-build-logs"
+          summary="$RUNNER_TEMP/build_summary.txt"
+          mkdir -p "$logs_dir"
+          : > "$summary"
+
+          apps=(
+            "samples/pqcp_basic_kem"
+            "samples/pqcp_basic_sig"
+            "samples/pqcp_bench_protocol"
+            "samples/pqcp_kat_deterministic"
+            "samples/pqcp_serial_acvp"
+            "samples/pqcp_streaming_hash_mldsa"
+            "samples/pqcp_tls_mbedtls_psa"
+            "tests/ztest_acvp_serial"
+            "tests/ztest_primitive"
+            "tests/ztest_rng"
+            "tests/ztest_tls_selftest"
+          )
+
+          for app in "${apps[@]}"; do
+            name="${app//\//_}"
+            build_dir="$RUNNER_TEMP/build-${name}"
+            log_file="$logs_dir/${name}.log"
+
+            echo "==> Building $app" | tee -a "$summary"
+            west build -p always -d "$build_dir" -b qemu_x86_64 "$MODULE_PATH/$app" \
+              -- -DZEPHYR_EXTRA_MODULES="$MODULE_PATH" >"$log_file" 2>&1
+            echo "PASS $app" | tee -a "$summary"
+            echo "  log: $log_file" >> "$summary"
+          done
+
+      - name: Extract release notes
+        run: |
+          python "$MODULE_PATH/scripts/extract_changelog_section.py" \
+            --file "$MODULE_PATH/CHANGELOG.md" \
+            --section Unreleased \
+            --output "$RUNNER_TEMP/release-notes.md"
+
+      - name: Upload release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            ${{ runner.temp }}/release-check.log
+            ${{ runner.temp }}/release-check-output/release_check_results.xml
+            ${{ runner.temp }}/build_summary.txt
+            ${{ runner.temp }}/release-notes.md
+            ${{ runner.temp }}/release-build-logs
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            ${{ runner.temp }}/release-check-output/release_check_results.xml
+            ${{ runner.temp }}/build_summary.txt

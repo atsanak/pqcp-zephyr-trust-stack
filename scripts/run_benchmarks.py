@@ -675,23 +675,40 @@ class BenchmarkRunner:
         if self.verbose:
             print(" ".join(cmd))
 
+        proc: subprocess.Popen[str] | None = None
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 cwd=str(cwd),
+                env=self.command_env,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                timeout=timeout,
-                env=self.command_env,
-                check=False,
+                start_new_session=True,
             )
-            return CommandResult(result.returncode, result.stdout, False)
-        except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode(errors="replace")
-            return CommandResult(124, stdout, True)
+            stdout, _ = proc.communicate(timeout=timeout)
+            return CommandResult(proc.returncode, stdout or "", False)
+        except subprocess.TimeoutExpired:
+            stdout = ""
+            if proc is not None:
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    pass
+                try:
+                    stdout, _ = proc.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    except PermissionError:
+                        pass
+                    stdout, _ = proc.communicate()
+            return CommandResult(124, stdout or "", True)
 
     def _write_extra_conf(self, run_dir: Path, spec: RunSpec) -> Optional[Path]:
         lines = [PROFILES[spec.profile]["kconfig"], *spec.extra_kconfig]
