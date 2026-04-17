@@ -63,7 +63,7 @@ CHANGELOG.md
 
 ---
 
-## Completed — verified HEAD 1c50d4f
+## Completed — verified HEAD 9b3e382
 
 Infrastructure:
 - west.yml: pinned SHAs for mlkem-native + mldsa-native
@@ -84,7 +84,23 @@ CI/Tooling:
 - Tag-triggered release.yml: release artifacts on v* tags
 - Twister testcase.yaml files: all ztest suites discoverable by west twister
 - cppcheck enforced in CI (no --skip-cppcheck)
+- .github/workflows/release.yml: tag v* → gate → GitHub Release (7661a25)
+- scripts/extract_changelog_section.py: [Unreleased] extractor (7661a25)
+- tests/ztest_*/testcase.yaml: all four suites Twister-discoverable (185067b)
+- src/psa_mlkem_driver.c + psa_mldsa_driver.c: buffer pre-validated, specific
+  PSA error codes, key type + parameter set rejected at entry (baf12b4)
+- cppcheck enforced in CI and release gate, no --skip-cppcheck (bfe4fea)
+- JUnit XML ANSI-sanitised, 9 named release-gate steps (bfe4fea)
 
 Version: 0.9.0-pre1. Next: bump CHANGELOG [Unreleased] → [0.9.0], tag v0.9.0.
 
-## TASKS — none. Tag v0.9.0 when release_check.py exits 0.
+## TASKS — next session
+
+1. feat(manifest): add root west.yml for standalone west init
+2. docs(changelog): populate [0.9.0] release notes, rename [Unreleased]
+3. docs(samples): add standalone README for serial ACVP and TLS samples
+4. test(acvp): add NIST KAT vector smoke test for ML-KEM-768 and ML-DSA-65
+5. docs(claude): update session memory to post-v0.9.0-prep state
+   docs(readme): add security properties section
+
+After all five tasks: tag v0.9.0 and verify release workflow fires.
