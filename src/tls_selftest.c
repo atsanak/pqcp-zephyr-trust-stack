@@ -186,17 +186,19 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
         }
     }
 
+#ifdef CONFIG_MBEDTLS_PSA_CRYPTO_C
     if (cfg.initialize_psa) {
         ret = pqcp_tls_selftest_init_psa(&report->psa_ready);
-        /* cppcheck-suppress knownConditionTrueFalse
-         * The helper can return 0 or a negative errno depending on the active
-         * PSA configuration, but cppcheck sometimes folds the preprocessor
-         * paths into a false-positive "always true" branch here.
-         */
         if (ret != 0) {
             return ret;
         }
     }
+#else
+    if (cfg.initialize_psa) {
+        report->psa_ready = false;
+        return -ENOTSUP;
+    }
+#endif
 
     handshake_start = timer_start();
 

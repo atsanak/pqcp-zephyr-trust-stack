@@ -36,9 +36,7 @@
 
 typedef struct {
     uint32_t latency_samples[100];
-    uint32_t rtos_jitter_samples[128];
     uint16_t sample_count;
-    uint16_t rtos_jitter_count;
 } protocol_bench_ctx_t;
 
 static protocol_bench_ctx_t bench_ctx;
@@ -47,6 +45,7 @@ static uint32_t percentile(uint32_t *samples, uint16_t count, uint8_t p);
 
 #if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)
 #define PQCP_PROTOCOL_RTOS_LOAD_STACK_SIZE 1024
+#define PQCP_PROTOCOL_RTOS_JITTER_SAMPLES 128U
 
 typedef struct {
     struct k_timer timer;
@@ -58,6 +57,8 @@ typedef struct {
 
 K_THREAD_STACK_DEFINE(protocol_rtos_load_stack, PQCP_PROTOCOL_RTOS_LOAD_STACK_SIZE);
 static protocol_rtos_probe_t protocol_rtos_probe;
+static uint32_t protocol_rtos_jitter_samples[PQCP_PROTOCOL_RTOS_JITTER_SAMPLES];
+static uint16_t protocol_rtos_jitter_count;
 
 static uint32_t saturating_us_delta(uint64_t actual, uint64_t expected)
 {
@@ -96,10 +97,10 @@ static void protocol_rtos_load_thread(void *p1, void *p2, void *p3)
             break;
         }
 
-        if (bench_ctx.rtos_jitter_count < ARRAY_SIZE(bench_ctx.rtos_jitter_samples)) {
+        if (protocol_rtos_jitter_count < ARRAY_SIZE(protocol_rtos_jitter_samples)) {
             uint64_t actual_wake_us = k_cyc_to_us_floor64(k_cycle_get_64());
 
-            bench_ctx.rtos_jitter_samples[bench_ctx.rtos_jitter_count++] =
+            protocol_rtos_jitter_samples[protocol_rtos_jitter_count++] =
                 saturating_us_delta(actual_wake_us, expected_wake_us);
         }
         expected_wake_us += period_us;
@@ -118,7 +119,7 @@ static void protocol_rtos_probe_start(void)
     atomic_clear(&protocol_rtos_probe.stop);
     atomic_clear(&protocol_rtos_probe.isr_count);
     atomic_clear(&protocol_rtos_probe.yield_count);
-    bench_ctx.rtos_jitter_count = 0U;
+    protocol_rtos_jitter_count = 0U;
 
     k_timer_init(&protocol_rtos_probe.timer, protocol_rtos_timer_handler, NULL);
     k_timer_user_data_set(&protocol_rtos_probe.timer, &protocol_rtos_probe);
@@ -145,12 +146,12 @@ static void protocol_rtos_probe_stop(pqcp_bench_protocol_result_t *result)
 
     result->rtos_isr_count = (uint32_t)atomic_get(&protocol_rtos_probe.isr_count);
     result->rtos_yield_count = (uint32_t)atomic_get(&protocol_rtos_probe.yield_count);
-    result->rtos_jitter_p50_us = percentile(bench_ctx.rtos_jitter_samples,
-                                            bench_ctx.rtos_jitter_count, 50);
-    result->rtos_jitter_p90_us = percentile(bench_ctx.rtos_jitter_samples,
-                                            bench_ctx.rtos_jitter_count, 90);
-    result->rtos_jitter_p99_us = percentile(bench_ctx.rtos_jitter_samples,
-                                            bench_ctx.rtos_jitter_count, 99);
+    result->rtos_jitter_p50_us = percentile(protocol_rtos_jitter_samples,
+                                            protocol_rtos_jitter_count, 50);
+    result->rtos_jitter_p90_us = percentile(protocol_rtos_jitter_samples,
+                                            protocol_rtos_jitter_count, 90);
+    result->rtos_jitter_p99_us = percentile(protocol_rtos_jitter_samples,
+                                            protocol_rtos_jitter_count, 99);
 }
 #endif
 

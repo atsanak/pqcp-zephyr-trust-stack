@@ -1514,7 +1514,6 @@ python scripts/run_extended_checks.py \
   --module-path "$PWD" \
   --zephyr-ref v4.4.0-rc1 \
   --skip-graphviz \
-  --skip-cppcheck \
   --run-compatibility-smoke \
   --strict
 ```
@@ -1533,7 +1532,6 @@ python scripts/run_extended_checks.py \
   --module-path "$PWD" \
   --zephyr-ref v4.4.0-rc1 \
   --skip-graphviz \
-  --skip-cppcheck \
   --run-compatibility-smoke \
   --compatibility-board-list qemu_x86_64,nucleo_h743zi \
   --strict
@@ -1580,6 +1578,11 @@ a scheduled/manual workflow that runs `scripts/run_extended_checks.py` to:
   profile-validation matrix
 - build-validate the `mps2/an385` MCU profile path through
   `tests/ztest_primitive` with `overlay-no-entropy.conf` and matching budgets
+
+The advisory `release-gate` job in `.github/workflows/ci.yml` now runs
+`python scripts/release_check.py` with a standalone `cppcheck` step before the
+broader extended-checks sequence, so the uploaded JUnit report shows static
+analysis as its own release criterion instead of burying it inside a larger job.
 - build-validate the `nucleo_h743zi` MCU profile path through
   `tests/ztest_primitive` and `samples/pqcp_basic_kem`, again with matching
   resource budgets
@@ -1666,7 +1669,6 @@ python scripts/run_extended_checks.py \
   --module-path "$PWD" \
   --zephyr-ref v4.4.0-rc1 \
   --skip-graphviz \
-  --skip-cppcheck \
   --run-compatibility-smoke \
   --compatibility-board-list qemu_x86_64,nucleo_h743zi \
   --strict
