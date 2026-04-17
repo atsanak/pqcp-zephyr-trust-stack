@@ -101,18 +101,21 @@ west build -p always -b qemu_x86_64 samples/pqcp_basic_kem
 
 ### Module Integration
 
-Downstream Zephyr applications can treat this repository as a normal external
-module. The module registration file lives at `zephyr/module.yml` and exposes:
+Downstream Zephyr applications can consume this repository in two supported
+ways, depending on whether you are integrating it as a normal west module or
+working in this repository itself during development.
+
+Path 1: west consumer
+
+When the repository is present in a west workspace manifest, the registration
+file at `zephyr/module.yml` injects the module automatically with:
 
 - `build.cmake: .`
 - `build.kconfig: Kconfig`
 - module name: `pqcp_zephyr_trust_stack`
 
-That means a consumer does not need custom CMake glue once the repository is
-present in the west workspace or injected through `ZEPHYR_EXTRA_MODULES`.
-
-For a minimal application-side integration, add the module to your workspace
-manifest and then enable the symbols you actually need in the app:
+That means a consumer does not need any custom CMake glue. Add the module to
+your workspace manifest and then enable only the symbols you need in the app:
 
 ```yaml
 manifest:
@@ -152,7 +155,7 @@ west build -p always -b qemu_x86_64 /path/to/app
 ```
 
 If you are not using the repository root `west.yml`, the equivalent explicit
-module injection flow is:
+external-module injection flow is:
 
 ```bash
 west build -p always -b qemu_x86_64 /path/to/app -- \
@@ -162,11 +165,20 @@ west build -p always -b qemu_x86_64 /path/to/app -- \
 That consumer app path is what we validate locally when checking that the
 module registration remains healthy.
 
-The repo's own samples and tests also self-register this local module before
-calling `find_package(Zephyr)`, so commands such as
-`west build -p always -b qemu_x86_64 tests/ztest_acvp_serial` work even when
-this repository is present in a workspace directory but not yet added to that
-workspace manifest.
+Path 2: in-tree development
+
+The repo's own samples and tests keep
+`cmake/pqcp_local_module.cmake` so local development builds still work even if
+this repository has not been added to the surrounding workspace manifest yet.
+That helper is included before `find_package(Zephyr)` in the repo-local apps,
+which is why commands such as
+`west build -p always -b qemu_x86_64 tests/ztest_acvp_serial` work directly
+from a checkout inside an arbitrary Zephyr workspace.
+
+External consumer applications should prefer Path 1 or explicit
+`ZEPHYR_EXTRA_MODULES` injection. The local helper exists to keep in-tree
+sample and test development friction low; it is not a replacement for
+`zephyr/module.yml` in downstream workspaces.
 
 ### Building and Running Samples
 

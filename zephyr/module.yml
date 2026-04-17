@@ -9,5 +9,3 @@ name: pqcp_zephyr_trust_stack
 build:
   cmake: .
   kconfig: Kconfig
-  settings:
-    dts_root: .
