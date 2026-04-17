@@ -16,10 +16,25 @@ set(PQCP_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(PQCP_INC ${PQCP_DIR}/include)
 set(PQCP_SRC ${PQCP_DIR}/src)
 set(PQCP_EXT ${PQCP_DIR}/ext)
+set(PQCP_WORKSPACE_CRYPTO_DIR ${PQCP_DIR}/../modules/crypto)
 
-# External library paths (submodules or FetchContent)
-set(MLKEM_NATIVE_DIR ${PQCP_EXT}/mlkem-native)
-set(MLDSA_NATIVE_DIR ${PQCP_EXT}/mldsa-native)
+# External library paths
+if(EXISTS ${PQCP_EXT}/mlkem-native/mlkem)
+    set(MLKEM_NATIVE_DIR ${PQCP_EXT}/mlkem-native)
+elseif(EXISTS ${PQCP_WORKSPACE_CRYPTO_DIR}/mlkem-native/mlkem)
+    set(MLKEM_NATIVE_DIR ${PQCP_WORKSPACE_CRYPTO_DIR}/mlkem-native)
+else()
+    set(MLKEM_NATIVE_DIR ${PQCP_EXT}/mlkem-native)
+endif()
+
+if(EXISTS ${PQCP_EXT}/mldsa-native/mldsa)
+    set(MLDSA_NATIVE_DIR ${PQCP_EXT}/mldsa-native)
+elseif(EXISTS ${PQCP_WORKSPACE_CRYPTO_DIR}/mldsa-native/mldsa)
+    set(MLDSA_NATIVE_DIR ${PQCP_WORKSPACE_CRYPTO_DIR}/mldsa-native)
+else()
+    set(MLDSA_NATIVE_DIR ${PQCP_EXT}/mldsa-native)
+endif()
+
 set(PQCLEAN_BASELINE_DIR ${PQCP_EXT}/pqclean-baseline)
 
 # =============================================================================
