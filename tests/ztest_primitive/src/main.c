@@ -262,6 +262,11 @@ extern psa_status_t pqcp_psa_mlkem_decapsulate(
 /* Provisional PSA algorithm IDs */
 #ifndef PSA_ALG_ML_KEM_768
 #define PSA_ALG_ML_KEM_768     ((psa_algorithm_t)0x06000E01)
+#endif
+#ifndef PSA_KEY_TYPE_ML_KEM_PUBLIC_KEY
+#define PSA_KEY_TYPE_ML_KEM_PUBLIC_KEY   ((psa_key_type_t)0x4002)
+#endif
+#ifndef PSA_KEY_TYPE_ML_KEM_KEY_PAIR
 #define PSA_KEY_TYPE_ML_KEM_KEY_PAIR     ((psa_key_type_t)0x7002)
 #endif
 
@@ -322,6 +327,84 @@ ZTEST(pqcp_primitive, test_psa_mlkem_encaps_decaps)
                       "PSA shared secrets don't match");
 }
 
+ZTEST(pqcp_primitive, test_psa_mlkem_keygen_wrong_key_type)
+{
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    size_t key_length = 0U;
+
+    psa_set_key_algorithm(&attributes, PSA_ALG_ML_KEM_768);
+    psa_set_key_type(&attributes, PSA_KEY_TYPE_ML_KEM_PUBLIC_KEY);
+
+    psa_status_t status = pqcp_psa_mlkem_generate_key(
+        &attributes, psa_key_buffer, sizeof(psa_key_buffer), &key_length);
+
+    zassert_equal(status, PSA_ERROR_NOT_SUPPORTED,
+                  "Public-key generation should be rejected");
+}
+
+ZTEST(pqcp_primitive, test_psa_mlkem_encaps_rejects_bad_inputs)
+{
+    psa_key_attributes_t keypair_attrs = PSA_KEY_ATTRIBUTES_INIT;
+    psa_key_attributes_t public_attrs = PSA_KEY_ATTRIBUTES_INIT;
+    uint8_t short_ct[32];
+    size_t key_length = 0U;
+    size_t ct_length = 0U;
+    size_t ss_length = 0U;
+
+    psa_set_key_algorithm(&keypair_attrs, PSA_ALG_ML_KEM_768);
+    psa_set_key_type(&keypair_attrs, PSA_KEY_TYPE_ML_KEM_KEY_PAIR);
+    psa_set_key_algorithm(&public_attrs, PSA_ALG_ML_KEM_768);
+    psa_set_key_type(&public_attrs, PSA_KEY_TYPE_ML_KEM_PUBLIC_KEY);
+
+    psa_status_t status = pqcp_psa_mlkem_generate_key(
+        &keypair_attrs, psa_key_buffer, sizeof(psa_key_buffer), &key_length);
+    zassert_equal(status, PSA_SUCCESS);
+
+    status = pqcp_psa_mlkem_encapsulate(
+        &public_attrs, psa_key_buffer, key_length, PSA_ALG_ML_KEM_768,
+        short_ct, sizeof(short_ct), &ct_length,
+        psa_ss1, sizeof(psa_ss1), &ss_length);
+    zassert_equal(status, PSA_ERROR_BUFFER_TOO_SMALL,
+                  "Short ciphertext buffer should be rejected");
+
+    status = pqcp_psa_mlkem_encapsulate(
+        &keypair_attrs, NULL, key_length, PSA_ALG_ML_KEM_768,
+        psa_ct, sizeof(psa_ct), &ct_length,
+        psa_ss1, sizeof(psa_ss1), &ss_length);
+    zassert_equal(status, PSA_ERROR_INVALID_ARGUMENT,
+                  "NULL public-key buffer should be rejected");
+}
+
+ZTEST(pqcp_primitive, test_psa_mlkem_decaps_wrong_key_type)
+{
+    psa_key_attributes_t keypair_attrs = PSA_KEY_ATTRIBUTES_INIT;
+    psa_key_attributes_t public_attrs = PSA_KEY_ATTRIBUTES_INIT;
+    size_t key_length = 0U;
+    size_t ct_length = 0U;
+    size_t ss_length = 0U;
+
+    psa_set_key_algorithm(&keypair_attrs, PSA_ALG_ML_KEM_768);
+    psa_set_key_type(&keypair_attrs, PSA_KEY_TYPE_ML_KEM_KEY_PAIR);
+    psa_set_key_algorithm(&public_attrs, PSA_ALG_ML_KEM_768);
+    psa_set_key_type(&public_attrs, PSA_KEY_TYPE_ML_KEM_PUBLIC_KEY);
+
+    psa_status_t status = pqcp_psa_mlkem_generate_key(
+        &keypair_attrs, psa_key_buffer, sizeof(psa_key_buffer), &key_length);
+    zassert_equal(status, PSA_SUCCESS);
+
+    status = pqcp_psa_mlkem_encapsulate(
+        &public_attrs, psa_key_buffer, key_length, PSA_ALG_ML_KEM_768,
+        psa_ct, sizeof(psa_ct), &ct_length,
+        psa_ss1, sizeof(psa_ss1), &ss_length);
+    zassert_equal(status, PSA_SUCCESS);
+
+    status = pqcp_psa_mlkem_decapsulate(
+        &public_attrs, psa_key_buffer, key_length, PSA_ALG_ML_KEM_768,
+        psa_ct, ct_length, psa_ss2, sizeof(psa_ss2), &ss_length);
+    zassert_equal(status, PSA_ERROR_NOT_SUPPORTED,
+                  "Public-key decapsulation should be rejected");
+}
+
 #endif /* CONFIG_PQCP_PSA_DRIVER_MLKEM */
 
 #ifdef CONFIG_PQCP_PSA_DRIVER_MLDSA
@@ -350,6 +433,11 @@ extern psa_status_t pqcp_psa_mldsa_verify_message(
 /* Provisional PSA algorithm IDs */
 #ifndef PSA_ALG_ML_DSA_65
 #define PSA_ALG_ML_DSA_65     ((psa_algorithm_t)0x06000F01)
+#endif
+#ifndef PSA_KEY_TYPE_ML_DSA_PUBLIC_KEY
+#define PSA_KEY_TYPE_ML_DSA_PUBLIC_KEY   ((psa_key_type_t)0x4003)
+#endif
+#ifndef PSA_KEY_TYPE_ML_DSA_KEY_PAIR
 #define PSA_KEY_TYPE_ML_DSA_KEY_PAIR     ((psa_key_type_t)0x7003)
 #endif
 
@@ -433,6 +521,60 @@ ZTEST(pqcp_primitive, test_psa_mldsa_verify_bad_sig)
         psa_signature, sig_length);
     zassert_equal(status, PSA_ERROR_INVALID_SIGNATURE,
                   "Bad signature should fail verification");
+}
+
+ZTEST(pqcp_primitive, test_psa_mldsa_keygen_wrong_key_type)
+{
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    size_t key_length = 0U;
+
+    psa_set_key_algorithm(&attributes, PSA_ALG_ML_DSA_65);
+    psa_set_key_type(&attributes, PSA_KEY_TYPE_ML_DSA_PUBLIC_KEY);
+
+    psa_status_t status = pqcp_psa_mldsa_generate_key(
+        &attributes, psa_sig_key_buffer, sizeof(psa_sig_key_buffer), &key_length);
+
+    zassert_equal(status, PSA_ERROR_NOT_SUPPORTED,
+                  "Public-key generation should be rejected");
+}
+
+ZTEST(pqcp_primitive, test_psa_mldsa_sign_rejects_bad_inputs)
+{
+    psa_key_attributes_t keypair_attrs = PSA_KEY_ATTRIBUTES_INIT;
+    psa_key_attributes_t public_attrs = PSA_KEY_ATTRIBUTES_INIT;
+    uint8_t short_signature[64];
+    size_t key_length = 0U;
+    size_t sig_length = 0U;
+
+    psa_set_key_algorithm(&keypair_attrs, PSA_ALG_ML_DSA_65);
+    psa_set_key_type(&keypair_attrs, PSA_KEY_TYPE_ML_DSA_KEY_PAIR);
+    psa_set_key_algorithm(&public_attrs, PSA_ALG_ML_DSA_65);
+    psa_set_key_type(&public_attrs, PSA_KEY_TYPE_ML_DSA_PUBLIC_KEY);
+
+    psa_status_t status = pqcp_psa_mldsa_generate_key(
+        &keypair_attrs, psa_sig_key_buffer, sizeof(psa_sig_key_buffer), &key_length);
+    zassert_equal(status, PSA_SUCCESS);
+
+    status = pqcp_psa_mldsa_sign_message(
+        &keypair_attrs, psa_sig_key_buffer, key_length, PSA_ALG_ML_DSA_65,
+        psa_test_msg, sizeof(psa_test_msg) - 1,
+        short_signature, sizeof(short_signature), &sig_length);
+    zassert_equal(status, PSA_ERROR_BUFFER_TOO_SMALL,
+                  "Short signature buffer should be rejected");
+
+    status = pqcp_psa_mldsa_sign_message(
+        &public_attrs, psa_sig_key_buffer, key_length, PSA_ALG_ML_DSA_65,
+        psa_test_msg, sizeof(psa_test_msg) - 1,
+        psa_signature, sizeof(psa_signature), &sig_length);
+    zassert_equal(status, PSA_ERROR_NOT_SUPPORTED,
+                  "Signing with a public-key attribute should be rejected");
+
+    status = pqcp_psa_mldsa_sign_message(
+        &keypair_attrs, NULL, key_length, PSA_ALG_ML_DSA_65,
+        psa_test_msg, sizeof(psa_test_msg) - 1,
+        psa_signature, sizeof(psa_signature), &sig_length);
+    zassert_equal(status, PSA_ERROR_INVALID_ARGUMENT,
+                  "NULL key buffer should be rejected");
 }
 
 #endif /* CONFIG_PQCP_PSA_DRIVER_MLDSA */
