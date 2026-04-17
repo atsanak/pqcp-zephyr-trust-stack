@@ -1563,6 +1563,37 @@ If the manual `zephyr_ref` differs from the baseline `v4.3.0`, the workflow
 also runs an explicit compatibility-smoke build step so Zephyr drift is called
 out separately from the default static-analysis output.
 
+## Releasing
+
+Keep the next release notes in the `## [Unreleased]` block in
+[`CHANGELOG.md`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/CHANGELOG.md).
+Before tagging, run the full release gate locally:
+
+```bash
+python scripts/release_check.py
+```
+
+Then create and push the annotated release tag:
+
+```bash
+git tag -a v0.9.0 -m "Release v0.9.0"
+git push --tags
+```
+
+The tag-triggered workflow at
+[`release.yml`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/.github/workflows/release.yml)
+automatically:
+
+- runs `python scripts/release_check.py` and stops the release if it fails;
+- builds every sample and ztest on `qemu_x86_64`;
+- uploads `release_check_results.xml`, `build_summary.txt`, the release log, and the per-build logs as workflow artifacts;
+- creates a GitHub Release titled with the tag name and populated from the current `## [Unreleased]` changelog block.
+
+Once the tagged release is out, move the `## [Unreleased]` content into a
+versioned heading such as `## [0.9.0] - 2026-04-17`, add a fresh empty
+`## [Unreleased]` section above it, and commit that rollover to start the next
+cycle cleanly.
+
 Fast CI is therefore pinned to a known-good baseline, while extended checks can
 be used to probe upcoming Zephyr drift before it reaches downstream consumers.
 

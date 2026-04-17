@@ -55,6 +55,7 @@ jobs:
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         run: |
           python -m py_compile \
+            "$GITHUB_WORKSPACE/scripts/extract_changelog_section.py" \
             "$GITHUB_WORKSPACE/scripts/run_acvp_serial_session.py" \
             "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
             "$GITHUB_WORKSPACE/scripts/parse_logs.py" \
