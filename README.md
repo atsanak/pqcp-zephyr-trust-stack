@@ -227,6 +227,38 @@ west build -p always -b mps2/an385 tests/ztest_primitive -- -DOVERLAY_CONFIG=ove
 west build -t run
 ```
 
+### Running Tests with Twister
+
+The repo now ships `testcase.yaml` manifests for all four ztest suites, so
+downstream Zephyr workspaces can discover them through the standard Twister
+runner instead of relying on repo-local helper scripts alone.
+
+To discover and build the QEMU-covered tests without running them:
+
+```bash
+/Users/angelostsanaktsidis/code/PQC/zephyr-ws/.venv/bin/west twister \
+  -T tests/ \
+  -p qemu_x86_64 \
+  --build-only
+```
+
+To focus on just the PQCP-tagged scenarios, use Twister's tag filter:
+
+```bash
+/Users/angelostsanaktsidis/code/PQC/zephyr-ws/.venv/bin/west twister \
+  -T tests/ \
+  -p qemu_x86_64 \
+  --build-only \
+  -t pqcp
+```
+
+The current manifests cover:
+
+- `tests/ztest_rng`
+- `tests/ztest_primitive` plus the PSA and `overlay-no-entropy.conf` variants
+- `tests/ztest_tls_selftest`
+- `tests/ztest_acvp_serial`
+
 ### Enable in Your Application
 
 Add to your `prj.conf`:
