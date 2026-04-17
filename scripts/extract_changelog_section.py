@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Extract a named Keep a Changelog section from CHANGELOG.md.
-"""
+"""Extract Keep a Changelog sections for release automation."""
 
 from __future__ import annotations
 
@@ -16,6 +14,12 @@ SECTION_RE = re.compile(r"^## \[([^\]]+)\](?:\s+-\s+.*)?$", re.MULTILINE)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Extract a named section from CHANGELOG.md"
+    )
+    parser.add_argument(
+        "file_arg",
+        nargs="?",
+        type=Path,
+        help="Optional positional path to the changelog file",
     )
     parser.add_argument(
         "--file",
@@ -33,22 +37,35 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional output file; defaults to stdout",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.file_arg is not None:
+        args.file = args.file_arg
+    return args
 
 
-def extract_section(text: str, section_name: str) -> str:
+def _iter_sections(text: str) -> list[tuple[str, str]]:
     matches = list(SECTION_RE.finditer(text))
+    sections: list[tuple[str, str]] = []
     for index, match in enumerate(matches):
-        if match.group(1) != section_name:
-            continue
-
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         body = text[start:end].strip()
-        if not body:
-            return "No release notes were recorded in this section.\n"
-        return body + "\n"
+        sections.append((match.group(1), body))
+    return sections
 
+
+def extract_section(text: str, section_name: str) -> str:
+    sections = _iter_sections(text)
+    for index, (name, body) in enumerate(sections):
+        if name != section_name:
+            continue
+        if body:
+            return body + "\n"
+        if name == "Unreleased":
+            for _, fallback_body in sections[index + 1 :]:
+                if fallback_body:
+                    return fallback_body + "\n"
+        return "No release notes were recorded in this section.\n"
     raise SystemExit(f"Section [{section_name}] not found in changelog")
 
 
