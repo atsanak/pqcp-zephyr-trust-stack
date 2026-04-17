@@ -279,6 +279,37 @@ def normalize_run_mode(value: Optional[str], *, build_only: bool = False) -> str
     return run_mode
 
 
+def resolve_run_mode(
+    value: Optional[str],
+    *,
+    build_only: bool = False,
+    run: Optional[bool] = None,
+    build: Optional[bool] = None,
+) -> str:
+    if value is not None:
+        return normalize_run_mode(value, build_only=build_only)
+
+    if build_only:
+        return "build_only"
+
+    if run is None and build is None:
+        return normalize_run_mode(None, build_only=False)
+
+    run_enabled = bool(run)
+    build_enabled = bool(build)
+
+    if run_enabled and not build_enabled:
+        return "run"
+    if build_enabled and not run_enabled:
+        return "build_only"
+    if run_enabled and build_enabled:
+        return "run"
+
+    raise ValueError(
+        "Matrix entries using run/build booleans must enable at least one mode"
+    )
+
+
 def make_run_id(
     board: str,
     profile: str,
@@ -1070,9 +1101,11 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                 implementation_name = normalize_implementation_name(
                     item.get("implementation")
                 )
-                run_mode = normalize_run_mode(
+                run_mode = resolve_run_mode(
                     item.get("run_mode"),
                     build_only=bool(item.get("build_only", False)),
+                    run=item.get("run"),
+                    build=item.get("build"),
                 )
                 backend_policy = normalize_backend_policy(item.get("backend"))
                 overlays = normalize_overlays(item.get("overlays"))
@@ -1120,9 +1153,11 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
             implementation_name = normalize_implementation_name(
                 item.get("implementation")
             )
-            run_mode = normalize_run_mode(
+            run_mode = resolve_run_mode(
                 item.get("run_mode"),
                 build_only=bool(item.get("build_only", False)),
+                run=item.get("run"),
+                build=item.get("build"),
             )
             backend_policy = normalize_backend_policy(item.get("backend"))
             sample_info = SAMPLES.get(sample, {}) if sample else {}
