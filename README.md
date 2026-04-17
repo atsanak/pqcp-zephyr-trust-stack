@@ -44,22 +44,23 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 
 ### West Workspace Setup
 
-For a fresh workspace, this repository now ships a root `west.yml` manifest that
-pulls Zephyr plus the two PQ Code Package backends into the layout expected by
-the module:
+For a fresh workspace, use the repository-root `west.yml` directly:
 
 ```bash
-west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack --mr main pqcp-ws
-cd pqcp-ws
-west update
-west manifest --resolve > /dev/null
+west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
+cd my-workspace && west update
+west build -b qemu_x86_64 pqcp-zephyr-trust-stack/samples/pqcp_serial_acvp
 ```
 
 That leaves the manifest repository at `pqcp-zephyr-trust-stack/`, Zephyr at
-`zephyr/`, and the PQCP backend projects at:
+`zephyr/`, and the PQ Code Package backends at:
 
-- `pqcp-zephyr-trust-stack/ext/mlkem-native`
-- `pqcp-zephyr-trust-stack/ext/mldsa-native`
+- `modules/crypto/mlkem-native`
+- `modules/crypto/mldsa-native`
+
+The module still supports the existing in-repo `ext/` layout for local
+development checkouts, so older workspaces and direct in-tree builds continue
+to work.
 
 For release-oriented integrations, pin the manifest repo revision to the tag or
 commit that matches the documented version macros in
@@ -107,63 +108,34 @@ working in this repository itself during development.
 
 Path 1: west consumer
 
-When the repository is present in a west workspace manifest, the registration
-file at `zephyr/module.yml` injects the module automatically with:
+When the repository is used as the workspace manifest repository, `west.yml`
+pulls Zephyr plus the pinned PQ Code Package dependencies automatically and
+`zephyr/module.yml` injects the module’s CMake/Kconfig integration with no
+extra glue:
 
-- `build.cmake: .`
-- `build.kconfig: Kconfig`
-- module name: `pqcp_zephyr_trust_stack`
-
-That means a consumer does not need any custom CMake glue. Add the module to
-your workspace manifest and then enable only the symbols you need in the app:
-
-```yaml
-manifest:
-  projects:
-    - name: pqcp-zephyr-trust-stack
-      url: https://github.com/atsana01/pqcp-zephyr-trust-stack
-      revision: <pinned-tag-or-commit>
-      path: modules/pqcp
+```bash
+west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
+cd my-workspace && west update
+west build -b qemu_x86_64 pqcp-zephyr-trust-stack/samples/pqcp_serial_acvp
 ```
 
-```conf
-CONFIG_PQCP=y
-CONFIG_PQCP_ACVP=y
-CONFIG_PQCP_PROFILE_NATIVE_LAB=y
-```
+For an application workspace that already has its own manifest, add this repo as
+another project and pin it to the release tag or commit that matches both
+`PQCP_VERSION_STRING` in `include/pqcp_zephyr/version.h` and the top release
+entry in `CHANGELOG.md`.
 
-The ACVP command library can also be enabled without the native/lab profile if
+The ACVP command library can be enabled without the full native/lab profile if
 your application needs just the parser/formatter surface, but production-style
 builds should still keep deterministic RNG disabled and select a production RNG
 backend such as `CONFIG_PQCP_RNG_ZEPHYR_ENTROPY=y` or `CONFIG_PQCP_RNG_PSA=y`.
 
-For a lightweight consumer smoke test, a trivial Zephyr app can include:
-
-```c
-#include <pqcp_zephyr/acvp_cmd.h>
-
-int main(void)
-{
-    return pqcp_acvp_result_str(PQCP_ACVP_OK) != NULL ? 0 : 1;
-}
-```
-
-and build it with:
-
-```bash
-west build -p always -b qemu_x86_64 /path/to/app
-```
-
 If you are not using the repository root `west.yml`, the equivalent explicit
-external-module injection flow is:
+external-module injection flow is still:
 
 ```bash
 west build -p always -b qemu_x86_64 /path/to/app -- \
   -DZEPHYR_EXTRA_MODULES=/path/to/pqcp-zephyr-trust-stack
 ```
-
-That consumer app path is what we validate locally when checking that the
-module registration remains healthy.
 
 Path 2: in-tree development
 

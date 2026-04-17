@@ -1,11 +1,15 @@
 manifest:
-  version: 1.2
+  self:
+    path: pqcp-zephyr-trust-stack
 
   remotes:
     - name: zephyrproject-rtos
       url-base: https://github.com/zephyrproject-rtos
-    - name: pq-code-package
+    - name: pqcp
       url-base: https://github.com/pq-code-package
+
+  defaults:
+    remote: zephyrproject-rtos
 
   projects:
     - name: zephyr
@@ -13,13 +17,10 @@ manifest:
       revision: v4.3.0
       import: true
     - name: mlkem-native
-      remote: pq-code-package
+      remote: pqcp
       revision: e07bff537f38b457601e524038f2395e235b011b
-      path: pqcp-zephyr-trust-stack/ext/mlkem-native
+      path: modules/crypto/mlkem-native
     - name: mldsa-native
-      remote: pq-code-package
+      remote: pqcp
       revision: 0f8b8e074b2525eb844b022b03b962bf888d51aa
-      path: pqcp-zephyr-trust-stack/ext/mldsa-native
-
-  self:
-    path: pqcp-zephyr-trust-stack
+      path: modules/crypto/mldsa-native
