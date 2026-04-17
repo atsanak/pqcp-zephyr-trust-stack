@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -25,6 +26,10 @@ HOST_ENV_BLACKLIST = (
     "LDFLAGS",
     "CPATH",
     "SDKROOT",
+)
+
+XML_INVALID_CHARS_RE = re.compile(
+    "[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD]"
 )
 
 
@@ -121,6 +126,17 @@ def build_env() -> dict[str, str]:
     return env
 
 
+def discover_tool(name: str) -> str:
+    tool = shutil.which(name)
+    if tool is None:
+        raise RuntimeError(f"Unable to find required tool: {name}")
+    return tool
+
+
+def sanitize_junit_text(text: str) -> str:
+    return XML_INVALID_CHARS_RE.sub("", text)
+
+
 def write_junit_report(results: List[StepResult], output_path: Path) -> None:
     testsuite = ET.Element(
         "testsuite",
@@ -146,9 +162,9 @@ def write_junit_report(results: List[StepResult], output_path: Path) -> None:
                 message=f"Step exited with code {result.returncode}",
                 type="failure",
             )
-            failure.text = result.output
+            failure.text = sanitize_junit_text(result.output)
         system_out = ET.SubElement(testcase, "system-out")
-        system_out.text = result.output
+        system_out.text = sanitize_junit_text(result.output)
 
     root = ET.Element("testsuites")
     root.append(testsuite)
@@ -235,6 +251,7 @@ def main() -> int:
     output_root.mkdir(parents=True, exist_ok=True)
 
     west_cmd = discover_west(args.west, west_root, module_path)
+    cppcheck_cmd = discover_tool("cppcheck")
     env = build_env()
     ztest_build_dir = output_root / "ztest_acvp_serial_qemu"
     nucleo_protocol_default_dir = output_root / "nucleo_protocol_default"
@@ -243,6 +260,19 @@ def main() -> int:
     junit_output = output_root / "release_check_results.xml"
 
     steps = [
+        Step(
+            name="cppcheck",
+            cmd=[
+                cppcheck_cmd,
+                "--enable=warning,style,performance,portability",
+                "--error-exitcode=1",
+                "--suppress=missingIncludeSystem",
+                "-I",
+                str(module_path / "include"),
+                str(module_path / "src"),
+            ],
+            cwd=module_path,
+        ),
         Step(
             name="Extended Checks (strict)",
             cmd=[
@@ -253,6 +283,7 @@ def main() -> int:
                 "--module-path",
                 str(module_path),
                 "--strict",
+                "--skip-cppcheck",
             ],
             cwd=module_path,
         ),
@@ -267,6 +298,7 @@ def main() -> int:
                 str(module_path),
                 "--strict",
                 "--run-cost-of-assurance-smoke",
+                "--skip-cppcheck",
             ],
             cwd=module_path,
         ),

@@ -86,7 +86,6 @@ jobs:
             --module-path "$GITHUB_WORKSPACE" \
             --zephyr-ref "$ZEPHYR_REF" \
             --skip-graphviz \
-            --skip-cppcheck \
             --run-compatibility-smoke \
             --strict
 
