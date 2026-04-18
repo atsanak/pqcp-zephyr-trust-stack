@@ -336,6 +336,16 @@ def main() -> int:
             ),
         ),
         Step(
+            name="kat_provenance",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/verify_kat_provenance.py"),
+                "--header",
+                str(module_path / "tests/ztest_acvp_kat/src/kat_vectors.h"),
+            ],
+            cwd=module_path,
+        ),
+        Step(
             name="ACVP KAT ztest build",
             cmd=[
                 *west_cmd,
