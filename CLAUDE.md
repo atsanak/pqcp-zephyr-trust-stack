@@ -1,8 +1,8 @@
 # CLAUDE.md — pqcp-zephyr-trust-stack session memory
 
 > Auto-managed context for AI coding sessions.
-> Last updated: 2026-04-13 by review agent.
-> HEAD: 7685546 (main)
+> Last updated: 2026-04-18 by Codex.
+> HEAD: b6a71f6 (main)
 
 ---
 
@@ -22,22 +22,28 @@ externally consumable Zephyr module.
 CMakeLists.txt       ← top-level, module entry point
 Kconfig              ← top-level, all CONFIG_PQCP_* symbols live here
 west.yml             ← repo-root manifest (Zephyr v4.3.0 + pinned deps)
-zephyr/              ← MISSING: needs module.yml (see Task 2)
+zephyr/module.yml    ← west external module registration
 include/pqcp_zephyr/ ← public stable API headers
   acvp_cmd.h         ← ACVP wire protocol, sizing constants, error codes
-  tls_selftest.h     ← TLS/PSA/PQC selftest API (declared, needs impl)
+  tls_selftest.h     ← TLS/PSA/PQC selftest API (implemented in src/tls_selftest.c)
   version.h          ← PQCP_VERSION = "0.9.0"
 src/
   acvp_cmd.c         ← validate_line, timeout/reset, receive loop
-  tls_selftest.c     ← INCOMPLETE — must implement 3 declared functions
+  tls_selftest.c     ← implemented PSA init + offline handshake + metric logging
+  psa_mlkem_driver.c ← hardened PSA ML-KEM driver entry points
+  psa_mldsa_driver.c ← hardened PSA ML-DSA driver entry points
 samples/
   pqcp_serial_acvp/  ← k_msgq + k_timer ACVP harness, ERROR:TIMEOUT
   pqcp_bench_protocol/
   pqcp_tls_mbedtls_psa/
 tests/
   ztest_acvp_serial/ ← garbage/oversize/timeout ztests (all passing)
+  ztest_acvp_kat/    ← ML-KEM-768 + ML-DSA-65 deterministic smoke vectors
   ztest_tls_selftest/
+  ztest_primitive/
+  ztest_rng/
 scripts/
+  extract_changelog_section.py
   release_check.py
   run_extended_checks.py
   cost_of_assurance_matrix.json
@@ -63,19 +69,25 @@ CHANGELOG.md
 
 ---
 
-## Completed — verified HEAD 9b3e382
+## Completed — verified HEAD b6a71f6
 
 Infrastructure:
+- west.yml: repo-root manifest for standalone `west init -m`
 - west.yml: pinned SHAs for mlkem-native + mldsa-native
 - zephyr/module.yml: minimal west external module registration
 - cmake/pqcp_local_module.cmake: local in-tree development bootstrap
 - All CMakeLists.txt updated for local bootstrap
+- CHANGELOG.md: `0.9.0` release notes populated, fresh empty `Unreleased` block added
+- samples/pqcp_serial_acvp/README.md + samples/pqcp_tls_mbedtls_psa/README.md:
+  standalone sample docs with real build/run output
 
 Implementations:
 - src/tls_selftest.c: 11KB, real PSA init + mbedTLS handshake + metric logging
 - src/acvp_cmd.c: 26KB, garbage/timeout/recovery hardened, bounded line validator
 - src/psa_mlkem_driver.c + src/psa_mldsa_driver.c: PSA drivers, error paths hardened
 - src/bench_protocol.c: 16KB protocol benchmark with RTOS metric emission
+- tests/ztest_acvp_kat/: deterministic ML-KEM-768 + ML-DSA-65 KAT smoke using
+  upstream vector material, wired into `release_check.py`
 
 CI/Tooling:
 - JUnit XML from release_check.py, artifact upload in ci.yml
@@ -91,16 +103,16 @@ CI/Tooling:
   PSA error codes, key type + parameter set rejected at entry (baf12b4)
 - cppcheck enforced in CI and release gate, no --skip-cppcheck (bfe4fea)
 - JUnit XML ANSI-sanitised, 9 named release-gate steps (bfe4fea)
+- README.md: security properties section documenting correctness, side-channel
+  posture, PSA guarantees, and out-of-scope boundaries
+- release_check.py: ACVP KAT build/run added as named release step
 
-Version: 0.9.0-pre1. Next: bump CHANGELOG [Unreleased] → [0.9.0], tag v0.9.0.
+Version: 0.9.0-pre1. Next: run `release_check.py`, tag `v0.9.0`, and verify
+the tag-triggered GitHub Release workflow publishes artifacts successfully.
 
 ## TASKS — next session
 
-1. feat(manifest): add root west.yml for standalone west init
-2. docs(changelog): populate [0.9.0] release notes, rename [Unreleased]
-3. docs(samples): add standalone README for serial ACVP and TLS samples
-4. test(acvp): add NIST KAT vector smoke test for ML-KEM-768 and ML-DSA-65
-5. docs(claude): update session memory to post-v0.9.0-prep state
-   docs(readme): add security properties section
-
-After all five tasks: tag v0.9.0 and verify release workflow fires.
+1. Tag `v0.9.0` from a clean main branch once `python3 scripts/release_check.py`
+   exits 0.
+2. Push the tag and confirm `.github/workflows/release.yml` creates the GitHub
+   Release with the changelog-derived body and uploaded artifacts.
