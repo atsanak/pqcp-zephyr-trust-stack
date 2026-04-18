@@ -26,8 +26,7 @@
  * include style (`<cortex_m/dwt.h>`) instead of depending on private paths.
  */
 #if defined(CONFIG_CPU_CORTEX_M_HAS_DWT) && defined(CONFIG_PQCP_BENCH_CYCLE_COUNTER)
-#if defined(__has_include)
-/* cppcheck-suppress preprocessorErrorDirective */
+#if defined(__has_include) && !defined(__CPPCHECK__)
 #if __has_include(<cortex_m/dwt.h>)
 #include <cortex_m/dwt.h>
 #define USE_DWT_CYCLES 1

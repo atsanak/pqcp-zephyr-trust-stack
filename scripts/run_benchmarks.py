@@ -771,11 +771,13 @@ class BenchmarkRunner:
                 timeout=run_timeout,
             )
 
-        return self._run_command(
+        result = self._run_command(
             [*self.west_cmd, "build", "-d", str(build_dir), "-t", "run"],
             cwd=self.west_root,
             timeout=run_timeout,
         )
+        self._cleanup_qemu(build_dir)
+        return result
 
     def _get_code_size(self, spec: RunSpec) -> Dict[str, int]:
         build_dir = self.output_dir / "build" / spec.run_id
