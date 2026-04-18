@@ -8,6 +8,14 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
+### Planned for v1.0.0
+
+- CI: `west twister` discovery job covering all five ztest suites.
+- CI: NIST KAT vector provenance verification in the release gate.
+- CI: `nucleo_h743zi` protocol suite builds on CI runners, not just matrix metadata.
+- Completeness: ML-KEM-1024 and ML-DSA-87 KAT vectors added to `tests/ztest_acvp_kat`.
+- Robustness: deeper ACVP serial stall handling beyond the current bounded frame timeout.
+
 ## [0.9.0] - 2026-04-18
 
 ### Added
@@ -17,8 +25,8 @@ release tag to the validation and provider surface it introduced.
    bootstrap helper.
 - Tag-triggered release workflow with `release_check.py` gating, JUnit upload,
    changelog extraction, build-log artifacts, and GitHub Release publication.
-- Twister `testcase.yaml` manifests for all four ztest suites so downstream
-   `west twister` pipelines can discover the module tests directly.
+- Twister `testcase.yaml` manifests for all five ztest suites so downstream
+  `west twister` pipelines can discover the module tests directly.
 - A production-oriented PQCP provider family for ML-KEM and ML-DSA with RNG
    abstraction, PSA driver shims, deterministic KAT coverage, and stable
    `PQCP_METRIC` logging for primitive and protocol samples.
