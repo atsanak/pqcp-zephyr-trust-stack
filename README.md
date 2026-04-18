@@ -1643,7 +1643,7 @@ python scripts/release_check.py
 Then validate the full GitHub Actions release path without publishing:
 
 ```bash
-gh workflow run release-dry-run.yml --ref main
+gh workflow run release-dry-run.yml --ref main -f release_ref=main
 ```
 
 Wait for `release-dry-run.yml` to complete successfully on `main`, then create
