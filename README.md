@@ -2,6 +2,27 @@
 
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
+## Security Properties
+
+### Cryptographic Correctness
+- ML-KEM-512/768/1024 implemented per FIPS 203 (final)
+- ML-DSA-44/65/87 implemented per FIPS 204 (final)
+- NIST KAT vectors verified in CI ([`tests/ztest_acvp_kat`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/tests/ztest_acvp_kat))
+- Baseline provider is QEMU-only; not a production path
+
+### Side-Channel Posture
+- The PQCP provider implementations are the `mlkem-native` and `mldsa-native` modules (see [`west.yml`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/west.yml) for pinned revisions). Consult those modules' documentation for their constant-time guarantees.
+- The baseline provider makes no constant-time guarantees.
+
+### PSA Driver Guarantees
+- Output buffer bounds validated before any write
+- Unsupported key types rejected before internal state mutation
+- All error paths return specific `PSA_ERROR_*` codes
+
+### Out of Scope for This Module
+- Hardware RNG quality (depends on platform entropy source)
+- TLS record-layer security (provided by mbedTLS)
+
 ## Features
 
 - **ML-KEM (FIPS-203)**: Key Encapsulation Mechanism for quantum-resistant key exchange
