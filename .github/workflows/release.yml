@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or ref to release"
+        required: true
+        type: string
+
+env:
+  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
 
 permissions:
   contents: write
@@ -16,6 +25,7 @@ jobs:
       - name: Check out module repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.RELEASE_REF }}
           submodules: recursive
 
       - name: Set up Python
@@ -49,7 +59,7 @@ jobs:
       - name: Initialize Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m "$GITHUB_WORKSPACE" --mr "$GITHUB_SHA" release-workspace
+          west init -m "$GITHUB_WORKSPACE" --mr "$RELEASE_REF" release-workspace
           cd release-workspace
           west update
           west packages pip --install --ignore-venv-check
@@ -116,7 +126,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ github.ref_name }}
+          name: release-${{ env.RELEASE_REF }}
           path: |
             ${{ runner.temp }}/release-check.log
             ${{ runner.temp }}/release-check-output/release_check_results.xml
@@ -127,7 +137,8 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_REF }}
+          name: ${{ env.RELEASE_REF }}
           body_path: ${{ runner.temp }}/release-notes.md
           files: |
             ${{ runner.temp }}/release-check-output/release_check_results.xml
