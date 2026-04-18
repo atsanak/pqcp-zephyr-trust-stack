@@ -251,6 +251,96 @@ jobs:
           name: twister-results
           path: ${{ runner.temp }}/twister-out/
 
+  nucleo-protocol-builds:
+    runs-on: ubuntu-22.04
+    needs:
+      - qemu-smoke
+
+    steps:
+      - name: Check out module repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ccache \
+            cppcheck \
+            device-tree-compiler \
+            dfu-util \
+            file \
+            gcc \
+            g++ \
+            gperf \
+            libmagic1 \
+            libsdl2-dev \
+            make \
+            ninja-build \
+            qemu-system-x86 \
+            wget \
+            xz-utils
+
+      - name: Install west
+        run: python -m pip install --upgrade west
+
+      - name: Set up Zephyr workspace
+        working-directory: ${{ runner.temp }}
+        run: |
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          cd zephyrproject
+          west update
+          west packages pip --install --ignore-venv-check
+          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
+
+      - name: Build nucleo_h743zi protocol suite samples
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          logs_dir="$RUNNER_TEMP/nucleo-protocol-logs"
+          mkdir -p "$logs_dir"
+
+          west build -p always \
+            -d "$RUNNER_TEMP/build-nucleo-protocol-default" \
+            -b nucleo_h743zi \
+            "$GITHUB_WORKSPACE/samples/pqcp_bench_protocol" \
+            -- \
+            -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE" \
+            -DOVERLAY_CONFIG=overlay-rtos-metrics.conf \
+            >"$logs_dir/mlkem768_mldsa65.log" 2>&1
+
+          west build -p always \
+            -d "$RUNNER_TEMP/build-nucleo-protocol-single-level" \
+            -b nucleo_h743zi \
+            "$GITHUB_WORKSPACE/samples/pqcp_bench_protocol" \
+            -- \
+            -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE" \
+            -DOVERLAY_CONFIG=overlay-rtos-metrics.conf \
+            -DCONFIG_PQCP_MLKEM_LEVEL_512=y \
+            -DCONFIG_PQCP_MLKEM_LEVEL_768=n \
+            -DCONFIG_PQCP_MLKEM_LEVEL_1024=n \
+            -DCONFIG_PQCP_MLDSA_LEVEL_44=n \
+            -DCONFIG_PQCP_MLDSA_LEVEL_65=n \
+            -DCONFIG_PQCP_MLDSA_LEVEL_87=y \
+            -DCONFIG_MAIN_STACK_SIZE=196608 \
+            >"$logs_dir/mlkem512_mldsa87.log" 2>&1
+
+      - name: Upload nucleo protocol build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nucleo-protocol-builds
+          path: ${{ runner.temp }}/nucleo-protocol-logs/
+
   release-gate:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
