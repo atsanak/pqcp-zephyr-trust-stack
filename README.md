@@ -2,6 +2,34 @@
 
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
+## Performance
+
+> QEMU x86_64 emulation. Cycle counts are emulation-approximate; generate the
+> full dataset with `scripts/export_results.py` and inspect
+> `results/benchmark_results.csv` plus `results/benchmark_summary.md` for the
+> complete publication-ready export.
+
+| Operation | Param Set | PQCP cycles | Baseline cycles | Overhead |
+|-----------|-----------|-------------|-----------------|----------|
+| ML-KEM KeyGen | 512 | 3743 | 3286 | +13.91% |
+| ML-KEM KeyGen | 768 | 2311 | 3421 | -32.45% |
+| ML-KEM KeyGen | 1024 | 2503 | 3368 | -25.68% |
+| ML-KEM Encaps | 512 | 1486 | 998 | +48.90% |
+| ML-KEM Encaps | 768 | 1176 | 1213 | -3.05% |
+| ML-KEM Encaps | 1024 | 1204 | 1834 | -34.35% |
+| ML-KEM Decaps | 512 | 988 | 2295 | -56.95% |
+| ML-KEM Decaps | 768 | 841 | 1274 | -33.99% |
+| ML-KEM Decaps | 1024 | 1044 | 2033 | -48.65% |
+| ML-DSA KeyGen | 44 | 6253 | 3476 | +79.89% |
+| ML-DSA KeyGen | 65 | 7501 | 3723 | +101.48% |
+| ML-DSA KeyGen | 87 | 3929 | 4820 | -18.49% |
+| ML-DSA Sign | 44 | 10157 | 7593 | +33.77% |
+| ML-DSA Sign | 65 | 11989 | 7162 | +67.40% |
+| ML-DSA Sign | 87 | 13425 | 17551 | -23.51% |
+| ML-DSA Verify | 44 | 1437 | 1309 | +9.78% |
+| ML-DSA Verify | 65 | 3555 | 1643 | +116.37% |
+| ML-DSA Verify | 87 | 6067 | 2543 | +138.58% |
+
 ## Security Properties
 
 ### Cryptographic Correctness
@@ -27,9 +55,9 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 
 - [x] CI: west Twister discovery job
 - [x] CI: KAT vector NIST provenance verification
-- [ ] CI: `nucleo_h743zi` protocol suite builds on CI runners
-- [ ] Completeness: ML-KEM-1024 + ML-DSA-87 KAT vectors
-- [ ] Robustness: ACVP readline timeout / deeper mid-frame stall detection coverage
+- [x] CI: `nucleo_h743zi` protocol suite builds on CI runners
+- [x] Completeness: ML-KEM-1024 + ML-DSA-87 KAT vectors
+- [x] Robustness: ACVP readline timeout / deeper mid-frame stall detection coverage
 
 ## Features
 
@@ -1551,6 +1579,9 @@ The fast CI path runs:
 - `tests/ztest_tls_selftest`
 - `samples/pqcp_basic_kem`
 - `samples/pqcp_basic_sig`
+- build-only `samples/pqcp_bench_protocol` for `nucleo_h743zi` in both the
+  default ML-KEM-768 + ML-DSA-65 lane and the single-level ML-KEM-512 +
+  ML-DSA-87 lane
 - a filtered `--benchmark-matrix` smoke run
 - a filtered `--profile-validation` build-only smoke run with
   `scripts/resource_budgets.json`
@@ -1609,11 +1640,18 @@ Before tagging, run the full release gate locally:
 python scripts/release_check.py
 ```
 
-Then create and push the annotated release tag:
+Then validate the full GitHub Actions release path without publishing:
 
 ```bash
-git tag -a v0.9.0 -m "Release v0.9.0"
-git push --tags
+gh workflow run release-dry-run.yml --ref main
+```
+
+Wait for `release-dry-run.yml` to complete successfully on `main`, then create
+and push the annotated release tag:
+
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0: publication-quality PQC stack"
+git push origin v1.0.0
 ```
 
 The tag-triggered workflow at
@@ -1624,6 +1662,12 @@ automatically:
 - builds every sample and ztest on `qemu_x86_64`;
 - uploads `release_check_results.xml`, `build_summary.txt`, the release log, and the per-build logs as workflow artifacts;
 - creates a GitHub Release titled with the tag name and populated from the current `## [Unreleased]` changelog block.
+
+The companion
+[`release-dry-run.yml`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/.github/workflows/release-dry-run.yml)
+workflow runs the same gate, QEMU builds, and changelog extraction steps
+without publishing a GitHub Release. Use it to validate the release pipeline on
+`main` before pushing any release tag.
 
 Once the tagged release is out, move the `## [Unreleased]` content into a
 versioned heading such as `## [0.9.0] - 2026-04-17`, add a fresh empty
