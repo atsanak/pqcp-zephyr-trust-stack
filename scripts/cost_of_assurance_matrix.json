@@ -61,6 +61,34 @@
       "notes": "QEMU-only clean reference baseline for ML-KEM-512 primitive comparison."
     },
     {
+      "run_id": "qemu_x86_64__coa_qemu_single_level__pqcp_basic_kem_mlkem1024",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_basic_kem",
+      "implementation": "pqcp",
+      "backend": "auto",
+      "extra_kconfig": [
+        "CONFIG_PQCP_MLKEM_LEVEL_512=n",
+        "CONFIG_PQCP_MLKEM_LEVEL_768=n",
+        "CONFIG_PQCP_MLKEM_LEVEL_1024=y"
+      ],
+      "notes": "QEMU single-level ML-KEM-1024 PQCP primitive comparison row without changing production profile semantics."
+    },
+    {
+      "run_id": "qemu_x86_64__coa_qemu_single_level__pqcp_basic_kem_mlkem1024_baseline",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_basic_kem",
+      "implementation": "baseline",
+      "backend": "clean",
+      "extra_kconfig": [
+        "CONFIG_PQCP_MLKEM_LEVEL_512=n",
+        "CONFIG_PQCP_MLKEM_LEVEL_768=n",
+        "CONFIG_PQCP_MLKEM_LEVEL_1024=y"
+      ],
+      "notes": "QEMU-only clean reference baseline for ML-KEM-1024 primitive comparison."
+    },
+    {
       "board": "qemu_x86_64",
       "profile": "MCU_MINIMAL",
       "sample": "pqcp_basic_sig",
@@ -121,6 +149,36 @@
         "CONFIG_MAIN_STACK_SIZE=196608"
       ],
       "notes": "QEMU-only clean reference baseline for ML-DSA-87 primitive comparison."
+    },
+    {
+      "run_id": "qemu_x86_64__coa_qemu_single_level__pqcp_basic_sig_mldsa44",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_basic_sig",
+      "implementation": "pqcp",
+      "backend": "auto",
+      "extra_kconfig": [
+        "CONFIG_PQCP_MLDSA_LEVEL_44=y",
+        "CONFIG_PQCP_MLDSA_LEVEL_65=n",
+        "CONFIG_PQCP_MLDSA_LEVEL_87=n",
+        "CONFIG_MAIN_STACK_SIZE=196608"
+      ],
+      "notes": "QEMU single-level ML-DSA-44 PQCP primitive comparison row without changing production profile semantics."
+    },
+    {
+      "run_id": "qemu_x86_64__coa_qemu_single_level__pqcp_basic_sig_mldsa44_baseline",
+      "board": "qemu_x86_64",
+      "profile": "COA_QEMU_SINGLE_LEVEL",
+      "sample": "pqcp_basic_sig",
+      "implementation": "baseline",
+      "backend": "clean",
+      "extra_kconfig": [
+        "CONFIG_PQCP_MLDSA_LEVEL_44=y",
+        "CONFIG_PQCP_MLDSA_LEVEL_65=n",
+        "CONFIG_PQCP_MLDSA_LEVEL_87=n",
+        "CONFIG_MAIN_STACK_SIZE=196608"
+      ],
+      "notes": "QEMU-only clean reference baseline for ML-DSA-44 primitive comparison."
     },
     {
       "board": "qemu_x86_64",

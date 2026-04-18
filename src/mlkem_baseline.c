@@ -22,6 +22,14 @@
 #define PQCP_MLKEM_BASELINE_KEYPAIR PQCLEAN_MLKEM512_CLEAN_crypto_kem_keypair
 #define PQCP_MLKEM_BASELINE_ENCAPS PQCLEAN_MLKEM512_CLEAN_crypto_kem_enc
 #define PQCP_MLKEM_BASELINE_DECAPS PQCLEAN_MLKEM512_CLEAN_crypto_kem_dec
+#elif defined(CONFIG_PQCP_MLKEM_LEVEL_1024) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_512) && \
+      !defined(CONFIG_PQCP_MLKEM_LEVEL_768)
+#include "mlkem1024_clean/api.h"
+#define PQCP_MLKEM_BASELINE_LEVEL PQCP_MLKEM_1024
+#define PQCP_MLKEM_BASELINE_KEYPAIR PQCLEAN_MLKEM1024_CLEAN_crypto_kem_keypair
+#define PQCP_MLKEM_BASELINE_ENCAPS PQCLEAN_MLKEM1024_CLEAN_crypto_kem_enc
+#define PQCP_MLKEM_BASELINE_DECAPS PQCLEAN_MLKEM1024_CLEAN_crypto_kem_dec
 #elif defined(CONFIG_PQCP_MLKEM_LEVEL_768) && \
       !defined(CONFIG_PQCP_MLKEM_LEVEL_512) && \
       !defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
@@ -42,7 +50,7 @@
 #define PQCP_MLKEM_BASELINE_ENCAPS PQCLEAN_MLKEM768_CLEAN_crypto_kem_enc
 #define PQCP_MLKEM_BASELINE_DECAPS PQCLEAN_MLKEM768_CLEAN_crypto_kem_dec
 #else
-#error "PQCP baseline ML-KEM provider requires a single supported level (512 or 768)"
+#error "PQCP baseline ML-KEM provider requires a single supported level (512, 768, or 1024)"
 #endif
 
 static inline int validate_level(pqcp_mlkem_level_t level)
