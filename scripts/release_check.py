@@ -254,6 +254,7 @@ def main() -> int:
     cppcheck_cmd = discover_tool("cppcheck")
     env = build_env()
     ztest_build_dir = output_root / "ztest_acvp_serial_qemu"
+    kat_build_dir = output_root / "ztest_acvp_kat_qemu"
     nucleo_protocol_default_dir = output_root / "nucleo_protocol_default"
     nucleo_protocol_single_level_dir = output_root / "nucleo_protocol_single_level"
     profile_output_dir = output_root / "profile_validation"
@@ -333,6 +334,40 @@ def main() -> int:
             timeout=120,
             success_markers=(
                 "TESTSUITE pqcp_acvp_serial succeeded",
+                "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="ACVP KAT ztest build",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "qemu_x86_64",
+                str(module_path / "tests/ztest_acvp_kat"),
+                "-d",
+                str(kat_build_dir),
+                "--",
+                f"-DZEPHYR_EXTRA_MODULES={module_path}",
+            ],
+            cwd=west_root,
+        ),
+        Step(
+            name="ACVP KAT ztest run",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-d",
+                str(kat_build_dir),
+                "-t",
+                "run",
+            ],
+            cwd=west_root,
+            timeout=180,
+            success_markers=(
+                "TESTSUITE pqcp_acvp_kat succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
         ),
