@@ -14,9 +14,18 @@
 
 #include <string.h>
 
-#if defined(CONFIG_PQCP_MLDSA_LEVEL_65) && \
-    !defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+#if defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+    !defined(CONFIG_PQCP_MLDSA_LEVEL_65) && \
     !defined(CONFIG_PQCP_MLDSA_LEVEL_87)
+#include "mldsa44_clean/api.h"
+#define PQCP_MLDSA_BASELINE_LEVEL PQCP_MLDSA_44
+#define PQCP_MLDSA_BASELINE_SIG_SIZE PQCP_MLDSA_44_SIG_SIZE
+#define PQCP_MLDSA_BASELINE_KEYPAIR PQCLEAN_MLDSA44_CLEAN_crypto_sign_keypair
+#define PQCP_MLDSA_BASELINE_SIGN PQCLEAN_MLDSA44_CLEAN_crypto_sign_signature_ctx
+#define PQCP_MLDSA_BASELINE_VERIFY PQCLEAN_MLDSA44_CLEAN_crypto_sign_verify_ctx
+#elif defined(CONFIG_PQCP_MLDSA_LEVEL_65) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_44) && \
+      !defined(CONFIG_PQCP_MLDSA_LEVEL_87)
 #include "mldsa65_clean/api.h"
 #define PQCP_MLDSA_BASELINE_LEVEL PQCP_MLDSA_65
 #define PQCP_MLDSA_BASELINE_SIG_SIZE PQCP_MLDSA_65_SIG_SIZE
@@ -45,7 +54,7 @@
 #define PQCP_MLDSA_BASELINE_SIGN PQCLEAN_MLDSA65_CLEAN_crypto_sign_signature_ctx
 #define PQCP_MLDSA_BASELINE_VERIFY PQCLEAN_MLDSA65_CLEAN_crypto_sign_verify_ctx
 #else
-#error "PQCP baseline ML-DSA provider requires a single supported level (65 or 87)"
+#error "PQCP baseline ML-DSA provider requires a single supported level (44, 65, or 87)"
 #endif
 
 static inline int validate_level(pqcp_mldsa_level_t level)
