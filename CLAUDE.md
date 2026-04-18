@@ -2,7 +2,7 @@
 
 > Auto-managed context for AI coding sessions.
 > Last updated: 2026-04-18 by Codex.
-> HEAD: c0b865a (main)
+> HEAD: ed525589a8c1575beb375e8e99767209f0dd6a43 (main, 2026-04-18)
 
 ---
 
@@ -90,6 +90,10 @@ Infrastructure:
   - fix(ci): cppcheck flags aligned between release gate and strict checks,
     release pipeline green end-to-end (a2a55b2 + bd77abd + 1019dce + 41ee9c4)
   - v0.9.0 GitHub Release published successfully
+  - feat(ci): add nucleo protocol build lane and release-dry-run.yml (fc84a36)
+  DEFECT: dry-run hardcodes "[1.0.0]", no QEMU timeouts, no bench CSV check
+- docs(release): version.h bumped to 1.0.0, CHANGELOG [1.0.0] promoted (ed52558)
+  STATUS: v1.0.0 tag NOT yet pushed — dry-run not yet confirmed green
 
 
 Implementations:
@@ -134,26 +138,28 @@ CI/Tooling:
 Version: 0.9.0 released. Next: confirm the published `v0.9.0` release
 artifacts and close the remaining `v1.0.0` roadmap items.
 
+
+## OPEN DEFECTS (must fix before v1.0.0 tag)
+1. release-dry-run.yml: hardcoded version string, no QEMU timeouts, no benchmark CSV step
+2. README Performance table: numbers not CI-verified (may be fabricated)
+3. No resource_budgets.json / check_resource_budgets.py (no MCU size guard)
+4. No Doxygen docs (docs/Doxyfile, docs.yml CI job)
+5. No SBOM / THIRD_PARTY_LICENSES.md
+6. No sample functional output validator (verify_sample_output.py)
+
 ## TASKS — v1.0.0 work
 
 ## TASKS — v1.0.0 publication-quality work
 
 ## TASKS — v1.0.0 publication-quality work
 
-TASK 0 [BLOCKER]: Fix release gate — push scripts/export_results.py to main
-  (release_check.py benchmark_csv step calls it but it doesn't exist on remote)
+TASK 1: Fix release-dry-run.yml (dynamic version, timeouts, bench CSV step)
+TASK 2: Validate README perf table against real CSV output
+TASK 3: resource_budgets.json + check_resource_budgets.py + ci.yml size upload
+TASK 4: Doxygen configuration + docs.yml CI workflow
+TASK 5: THIRD_PARTY_LICENSES.md + sbom.spdx
+TASK 6: verify_sample_output.py + integration test step in release gate
+TASK 7: Tag v1.0.0 ONLY after all above pass + dry-run green
 
-TASK 1: vendor NIST KAT vectors offline + expand to all FIPS 203/204 param sets
-  (ML-KEM-512/768/1024, ML-DSA-44/65/87 in nist_vectors/ + kat_vectors.h + ztests)
-
-TASK 2: scripts/export_results.py → results/benchmark_results.csv + summary.md
-  (thin layer over existing matrix runner; --smoke flag for release gate)
-
-TASK 3: verify/complete baseline coverage (mlkem_baseline.c 1024, mldsa_baseline.c 44)
-  and corresponding runnable matrix entries in cost_of_assurance_matrix.json
-
-TASK 4: README.md Performance table with real measured QEMU numbers from CSV export
-
-TASK 5: release-dry-run.yml workflow → validate → tag v1.0.0 → update CHANGELOG
-
-RULE: push to origin/main after every commit. Never end a session with local-only commits.
+## RULE
+Push to origin/main after every commit. Never end session with local-only commits.
