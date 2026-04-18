@@ -33,6 +33,34 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Validate tagged release version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_VERSION="${RELEASE_REF#v}"
+          VERSION=$(
+            python3 - <<'PY'
+from pathlib import Path
+import re
+
+text = Path("include/pqcp_zephyr/version.h").read_text(encoding="utf-8")
+match = re.search(r'#define\s+PQCP_ZEPHYR_VERSION_STRING\s+"([^"]+)"', text)
+if match is None:
+    raise SystemExit("Unable to determine PQCP_ZEPHYR_VERSION_STRING")
+print(match.group(1))
+PY
+          )
+          if [ "$TAG_VERSION" != "$VERSION" ]; then
+            echo "Tag ${TAG_VERSION} does not match version.h ${VERSION}"
+            exit 1
+          fi
+          if ! grep -q "^## \\[${TAG_VERSION}\\]" CHANGELOG.md; then
+            echo "No CHANGELOG entry for ${TAG_VERSION}"
+            exit 1
+          fi
+          echo "RELEASE_VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
+
       - name: Install host dependencies
         run: |
           sudo apt-get update
@@ -70,6 +98,7 @@ jobs:
       - name: Run release gate
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         shell: bash
+        timeout-minutes: 90
         run: |
           set -o pipefail
           python "$MODULE_PATH/scripts/release_check.py" \
@@ -117,10 +146,9 @@ jobs:
 
       - name: Extract release notes
         run: |
-          release_section="${RELEASE_REF#v}"
           python "$MODULE_PATH/scripts/extract_changelog_section.py" \
             --file "$MODULE_PATH/CHANGELOG.md" \
-            --section "$release_section" \
+            --section "$RELEASE_VERSION" \
             --output "$RUNNER_TEMP/release-notes.md"
 
       - name: Upload release artifacts
