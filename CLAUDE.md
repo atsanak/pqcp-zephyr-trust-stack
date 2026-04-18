@@ -2,7 +2,7 @@
 
 > Auto-managed context for AI coding sessions.
 > Last updated: 2026-04-18 by Codex.
-> HEAD: b6a71f6 (main)
+> HEAD: c0b865a (main)
 
 ---
 
@@ -12,8 +12,8 @@ Zephyr RTOS module providing Post-Quantum Cryptography (PQC) primitives
 (ML-KEM, ML-DSA) via a layered stack: PSA Crypto / mbedTLS provider →
 protocol benchmark → ACVP serial test harness → TLS self-test.
 Target: embedded MCUs (primary: nucleo_h743zi class) + QEMU for CI.
-Version: 0.9.0-pre1. Goal: ship 0.9.0 as a product-ready, reproducible,
-externally consumable Zephyr module.
+Version: 0.9.0 released. Goal: land the remaining CI, KAT, and robustness
+work needed for a production `v1.0.0`.
 
 ---
 
@@ -38,7 +38,7 @@ samples/
   pqcp_tls_mbedtls_psa/
 tests/
   ztest_acvp_serial/ ← garbage/oversize/timeout ztests (all passing)
-  ztest_acvp_kat/    ← ML-KEM-768 + ML-DSA-65 deterministic smoke vectors
+  ztest_acvp_kat/    ← ML-KEM-768 + ML-DSA-65 NIST ACVP smoke vectors
   ztest_tls_selftest/
   ztest_primitive/
   ztest_rng/
@@ -69,7 +69,7 @@ CHANGELOG.md
 
 ---
 
-## Completed — verified HEAD b6a71f6
+## Completed — verified HEAD c0b865a
 
 Infrastructure:
 - west.yml: repo-root manifest for standalone `west init -m`
@@ -77,6 +77,8 @@ Infrastructure:
 - zephyr/module.yml: minimal west external module registration
 - cmake/pqcp_local_module.cmake: local in-tree development bootstrap
 - All CMakeLists.txt updated for local bootstrap
+- .github/workflows/release.yml: tag ref bootstrap fixed, workflow_dispatch ref
+  input added, and changelog extraction now follows the versioned tag section
 - CHANGELOG.md: `0.9.0` release notes populated, fresh empty `Unreleased` block added
 - samples/pqcp_serial_acvp/README.md + samples/pqcp_tls_mbedtls_psa/README.md:
   standalone sample docs with real build/run output
@@ -86,8 +88,8 @@ Implementations:
 - src/acvp_cmd.c: 26KB, garbage/timeout/recovery hardened, bounded line validator
 - src/psa_mlkem_driver.c + src/psa_mldsa_driver.c: PSA drivers, error paths hardened
 - src/bench_protocol.c: 16KB protocol benchmark with RTOS metric emission
-- tests/ztest_acvp_kat/: deterministic ML-KEM-768 + ML-DSA-65 KAT smoke using
-  upstream vector material, wired into `release_check.py`
+- tests/ztest_acvp_kat/: ML-KEM-768 keygen/encaps and ML-DSA-65 sign/verify
+  smoke using official NIST ACVP vectors, wired into `release_check.py`
 
 CI/Tooling:
 - JUnit XML from release_check.py, artifact upload in ci.yml
@@ -98,21 +100,30 @@ CI/Tooling:
 - cppcheck enforced in CI (no --skip-cppcheck)
 - .github/workflows/release.yml: tag v* → gate → GitHub Release (7661a25)
 - scripts/extract_changelog_section.py: [Unreleased] extractor (7661a25)
-- tests/ztest_*/testcase.yaml: all four suites Twister-discoverable (185067b)
+- tests/ztest_*/testcase.yaml: all five suites Twister-discoverable
 - src/psa_mlkem_driver.c + psa_mldsa_driver.c: buffer pre-validated, specific
   PSA error codes, key type + parameter set rejected at entry (baf12b4)
 - cppcheck enforced in CI and release gate, no --skip-cppcheck (bfe4fea)
-- JUnit XML ANSI-sanitised, 9 named release-gate steps (bfe4fea)
+- JUnit XML ANSI-sanitised, 11 named release-gate steps
 - README.md: security properties section documenting correctness, side-channel
   posture, PSA guarantees, and out-of-scope boundaries
-- release_check.py: ACVP KAT build/run added as named release step
+- .github/workflows/ci.yml: west Twister discovery job added for build-only
+  test manifest validation on qemu_x86_64
+- scripts/verify_kat_provenance.py: official ACVP JSON verifier for checked-in
+  ML-KEM-768 and ML-DSA-65 KAT vectors
+- release_check.py: cppcheck enforced within strict extended checks, plus
+  `kat_provenance` and ACVP KAT build/run as named release steps
 
-Version: 0.9.0-pre1. Next: run `release_check.py`, tag `v0.9.0`, and verify
-the tag-triggered GitHub Release workflow publishes artifacts successfully.
+Version: 0.9.0 released. Next: confirm the published `v0.9.0` release
+artifacts and close the remaining `v1.0.0` roadmap items.
 
-## TASKS — next session
+## TASKS — v1.0.0 work
 
-1. Tag `v0.9.0` from a clean main branch once `python3 scripts/release_check.py`
-   exits 0.
-2. Push the tag and confirm `.github/workflows/release.yml` creates the GitHub
-   Release with the changelog-derived body and uploaded artifacts.
+1. fix(ci): confirm/repair the published `v0.9.0` GitHub Release outcome and
+   attached artifacts.
+2. ci(mcu): build the `nucleo_h743zi` protocol suites in CI runners, not only
+   in matrix metadata and local release checks.
+3. test(kat): extend `tests/ztest_acvp_kat` with ML-KEM-1024 and ML-DSA-87
+   official vectors.
+4. fix(acvp): deepen serial stall handling coverage beyond the current bounded
+   frame timeout path.

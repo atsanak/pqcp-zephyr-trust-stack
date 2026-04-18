@@ -23,6 +23,14 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 - Hardware RNG quality (depends on platform entropy source)
 - TLS record-layer security (provided by mbedTLS)
 
+## Roadmap to v1.0.0
+
+- [x] CI: west Twister discovery job
+- [x] CI: KAT vector NIST provenance verification
+- [ ] CI: `nucleo_h743zi` protocol suite builds on CI runners
+- [ ] Completeness: ML-KEM-1024 + ML-DSA-87 KAT vectors
+- [ ] Robustness: ACVP readline timeout / deeper mid-frame stall detection coverage
+
 ## Features
 
 - **ML-KEM (FIPS-203)**: Key Encapsulation Mechanism for quantum-resistant key exchange
