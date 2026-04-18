@@ -3,14 +3,14 @@ name: Release Dry Run
 on:
   workflow_dispatch:
     inputs:
-      ref:
+      release_ref:
         description: "Branch, tag, or commit to validate"
         required: true
         default: "main"
         type: string
 
 env:
-  RELEASE_REF: ${{ inputs.ref }}
+  RELEASE_REF: ${{ inputs.release_ref }}
 
 permissions:
   contents: read
