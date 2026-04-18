@@ -258,6 +258,7 @@ def main() -> int:
     nucleo_protocol_default_dir = output_root / "nucleo_protocol_default"
     nucleo_protocol_single_level_dir = output_root / "nucleo_protocol_single_level"
     profile_output_dir = output_root / "profile_validation"
+    benchmark_csv_path = output_root / "benchmark_results.csv"
     junit_output = output_root / "release_check_results.xml"
 
     steps = [
@@ -380,6 +381,28 @@ def main() -> int:
             success_markers=(
                 "TESTSUITE pqcp_acvp_kat succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="benchmark_csv",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/export_results.py"),
+                "--west-root",
+                str(west_root),
+                "--module-path",
+                str(module_path),
+                "--output",
+                str(benchmark_csv_path),
+                "--platform",
+                "qemu_x86_64",
+                "--smoke",
+            ],
+            cwd=module_path,
+            timeout=900,
+            success_markers=(
+                "[export] Wrote",
+                "benchmark_results.csv",
             ),
         ),
         Step(
