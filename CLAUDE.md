@@ -99,6 +99,14 @@ Implementations:
 - src/bench_protocol.c: 16KB protocol benchmark with RTOS metric emission
 - tests/ztest_acvp_kat/: ML-KEM-768 keygen/encaps and ML-DSA-65 sign/verify
   smoke using official NIST ACVP vectors, wired into `release_check.py`
+- fix(ci): align cppcheck flags in release_check.py with run_extended_checks.py (a2a55b2)
+- ci(twister): add west twister --build-only discovery job to ci.yml (1eca7e5)
+- test(kat): add NIST provenance verifier script (live download, 768/65 only) (c0b865a)
+- docs(roadmap): populate v1.0.0 milestone in CHANGELOG + README + CLAUDE (8449a2c)
+- v0.9.0 GitHub Release published (pipeline required 3 repair commits after tag)
+- KNOWN: scripts/release_check.py benchmark_csv step is BROKEN on remote main
+  (calls export_results.py which does not exist on remote) — fix is Task 0
+
 
 CI/Tooling:
 - JUnit XML from release_check.py, artifact upload in ci.yml
@@ -130,11 +138,22 @@ artifacts and close the remaining `v1.0.0` roadmap items.
 
 ## TASKS — v1.0.0 publication-quality work
 
-1. test(kat): vendor NIST JSON vectors + complete all FIPS 203/204 parameter sets
-   (ML-KEM-512/768/1024, ML-DSA-44/65/87 in kat_vectors.h + nist_vectors/)
-2. feat(bench): export_results.py → results/benchmark_results.csv + summary.md
-3. fix(acvp): CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS + test_readline_timeout
-4. docs(perf): measured performance table in README using export_results.py output
-5. ci(release-dry-run): release-dry-run.yml workflow, validate before tagging
-   Then: tag v1.0.0 only after dry-run is green
+## TASKS — v1.0.0 publication-quality work
 
+TASK 0 [BLOCKER]: Fix release gate — push scripts/export_results.py to main
+  (release_check.py benchmark_csv step calls it but it doesn't exist on remote)
+
+TASK 1: vendor NIST KAT vectors offline + expand to all FIPS 203/204 param sets
+  (ML-KEM-512/768/1024, ML-DSA-44/65/87 in nist_vectors/ + kat_vectors.h + ztests)
+
+TASK 2: scripts/export_results.py → results/benchmark_results.csv + summary.md
+  (thin layer over existing matrix runner; --smoke flag for release gate)
+
+TASK 3: verify/complete baseline coverage (mlkem_baseline.c 1024, mldsa_baseline.c 44)
+  and corresponding runnable matrix entries in cost_of_assurance_matrix.json
+
+TASK 4: README.md Performance table with real measured QEMU numbers from CSV export
+
+TASK 5: release-dry-run.yml workflow → validate → tag v1.0.0 → update CHANGELOG
+
+RULE: push to origin/main after every commit. Never end a session with local-only commits.
