@@ -60,6 +60,7 @@ jobs:
             "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
             "$GITHUB_WORKSPACE/scripts/parse_logs.py" \
             "$GITHUB_WORKSPACE/scripts/summarize_cost_of_assurance.py" \
+            "$GITHUB_WORKSPACE/scripts/verify_kat_provenance.py" \
             "$GITHUB_WORKSPACE/scripts/run_extended_checks.py" \
             "$GITHUB_WORKSPACE/scripts/run_sanitizer_checks.py" \
             "$GITHUB_WORKSPACE/scripts/release_check.py"
