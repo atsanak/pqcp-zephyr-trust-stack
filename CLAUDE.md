@@ -82,6 +82,15 @@ Infrastructure:
 - CHANGELOG.md: `0.9.0` release notes populated, fresh empty `Unreleased` block added
 - samples/pqcp_serial_acvp/README.md + samples/pqcp_tls_mbedtls_psa/README.md:
   standalone sample docs with real build/run output
+   - scripts/verify_kat_provenance.py: 248 lines, downloads NIST ACVP JSON,
+    verifies kat_vectors.h hex values (replaces runtime download with
+    vendored nist_vectors/ in next session) (c0b865a)
+  - ci(twister): west twister --build-only job in ci.yml (1eca7e5)
+  - docs(roadmap): v1.0.0 planned items in CHANGELOG + README (8449a2c)
+  - fix(ci): cppcheck flags aligned between release gate and strict checks,
+    release pipeline green end-to-end (a2a55b2 + bd77abd + 1019dce + 41ee9c4)
+  - v0.9.0 GitHub Release published successfully
+
 
 Implementations:
 - src/tls_selftest.c: 11KB, real PSA init + mbedTLS handshake + metric logging
@@ -119,11 +128,13 @@ artifacts and close the remaining `v1.0.0` roadmap items.
 
 ## TASKS — v1.0.0 work
 
-1. fix(ci): confirm/repair the published `v0.9.0` GitHub Release outcome and
-   attached artifacts.
-2. ci(mcu): build the `nucleo_h743zi` protocol suites in CI runners, not only
-   in matrix metadata and local release checks.
-3. test(kat): extend `tests/ztest_acvp_kat` with ML-KEM-1024 and ML-DSA-87
-   official vectors.
-4. fix(acvp): deepen serial stall handling coverage beyond the current bounded
-   frame timeout path.
+## TASKS — v1.0.0 publication-quality work
+
+1. test(kat): vendor NIST JSON vectors + complete all FIPS 203/204 parameter sets
+   (ML-KEM-512/768/1024, ML-DSA-44/65/87 in kat_vectors.h + nist_vectors/)
+2. feat(bench): export_results.py → results/benchmark_results.csv + summary.md
+3. fix(acvp): CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS + test_readline_timeout
+4. docs(perf): measured performance table in README using export_results.py output
+5. ci(release-dry-run): release-dry-run.yml workflow, validate before tagging
+   Then: tag v1.0.0 only after dry-run is green
+
