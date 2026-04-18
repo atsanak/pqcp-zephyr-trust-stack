@@ -117,9 +117,10 @@ jobs:
 
       - name: Extract release notes
         run: |
+          release_section="${RELEASE_REF#v}"
           python "$MODULE_PATH/scripts/extract_changelog_section.py" \
             --file "$MODULE_PATH/CHANGELOG.md" \
-            --section Unreleased \
+            --section "$release_section" \
             --output "$RUNNER_TEMP/release-notes.md"
 
       - name: Upload release artifacts
