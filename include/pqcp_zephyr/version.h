@@ -12,10 +12,10 @@ extern "C" {
 #endif
 
 /** @brief Major version of the PQCP Zephyr module. */
-#define PQCP_ZEPHYR_VERSION_MAJOR 0
+#define PQCP_ZEPHYR_VERSION_MAJOR 1
 
 /** @brief Minor version of the PQCP Zephyr module. */
-#define PQCP_ZEPHYR_VERSION_MINOR 9
+#define PQCP_ZEPHYR_VERSION_MINOR 0
 
 /** @brief Patch version of the PQCP Zephyr module. */
 #define PQCP_ZEPHYR_VERSION_PATCH 0
@@ -27,7 +27,7 @@ extern "C" {
      PQCP_ZEPHYR_VERSION_PATCH)
 
 /** @brief Human-readable semantic version string. */
-#define PQCP_ZEPHYR_VERSION_STRING "0.9.0"
+#define PQCP_ZEPHYR_VERSION_STRING "1.0.0"
 
 /*
  * Backward-compatible version aliases retained for existing tooling and
@@ -37,7 +37,7 @@ extern "C" {
 #define PQCP_VERSION_MINOR PQCP_ZEPHYR_VERSION_MINOR
 #define PQCP_VERSION_PATCH PQCP_ZEPHYR_VERSION_PATCH
 #define PQCP_VERSION_HEX PQCP_ZEPHYR_VERSION_HEX
-#define PQCP_VERSION_STRING "0.9.0"
+#define PQCP_VERSION_STRING "1.0.0"
 
 #ifdef __cplusplus
 }

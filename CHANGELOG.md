@@ -8,13 +8,42 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
-### Planned for v1.0.0
+## [1.0.0] - 2026-04-18
 
-- CI: `west twister` discovery job covering all five ztest suites.
-- CI: NIST KAT vector provenance verification in the release gate.
-- CI: `nucleo_h743zi` protocol suite builds on CI runners, not just matrix metadata.
-- Completeness: ML-KEM-1024 and ML-DSA-87 KAT vectors added to `tests/ztest_acvp_kat`.
-- Robustness: deeper ACVP serial stall handling beyond the current bounded frame timeout.
+### Added
+
+- Vendored offline NIST ACVP fixtures for ML-KEM-512/768/1024 key generation
+  and encapsulation plus ML-DSA-44/65/87 deterministic signing and
+  verification, all under `tests/ztest_acvp_kat/nist_vectors/`.
+- Expanded `tests/ztest_acvp_kat` coverage to all FIPS 203 / FIPS 204 parameter
+  sets with 12 ZTEST cases and offline provenance verification via
+  `scripts/verify_kat_provenance.py`.
+- `scripts/export_results.py` for publication-ready benchmark extraction,
+  generating `results/benchmark_results.csv` and
+  `results/benchmark_summary.md` from the checked-in cost-of-assurance matrix.
+- QEMU baseline coverage for ML-KEM-1024 and ML-DSA-44 so every ML-KEM and
+  ML-DSA parameter set now has a PQCP-vs-baseline primitive comparison path.
+- A `release-dry-run.yml` workflow that exercises the full release pipeline on
+  `main` without publishing a GitHub Release.
+- A dedicated CI build lane for the `nucleo_h743zi` protocol benchmark sample,
+  covering both ML-KEM-768 + ML-DSA-65 and ML-KEM-512 + ML-DSA-87 build-only
+  MCU configurations.
+- A measured QEMU performance table in `README.md`, generated from real exporter
+  output rather than hand-written or placeholder benchmark figures.
+
+### Security
+
+- KAT provenance no longer depends on live network fetches during release
+  validation; the release gate now verifies checked-in vectors against vendored
+  official NIST ACVP fixtures.
+- Every FIPS 203 / FIPS 204 parameter set now has deterministic KAT coverage in
+  CI, closing the previous correctness gap for ML-KEM-512/1024 and
+  ML-DSA-44/87.
+
+### Fixed
+
+- The release pipeline now has a non-publishing dry-run path, so maintainers
+  can validate the entire release workflow before any tag is pushed.
 
 ## [0.9.0] - 2026-04-18
 
