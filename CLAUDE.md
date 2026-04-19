@@ -68,7 +68,7 @@ CHANGELOG.md
 - New C code: must compile -Wall -Wextra -Werror on ARM + x86 toolchains.
 
 ---
-
+## Sprint — Product Readiness (April 2026)
 ## Completed — verified HEAD c0b865a
 
 Infrastructure:
@@ -94,6 +94,12 @@ Infrastructure:
   DEFECT: dry-run hardcodes "[1.0.0]", no QEMU timeouts, no bench CSV check
 - docs(release): version.h bumped to 1.0.0, CHANGELOG [1.0.0] promoted (ed52558)
   STATUS: v1.0.0 tag NOT yet pushed — dry-run not yet confirmed green
+- [x] QEMU cost-of-assurance: primitive + protocol level, PQCP vs baseline
+- [x] ACVP bounded line validator, garbage/oversize rejection, recovery, negative ztests
+- [x] scripts/release_check.py sequential gate
+- [x] Release workflows: version/changelog/benchmark triple alignment
+- [x] README performance table provenance + honest n/a annotations
+
 
 
 Implementations:
@@ -152,14 +158,20 @@ artifacts and close the remaining `v1.0.0` roadmap items.
 ## TASKS — v1.0.0 publication-quality work
 
 ## TASKS — v1.0.0 publication-quality work
+- [ ] T1: Benchmark CSV smoke hardened (row count, NaN, ratio bounds); bench_primitive.c emits wall-time us; parse_logs.py consumes it
+- [ ] T2: MCU protocol build-only entries (nucleo_h743zi), ROM/RAM extracted from .map, resource budget enforced
+- [ ] T3: RTOS/TLS decomposition fields wired into regression JSON and enforcement loop
+- [ ] T4: run_sanitizer_checks.py wired into release-dry-run.yml and release_check.py; PSA drivers covered
+- [ ] T5: ACVP readline stall timeout (Kconfig-configurable, ERROR:TIMEOUT response, ztest)
+- [ ] T6: west.yml at root; CMakeLists.txt ↔ version.h consistency check; release_check.py version triple check
 
-TASK 1: Fix release-dry-run.yml (dynamic version, timeouts, bench CSV step)
-TASK 2: Validate README perf table against real CSV output
-TASK 3: resource_budgets.json + check_resource_budgets.py + ci.yml size upload
-TASK 4: Doxygen configuration + docs.yml CI workflow
-TASK 5: THIRD_PARTY_LICENSES.md + sbom.spdx
-TASK 6: verify_sample_output.py + integration test step in release gate
-TASK 7: Tag v1.0.0 ONLY after all above pass + dry-run green
+### Known Blockers
+- GitHub workflow_dispatch 422: delete and re-push release-dry-run.yml to force re-registration
+- Primitive QEMU export is cycles-only until T1 wall-time fix is merged
+
+### Release Criteria (before tagging v1.0.0)
+Run: `python3 scripts/release_check.py`
+All steps must print PASS. No exceptions.
 
 ## RULE
 Push to origin/main after every commit. Never end session with local-only commits.
