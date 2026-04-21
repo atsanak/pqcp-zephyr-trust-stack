@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 
-SECTION_RE = re.compile(r"^## \[([^\]]+)\](?:\s+-\s+.*)?$", re.MULTILINE)
+SECTION_RE = re.compile(r"^## \[([^\]]+)\](?:[ \t]+-[ \t]+[^\r\n]*)?$", re.MULTILINE)
 
 
 def parse_args() -> argparse.Namespace:

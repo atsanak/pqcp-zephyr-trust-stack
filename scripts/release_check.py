@@ -264,6 +264,8 @@ def main() -> int:
         str(module_path / "scripts/check_version_consistency.py"),
         "--module-path",
         str(module_path),
+        "--changelog",
+        str(module_path / "CHANGELOG.md"),
     ]
     if args.tag:
         version_check_cmd.extend(["--tag", args.tag])
