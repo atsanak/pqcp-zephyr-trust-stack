@@ -54,6 +54,10 @@ static void print_hex(const char *label, const uint8_t *data, size_t len)
 
 int main(void)
 {
+    uint64_t keygen_us;
+    uint64_t encaps_us;
+    uint64_t decaps_us;
+
     printk("\n");
     printk("========================================\n");
     printk("  PQCP Basic ML-KEM Sample\n");
@@ -92,6 +96,7 @@ int main(void)
     ret = pqcp_mlkem_keypair(level, pk, sk);
     
     uint64_t keygen_time = pqcp_bench_end_timing(start);
+    keygen_us = pqcp_bench_cycles_to_us(keygen_time);
     
     if (ret != PQCP_MLKEM_SUCCESS) {
         printk("ERROR: Key generation failed: %d\n", ret);
@@ -100,7 +105,7 @@ int main(void)
     
     printk("Key generation completed\n");
     print_hex("Public key", pk, pqcp_mlkem_pk_size(level));
-    printk("Time: %llu cycles\n\n", keygen_time);
+    printk("Time: %llu cycles (%llu us)\n\n", keygen_time, keygen_us);
     
     /* Encapsulation */
     printk("--- Encapsulation ---\n");
@@ -109,6 +114,7 @@ int main(void)
     ret = pqcp_mlkem_encapsulate(level, pk, ct, ss_enc);
     
     uint64_t encaps_time = pqcp_bench_end_timing(start);
+    encaps_us = pqcp_bench_cycles_to_us(encaps_time);
     
     if (ret != PQCP_MLKEM_SUCCESS) {
         printk("ERROR: Encapsulation failed: %d\n", ret);
@@ -118,7 +124,7 @@ int main(void)
     printk("Encapsulation completed\n");
     print_hex("Ciphertext", ct, pqcp_mlkem_ct_size(level));
     print_hex("Shared secret (encap)", ss_enc, PQCP_MLKEM_SS_SIZE);
-    printk("Time: %llu cycles\n\n", encaps_time);
+    printk("Time: %llu cycles (%llu us)\n\n", encaps_time, encaps_us);
     
     /* Decapsulation */
     printk("--- Decapsulation ---\n");
@@ -127,6 +133,7 @@ int main(void)
     ret = pqcp_mlkem_decapsulate(level, ct, sk, ss_dec);
     
     uint64_t decaps_time = pqcp_bench_end_timing(start);
+    decaps_us = pqcp_bench_cycles_to_us(decaps_time);
     
     if (ret != PQCP_MLKEM_SUCCESS) {
         printk("ERROR: Decapsulation failed: %d\n", ret);
@@ -135,7 +142,7 @@ int main(void)
     
     printk("Decapsulation completed\n");
     print_hex("Shared secret (decap)", ss_dec, PQCP_MLKEM_SS_SIZE);
-    printk("Time: %llu cycles\n\n", decaps_time);
+    printk("Time: %llu cycles (%llu us)\n\n", decaps_time, decaps_us);
     
     /* Verify */
     printk("--- Verification ---\n");
@@ -150,9 +157,13 @@ int main(void)
     printk("\n--- Summary ---\n");
     printk("Algorithm: %s\n", pqcp_mlkem_level_name(level));
     printk("KeyGen:    %llu cycles\n", keygen_time);
+    printk("           %llu us\n", keygen_us);
     printk("Encaps:    %llu cycles\n", encaps_time);
+    printk("           %llu us\n", encaps_us);
     printk("Decaps:    %llu cycles\n", decaps_time);
+    printk("           %llu us\n", decaps_us);
     printk("Total:     %llu cycles\n", keygen_time + encaps_time + decaps_time);
+    printk("           %llu us\n", keygen_us + encaps_us + decaps_us);
     
     /* Stack usage */
     uint32_t stack = pqcp_bench_get_stack_usage();
@@ -163,8 +174,11 @@ int main(void)
     /* Emit structured metrics for parsing */
     printk("\n--- Structured Metrics ---\n");
     PQCP_LOG_CYCLES("primitive", "keygen", "MLKEM", level, keygen_time);
+    PQCP_LOG_TIME_US("primitive", "keygen", "MLKEM", level, keygen_us);
     PQCP_LOG_CYCLES("primitive", "encaps", "MLKEM", level, encaps_time);
+    PQCP_LOG_TIME_US("primitive", "encaps", "MLKEM", level, encaps_us);
     PQCP_LOG_CYCLES("primitive", "decaps", "MLKEM", level, decaps_time);
+    PQCP_LOG_TIME_US("primitive", "decaps", "MLKEM", level, decaps_us);
     
     if (stack > 0) {
         PQCP_LOG_STACK("primitive", "total", "MLKEM", level, stack);
