@@ -307,7 +307,9 @@ jobs:
           set -euo pipefail
 
           logs_dir="$RUNNER_TEMP/nucleo-protocol-logs"
+          artifacts_dir="$RUNNER_TEMP/nucleo-protocol-artifacts"
           mkdir -p "$logs_dir"
+          mkdir -p "$artifacts_dir"
 
           west build -p always \
             -d "$RUNNER_TEMP/build-nucleo-protocol-default" \
@@ -334,12 +336,24 @@ jobs:
             -DCONFIG_MAIN_STACK_SIZE=196608 \
             >"$logs_dir/mlkem512_mldsa87.log" 2>&1
 
+          size "$RUNNER_TEMP/build-nucleo-protocol-default/zephyr/zephyr.elf" \
+            | tee "$logs_dir/mlkem768_mldsa65.size.txt"
+          size "$RUNNER_TEMP/build-nucleo-protocol-single-level/zephyr/zephyr.elf" \
+            | tee "$logs_dir/mlkem512_mldsa87.size.txt"
+
+          cp "$RUNNER_TEMP/build-nucleo-protocol-default/zephyr/zephyr.elf" \
+            "$artifacts_dir/mlkem768_mldsa65.elf"
+          cp "$RUNNER_TEMP/build-nucleo-protocol-single-level/zephyr/zephyr.elf" \
+            "$artifacts_dir/mlkem512_mldsa87.elf"
+
       - name: Upload nucleo protocol build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nucleo-protocol-builds
-          path: ${{ runner.temp }}/nucleo-protocol-logs/
+          path: |
+            ${{ runner.temp }}/nucleo-protocol-logs/
+            ${{ runner.temp }}/nucleo-protocol-artifacts/
 
   release-gate:
     if: >-

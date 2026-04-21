@@ -100,6 +100,16 @@ PY
             --output-root "$RUNNER_TEMP/release-check-output" \
             | tee "$RUNNER_TEMP/release-check.log"
 
+      - name: Sanitizer smoke
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        shell: bash
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          python "$MODULE_PATH/scripts/run_sanitizer_checks.py" \
+            --west-root "$ZEPHYR_WORKSPACE" \
+            --module-path "$MODULE_PATH"
+
       - name: Benchmark CSV smoke
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         shell: bash
@@ -115,28 +125,23 @@ PY
             --smoke \
             --output "$BENCHMARK_SMOKE_CSV"
 
-          python3 - <<'PY'
-import csv
-import os
-from pathlib import Path
+      - name: Validate benchmark CSV (with provenance)
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python "$MODULE_PATH/scripts/export_results.py" \
+            --validate-only "$RUNNER_TEMP/benchmark_smoke.csv" \
+            --verify-provenance
 
-csv_path = Path(os.environ["BENCHMARK_SMOKE_CSV"])
-with csv_path.open(newline="", encoding="utf-8") as handle:
-    rows = list(csv.DictReader(handle))
-
-required = {
-    "suite",
-    "parameter_set",
-    "implementation",
-    "operation",
-    "cycles",
-    "time_us",
-}
-assert rows, "CSV is empty"
-missing = required - set(rows[0].keys())
-assert not missing, f"Missing columns: {sorted(missing)}"
-print(f"OK: {len(rows)} benchmark rows validated")
-PY
+      - name: Upload benchmark smoke artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-smoke-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/benchmark_smoke.csv
+            ${{ runner.temp }}/benchmark_provenance.json
 
       - name: Build all qemu_x86_64 samples and ztests
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
