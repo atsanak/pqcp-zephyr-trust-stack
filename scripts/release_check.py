@@ -57,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--west-root", type=Path, help="Zephyr workspace root")
     parser.add_argument("--module-path", type=Path, help="PQCP module path")
     parser.add_argument("--west", help="Explicit west binary or command")
+    parser.add_argument("--tag", help="Optional git tag/version string to validate")
     parser.add_argument(
         "--output-root",
         type=Path,
@@ -255,13 +256,24 @@ def main() -> int:
     env = build_env()
     ztest_build_dir = output_root / "ztest_acvp_serial_qemu"
     kat_build_dir = output_root / "ztest_acvp_kat_qemu"
-    nucleo_protocol_default_dir = output_root / "nucleo_protocol_default"
-    nucleo_protocol_single_level_dir = output_root / "nucleo_protocol_single_level"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
     junit_output = output_root / "release_check_results.xml"
+    version_check_cmd = [
+        sys.executable,
+        str(module_path / "scripts/check_version_consistency.py"),
+        "--module-path",
+        str(module_path),
+    ]
+    if args.tag:
+        version_check_cmd.extend(["--tag", args.tag])
 
     steps = [
+        Step(
+            name="version_consistency",
+            cmd=version_check_cmd,
+            cwd=module_path,
+        ),
         Step(
             name="cppcheck",
             cmd=[
@@ -290,6 +302,19 @@ def main() -> int:
                 "--strict",
             ],
             cwd=module_path,
+        ),
+        Step(
+            name="sanitizers",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_sanitizer_checks.py"),
+                "--west-root",
+                str(west_root),
+                "--module-path",
+                str(module_path),
+            ],
+            cwd=module_path,
+            timeout=1200,
         ),
         Step(
             name="Extended Checks (strict cost-of-assurance smoke)",
@@ -406,47 +431,30 @@ def main() -> int:
             ),
         ),
         Step(
-            name="MCU protocol CMake-only (nucleo_h743zi ML-KEM-768 + ML-DSA-65)",
+            name="benchmark_csv_validate",
             cmd=[
-                *west_cmd,
-                "build",
-                "-p",
-                "always",
-                "-b",
-                "nucleo_h743zi",
-                str(module_path / "samples/pqcp_bench_protocol"),
-                "-d",
-                str(nucleo_protocol_default_dir),
-                "--cmake-only",
-                "--",
-                "-DOVERLAY_CONFIG=overlay-rtos-metrics.conf",
+                sys.executable,
+                str(module_path / "scripts/export_results.py"),
+                "--validate-only",
+                str(benchmark_csv_path),
+                "--verify-provenance",
             ],
-            cwd=west_root,
+            cwd=module_path,
         ),
         Step(
-            name="MCU protocol CMake-only (nucleo_h743zi ML-KEM-512 + ML-DSA-87)",
+            name="resource_budgets",
             cmd=[
-                *west_cmd,
-                "build",
-                "-p",
-                "always",
-                "-b",
-                "nucleo_h743zi",
-                str(module_path / "samples/pqcp_bench_protocol"),
-                "-d",
-                str(nucleo_protocol_single_level_dir),
-                "--cmake-only",
-                "--",
-                "-DOVERLAY_CONFIG=overlay-rtos-metrics.conf",
-                "-DCONFIG_PQCP_MLKEM_LEVEL_512=y",
-                "-DCONFIG_PQCP_MLKEM_LEVEL_768=n",
-                "-DCONFIG_PQCP_MLKEM_LEVEL_1024=n",
-                "-DCONFIG_PQCP_MLDSA_LEVEL_44=n",
-                "-DCONFIG_PQCP_MLDSA_LEVEL_65=n",
-                "-DCONFIG_PQCP_MLDSA_LEVEL_87=y",
-                "-DCONFIG_MAIN_STACK_SIZE=196608",
+                sys.executable,
+                str(module_path / "scripts/check_resource_budgets.py"),
+                "--west-root",
+                str(west_root),
+                "--module-path",
+                str(module_path),
+                "--output-root",
+                str(output_root / "mcu_protocol_footprint"),
             ],
-            cwd=west_root,
+            cwd=module_path,
+            timeout=1200,
         ),
         Step(
             name="Profile validation with resource budgets",
