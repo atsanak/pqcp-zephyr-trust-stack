@@ -356,10 +356,13 @@ jobs:
             ${{ runner.temp }}/nucleo-protocol-artifacts/
 
   release-gate:
+    # Blocking on main-branch pushes, PRs targeting main, and tag pushes.
+    # Do NOT re-add continue-on-error here: that would downgrade the gate to
+    # advisory and let broken release_check.py runs merge silently.
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
-    continue-on-error: true
+      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-22.04
 
     steps:
