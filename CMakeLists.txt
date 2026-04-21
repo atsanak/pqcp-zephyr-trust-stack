@@ -6,6 +6,36 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
+set(PQCP_PROJECT_VERSION "1.0.0")
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  project(PQCPZephyrTrustStack VERSION ${PQCP_PROJECT_VERSION} LANGUAGES C)
+endif()
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/include/pqcp_zephyr/version.h" PQCP_VERSION_HEADER_TEXT)
+string(
+  REGEX MATCH
+  "#define[ \t]+PQCP_VERSION_STRING[ \t]+\"([0-9]+\\.[0-9]+\\.[0-9]+)\""
+  PQCP_VERSION_HEADER_MATCH
+  "${PQCP_VERSION_HEADER_TEXT}"
+)
+
+if(NOT CMAKE_MATCH_1)
+  message(FATAL_ERROR
+    "Unable to parse PQCP_VERSION_STRING from "
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pqcp_zephyr/version.h"
+  )
+endif()
+
+set(PQCP_HEADER_VERSION "${CMAKE_MATCH_1}")
+
+if(NOT PQCP_PROJECT_VERSION STREQUAL PQCP_HEADER_VERSION)
+  message(FATAL_ERROR
+    "PQCP version mismatch: CMakeLists.txt declares ${PQCP_PROJECT_VERSION} "
+    "but version.h declares ${PQCP_HEADER_VERSION}"
+  )
+endif()
+
 # Module registration for west
 if(CONFIG_PQCP)
 

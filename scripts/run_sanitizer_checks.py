@@ -45,8 +45,20 @@ DEFAULT_CASES = [
         run=True,
     ),
     SanitizerCase(
+        name="ztest_primitive",
+        app_path="tests/ztest_primitive",
+        overlay="overlay-sanitize.conf",
+        run=True,
+    ),
+    SanitizerCase(
         name="ztest_tls_selftest",
         app_path="tests/ztest_tls_selftest",
+        overlay="overlay-sanitize.conf",
+        run=True,
+    ),
+    SanitizerCase(
+        name="pqcp_bench_protocol",
+        app_path="samples/pqcp_bench_protocol",
         overlay="overlay-sanitize.conf",
         run=True,
     ),
@@ -202,7 +214,20 @@ def main() -> int:
             "Run this helper on Linux (or in GitHub Actions), or pass a different "
             "board only if that target is known to support ASan/UBSan."
         )
-        return 2
+        ci_env = any(
+            os.environ.get(var) for var in ("CI", "GITHUB_ACTIONS", "PQCP_STRICT_SANITIZERS")
+        )
+        if ci_env:
+            print(
+                "CI environment detected: refusing to silently skip sanitizer checks. "
+                "Exiting with failure so the gate surfaces the unsupported host."
+            )
+            return 2
+        print(
+            "Non-CI host: skipping sanitizer execution. Set PQCP_STRICT_SANITIZERS=1 "
+            "to force strict behavior locally."
+        )
+        return 0
 
     env = build_env()
     west_cmd = discover_west(args.west, west_root, module_path)
