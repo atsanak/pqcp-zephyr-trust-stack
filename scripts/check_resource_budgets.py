@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """
 Run MCU protocol build-only cost-of-assurance rows and enforce ROM/RAM budgets.
 """

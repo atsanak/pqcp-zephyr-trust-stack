@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """
 Summarize cost-of-assurance benchmark runs into comparison-friendly CSVs.
 

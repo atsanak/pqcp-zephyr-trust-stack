@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Extract Keep a Changelog sections for release automation."""
 
 from __future__ import annotations
