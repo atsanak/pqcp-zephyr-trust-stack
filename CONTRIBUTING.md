@@ -98,6 +98,45 @@ SDK. `run_sanitizer_checks.py` is strict on CI (returns non-zero on
 unsupported hosts if `CI=1`, `GITHUB_ACTIONS=true`, or
 `PQCP_STRICT_SANITIZERS=1` is set) and graceful locally.
 
+## Re-baselining MCU resource budgets
+
+`scripts/resource_budgets.json` declares ROM/RAM envelopes that
+`scripts/check_resource_budgets.py` enforces for the `nucleo_h743zi`
+`pqcp_bench_protocol` rows, and that `scripts/run_extended_checks.py`
+inspects informationally for qemu/mps2 rows. Each entry carries a
+`status` field:
+
+- `"measured"` — the limit comes from a real build captured on a host
+  with the Zephyr SDK (see `measured_sdk`, `measured_toolchain`,
+  `measured_at`, `measured_rom_bytes`, `measured_ram_bytes`).
+- `"estimated_pending_ci_baseline"` — the limit is a safe upper bound
+  carried over from an earlier release and has not yet been re-measured
+  on the current toolchain. Treat it as a ceiling, not a performance
+  claim.
+
+Before tagging a new major release:
+
+1. Activate the Zephyr workspace (`source zephyr/zephyr-env.sh`, ensure
+   `west`, `arm-zephyr-eabi-gcc`, and the SDK are all present).
+2. Run `python3 scripts/check_resource_budgets.py --board nucleo_h743zi
+   --output-root benchmark_results/mcu_baseline`.
+3. The tool prints the measured ROM and RAM per `run_id`. For each
+   matching entry in `scripts/resource_budgets.json`, update
+   `measured_rom_bytes`, `measured_ram_bytes`, `measured_sdk`,
+   `measured_toolchain`, `measured_at`, and recompute
+   `rom_bytes_max = ceil(measured_rom_bytes * 1.10)` and
+   `ram_bytes_max = ceil(measured_ram_bytes * 1.10)`.
+4. Convert any remaining `"estimated_pending_ci_baseline"` entries that
+   you have a measurement lane for into `"measured"` entries.
+5. Commit the update with rationale in the commit body (build host,
+   SDK version, why any entry deliberately remains estimated).
+
+The `benchmark-smoke` CI job uploads the qemu `benchmark_smoke.csv`
+and its provenance sidecar as an artifact on every successful run, but
+does not gate the release — it is reference data, not truth. Do not
+treat CI artifacts as a substitute for the explicit re-baselining
+step above.
+
 ## IDE metadata
 
 Do not commit IDE or editor metadata. `.cursor/`, `.vscode/`, and
