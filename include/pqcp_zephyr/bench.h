@@ -59,6 +59,8 @@ typedef struct pqcp_bench_result {
     uint64_t min_time;
     uint64_t max_time;
     uint64_t avg_time;  /* total_time / iterations */
+    uint64_t avg_cycles;/* Average timing in raw hardware cycles */
+    uint64_t avg_us;    /* Average timing converted to microseconds */
     
     /* Memory measurements */
     uint32_t stack_used;     /* Peak stack usage in bytes */
@@ -289,16 +291,26 @@ void pqcp_bench_run_protocol_all(void);
 /**
  * @brief Start timing measurement.
  *
- * @return Start timestamp (cycles or ticks).
+ * @return Start timestamp (hardware cycles).
  */
 uint64_t pqcp_bench_start_timing(void);
 
 /**
+ * @brief End timing measurement.
  *
  * @param start Start timestamp from pqcp_bench_start_timing().
- * @return Elapsed time (cycles or microseconds based on config).
+ * @return Elapsed hardware cycles.
  */
 uint64_t pqcp_bench_end_timing(uint64_t start);
+
+/**
+ * @brief Convert elapsed hardware cycles to microseconds.
+ *
+ * @param cycles Elapsed hardware cycles.
+ *
+ * @return Equivalent duration in microseconds.
+ */
+uint64_t pqcp_bench_cycles_to_us(uint64_t cycles);
 
 /**
  * @brief Get stack high water mark.

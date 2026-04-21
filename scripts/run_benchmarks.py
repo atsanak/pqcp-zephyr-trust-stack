@@ -1121,7 +1121,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     item.get("implementation")
                 )
                 run_mode = resolve_run_mode(
-                    item.get("run_mode"),
+                    item.get("mode", item.get("run_mode")),
                     build_only=bool(item.get("build_only", False)),
                     run=item.get("run"),
                     build=item.get("build"),
@@ -1173,7 +1173,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                 item.get("implementation")
             )
             run_mode = resolve_run_mode(
-                item.get("run_mode"),
+                item.get("mode", item.get("run_mode")),
                 build_only=bool(item.get("build_only", False)),
                 run=item.get("run"),
                 build=item.get("build"),

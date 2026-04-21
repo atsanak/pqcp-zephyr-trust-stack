@@ -52,6 +52,10 @@ static pqcp_mldsa_level_t sample_mldsa_level(void)
 
 int main(void)
 {
+    uint64_t keygen_us;
+    uint64_t sign_us;
+    uint64_t verify_us;
+
     printk("\n");
     printk("========================================\n");
     printk("  PQCP Basic ML-DSA Sample\n");
@@ -90,6 +94,7 @@ int main(void)
     ret = pqcp_mldsa_keypair(level, pk, sk);
     
     uint64_t keygen_time = pqcp_bench_end_timing(start);
+    keygen_us = pqcp_bench_cycles_to_us(keygen_time);
     
     if (ret != PQCP_MLDSA_SUCCESS) {
         printk("ERROR: Key generation failed: %d\n", ret);
@@ -98,7 +103,7 @@ int main(void)
     
     printk("Key generation completed\n");
     print_hex("Public key", pk, pqcp_mldsa_pk_size(level));
-    printk("Time: %llu cycles\n\n", keygen_time);
+    printk("Time: %llu cycles (%llu us)\n\n", keygen_time, keygen_us);
     
     /* Signing */
     printk("--- Signing ---\n");
@@ -110,6 +115,7 @@ int main(void)
                           sig);
     
     uint64_t sign_time = pqcp_bench_end_timing(start);
+    sign_us = pqcp_bench_cycles_to_us(sign_time);
     
     if (ret != PQCP_MLDSA_SUCCESS) {
         printk("ERROR: Signing failed: %d\n", ret);
@@ -118,7 +124,7 @@ int main(void)
     
     printk("Signing completed\n");
     print_hex("Signature", sig, pqcp_mldsa_sig_size(level));
-    printk("Time: %llu cycles\n\n", sign_time);
+    printk("Time: %llu cycles (%llu us)\n\n", sign_time, sign_us);
     
     /* Verification */
     printk("--- Verification ---\n");
@@ -130,6 +136,7 @@ int main(void)
                             sig);
     
     uint64_t verify_time = pqcp_bench_end_timing(start);
+    verify_us = pqcp_bench_cycles_to_us(verify_time);
     
     if (ret == PQCP_MLDSA_SUCCESS) {
         printk("Signature verification: VALID\n");
@@ -140,7 +147,7 @@ int main(void)
         printk("ERROR: Verification failed: %d\n", ret);
         return -1;
     }
-    printk("Time: %llu cycles\n\n", verify_time);
+    printk("Time: %llu cycles (%llu us)\n\n", verify_time, verify_us);
     
     /* Test with modified message (should fail) */
     printk("--- Negative Test (modified message) ---\n");
@@ -198,9 +205,13 @@ int main(void)
     printk("\n--- Summary ---\n");
     printk("Algorithm: %s\n", pqcp_mldsa_level_name(level));
     printk("KeyGen:    %llu cycles\n", keygen_time);
+    printk("           %llu us\n", keygen_us);
     printk("Sign:      %llu cycles\n", sign_time);
+    printk("           %llu us\n", sign_us);
     printk("Verify:    %llu cycles\n", verify_time);
+    printk("           %llu us\n", verify_us);
     printk("Total:     %llu cycles\n", keygen_time + sign_time + verify_time);
+    printk("           %llu us\n", keygen_us + sign_us + verify_us);
     
     /* Stack usage */
     uint32_t stack = pqcp_bench_get_stack_usage();
@@ -211,8 +222,11 @@ int main(void)
     /* Emit structured metrics for parsing */
     printk("\n--- Structured Metrics ---\n");
     PQCP_LOG_CYCLES("primitive", "keygen", "MLDSA", level, keygen_time);
+    PQCP_LOG_TIME_US("primitive", "keygen", "MLDSA", level, keygen_us);
     PQCP_LOG_CYCLES("primitive", "sign", "MLDSA", level, sign_time);
+    PQCP_LOG_TIME_US("primitive", "sign", "MLDSA", level, sign_us);
     PQCP_LOG_CYCLES("primitive", "verify", "MLDSA", level, verify_time);
+    PQCP_LOG_TIME_US("primitive", "verify", "MLDSA", level, verify_us);
     
     if (stack > 0) {
         PQCP_LOG_STACK("primitive", "total", "MLDSA", level, stack);

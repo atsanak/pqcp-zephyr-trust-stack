@@ -52,10 +52,11 @@ def parse_pqcp_metric_line(line: str) -> Optional[Dict]:
 
 def parse_primitive_line(line: str) -> Optional[Dict]:
     """Parse a primitive benchmark line."""
-    # Format: PRIM,MLKEM768,KEYGEN,cycles=12345,stack=2048,text=4096,bss=256,backend=C
+    # Format: PRIM,MLKEM768,KEYGEN,cycles=12345,us=67,stack=2048,text=4096,bss=256,backend=C
     pattern = re.compile(
         r'PRIM,(\w+?)(\d+),(\w+),'
         r'(\w+)=(\d+),'  # time unit
+        r'(?:us=(\d+),)?'
         r'stack=(\d+),'
         r'text=(\d+),'
         r'bss=(\d+)'
@@ -73,10 +74,11 @@ def parse_primitive_line(line: str) -> Optional[Dict]:
         'operation': m.group(3),
         'time_unit': m.group(4),
         'time_value': int(m.group(5)),
-        'stack_bytes': int(m.group(6)),
-        'text_bytes': int(m.group(7)),
-        'bss_bytes': int(m.group(8)),
-        'backend': m.group(9) or 'unknown',
+        'time_us': int(m.group(6)) if m.group(6) else None,
+        'stack_bytes': int(m.group(7)),
+        'text_bytes': int(m.group(8)),
+        'bss_bytes': int(m.group(9)),
+        'backend': m.group(10) or 'unknown',
     }
 
 
@@ -156,6 +158,7 @@ def write_primitive_csv(results: List[Dict], output_path: Path):
         fieldnames = [
             'algorithm', 'level', 'operation', 
             'time_unit', 'time_value',
+            'time_us',
             'stack_bytes', 'text_bytes', 'bss_bytes',
             'backend', 'target', 'timestamp'
         ]

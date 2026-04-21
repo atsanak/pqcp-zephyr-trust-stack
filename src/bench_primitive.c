@@ -40,6 +40,38 @@
 
 static bool bench_initialized = false;
 
+static const char *pqcp_bench_metric_component(pqcp_bench_op_t op)
+{
+    if (op >= PQCP_BENCH_MLKEM_KEYPAIR && op <= PQCP_BENCH_MLKEM_DECAPS) {
+        return "MLKEM";
+    }
+    if (op >= PQCP_BENCH_MLDSA_KEYPAIR && op <= PQCP_BENCH_MLDSA_VERIFY) {
+        return "MLDSA";
+    }
+    return "RNG";
+}
+
+static const char *pqcp_bench_metric_operation(pqcp_bench_op_t op)
+{
+    switch (op) {
+    case PQCP_BENCH_MLKEM_KEYPAIR:
+    case PQCP_BENCH_MLDSA_KEYPAIR:
+        return "keygen";
+    case PQCP_BENCH_MLKEM_ENCAPS:
+        return "encaps";
+    case PQCP_BENCH_MLKEM_DECAPS:
+        return "decaps";
+    case PQCP_BENCH_MLDSA_SIGN:
+        return "sign";
+    case PQCP_BENCH_MLDSA_VERIFY:
+        return "verify";
+    case PQCP_BENCH_RNG_ENTROPY:
+        return "entropy";
+    default:
+        return "unknown";
+    }
+}
+
 int pqcp_bench_init(void)
 {
     if (bench_initialized) {
@@ -71,10 +103,13 @@ uint64_t pqcp_bench_end_timing(uint64_t start)
     return (uint64_t)(end - (uint32_t)start);
 #else
     uint32_t end = k_cycle_get_32();
-    uint32_t cycles = end - (uint32_t)start;
-    /* Convert to microseconds if not using raw cycles */
-    return k_cyc_to_us_floor32(cycles);
+    return (uint64_t)(end - (uint32_t)start);
 #endif
+}
+
+uint64_t pqcp_bench_cycles_to_us(uint64_t cycles)
+{
+    return (cycles * 1000000ULL) / CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
 }
 
 uint32_t pqcp_bench_get_stack_usage(void)
@@ -110,18 +145,33 @@ void pqcp_bench_print_result(const pqcp_bench_result_t *result)
 {
     const char *unit = (result->time_unit == 0) ? "cycles" : "us";
     const char *backend = (result->backend == 0) ? "C" : "native";
+    const char *algorithm = pqcp_bench_metric_component(result->op);
+    const char *operation = pqcp_bench_metric_operation(result->op);
     
-    printk("PRIM,%s%u,%s,%s=%llu,stack=%u,text=%u,bss=%u,backend=%s\n",
-           (result->op >= PQCP_BENCH_MLKEM_KEYPAIR && 
-            result->op <= PQCP_BENCH_MLKEM_DECAPS) ? "MLKEM" : "MLDSA",
+    printk("PRIM,%s%u,%s,%s=%llu,us=%llu,stack=%u,text=%u,bss=%u,backend=%s\n",
+           algorithm,
            result->level,
            pqcp_bench_op_name(result->op),
            unit,
            result->avg_time,
+           result->avg_us,
            result->stack_used,
            result->text_size,
            result->bss_size,
            backend);
+
+    if (result->avg_cycles > 0U) {
+        PQCP_LOG_CYCLES("primitive", operation, algorithm, result->level,
+                        result->avg_cycles);
+    }
+    if (result->avg_us > 0U) {
+        PQCP_LOG_TIME_US("primitive", operation, algorithm, result->level,
+                         result->avg_us);
+    }
+    if (result->stack_used > 0U) {
+        PQCP_LOG_STACK("primitive", "total", algorithm, result->level,
+                       result->stack_used);
+    }
 }
 
 /*
@@ -155,9 +205,9 @@ int pqcp_bench_mlkem(uint16_t level,
     static uint8_t ss1[PQCP_MLKEM_SS_SIZE];
     static uint8_t ss2[PQCP_MLKEM_SS_SIZE];
     
-    uint64_t times[3] = {0, 0, 0};
-    uint64_t min_times[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX};
-    uint64_t max_times[3] = {0, 0, 0};
+    uint64_t cycles_totals[3] = {0, 0, 0};
+    uint64_t min_cycles[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX};
+    uint64_t max_cycles[3] = {0, 0, 0};
     
     /* Initialize benchmark infrastructure */
     pqcp_bench_init();
@@ -178,33 +228,33 @@ int pqcp_bench_mlkem(uint16_t level,
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_mlkem_keypair(mlkem_level, pk, sk);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        times[0] += elapsed;
-        if (elapsed < min_times[0]) min_times[0] = elapsed;
-        if (elapsed > max_times[0]) max_times[0] = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        cycles_totals[0] += elapsed_cycles;
+        if (elapsed_cycles < min_cycles[0]) min_cycles[0] = elapsed_cycles;
+        if (elapsed_cycles > max_cycles[0]) max_cycles[0] = elapsed_cycles;
     }
     
     /* Benchmark encapsulation */
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_mlkem_encapsulate(mlkem_level, pk, ct, ss1);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        times[1] += elapsed;
-        if (elapsed < min_times[1]) min_times[1] = elapsed;
-        if (elapsed > max_times[1]) max_times[1] = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        cycles_totals[1] += elapsed_cycles;
+        if (elapsed_cycles < min_cycles[1]) min_cycles[1] = elapsed_cycles;
+        if (elapsed_cycles > max_cycles[1]) max_cycles[1] = elapsed_cycles;
     }
     
     /* Benchmark decapsulation */
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_mlkem_decapsulate(mlkem_level, ct, sk, ss2);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        times[2] += elapsed;
-        if (elapsed < min_times[2]) min_times[2] = elapsed;
-        if (elapsed > max_times[2]) max_times[2] = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        cycles_totals[2] += elapsed_cycles;
+        if (elapsed_cycles < min_cycles[2]) min_cycles[2] = elapsed_cycles;
+        if (elapsed_cycles > max_cycles[2]) max_cycles[2] = elapsed_cycles;
     }
     
     /* Fill results */
@@ -215,13 +265,21 @@ int pqcp_bench_mlkem(uint16_t level,
     };
     
     for (int i = 0; i < 3; i++) {
+        uint64_t avg_cycles = cycles_totals[i] / cfg.iterations;
+        uint64_t avg_us = pqcp_bench_cycles_to_us(avg_cycles);
+
         results[i].op = ops[i];
         results[i].level = level;
         results[i].iterations = cfg.iterations;
-        results[i].total_time = times[i];
-        results[i].min_time = min_times[i];
-        results[i].max_time = max_times[i];
-        results[i].avg_time = times[i] / cfg.iterations;
+        results[i].total_time = cfg.use_cycles ? cycles_totals[i]
+                                               : pqcp_bench_cycles_to_us(cycles_totals[i]);
+        results[i].min_time = cfg.use_cycles ? min_cycles[i]
+                                             : pqcp_bench_cycles_to_us(min_cycles[i]);
+        results[i].max_time = cfg.use_cycles ? max_cycles[i]
+                                             : pqcp_bench_cycles_to_us(max_cycles[i]);
+        results[i].avg_time = cfg.use_cycles ? avg_cycles : avg_us;
+        results[i].avg_cycles = avg_cycles;
+        results[i].avg_us = avg_us;
         results[i].stack_used = 0;
         if (cfg.measure_stack) {
             results[i].stack_used = pqcp_bench_get_stack_usage();
@@ -281,9 +339,9 @@ int pqcp_bench_mldsa(uint16_t level,
         msg[i] = (uint8_t)(i & 0xFF);
     }
     
-    uint64_t times[3] = {0, 0, 0};
-    uint64_t min_times[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX};
-    uint64_t max_times[3] = {0, 0, 0};
+    uint64_t cycles_totals[3] = {0, 0, 0};
+    uint64_t min_cycles[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX};
+    uint64_t max_cycles[3] = {0, 0, 0};
     
     pqcp_bench_init();
     
@@ -306,33 +364,33 @@ int pqcp_bench_mldsa(uint16_t level,
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_mldsa_keypair(mldsa_level, pk, sk);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        times[0] += elapsed;
-        if (elapsed < min_times[0]) min_times[0] = elapsed;
-        if (elapsed > max_times[0]) max_times[0] = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        cycles_totals[0] += elapsed_cycles;
+        if (elapsed_cycles < min_cycles[0]) min_cycles[0] = elapsed_cycles;
+        if (elapsed_cycles > max_cycles[0]) max_cycles[0] = elapsed_cycles;
     }
     
     /* Benchmark signing */
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_mldsa_sign(mldsa_level, sk, msg, msg_len, NULL, 0, sig);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        times[1] += elapsed;
-        if (elapsed < min_times[1]) min_times[1] = elapsed;
-        if (elapsed > max_times[1]) max_times[1] = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        cycles_totals[1] += elapsed_cycles;
+        if (elapsed_cycles < min_cycles[1]) min_cycles[1] = elapsed_cycles;
+        if (elapsed_cycles > max_cycles[1]) max_cycles[1] = elapsed_cycles;
     }
     
     /* Benchmark verification */
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_mldsa_verify(mldsa_level, pk, msg, msg_len, NULL, 0, sig);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        times[2] += elapsed;
-        if (elapsed < min_times[2]) min_times[2] = elapsed;
-        if (elapsed > max_times[2]) max_times[2] = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        cycles_totals[2] += elapsed_cycles;
+        if (elapsed_cycles < min_cycles[2]) min_cycles[2] = elapsed_cycles;
+        if (elapsed_cycles > max_cycles[2]) max_cycles[2] = elapsed_cycles;
     }
     
     /* Fill results */
@@ -343,13 +401,21 @@ int pqcp_bench_mldsa(uint16_t level,
     };
     
     for (int i = 0; i < 3; i++) {
+        uint64_t avg_cycles = cycles_totals[i] / cfg.iterations;
+        uint64_t avg_us = pqcp_bench_cycles_to_us(avg_cycles);
+
         results[i].op = ops[i];
         results[i].level = level;
         results[i].iterations = cfg.iterations;
-        results[i].total_time = times[i];
-        results[i].min_time = min_times[i];
-        results[i].max_time = max_times[i];
-        results[i].avg_time = times[i] / cfg.iterations;
+        results[i].total_time = cfg.use_cycles ? cycles_totals[i]
+                                               : pqcp_bench_cycles_to_us(cycles_totals[i]);
+        results[i].min_time = cfg.use_cycles ? min_cycles[i]
+                                             : pqcp_bench_cycles_to_us(min_cycles[i]);
+        results[i].max_time = cfg.use_cycles ? max_cycles[i]
+                                             : pqcp_bench_cycles_to_us(max_cycles[i]);
+        results[i].avg_time = cfg.use_cycles ? avg_cycles : avg_us;
+        results[i].avg_cycles = avg_cycles;
+        results[i].avg_us = avg_us;
         results[i].stack_used = 0;
         if (cfg.measure_stack) {
             results[i].stack_used = pqcp_bench_get_stack_usage();
@@ -392,9 +458,9 @@ int pqcp_bench_rng(size_t block_size,
     
     pqcp_bench_init();
     
-    uint64_t total_time = 0;
-    uint64_t min_time = UINT64_MAX;
-    uint64_t max_time = 0;
+    uint64_t total_cycles = 0;
+    uint64_t min_cycles = UINT64_MAX;
+    uint64_t max_cycles = 0;
     
     /* Warmup */
     for (uint32_t i = 0; i < cfg.warmup; i++) {
@@ -405,20 +471,25 @@ int pqcp_bench_rng(size_t block_size,
     for (uint32_t i = 0; i < cfg.iterations; i++) {
         uint64_t start = pqcp_bench_start_timing();
         pqcp_rng_get_bytes(buffer, block_size);
-        uint64_t elapsed = pqcp_bench_end_timing(start);
-        
-        total_time += elapsed;
-        if (elapsed < min_time) min_time = elapsed;
-        if (elapsed > max_time) max_time = elapsed;
+        uint64_t elapsed_cycles = pqcp_bench_end_timing(start);
+
+        total_cycles += elapsed_cycles;
+        if (elapsed_cycles < min_cycles) min_cycles = elapsed_cycles;
+        if (elapsed_cycles > max_cycles) max_cycles = elapsed_cycles;
     }
     
+    result->avg_cycles = total_cycles / cfg.iterations;
+    result->avg_us = pqcp_bench_cycles_to_us(result->avg_cycles);
     result->op = PQCP_BENCH_RNG_ENTROPY;
     result->level = (uint16_t)block_size;
     result->iterations = cfg.iterations;
-    result->total_time = total_time;
-    result->min_time = min_time;
-    result->max_time = max_time;
-    result->avg_time = total_time / cfg.iterations;
+    result->total_time = cfg.use_cycles ? total_cycles
+                                        : pqcp_bench_cycles_to_us(total_cycles);
+    result->min_time = cfg.use_cycles ? min_cycles
+                                      : pqcp_bench_cycles_to_us(min_cycles);
+    result->max_time = cfg.use_cycles ? max_cycles
+                                      : pqcp_bench_cycles_to_us(max_cycles);
+    result->avg_time = cfg.use_cycles ? result->avg_cycles : result->avg_us;
     result->stack_used = 0;
     result->heap_used = 0;
     result->text_size = 0;
