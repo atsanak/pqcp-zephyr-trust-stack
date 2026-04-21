@@ -180,6 +180,12 @@
         "handshake_time": {
           "max_ratio": 6.0
         },
+        "auth_time": {
+          "max_ratio": 4.0
+        },
+        "key_exchange_time": {
+          "max_ratio": 4.0
+        },
         "handshake_provider_overhead": {
           "max_ratio": 8.0,
           "max_candidate": 250.0
@@ -226,6 +232,12 @@
       "metrics": {
         "handshake_time": {
           "max_ratio": 6.0
+        },
+        "auth_time": {
+          "max_ratio": 4.0
+        },
+        "key_exchange_time": {
+          "max_ratio": 4.0
         },
         "handshake_provider_overhead": {
           "max_ratio": 8.0,
