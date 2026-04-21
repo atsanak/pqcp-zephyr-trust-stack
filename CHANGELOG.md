@@ -8,42 +8,117 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-04-18
+## [1.0.0] - 2026-04-21
+
+First production-quality release of the Zephyr PQC trust stack. Supports
+ML-KEM-512/768/1024 (FIPS 203) and ML-DSA-44/65/87 (FIPS 204) through a
+PSA Crypto + mbedTLS provider surface, with an ACVP serial harness, KAT
+verification, a cost-of-assurance regression suite, MCU resource-budget
+enforcement, sanitizer coverage, and an auditable benchmark provenance
+sidecar.
 
 ### Added
 
-- Vendored offline NIST ACVP fixtures for ML-KEM-512/768/1024 key generation
-  and encapsulation plus ML-DSA-44/65/87 deterministic signing and
-  verification, all under `tests/ztest_acvp_kat/nist_vectors/`.
-- Expanded `tests/ztest_acvp_kat` coverage to all FIPS 203 / FIPS 204 parameter
-  sets with 12 ZTEST cases and offline provenance verification via
-  `scripts/verify_kat_provenance.py`.
+- Production-grade PQCP provider family covering ML-KEM-512/768/1024 and
+  ML-DSA-44/65/87 via a PSA Crypto driver layer (`psa_mlkem_driver`,
+  `psa_mldsa_driver`) and a Zephyr-facing `pqcp_mlkem_*` / `pqcp_mldsa_*`
+  API backed by the `mlkem-native` and `mldsa-native` modules pinned in
+  `west.yml`.
+- Vendored offline NIST ACVP fixtures for ML-KEM-512/768/1024 key
+  generation and encapsulation plus ML-DSA-44/65/87 deterministic
+  signing and verification, all under `tests/ztest_acvp_kat/nist_vectors/`.
+- Expanded `tests/ztest_acvp_kat` coverage to all FIPS 203 / FIPS 204
+  parameter sets with 12 ZTEST cases and offline provenance verification
+  via `scripts/verify_kat_provenance.py`.
+- ACVP serial harness with bounded-line validation, garbage and
+  oversized frame rejection, partial-frame timeout recovery, and a full
+  set of negative-scenario ztests (`tests/ztest_acvp_serial`).
+- TLS-level cost-of-assurance regression suite in
+  `scripts/qemu_cost_of_assurance_regression.json` with enforced
+  `handshake_latency_ratio`, `rom_ratio`, `ram_ratio`, `auth_time`, and
+  `key_exchange_time` thresholds for both ML-KEM-768+ML-DSA-65 and
+  ML-KEM-512+ML-DSA-87 protocol suites.
 - `scripts/export_results.py` for publication-ready benchmark extraction,
   generating `results/benchmark_results.csv` and
-  `results/benchmark_summary.md` from the checked-in cost-of-assurance matrix.
-- QEMU baseline coverage for ML-KEM-1024 and ML-DSA-44 so every ML-KEM and
-  ML-DSA parameter set now has a PQCP-vs-baseline primitive comparison path.
-- A `release-dry-run.yml` workflow that exercises the full release pipeline on
-  `main` without publishing a GitHub Release.
-- A dedicated CI build lane for the `nucleo_h743zi` protocol benchmark sample,
-  covering both ML-KEM-768 + ML-DSA-65 and ML-KEM-512 + ML-DSA-87 build-only
-  MCU configurations.
-- A measured QEMU performance table in `README.md`, generated from real exporter
-  output rather than hand-written or placeholder benchmark figures.
+  `results/benchmark_summary.md` from the checked-in cost-of-assurance
+  matrix, with paired `avg_cycles` and `avg_us` columns.
+- Benchmark provenance sidecar (`benchmark_provenance.json`,
+  `PROVENANCE_SCHEMA_VERSION = 1`) written next to every CSV, recording
+  csv sha256, host, toolchain, git SHAs, CI flag, and per-layer row
+  stats. Verified via `export_results.py --validate-only
+  --verify-provenance`.
+- MCU resource-budget enforcement: `scripts/check_resource_budgets.py`
+  builds the `pqcp_bench_protocol` configurations for `nucleo_h743zi`
+  and fails the release gate if ROM or RAM exceeds the envelopes
+  declared in `scripts/resource_budgets.json`.
+- Version-triple consistency gate: `scripts/check_version_consistency.py`
+  cross-checks `PQCP_VERSION_STRING` in `include/pqcp_zephyr/version.h`,
+  `PQCP_PROJECT_VERSION` in `CMakeLists.txt`, and (optionally) the
+  release tag. The top-level `CMakeLists.txt` also raises a
+  configure-time `FATAL_ERROR` when the header and project versions
+  disagree.
+- Sanitizer integration: `scripts/run_sanitizer_checks.py` builds and
+  runs `ztest_acvp_serial`, `ztest_primitive`, and `pqcp_bench_protocol`
+  under ASan/UBSan on `native_sim/native/64`. Strict in CI
+  (`CI=1`/`GITHUB_ACTIONS`/`PQCP_STRICT_SANITIZERS`), graceful locally
+  on unsupported hosts.
+- QEMU baseline coverage for ML-KEM-1024 and ML-DSA-44 so every
+  ML-KEM and ML-DSA parameter set has a PQCP-vs-baseline primitive
+  comparison path.
+- A `release-dry-run.yml` workflow that exercises the full release
+  pipeline on `main` without publishing a GitHub Release.
+- A dedicated CI build lane for the `nucleo_h743zi` protocol benchmark
+  sample, covering both ML-KEM-768+ML-DSA-65 and ML-KEM-512+ML-DSA-87
+  build-only MCU configurations.
+- A measured QEMU performance table in `README.md`, generated from real
+  exporter output rather than hand-written or placeholder benchmark
+  figures.
+- `CONTRIBUTING.md` documenting benchmark regeneration, the single
+  authoritative release gate, and IDE metadata policy.
+
+### Changed
+
+- `release_check.py` is now the single authoritative release gate, with
+  a 15-step sequence: version consistency, cppcheck, strict extended
+  checks, sanitizers, cost-of-assurance smoke, ACVP serial regression,
+  KAT provenance, KAT build/run, benchmark CSV export,
+  `--validate-only --verify-provenance`, MCU resource budgets, profile
+  validation.
+- The `release-gate` GitHub Actions job is blocking on `main` pushes,
+  PRs targeting `main`, and tag pushes. `continue-on-error: true` was
+  removed.
+- `CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS` range narrowed to `100..60000`
+  (previously `100..600000`), rejecting unusable upper values.
+- Primitive benchmark timing records cycles and microseconds
+  independently; `pqcp_bench_end_timing` returns raw hardware cycles,
+  and `pqcp_bench_cycles_to_us` performs the explicit conversion.
 
 ### Security
 
-- KAT provenance no longer depends on live network fetches during release
-  validation; the release gate now verifies checked-in vectors against vendored
-  official NIST ACVP fixtures.
-- Every FIPS 203 / FIPS 204 parameter set now has deterministic KAT coverage in
-  CI, closing the previous correctness gap for ML-KEM-512/1024 and
-  ML-DSA-44/87.
+- KAT provenance no longer depends on live network fetches during
+  release validation; the release gate verifies checked-in vectors
+  against vendored official NIST ACVP fixtures.
+- Every FIPS 203 / FIPS 204 parameter set now has deterministic KAT
+  coverage in CI, closing the previous correctness gap for
+  ML-KEM-512/1024 and ML-DSA-44/87.
+- PSA drivers can no longer write past output buffer bounds: output
+  lengths are validated before any write or copy into caller-provided
+  buffers.
+- Unsupported PSA key types are rejected before any internal state is
+  modified.
+- ACVP serial interface recovers cleanly after garbage, oversized, or
+  partial-timed-out frames and returns stable `ERROR:*` wire responses.
 
 ### Fixed
 
-- The release pipeline now has a non-publishing dry-run path, so maintainers
-  can validate the entire release workflow before any tag is pushed.
+- The release pipeline now has a non-publishing dry-run path, so
+  maintainers can validate the entire release workflow before any tag
+  is pushed.
+- Release-gate bulk-build matrices in `release.yml` and
+  `release-dry-run.yml` are aligned; both include `tests/ztest_acvp_kat`.
+- README links and example commands are portable — all absolute
+  `/Users/...` paths have been replaced with repo-relative paths and
+  environment-variable placeholders.
 
 ## [0.9.0] - 2026-04-18
 
