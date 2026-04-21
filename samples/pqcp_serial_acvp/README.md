@@ -72,6 +72,6 @@ The sample-specific PQCP options below come from `prj.conf` plus the shared modu
 | `CONFIG_PQCP_ACVP` | `y` | `y` if `CONFIG_PQCP_PROFILE_NATIVE_LAB`, otherwise `n` | `y` enables the reusable ACVP parser/formatter and command handlers. |
 | `CONFIG_PQCP_RNG_CUSTOM` | `y` | `n` | `y` selects application-registered RNG hooks; `n` leaves the sample on another RNG backend. |
 | `CONFIG_PQCP_RNG_DETERMINISTIC_TEST` | `y` | `n` | `y` enables deterministic DRBG seeding for ACVP/KAT only; `n` disables deterministic mode. |
-| `CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS` | inherited `5000` | `5000` | Integer range `100..600000`; partial command lines time out to `ERROR:TIMEOUT` after this many milliseconds. |
+| `CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS` | inherited `5000` | `5000` | Integer range `100..60000`; partial command lines time out to `ERROR:TIMEOUT` after this many milliseconds. |
 
 This sample intentionally enables deterministic test RNG support so ACVP hosts can seed reproducible vectors. Do not reuse this RNG configuration in production firmware.
