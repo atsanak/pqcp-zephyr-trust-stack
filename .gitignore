@@ -10,3 +10,7 @@ benchmark_results*/
 results/*.csv
 results/*.md
 !results/.gitkeep
+
+# IDE / editor metadata (should not live in a public security repo)
+.vscode/
+.idea/
