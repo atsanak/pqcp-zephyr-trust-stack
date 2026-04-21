@@ -7,8 +7,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import math
 import os
+import platform as host_platform
 import shlex
 import subprocess
 import sys
@@ -17,6 +20,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+PROVENANCE_SCHEMA_VERSION = 1
 
 HOST_ENV_BLACKLIST = (
     "CFLAGS",
@@ -31,6 +36,29 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 DEFAULT_MATRIX = REPO_ROOT / "scripts" / "cost_of_assurance_matrix.json"
 DEFAULT_OUTPUT = REPO_ROOT / "results" / "benchmark_results.csv"
+CSV_FIELDNAMES = [
+    "suite",
+    "parameter_set",
+    "implementation",
+    "backend",
+    "operation",
+    "cycles",
+    "time_us",
+    "rom_bytes",
+    "ram_bytes",
+    "platform",
+    "timestamp",
+]
+EXPECTED_PRIMITIVE_ROWS = {
+    "ML-KEM-512": ("keygen", "encaps", "decaps"),
+    "ML-KEM-768": ("keygen", "encaps", "decaps"),
+    "ML-KEM-1024": ("keygen", "encaps", "decaps"),
+    "ML-DSA-44": ("keygen", "sign", "verify"),
+    "ML-DSA-65": ("keygen", "sign", "verify"),
+    "ML-DSA-87": ("keygen", "sign", "verify"),
+}
+MIN_PQCP_BASELINE_TIME_RATIO = 0.2
+MAX_PQCP_BASELINE_TIME_RATIO = 10.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,6 +85,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--west-root", type=Path, help="Zephyr workspace root")
     parser.add_argument("--module-path", type=Path, help="PQCP module path")
     parser.add_argument("--west", help="Explicit west binary or command")
+    parser.add_argument(
+        "--validate-only",
+        type=Path,
+        help="Validate an existing benchmark CSV instead of generating a new one",
+    )
+    parser.add_argument(
+        "--verify-provenance",
+        action="store_true",
+        help=(
+            "When used with --validate-only, also load the matching "
+            "benchmark_provenance.json sidecar and verify that its "
+            "recorded csv.sha256 matches the CSV content."
+        ),
+    )
+    parser.add_argument(
+        "--provenance-output",
+        type=Path,
+        help=(
+            "Override the benchmark_provenance.json path. Defaults to "
+            "writing the sidecar next to the CSV output."
+        ),
+    )
     parser.add_argument(
         "--smoke",
         action="store_true",
@@ -165,7 +215,21 @@ def select_entries(
         if entry.get("board") == platform and entry_is_runnable(entry)
     ]
     if smoke:
-        return runnable[:3]
+        return [
+            entry
+            for entry in runnable
+            if entry.get("sample") in {"pqcp_basic_kem", "pqcp_basic_sig"}
+            and (
+                (
+                    entry.get("implementation") == "pqcp"
+                    and entry.get("backend") == "auto"
+                )
+                or (
+                    entry.get("implementation") == "baseline"
+                    and entry.get("backend") == "clean"
+                )
+            )
+        ]
     return runnable
 
 
@@ -282,7 +346,10 @@ def export_rows(
 ) -> List[Dict[str, Any]]:
     run_lookup = {row["run_id"]: row for row in runs}
     protocol_sets = protocol_parameter_sets(metric_rows)
-    exported: List[Dict[str, Any]] = []
+    exported: Dict[
+        Tuple[str, str, str, str, str, str, str],
+        Dict[str, Any],
+    ] = {}
 
     for row in metric_rows:
         if row.get("board") != platform:
@@ -322,42 +389,52 @@ def export_rows(
                 int(row.get("level", 0)),
             )
 
-        exported.append(
+        key = (
+            suite,
+            parameter_set,
+            str(run["implementation"]),
+            str(run["backend"]),
+            normalize_operation(str(row.get("operation", "")), metric),
+            platform,
+            str(row.get("timestamp", "")),
+        )
+        record = exported.setdefault(
+            key,
             {
                 "suite": suite,
                 "parameter_set": parameter_set,
                 "implementation": run["implementation"],
                 "backend": run["backend"],
                 "operation": normalize_operation(str(row.get("operation", "")), metric),
-                "cycles": cycles if cycles is not None else "",
-                "time_us": time_us if time_us is not None else "",
+                "cycles": "",
+                "time_us": "",
                 "rom_bytes": run.get("rom_bytes", ""),
                 "ram_bytes": run.get("ram_bytes", ""),
                 "platform": platform,
                 "timestamp": row.get("timestamp", ""),
-            }
+            },
         )
+        if cycles is not None:
+            record["cycles"] = cycles
+        if time_us is not None:
+            record["time_us"] = time_us
 
-    return exported
+    return sorted(
+        exported.values(),
+        key=lambda row: (
+            row["suite"],
+            row["parameter_set"],
+            row["operation"],
+            row["implementation"],
+            row["backend"],
+        ),
+    )
 
 
 def write_csv(rows: List[Dict[str, Any]], output_path: Path) -> None:
-    fieldnames = [
-        "suite",
-        "parameter_set",
-        "implementation",
-        "backend",
-        "operation",
-        "cycles",
-        "time_us",
-        "rom_bytes",
-        "ram_bytes",
-        "platform",
-        "timestamp",
-    ]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=CSV_FIELDNAMES)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -420,19 +497,373 @@ def write_summary(rows: List[Dict[str, Any]], summary_path: Path) -> None:
     summary_path.write_text("\n".join(lines) + "\n")
 
 
+def _parse_positive_number(value: Any, label: str) -> Tuple[Optional[float], Optional[str]]:
+    if value in ("", None, "n/a"):
+        return None, f"{label} is missing"
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None, f"{label} is not numeric: {value!r}"
+    if not math.isfinite(numeric):
+        return None, f"{label} is not finite: {value!r}"
+    if numeric <= 0:
+        return None, f"{label} must be > 0, got {value!r}"
+    return numeric, None
+
+
+def validate_benchmark_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    failures: List[Dict[str, str]] = []
+    primitive_rows = [
+        row for row in rows
+        if row.get("parameter_set") in EXPECTED_PRIMITIVE_ROWS
+        and row.get("operation") in EXPECTED_PRIMITIVE_ROWS[row["parameter_set"]]
+        and row.get("implementation") in {"pqcp", "baseline"}
+    ]
+
+    if len(primitive_rows) < 18:
+        failures.append(
+            {
+                "check": "row_count",
+                "message": (
+                    f"expected at least 18 primitive benchmark rows, found {len(primitive_rows)}"
+                ),
+            }
+        )
+
+    seen_rows = {
+        (row["parameter_set"], row["operation"], row["implementation"])
+        for row in primitive_rows
+    }
+    for parameter_set, operations in EXPECTED_PRIMITIVE_ROWS.items():
+        for operation in operations:
+            for implementation in ("pqcp", "baseline"):
+                key = (parameter_set, operation, implementation)
+                if key not in seen_rows:
+                    failures.append(
+                        {
+                            "check": "missing_row",
+                            "message": (
+                                "missing benchmark row for "
+                                f"{parameter_set} {operation} ({implementation})"
+                            ),
+                        }
+                    )
+
+    pqcp_vs_baseline_us: Dict[Tuple[str, str], Dict[str, float]] = defaultdict(dict)
+    for row in primitive_rows:
+        context = (
+            f"{row['parameter_set']} {row['operation']} ({row['implementation']})"
+        )
+        for column in ("cycles", "time_us", "rom_bytes", "ram_bytes"):
+            numeric, error = _parse_positive_number(row.get(column), f"{context} {column}")
+            if error is not None:
+                failures.append({"check": "numeric", "message": error})
+                continue
+            if column == "time_us" and numeric is not None:
+                pqcp_vs_baseline_us[(row["parameter_set"], row["operation"])][
+                    row["implementation"]
+                ] = numeric
+
+    for key, values in sorted(pqcp_vs_baseline_us.items()):
+        if "pqcp" not in values or "baseline" not in values:
+            failures.append(
+                {
+                    "check": "ratio_missing",
+                    "message": (
+                        f"missing pqcp/baseline time_us pair for {key[0]} {key[1]}"
+                    ),
+                }
+            )
+            continue
+        ratio = values["pqcp"] / values["baseline"]
+        if ratio < MIN_PQCP_BASELINE_TIME_RATIO or ratio > MAX_PQCP_BASELINE_TIME_RATIO:
+            failures.append(
+                {
+                    "check": "ratio",
+                    "message": (
+                        f"{key[0]} {key[1]} pqcp/baseline time_us ratio "
+                        f"{ratio:.2f} outside "
+                        f"[{MIN_PQCP_BASELINE_TIME_RATIO:.2f}, {MAX_PQCP_BASELINE_TIME_RATIO:.2f}]"
+                    ),
+                }
+            )
+
+    return failures
+
+
+def validate_benchmark_csv(path: Path) -> List[Dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != CSV_FIELDNAMES:
+            return [
+                {
+                    "check": "header",
+                    "message": (
+                        "benchmark export CSV header mismatch: "
+                        f"got {reader.fieldnames}, expected {CSV_FIELDNAMES}"
+                    ),
+                }
+            ]
+        rows = list(reader)
+    return validate_benchmark_rows(rows)
+
+
+def _file_sha256(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _git_rev(path: Path) -> Optional[str]:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha or None
+
+
+def _git_branch(path: Path) -> Optional[str]:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    return branch if branch and branch != "HEAD" else None
+
+
+def _git_dirty(path: Path) -> Optional[bool]:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return bool(result.stdout.strip())
+
+
+def _west_version(west_cmd: Optional[List[str]]) -> Optional[str]:
+    if not west_cmd:
+        return None
+    try:
+        result = subprocess.run(
+            list(west_cmd) + ["--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip().splitlines()[0] if result.stdout else None
+
+
+def build_provenance(
+    *,
+    csv_path: Path,
+    matrix_path: Path,
+    rows: List[Dict[str, Any]],
+    platform: str,
+    smoke: bool,
+    module_path: Path,
+    west_root: Path,
+    west_cmd: Optional[List[str]],
+) -> Dict[str, Any]:
+    """Collect provenance metadata for a generated benchmark CSV.
+
+    The resulting document is written as a sidecar JSON next to the CSV. It
+    gives reviewers an auditable answer to "why should these numbers be
+    trusted?" by binding the CSV hash to git SHAs, host info, tooling, and
+    per-layer row counts.
+    """
+    primitive_rows = [
+        row
+        for row in rows
+        if row.get("parameter_set") in EXPECTED_PRIMITIVE_ROWS
+    ]
+    protocol_rows = [
+        row
+        for row in rows
+        if row.get("parameter_set") not in EXPECTED_PRIMITIVE_ROWS
+    ]
+    pqcp_pairs = {
+        (row["parameter_set"], row["operation"])
+        for row in primitive_rows
+        if row.get("implementation") == "pqcp"
+    }
+    baseline_pairs = {
+        (row["parameter_set"], row["operation"])
+        for row in primitive_rows
+        if row.get("implementation") == "baseline"
+    }
+    paired_primitive = sorted(pqcp_pairs & baseline_pairs)
+
+    uname = host_platform.uname()
+    provenance: Dict[str, Any] = {
+        "schema_version": PROVENANCE_SCHEMA_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generator": "scripts/export_results.py",
+        "platform": platform,
+        "smoke": bool(smoke),
+        "csv": {
+            "path": csv_path.name,
+            "sha256": _file_sha256(csv_path),
+            "row_count": len(rows),
+            "primitive_row_count": len(primitive_rows),
+            "protocol_row_count": len(protocol_rows),
+            "paired_primitive_rows": [
+                f"{pair[0]}/{pair[1]}" for pair in paired_primitive
+            ],
+        },
+        "matrix": {
+            "path": str(matrix_path),
+            "sha256": _file_sha256(matrix_path) if matrix_path.exists() else None,
+        },
+        "git": {
+            "module_sha": _git_rev(module_path),
+            "module_branch": _git_branch(module_path),
+            "module_dirty": _git_dirty(module_path),
+            "workspace_sha": _git_rev(west_root),
+        },
+        "host": {
+            "system": uname.system,
+            "release": uname.release,
+            "machine": uname.machine,
+            "python": sys.version.split()[0],
+        },
+        "tooling": {
+            "west": _west_version(west_cmd),
+            "zephyr_sdk_install_dir": os.environ.get("ZEPHYR_SDK_INSTALL_DIR"),
+            "zephyr_toolchain_variant": os.environ.get("ZEPHYR_TOOLCHAIN_VARIANT"),
+            "ci": bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")),
+        },
+    }
+    return provenance
+
+
+def write_provenance(provenance: Dict[str, Any], provenance_path: Path) -> None:
+    provenance_path.parent.mkdir(parents=True, exist_ok=True)
+    provenance_path.write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
+
+
+def verify_provenance(csv_path: Path, provenance_path: Path) -> List[Dict[str, str]]:
+    """Verify a provenance sidecar matches its CSV.
+
+    Returns a list of failure dicts following the validate_benchmark_rows
+    convention. Missing provenance is not an error — callers may opt in.
+    """
+    failures: List[Dict[str, str]] = []
+    try:
+        document = json.loads(provenance_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        failures.append({"check": "provenance_load", "message": str(exc)})
+        return failures
+
+    if document.get("schema_version") != PROVENANCE_SCHEMA_VERSION:
+        failures.append(
+            {
+                "check": "provenance_schema",
+                "message": (
+                    f"unexpected schema_version "
+                    f"{document.get('schema_version')!r}; expected "
+                    f"{PROVENANCE_SCHEMA_VERSION}"
+                ),
+            }
+        )
+
+    csv_meta = document.get("csv") or {}
+    recorded_hash = csv_meta.get("sha256")
+    actual_hash = _file_sha256(csv_path)
+    if recorded_hash != actual_hash:
+        failures.append(
+            {
+                "check": "provenance_hash",
+                "message": (
+                    f"provenance sha256 {recorded_hash!r} does not match CSV "
+                    f"sha256 {actual_hash!r}"
+                ),
+            }
+        )
+    return failures
+
+
 def validate_output(rows: List[Dict[str, Any]], output_path: Path) -> None:
     if not rows:
         raise RuntimeError("benchmark export produced no timing rows")
-    header = output_path.read_text().splitlines()[0].strip()
-    expected = "suite,parameter_set,implementation,backend,operation,cycles,time_us,rom_bytes,ram_bytes,platform,timestamp"
-    if header != expected:
-        raise RuntimeError(
-            f"benchmark export CSV header mismatch: got '{header}', expected '{expected}'"
+    failures = validate_benchmark_csv(output_path)
+    if failures:
+        rendered = "\n".join(
+            f"  - [{failure['check']}] {failure['message']}" for failure in failures
         )
+        raise RuntimeError(f"benchmark export CSV validation failed:\n{rendered}")
 
 
 def main() -> int:
     args = parse_args()
+    if args.validate_only is not None:
+        csv_path = args.validate_only.resolve()
+        failures = validate_benchmark_csv(csv_path)
+        if args.verify_provenance:
+            provenance_path = (
+                args.provenance_output.resolve()
+                if args.provenance_output is not None
+                else csv_path.with_name("benchmark_provenance.json")
+            )
+            if not provenance_path.exists():
+                failures.append(
+                    {
+                        "check": "provenance_missing",
+                        "message": (
+                            f"--verify-provenance requested but {provenance_path} "
+                            f"is missing"
+                        ),
+                    }
+                )
+            else:
+                failures.extend(verify_provenance(csv_path, provenance_path))
+        if failures:
+            print("[export] Benchmark CSV validation failed:")
+            for failure in failures:
+                print(f"  - [{failure['check']}] {failure['message']}")
+            return 1
+        print(f"[export] Benchmark CSV validation passed: {csv_path}")
+        if args.verify_provenance:
+            print("[export] Provenance sidecar hash matches CSV content")
+        return 0
+
     module_path = args.module_path.resolve() if args.module_path else REPO_ROOT
     west_root = args.west_root.resolve() if args.west_root else detect_west_root(module_path)
     matrix_path = args.matrix.resolve()
@@ -471,10 +902,28 @@ def main() -> int:
     write_summary(exported, summary_path)
     validate_output(exported, output_path)
 
+    provenance_path = (
+        args.provenance_output.resolve()
+        if args.provenance_output is not None
+        else output_path.with_name("benchmark_provenance.json")
+    )
+    provenance = build_provenance(
+        csv_path=output_path,
+        matrix_path=matrix_path,
+        rows=exported,
+        platform=args.platform,
+        smoke=args.smoke,
+        module_path=module_path,
+        west_root=west_root,
+        west_cmd=west_cmd,
+    )
+    write_provenance(provenance, provenance_path)
+
     print(
         f"[export] Wrote {len(exported)} benchmark rows to {output_path}"
     )
     print(f"[export] Wrote summary markdown to {summary_path}")
+    print(f"[export] Wrote provenance sidecar to {provenance_path}")
     print(f"[export] Generated at {datetime.now(timezone.utc).isoformat()}")
     return 0
 
