@@ -1,5 +1,8 @@
 # PQCP Zephyr Trust Stack
 
+[![CI](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/ci.yml)
+[![Release dry-run](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml/badge.svg?branch=main)](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml)
+
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
 ## Performance
