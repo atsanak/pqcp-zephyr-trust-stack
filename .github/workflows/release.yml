@@ -118,6 +118,11 @@ PY
           mkdir -p "$logs_dir"
           : > "$summary"
 
+          # Keep this list in sync with release-dry-run.yml so the two
+          # workflows exercise identical build matrices. KAT vectors are
+          # also verified inside scripts/release_check.py, but having the
+          # bulk-build cover tests/ztest_acvp_kat keeps release-time
+          # artifacts consistent with the dry-run evidence reviewers see.
           apps=(
             "samples/pqcp_basic_kem"
             "samples/pqcp_basic_sig"
@@ -126,6 +131,7 @@ PY
             "samples/pqcp_serial_acvp"
             "samples/pqcp_streaming_hash_mldsa"
             "samples/pqcp_tls_mbedtls_psa"
+            "tests/ztest_acvp_kat"
             "tests/ztest_acvp_serial"
             "tests/ztest_primitive"
             "tests/ztest_rng"
