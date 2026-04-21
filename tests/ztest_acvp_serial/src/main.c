@@ -347,7 +347,7 @@ ZTEST(pqcp_acvp_serial, test_serial_line_garbage_rejected_and_recovered)
     assert_response_prefix(&resp, "RESULT:");
 }
 
-ZTEST(pqcp_acvp_serial, test_serial_line_timeout_rejected_and_recovered)
+ZTEST(pqcp_acvp_serial, test_readline_timeout)
 {
     static const char *partial = "KEYGEN:MLKEM:768:";
     static const char *complete = "KEYGEN:MLKEM:768:\n";

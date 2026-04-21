@@ -54,6 +54,9 @@ enum pqcp_acvp_result {
     PQCP_ACVP_VERIFY_INVALID,      /**< Signature is invalid (not an error) */
 };
 
+/** @brief Backward-compatible alias for the serial line timeout result. */
+#define PQCP_ACVP_ERR_LINE_TIMEOUT PQCP_ACVP_ERR_TIMEOUT
+
 /**
  * @brief ACVP response structure.
  *
