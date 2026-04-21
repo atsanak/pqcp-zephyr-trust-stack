@@ -198,19 +198,44 @@ def run_command(
     cwd: Path,
     env: dict[str, str],
     verbose: bool,
+    timeout: Optional[int] = None,
 ) -> subprocess.CompletedProcess[str]:
+    # Runs a subprocess, collects stdout + stderr, and optionally enforces
+    # a wall-clock timeout. On timeout we kill the process tree and return
+    # a CompletedProcess with a non-zero returncode plus a clear marker in
+    # the captured output. This is deliberately preferred over
+    # subprocess.run(..., timeout=...) raising TimeoutExpired: the caller
+    # treats the result uniformly and we avoid losing whatever stdout had
+    # been produced before the hang — critical for diagnosing which
+    # sanitizer case is wedged on CI.
     if verbose:
         print(" ".join(cmd))
 
-    return subprocess.run(
+    proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        check=False,
     )
+
+    try:
+        stdout, _ = proc.communicate(timeout=timeout)
+        returncode = proc.returncode
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            stdout_tail, _ = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            stdout_tail = ""
+        stdout = (
+            (stdout_tail or "")
+            + f"\n[run_sanitizer_checks] Killed after {timeout}s wall-clock timeout.\n"
+        )
+        returncode = 124
+
+    return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=None)
 
 
 def select_cases(names: Optional[List[str]]) -> List[SanitizerCase]:
@@ -298,43 +323,67 @@ def main() -> int:
             f"-DOVERLAY_CONFIG={overlay_path.name}",
         ]
 
-        print(f"\n[{case.name}] Building with ASan/UBSan")
+        # Per-phase wall-clock budgets. These are intentionally generous
+        # vs. local runtimes (a Linux GHA runner is ~1.5x slower than a
+        # modern workstation) but tight enough that the outer
+        # release_check.py 1200s budget for the whole sanitizer step is
+        # still honoured for 3 default cases (3 * (build + run) well
+        # under 1200s). If any single phase blows its budget, we surface
+        # the case name rather than letting the outer timeout kill us
+        # silently with no attribution.
+        build_timeout = 300
+        run_timeout = 300
+
+        print(f"\n[{case.name}] Building with ASan/UBSan", flush=True)
         build_result = run_command(
             build_cmd,
             cwd=west_root,
             env=env,
             verbose=args.verbose,
+            timeout=build_timeout,
         )
         build_log.write_text(build_result.stdout)
         if build_result.returncode != 0:
             print(build_result.stdout)
-            print(f"[{case.name}] Build failed; full log: {build_log}")
-            return build_result.returncode
-        print(f"[{case.name}] Build OK ({build_log})")
+            print(
+                f"[{case.name}] Build failed (exit {build_result.returncode}); "
+                f"full log: {build_log}",
+                flush=True,
+            )
+            return build_result.returncode or 1
+        print(f"[{case.name}] Build OK ({build_log})", flush=True)
 
         if args.build_only or not case.run:
             continue
 
         run_cmd = [*west_cmd, "build", "-d", str(build_dir), "-t", "run"]
-        print(f"[{case.name}] Running sanitizer image")
+        print(f"[{case.name}] Running sanitizer image", flush=True)
         run_result = run_command(
             run_cmd,
             cwd=west_root,
             env=env,
             verbose=args.verbose,
+            timeout=run_timeout,
         )
         run_log.write_text(run_result.stdout)
         if run_result.returncode != 0:
             print(run_result.stdout)
-            print(f"[{case.name}] Run failed; full log: {run_log}")
-            return run_result.returncode
+            print(
+                f"[{case.name}] Run failed (exit {run_result.returncode}); "
+                f"full log: {run_log}",
+                flush=True,
+            )
+            return run_result.returncode or 1
 
         if "PROJECT EXECUTION SUCCESSFUL" not in run_result.stdout:
             print(run_result.stdout)
-            print(f"[{case.name}] Missing success marker; full log: {run_log}")
+            print(
+                f"[{case.name}] Missing success marker; full log: {run_log}",
+                flush=True,
+            )
             return 1
 
-        print(f"[{case.name}] Run OK ({run_log})")
+        print(f"[{case.name}] Run OK ({run_log})", flush=True)
 
     print("\nSanitizer checks completed successfully.")
     return 0
