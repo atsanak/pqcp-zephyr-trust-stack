@@ -157,6 +157,21 @@ def parse_args() -> argparse.Namespace:
         help="Checked-in qemu_x86_64 cost-of-assurance regression thresholds",
     )
     parser.add_argument(
+        "--run-mcu-protocol-budgets",
+        action="store_true",
+        help=(
+            "Run the nucleo_h743zi protocol build-only footprint matrix and enforce "
+            "ROM/RAM budgets. Requires a configured Zephyr ARM toolchain. Opt-in "
+            "because it performs real cross-compile builds."
+        ),
+    )
+    parser.add_argument(
+        "--mcu-protocol-output-root",
+        type=Path,
+        default=Path("benchmark_results/extended/mcu_protocol_footprint"),
+        help="Output directory for MCU protocol footprint artifacts",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Fail if an optional tool is unavailable instead of skipping it",
@@ -520,6 +535,8 @@ def evaluate_cost_of_assurance_regressions(
 
     print(f"[cost] Numeric regression thresholds: {config_path}")
 
+    failures: list[str] = []
+
     for item in comparisons:
         if not isinstance(item, dict):
             raise RuntimeError("cost-of-assurance regression entries must be objects")
@@ -544,13 +561,15 @@ def evaluate_cost_of_assurance_regressions(
         candidate = find_matching_row(selected_rows, candidate_selectors)
         baseline = find_matching_row(selected_rows, baseline_selectors)
         if candidate is None:
-            raise RuntimeError(
-                f"[cost] Missing candidate row for {name}: {candidate_selectors}"
+            failures.append(
+                f"Missing candidate row for {name}: {candidate_selectors}"
             )
+            continue
         if baseline is None:
-            raise RuntimeError(
-                f"[cost] Missing baseline row for {name}: {baseline_selectors}"
+            failures.append(
+                f"Missing baseline row for {name}: {baseline_selectors}"
             )
+            continue
 
         metrics = item.get("metrics", {})
         if not isinstance(metrics, dict) or not metrics:
@@ -593,11 +612,10 @@ def evaluate_cost_of_assurance_regressions(
                     print(
                         f"  - {metric_name}: " + ", ".join(status_bits)
                     )
-                    print(
-                        f"[cost] Regression detected for {name} metric {metric_name}: "
+                    failures.append(
+                        f"{name} metric {metric_name}: ratio "
                         f"{ratio:.2f} > {max_ratio:.2f}"
                     )
-                    return 1
 
             if "max_candidate" in raw_rule:
                 max_candidate = float(raw_rule["max_candidate"])
@@ -608,15 +626,49 @@ def evaluate_cost_of_assurance_regressions(
                     print(
                         f"  - {metric_name}: " + ", ".join(status_bits)
                     )
-                    print(
-                        f"[cost] Regression detected for {name} metric {metric_name}: "
-                        f"candidate {candidate_value:.2f} > absolute limit {max_candidate:.2f}"
+                    failures.append(
+                        f"{name} metric {metric_name}: candidate "
+                        f"{candidate_value:.2f} > absolute limit {max_candidate:.2f}"
                     )
-                    return 1
 
             print(f"  - {metric_name}: " + ", ".join(status_bits))
 
+    if failures:
+        print("[cost] Regression failures detected:")
+        for failure in failures:
+            print(f"  - {failure}")
+        return 1
+
     return 0
+
+
+def run_mcu_protocol_budget_check(
+    *,
+    west_root: Path,
+    module_path: Path,
+    env: dict[str, str],
+    verbose: bool,
+    output_root: Path,
+) -> int:
+    print("\n[mcu] Running nucleo_h743zi protocol footprint and budget checks")
+    result = run_command(
+        [
+            sys.executable,
+            str(module_path / "scripts/check_resource_budgets.py"),
+            "--west-root",
+            str(west_root),
+            "--module-path",
+            str(module_path),
+            "--output-root",
+            str(output_root),
+        ],
+        cwd=module_path,
+        env=env,
+        verbose=verbose,
+    )
+    if result.stdout:
+        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+    return result.returncode
 
 
 def run_cost_of_assurance_smoke(
@@ -900,6 +952,22 @@ def main() -> int:
         )
         if compat_result != 0:
             return compat_result
+
+    if args.run_mcu_protocol_budgets:
+        mcu_budget_result = run_mcu_protocol_budget_check(
+            west_root=west_root,
+            module_path=module_path,
+            env=env,
+            verbose=args.verbose,
+            output_root=args.mcu_protocol_output_root.resolve(),
+        )
+        if mcu_budget_result != 0:
+            return mcu_budget_result
+    else:
+        print(
+            "\n[mcu] Skipping nucleo_h743zi protocol footprint and budget checks "
+            "(pass --run-mcu-protocol-budgets to enable; release_check.py runs this step directly)."
+        )
 
     if args.run_cost_of_assurance_smoke:
         coa_result = run_cost_of_assurance_smoke(
