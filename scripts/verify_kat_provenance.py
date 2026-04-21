@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Verify checked-in ACVP KAT vectors against vendored NIST ACVP fixtures."""
 
 from __future__ import annotations

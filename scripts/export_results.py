@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """
 Export PQCP benchmark matrix results into a publication-friendly CSV.
 """
