@@ -154,6 +154,8 @@ PY
           mkdir -p "$logs_dir"
           : > "$summary"
 
+          # Keep this list in sync with release.yml so the two workflows
+          # exercise identical build matrices.
           apps=(
             "samples/pqcp_basic_kem"
             "samples/pqcp_basic_sig"
