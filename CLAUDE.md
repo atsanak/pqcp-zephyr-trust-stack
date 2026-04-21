@@ -1,8 +1,8 @@
 # CLAUDE.md — pqcp-zephyr-trust-stack session memory
 
 > Auto-managed context for AI coding sessions.
-> Last updated: 2026-04-21 by Codex.
-> HEAD: ed525589a8c1575beb375e8e99767209f0dd6a43 (main, 2026-04-18)
+> Last updated: 2026-04-21 by Opus 4.7.
+> HEAD: 2704cb662b91c7acf508f8c221d1f7e2a1e4fd37 (main, 2026-04-21)
 
 ---
 
@@ -231,6 +231,65 @@ Avoid:
   - records CSV sha256, git SHAs, host, toolchain, CI flag, and row-layer stats,
   - `--verify-provenance` gate in release_check.py and release-dry-run.yml,
   - documented in README as "Benchmark Provenance".
+
+## Session summary (HEAD 2704cb6, 2026-04-21, Opus 4.7)
+
+This session addressed the post-771ce93 open gaps. What landed:
+
+- `e63300b` ci: make release-gate blocking on main, PRs to main, and tag
+  pushes — removed `continue-on-error: true` from the `release-gate` job
+  in `.github/workflows/ci.yml` and extended its `if:` condition to also
+  fire on `refs/tags/*`. The release gate is now genuinely blocking.
+- `7d6f824` docs(readme): replace absolute filesystem paths with portable
+  equivalents — rewrote every `/Users/angelostsanaktsidis/...` link and
+  `.venv/bin/west` invocation in `README.md` to repo-relative paths or
+  portable `west` commands with an explicit PATH note.
+- `e2bfdd9` chore: untrack `.cursor/` and ignore common IDE metadata
+  directories — `git rm --cached .cursor/settings.json`, added
+  `.cursor/`, `.vscode/`, `.idea/` to `.gitignore`.
+- `df6dfc3` ci: align release.yml bulk-build matrix with release-dry-run.yml
+  — added `tests/ztest_acvp_kat` to `release.yml` apps[] so both release
+  workflows exercise identical build lists; cross-referenced in comments.
+- `2704cb6` docs: add CONTRIBUTING.md documenting benchmark regeneration
+  and gate policy — documents that `results/*.csv` is deliberately
+  gitignored, how to regenerate `benchmark_results.csv` + its provenance
+  sidecar locally, and why no committed benchmark artifact exists.
+
+## Open gaps after 2704cb6 (honest, not done)
+
+- [ ] `resource_budgets.json` ROM/RAM entries for nucleo_h743zi protocol
+  builds are still estimates. Needs a first real CI run of
+  `scripts/check_resource_budgets.py` on an actual `nucleo_h743zi`
+  build to re-baseline the budgets. Especially suspect: the
+  `baseline/clean` rows currently mirror PQCP numbers exactly.
+- [ ] `check_version_consistency.py` does not yet inspect
+  `CHANGELOG.md` — `release_check.py` covers the CHANGELOG separately
+  but unifying them would remove duplicated enforcement.
+- [ ] Sanitizer overlay compilation on `native_sim`/`native_posix`:
+  the `qemu-smoke` job of CI run 24743445941 (commit `fc616e3`, which
+  contains both `tests/ztest_primitive/overlay-sanitize.conf` and
+  `samples/pqcp_bench_protocol/overlay-sanitize.conf`) reported
+  `success`, so they do compile. Full-log reproduction and explicit
+  ASan/UBSan output capture was not performed because the enclosing
+  run was still `in_progress` when this session ended — revisit when
+  the run settles.
+- [ ] `results/benchmark_results.csv` regeneration on a real Linux
+  Zephyr SDK host and re-evaluation of the `benchmark_provenance.json`
+  sidecar against CI-produced data. This session confirmed that no
+  CSV is or ever has been tracked (git history shows zero `*.csv`
+  adds under `results/`) and documented the correct regeneration
+  path in `CONTRIBUTING.md`; what remains is executing it on a host
+  with the SDK and uploading the sidecar as a CI artifact.
+
+## Completed tasks (verified at 771ce93)
+
+- [x] T1: Benchmark CSV hardened — avg_cycles + avg_us fields, parse_logs.py updated
+- [x] T2: MCU protocol budgets — check_resource_budgets.py, resource_budgets.json, nucleo entries
+- [x] T3: RTOS/TLS decomposition — auth_time + key_exchange_time in regression JSON + enforcement
+- [x] T4: Sanitizer integration — run_sanitizer_checks.py strict-in-CI, overlays added
+- [x] T5: ACVP timeout coherence — Kconfig 100..60000, naming aligned, backward alias added
+- [x] T6: Version consistency + west.yml — check_version_consistency.py, CMakeLists FATAL_ERROR
+- [x] T7: Provenance novelty — benchmark_provenance.json sidecar, --verify-provenance, CI wired
 
 ---
 
