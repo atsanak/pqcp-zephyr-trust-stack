@@ -80,11 +80,11 @@ without having to rebuild the matrix themselves.
 ### Cryptographic Correctness
 - ML-KEM-512/768/1024 implemented per FIPS 203 (final)
 - ML-DSA-44/65/87 implemented per FIPS 204 (final)
-- NIST KAT vectors verified in CI ([`tests/ztest_acvp_kat`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/tests/ztest_acvp_kat))
+- NIST KAT vectors verified in CI ([`tests/ztest_acvp_kat`](tests/ztest_acvp_kat))
 - Baseline provider is QEMU-only; not a production path
 
 ### Side-Channel Posture
-- The PQCP provider implementations are the `mlkem-native` and `mldsa-native` modules (see [`west.yml`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/west.yml) for pinned revisions). Consult those modules' documentation for their constant-time guarantees.
+- The PQCP provider implementations are the `mlkem-native` and `mldsa-native` modules (see [`west.yml`](west.yml) for pinned revisions). Consult those modules' documentation for their constant-time guarantees.
 - The baseline provider makes no constant-time guarantees.
 
 ### PSA Driver Guarantees
@@ -310,7 +310,7 @@ runner instead of relying on repo-local helper scripts alone.
 To discover and build the QEMU-covered tests without running them:
 
 ```bash
-/Users/angelostsanaktsidis/code/PQC/zephyr-ws/.venv/bin/west twister \
+west twister \
   -T tests/ \
   -p qemu_x86_64 \
   --build-only
@@ -319,12 +319,16 @@ To discover and build the QEMU-covered tests without running them:
 To focus on just the PQCP-tagged scenarios, use Twister's tag filter:
 
 ```bash
-/Users/angelostsanaktsidis/code/PQC/zephyr-ws/.venv/bin/west twister \
+west twister \
   -T tests/ \
   -p qemu_x86_64 \
   --build-only \
   -t pqcp
 ```
+
+> If `west` is not on your `PATH`, substitute `python3 -m west twister ...`
+> or the full path to the `west` binary in your Zephyr workspace's Python
+> environment (typically `$ZEPHYR_BASE/../.venv/bin/west`).
 
 The current manifests cover:
 
@@ -1678,7 +1682,7 @@ out separately from the default static-analysis output.
 ## Releasing
 
 Keep the next release notes in the `## [Unreleased]` block in
-[`CHANGELOG.md`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/CHANGELOG.md).
+[`CHANGELOG.md`](CHANGELOG.md).
 Before tagging, run the full release gate locally:
 
 ```bash
@@ -1700,7 +1704,7 @@ git push origin v1.0.0
 ```
 
 The tag-triggered workflow at
-[`release.yml`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/.github/workflows/release.yml)
+[`release.yml`](.github/workflows/release.yml)
 automatically:
 
 - runs `python scripts/release_check.py` and stops the release if it fails;
@@ -1709,7 +1713,7 @@ automatically:
 - creates a GitHub Release titled with the tag name and populated from the current `## [Unreleased]` changelog block.
 
 The companion
-[`release-dry-run.yml`](/Users/angelostsanaktsidis/code/PQC/zephyr-ws/pqcp-zephyr-trust-stack/.github/workflows/release-dry-run.yml)
+[`release-dry-run.yml`](.github/workflows/release-dry-run.yml)
 workflow runs the same gate, QEMU builds, and changelog extraction steps
 without publishing a GitHub Release. Use it to validate the release pipeline on
 `main` before pushing any release tag.
