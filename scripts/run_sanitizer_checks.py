@@ -36,14 +36,16 @@ class SanitizerCase:
     app_path: str
     overlay: str
     run: bool
+    run_timeout_s: int = 300
 
 
 # Cases exercised under ASan/UBSan on native_sim/native/64.
 #
-# Two cases are deliberately restricted vs. a naive "build+run all PQCP
-# targets under ASan" list, because native_sim + ASan + mbedTLS has
-# well-characterised harness limitations that have nothing to do with
-# the cryptographic correctness we care about on the release gate:
+# ztest_tls_selftest remains opt-in because its printk hook assertions are
+# native_sim-specific under ASan, but the protocol benchmark now runs by
+# default again. That keeps the release gate's sanitizer path honest: the
+# full TLS-style KEM + ML-DSA handshake must execute, emit protocol metrics,
+# and return Zephyr's success marker under ASan/UBSan.
 #
 # 1. ztest_tls_selftest — moved to OPT_IN_CASES.
 #    Two of its ztests (test_tls_selftest_report_success and
@@ -58,21 +60,6 @@ class SanitizerCase:
 #    Both failures are harness artefacts, not real memory bugs.
 #    ztest_tls_selftest is still run under the non-sanitized
 #    release-gate (qemu-smoke, profile_validation).
-#
-# 2. pqcp_bench_protocol — kept in DEFAULT_CASES but with run=False
-#    (build-only). The build phase still links the full mbedTLS + PQCP
-#    PSA driver graph under ASan/UBSan, catching any memory-safety or
-#    UB-detectable ODR / init-order problem at load time. Running the
-#    image, however, hangs indefinitely on native_sim + ASan + mbedTLS
-#    (reproduced: build 24748072132 hit the 300s per-case run timeout
-#    even with CONFIG_PQCP_BENCH_ITERATIONS=1). The runtime TLS
-#    handshake path is already exercised by qemu-smoke and by the
-#    non-sanitized cost-of-assurance matrix in release_check.py, so
-#    skipping only the sanitized run does not leave TLS uncovered on
-#    the release gate. To force a run anyway (useful for investigating
-#    the hang on a dev machine), call
-#      scripts/run_sanitizer_checks.py --case pqcp_bench_protocol
-#    which treats it as an OPT_IN_CASES entry (below) with run=True.
 #
 # The crypto primitives themselves (ML-KEM, ML-DSA, ACVP driver glue)
 # are always build+run under ASan/UBSan via ztest_primitive and
@@ -94,23 +81,18 @@ DEFAULT_CASES = [
         name="pqcp_bench_protocol",
         app_path="samples/pqcp_bench_protocol",
         overlay="overlay-sanitize.conf",
-        run=False,
+        run=True,
+        run_timeout_s=120,
     ),
 ]
 
 # Opt-in cases that can be requested explicitly via --cases on the command
 # line but are not part of DEFAULT_CASES. See note above for the
-# ztest_tls_selftest and pqcp_bench_protocol rationale.
+# ztest_tls_selftest rationale.
 OPT_IN_CASES = [
     SanitizerCase(
         name="ztest_tls_selftest",
         app_path="tests/ztest_tls_selftest",
-        overlay="overlay-sanitize.conf",
-        run=True,
-    ),
-    SanitizerCase(
-        name="pqcp_bench_protocol",
-        app_path="samples/pqcp_bench_protocol",
         overlay="overlay-sanitize.conf",
         run=True,
     ),
@@ -214,6 +196,13 @@ def build_env() -> dict[str, str]:
     for key in HOST_ENV_BLACKLIST:
         env.pop(key, None)
     return env
+
+
+def required_success_markers(case: SanitizerCase) -> List[str]:
+    markers = ["PROJECT EXECUTION SUCCESSFUL"]
+    if case.name == "pqcp_bench_protocol":
+        markers.append("PQCP_METRIC,protocol,handshake")
+    return markers
 
 
 def run_command(
@@ -356,7 +345,7 @@ def main() -> int:
         # the case name rather than letting the outer timeout kill us
         # silently with no attribution.
         build_timeout = 300
-        run_timeout = 300
+        run_timeout = case.run_timeout_s
 
         print(f"\n[{case.name}] Building with ASan/UBSan", flush=True)
         build_result = run_command(
@@ -399,10 +388,15 @@ def main() -> int:
             )
             return run_result.returncode or 1
 
-        if "PROJECT EXECUTION SUCCESSFUL" not in run_result.stdout:
+        missing_markers = [
+            marker for marker in required_success_markers(case)
+            if marker not in run_result.stdout
+        ]
+        if missing_markers:
             print(run_result.stdout)
             print(
-                f"[{case.name}] Missing success marker; full log: {run_log}",
+                f"[{case.name}] Missing success marker(s): "
+                f"{', '.join(missing_markers)}; full log: {run_log}",
                 flush=True,
             )
             return 1
