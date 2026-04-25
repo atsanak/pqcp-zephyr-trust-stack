@@ -1,11 +1,14 @@
 # CLAUDE.md — pqcp-zephyr-trust-stack session memory
 
 > Auto-managed context for AI coding sessions.
-> Last updated: 2026-04-21 by Opus 4.7.
-> HEAD: 8f63b2cc (main, 2026-04-21) — CI release-gate green on this SHA,
->   with qemu-smoke + benchmark-smoke + nucleo-protocol-builds all green
->   on the previous SHA 691eeb28 (job-startup flake on 8f63b2cc for the
->   non-blocking jobs; release-gate — the only blocking job — is green).
+> Last updated: 2026-04-26 by Codex.
+> HEAD: d3f0299b (main, 2026-04-26) — release workflow YAML startup issue
+>   fixed locally and pushed. Local `py_compile`, workflow YAML parsing,
+>   `run_extended_checks.py --strict`, and
+>   `run_extended_checks.py --strict --run-cost-of-assurance-smoke` pass.
+>   GitHub Actions jobs currently do not start because the account reports
+>   failed payments or a spending-limit block; this is an account/billing
+>   issue, not a repository test failure.
 
 ---
 
@@ -403,13 +406,12 @@ Still open for post-v1.0.0:
   other nucleo samples) remain `estimated_pending_ci_baseline`.
   Running the full `check_resource_budgets.py` against each board's
   CI build artifact should retire this status.
-- [ ] `release.yml` and `release-dry-run.yml` show a GitHub Actions
-  startup_failure on every main-branch push (0 jobs, instant fail).
-  This is a pre-existing issue caused by `${{ inputs.release_ref }}`
-  being referenced at the workflow-level `env:` block when the event
-  is `push`. Does not block the release-gate or any real release
-  flow, but should be cleaned up by gating the `env:` expression on
-  event type or moving `RELEASE_REF` into a job-level env.
+- [ ] GitHub Actions hosted runners are currently blocked by account
+  billing/spending-limit state. CI run 24942163807 on `d3f0299`
+  produced check-run annotations saying: "The job was not started
+  because recent account payments have failed or your spending limit
+  needs to be increased." Resolve this in GitHub billing, then re-run
+  CI on `main`.
 - [ ] Root-cause the native_sim+ASan+mbedTLS TLS handshake hang so
   `pqcp_bench_protocol` can be re-enabled in the sanitizer run
   phase. The current workaround (build-only) is coverage-preserving
@@ -421,6 +423,30 @@ Still open for post-v1.0.0:
   adds under `results/`) and documented the correct regeneration
   path in `CONTRIBUTING.md`; what remains is executing it on a host
   with the SDK and uploading the sidecar as a CI artifact.
+
+## Session summary (HEAD d3f0299, 2026-04-26, Codex)
+
+- `d3f0299` fix(ci): repair release workflow YAML startup failures.
+  Moved `RELEASE_REF` out of workflow-level `env:` in
+  `.github/workflows/release.yml` and
+  `.github/workflows/release-dry-run.yml`, using job-level env and
+  `github.event.inputs.release_ref` so push/tag events do not evaluate
+  dispatch-only `inputs`. Also restored valid YAML indentation for
+  embedded Python heredocs in both workflows.
+- Local validation for `d3f0299`:
+  - `python3 -m py_compile scripts/*.py` passed.
+  - Ruby YAML parse for `release.yml`, `release-dry-run.yml`, and
+    `ci.yml` passed.
+  - `python3 scripts/run_extended_checks.py --strict` passed.
+  - `python3 scripts/run_extended_checks.py --strict --run-cost-of-assurance-smoke`
+    passed.
+  - `tests/ztest_acvp_serial` produced `PROJECT EXECUTION SUCCESSFUL`
+    with 12/12 tests passing after unsetting macOS SDK leakage
+    (`CPATH`, `CFLAGS`, `SDKROOT`) from the cross-build environment.
+- GitHub Actions run 24942163807 on `d3f0299` still failed before any
+  job steps ran. Check-run annotations identify the cause as GitHub
+  account billing/spending-limit state, not workflow YAML or Zephyr
+  test execution.
 
 ## Completed tasks (verified at 771ce93)
 
