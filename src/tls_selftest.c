@@ -43,7 +43,14 @@ static inline uint64_t timer_start(void)
 
 static inline uint64_t timer_elapsed_us(uint64_t start)
 {
-    return k_cyc_to_us_floor64(k_cycle_get_64() - start);
+    uint64_t elapsed_cycles = k_cycle_get_64() - start;
+    uint64_t elapsed_us = k_cyc_to_us_floor64(elapsed_cycles);
+
+    if (elapsed_cycles > 0U && elapsed_us == 0U) {
+        return 1U;
+    }
+
+    return elapsed_us;
 }
 
 static inline uint32_t div_round_up_u32(uint32_t value, uint32_t divisor)
