@@ -9,15 +9,14 @@ on:
         default: "main"
         type: string
 
-env:
-  RELEASE_REF: ${{ inputs.release_ref }}
-
 permissions:
   contents: read
 
 jobs:
   release-dry-run:
     runs-on: ubuntu-22.04
+    env:
+      RELEASE_REF: ${{ github.event.inputs.release_ref || 'main' }}
 
     steps:
       - name: Check out module repository
@@ -38,15 +37,15 @@ jobs:
 
           VERSION=$(
             python3 - <<'PY'
-from pathlib import Path
-import re
+          from pathlib import Path
+          import re
 
-text = Path("include/pqcp_zephyr/version.h").read_text(encoding="utf-8")
-match = re.search(r'#define\s+PQCP_ZEPHYR_VERSION_STRING\s+"([^"]+)"', text)
-if match is None:
-    raise SystemExit("Unable to determine PQCP_ZEPHYR_VERSION_STRING")
-print(match.group(1))
-PY
+          text = Path("include/pqcp_zephyr/version.h").read_text(encoding="utf-8")
+          match = re.search(r'#define\s+PQCP_ZEPHYR_VERSION_STRING\s+"([^"]+)"', text)
+          if match is None:
+              raise SystemExit("Unable to determine PQCP_ZEPHYR_VERSION_STRING")
+          print(match.group(1))
+          PY
           )
           if ! grep -q "^## \\[${VERSION}\\]" CHANGELOG.md; then
             echo "No CHANGELOG entry for ${VERSION}"

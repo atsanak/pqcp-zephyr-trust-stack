@@ -11,15 +11,16 @@ on:
         required: true
         type: string
 
-env:
-  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
-
 permissions:
   contents: write
 
 jobs:
   release:
     runs-on: ubuntu-22.04
+    env:
+      RELEASE_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+            github.event.inputs.release_ref || github.ref_name }}
 
     steps:
       - name: Check out module repository
@@ -41,15 +42,15 @@ jobs:
           TAG_VERSION="${RELEASE_REF#v}"
           VERSION=$(
             python3 - <<'PY'
-from pathlib import Path
-import re
+          from pathlib import Path
+          import re
 
-text = Path("include/pqcp_zephyr/version.h").read_text(encoding="utf-8")
-match = re.search(r'#define\s+PQCP_ZEPHYR_VERSION_STRING\s+"([^"]+)"', text)
-if match is None:
-    raise SystemExit("Unable to determine PQCP_ZEPHYR_VERSION_STRING")
-print(match.group(1))
-PY
+          text = Path("include/pqcp_zephyr/version.h").read_text(encoding="utf-8")
+          match = re.search(r'#define\s+PQCP_ZEPHYR_VERSION_STRING\s+"([^"]+)"', text)
+          if match is None:
+              raise SystemExit("Unable to determine PQCP_ZEPHYR_VERSION_STRING")
+          print(match.group(1))
+          PY
           )
           if [ "$TAG_VERSION" != "$VERSION" ]; then
             echo "Tag ${TAG_VERSION} does not match version.h ${VERSION}"
