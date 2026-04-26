@@ -8,7 +8,7 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-04-21
+## [1.0.0] - 2026-04-26
 
 First production-quality release of the Zephyr PQC trust stack. Supports
 ML-KEM-512/768/1024 (FIPS 203) and ML-DSA-44/65/87 (FIPS 204) through a
@@ -37,7 +37,9 @@ sidecar.
   `scripts/qemu_cost_of_assurance_regression.json` with enforced
   `handshake_latency_ratio`, `rom_ratio`, `ram_ratio`, `auth_time`, and
   `key_exchange_time` thresholds for both ML-KEM-768+ML-DSA-65 and
-  ML-KEM-512+ML-DSA-87 protocol suites.
+  ML-KEM-512+ML-DSA-87 protocol suites, plus RTOS/TLS decomposition
+  guardrails for provider overhead, transport overhead, and RTOS jitter
+  columns emitted by the protocol benchmark.
 - `scripts/export_results.py` for publication-ready benchmark extraction,
   generating `results/benchmark_results.csv` and
   `results/benchmark_summary.md` from the checked-in cost-of-assurance
@@ -62,6 +64,8 @@ sidecar.
   under ASan/UBSan on `native_sim/native/64`. Strict in CI
   (`CI=1`/`GITHUB_ACTIONS`/`PQCP_STRICT_SANITIZERS`), graceful locally
   on unsupported hosts.
+- Native TLS selftest smoke coverage in PR CI, including a Linux-only
+  sanitizer overlay path for the mbedTLS-backed TLS selftest.
 - QEMU baseline coverage for ML-KEM-1024 and ML-DSA-44 so every
   ML-KEM and ML-DSA parameter set has a PQCP-vs-baseline primitive
   comparison path.
@@ -79,7 +83,7 @@ sidecar.
 ### Changed
 
 - `release_check.py` is now the single authoritative release gate, with
-  a 15-step sequence: version consistency, cppcheck, strict extended
+  a multi-step sequence: version consistency, cppcheck, strict extended
   checks, sanitizers, cost-of-assurance smoke, ACVP serial regression,
   KAT provenance, KAT build/run, benchmark CSV export,
   `--validate-only --verify-provenance`, MCU resource budgets, profile
@@ -107,7 +111,9 @@ sidecar.
 - Unsupported PSA key types are rejected before any internal state is
   modified.
 - ACVP serial interface recovers cleanly after garbage, oversized, or
-  partial-timed-out frames and returns stable `ERROR:*` wire responses.
+  partial-timed-out frames and returns stable `ERROR:*` wire responses;
+  the per-frame readline timeout is enforced in the shared ACVP line
+  helper so sample users and library users share the same protection.
 
 ### Fixed
 
@@ -119,6 +125,9 @@ sidecar.
 - README links and example commands are portable — all absolute
   `/Users/...` paths have been replaced with repo-relative paths and
   environment-variable placeholders.
+- Cost-of-assurance regression validation now fails clearly when a
+  configured metric key does not exist in the generated benchmark CSV,
+  preventing RTOS/TLS guardrail typos from silently passing.
 
 ## [0.9.0] - 2026-04-18
 
