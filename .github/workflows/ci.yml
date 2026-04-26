@@ -115,6 +115,48 @@ jobs:
           run_test "tests/ztest_tls_selftest" "build-ztest-tls"
           run_test "tests/ztest_acvp_kat" "build-ztest-acvp-kat-smoke" "-DOVERLAY_CONFIG=overlay-smoke.conf"
 
+      - name: Run native_sim TLS selftest smoke
+        shell: bash
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+
+          run_native_tls() {
+            local build_dir="$1"
+            local extra_cmake_args="${2:-}"
+            local log_file="$RUNNER_TEMP/${build_dir}.log"
+
+            west build -p always -d "$build_dir" -b native_sim/native/64 "$GITHUB_WORKSPACE/tests/ztest_tls_selftest" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE" $extra_cmake_args
+            timeout 60s west build -d "$build_dir" -t run >"$log_file" 2>&1
+
+            if ! grep -q "PROJECT EXECUTION SUCCESSFUL" "$log_file"; then
+              cat "$log_file"
+              exit 1
+            fi
+          }
+
+          run_native_tls "build-native-tls-smoke"
+
+      - name: Run native_sim TLS sanitizer smoke
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: ${{ env.ZEPHYR_WORKSPACE }}
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+
+          log_file="$RUNNER_TEMP/build-native-tls-asan.log"
+          west build -p always -d build-native-tls-asan -b native_sim/native/64 "$GITHUB_WORKSPACE/tests/ztest_tls_selftest" -- \
+            -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE" \
+            -DOVERLAY_CONFIG="$GITHUB_WORKSPACE/tests/ztest_tls_selftest/overlay-sanitize.conf"
+          timeout 90s west build -d build-native-tls-asan -t run >"$log_file" 2>&1
+
+          if ! grep -q "PROJECT EXECUTION SUCCESSFUL" "$log_file"; then
+            cat "$log_file"
+            exit 1
+          fi
+
       - name: Run qemu_x86_64 sample smoke tests
         shell: bash
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
