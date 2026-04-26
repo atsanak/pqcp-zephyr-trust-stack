@@ -447,6 +447,15 @@ config PQCP_ACVP_READLINE_TIMEOUT_MS
 	  window, the sample drops the partial frame, emits ERROR:TIMEOUT, and
 	  waits for the next command.
 
+config PQCP_KAT_SMOKE_ONLY
+	bool "Limit ACVP KAT ztest to a smoke subset"
+	depends on PQCP_ACVP
+	default n
+	help
+	  Limit the ACVP known-answer ztest suite to a small deterministic subset
+	  for fast pull-request smoke runs. Leave this disabled for release gates
+	  so every vendored NIST KAT vector is exercised.
+
 endif # PQCP_ACVP
 
 endmenu

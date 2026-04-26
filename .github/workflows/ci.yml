@@ -88,10 +88,11 @@ jobs:
           run_test() {
             local app="$1"
             local build_dir="$2"
+            local extra_cmake_args="${3:-}"
             local log_file="$RUNNER_TEMP/${build_dir}.log"
             local status=0
 
-            west build -p always -d "$build_dir" -b qemu_x86_64 "$GITHUB_WORKSPACE/$app" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
+            west build -p always -d "$build_dir" -b qemu_x86_64 "$GITHUB_WORKSPACE/$app" -- -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE" $extra_cmake_args
 
             cleanup_qemu "$build_dir"
             timeout 120s west build -d "$build_dir" -t run >"$log_file" 2>&1 || status=$?
@@ -112,6 +113,7 @@ jobs:
           run_test "tests/ztest_primitive" "build-ztest-primitive"
           run_test "tests/ztest_acvp_serial" "build-ztest-acvp"
           run_test "tests/ztest_tls_selftest" "build-ztest-tls"
+          run_test "tests/ztest_acvp_kat" "build-ztest-acvp-kat-smoke" "-DOVERLAY_CONFIG=overlay-smoke.conf"
 
       - name: Run qemu_x86_64 sample smoke tests
         shell: bash
