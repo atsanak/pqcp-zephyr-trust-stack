@@ -370,10 +370,18 @@ ZTEST(pqcp_acvp_serial, test_readline_timeout)
     zassert_equal(
         pqcp_acvp_serial_line_timeout(&state, serial_line, sizeof(serial_line)),
         -ETIMEDOUT);
+    zassert_equal(strcmp(pqcp_acvp_result_str(PQCP_ACVP_ERR_LINE_TIMEOUT),
+                         "TIMEOUT"),
+                  0);
     zassert_equal(serial_line[0], '\0');
     zassert_false(state.active);
     zassert_false(state.overflow);
     zassert_equal(state.len, 0U);
+
+    pqcp_acvp_response_init(&resp, response_buffer, sizeof(response_buffer));
+    resp.result = PQCP_ACVP_ERR_LINE_TIMEOUT;
+    resp.data_len = 0U;
+    assert_response_line(&resp, "ERROR:TIMEOUT");
 
     for (size_t i = 0U; i < strlen(complete) - 1U; ++i) {
         zassert_equal(
