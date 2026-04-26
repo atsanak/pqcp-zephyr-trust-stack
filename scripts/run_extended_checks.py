@@ -515,6 +515,10 @@ def parse_numeric_metric(row: dict[str, str], metric: str, label: str) -> float:
         raise RuntimeError(f"{label} metric '{metric}' is not numeric: {raw}") from exc
 
 
+def available_metric_columns(row: dict[str, str]) -> str:
+    return ", ".join(sorted(row.keys()))
+
+
 def evaluate_cost_of_assurance_regressions(
     *,
     module_path: Path,
@@ -576,7 +580,7 @@ def evaluate_cost_of_assurance_regressions(
         if not isinstance(metrics, dict) or not metrics:
             raise RuntimeError(f"[cost] Comparison {name} has no metrics configured")
 
-        print(f"[cost] Regression comparison: {name}")
+        metric_key_failures: list[str] = []
         for metric_name, raw_rule in metrics.items():
             if not isinstance(raw_rule, dict):
                 raise RuntimeError(
@@ -587,7 +591,24 @@ def evaluate_cost_of_assurance_regressions(
                     f"[cost] Comparison {name} metric {metric_name} must define "
                     "max_ratio and/or max_candidate"
                 )
+            if metric_name not in candidate:
+                metric_key_failures.append(
+                    f"[cost] Comparison {name} candidate row is missing configured "
+                    f"metric column '{metric_name}' (available: "
+                    f"{available_metric_columns(candidate)})"
+                )
+            if "max_ratio" in raw_rule and metric_name not in baseline:
+                metric_key_failures.append(
+                    f"[cost] Comparison {name} baseline row is missing configured "
+                    f"metric column '{metric_name}' (available: "
+                    f"{available_metric_columns(baseline)})"
+                )
+        if metric_key_failures:
+            failures.extend(metric_key_failures)
+            continue
 
+        print(f"[cost] Regression comparison: {name}")
+        for metric_name, raw_rule in metrics.items():
             try:
                 candidate_value = parse_numeric_metric(
                     candidate,
