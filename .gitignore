@@ -7,6 +7,7 @@ cmake-build-*/
 twister-out/
 benchmark_results/
 benchmark_results*/
+docs/html/
 results/*.csv
 results/*.md
 !results/.gitkeep

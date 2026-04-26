@@ -21,106 +21,101 @@ extern "C" {
  * Benchmark Types
  */
 
-/* Benchmark operation IDs */
+/**
+ * @brief Benchmark operation identifiers emitted in primitive/protocol results.
+ */
 typedef enum {
-    /* ML-KEM operations */
-    PQCP_BENCH_MLKEM_KEYPAIR     = 0x0100,
-    PQCP_BENCH_MLKEM_ENCAPS      = 0x0101,
-    PQCP_BENCH_MLKEM_DECAPS      = 0x0102,
+    PQCP_BENCH_MLKEM_KEYPAIR     = 0x0100, /**< ML-KEM key generation. */
+    PQCP_BENCH_MLKEM_ENCAPS      = 0x0101, /**< ML-KEM encapsulation. */
+    PQCP_BENCH_MLKEM_DECAPS      = 0x0102, /**< ML-KEM decapsulation. */
     
-    /* ML-DSA operations */
-    PQCP_BENCH_MLDSA_KEYPAIR     = 0x0200,
-    PQCP_BENCH_MLDSA_SIGN        = 0x0201,
-    PQCP_BENCH_MLDSA_VERIFY      = 0x0202,
-    PQCP_BENCH_MLDSA_SIGN_STREAM = 0x0203,
+    PQCP_BENCH_MLDSA_KEYPAIR     = 0x0200, /**< ML-DSA key generation. */
+    PQCP_BENCH_MLDSA_SIGN        = 0x0201, /**< ML-DSA signing. */
+    PQCP_BENCH_MLDSA_VERIFY      = 0x0202, /**< ML-DSA verification. */
+    PQCP_BENCH_MLDSA_SIGN_STREAM = 0x0203, /**< ML-DSA streaming signing. */
     
-    /* Protocol operations */
-    PQCP_BENCH_TLS_HANDSHAKE     = 0x0300,
-    PQCP_BENCH_DTLS_HANDSHAKE    = 0x0301,
+    PQCP_BENCH_TLS_HANDSHAKE     = 0x0300, /**< TLS handshake benchmark. */
+    PQCP_BENCH_DTLS_HANDSHAKE    = 0x0301, /**< DTLS handshake benchmark. */
     
-    /* RNG operations */
-    PQCP_BENCH_RNG_ENTROPY       = 0x0400,
-    PQCP_BENCH_RNG_DRBG          = 0x0401,
+    PQCP_BENCH_RNG_ENTROPY       = 0x0400, /**< Entropy-source benchmark. */
+    PQCP_BENCH_RNG_DRBG          = 0x0401, /**< DRBG benchmark. */
 } pqcp_bench_op_t;
 
-/* Benchmark result structure */
+/**
+ * @brief Primitive benchmark result record.
+ */
 typedef struct pqcp_bench_result {
-    /* Operation identifier */
-    pqcp_bench_op_t op;
+    pqcp_bench_op_t op;     /**< Operation identifier. */
     
-    /* Security level (e.g., 512, 768, 1024 for ML-KEM) */
-    uint16_t level;
+    uint16_t level;         /**< Security level, e.g. 512, 768, or 1024. */
     
-    /* Number of iterations performed */
-    uint32_t iterations;
+    uint32_t iterations;    /**< Number of measured iterations. */
     
-    /* Timing measurements (in cycles or microseconds) */
-    uint64_t total_time;
-    uint64_t min_time;
-    uint64_t max_time;
-    uint64_t avg_time;  /* total_time / iterations */
-    uint64_t avg_cycles;/* Average timing in raw hardware cycles */
-    uint64_t avg_us;    /* Average timing converted to microseconds */
+    uint64_t total_time;    /**< Total measured time in the selected unit. */
+    uint64_t min_time;      /**< Minimum per-iteration time. */
+    uint64_t max_time;      /**< Maximum per-iteration time. */
+    uint64_t avg_time;      /**< Average time in the selected unit. */
+    uint64_t avg_cycles;    /**< Average timing in raw hardware cycles. */
+    uint64_t avg_us;        /**< Average timing converted to microseconds. */
     
-    /* Memory measurements */
-    uint32_t stack_used;     /* Peak stack usage in bytes */
-    uint32_t heap_used;      /* Peak heap usage in bytes (if applicable) */
+    uint32_t stack_used;    /**< Peak stack usage in bytes. */
+    uint32_t heap_used;     /**< Peak heap usage in bytes, if measured. */
     
-    /* Code size (from build artifacts, filled in by scripts) */
-    uint32_t text_size;      /* .text section size */
-    uint32_t data_size;      /* .data section size */
-    uint32_t bss_size;       /* .bss section size */
+    uint32_t text_size;     /**< .text section size from build artifacts. */
+    uint32_t data_size;     /**< .data section size from build artifacts. */
+    uint32_t bss_size;      /**< .bss section size from build artifacts. */
     
-    /* Flags */
-    uint8_t  time_unit;      /* 0 = cycles, 1 = microseconds */
-    uint8_t  backend;        /* 0 = C, 1 = native assembly */
+    uint8_t  time_unit;     /**< Time unit selector: 0 cycles, 1 microseconds. */
+    uint8_t  backend;       /**< Backend selector: 0 C, 1 native assembly. */
 } pqcp_bench_result_t;
 
-/* Protocol benchmark result (extended) */
+/**
+ * @brief Protocol benchmark result record.
+ */
 typedef struct pqcp_bench_protocol_result {
-    /* Base result */
-    pqcp_bench_result_t base;
+    pqcp_bench_result_t base; /**< Embedded primitive-style result header. */
     
-    /* Protocol-specific metrics */
-    uint32_t handshake_time_ms;   /* Handshake latency */
-    uint16_t sig_level;           /* Signature/authentication security level */
-    uint32_t client_bytes;        /* Approximate client-to-server payload */
-    uint32_t server_bytes;        /* Approximate server-to-client payload */
-    uint32_t transcript_bytes;    /* Total bytes exchanged */
-    uint16_t fragments;           /* Number of network fragments */
-    uint8_t  cpu_percent;         /* CPU utilization during handshake */
-    uint32_t peak_ram_bytes;      /* Peak RAM usage */
-    uint32_t stack_bytes;         /* Peak stack usage (if measurable) */
-    uint32_t heap_bytes;          /* Peak heap usage (if measurable) */
-    uint32_t working_set_bytes;   /* Static working set used by the flow */
-    uint64_t auth_time_us;        /* ML-DSA auth stage time */
-    uint64_t key_exchange_time_us;/* ML-KEM key exchange stage time */
-    uint64_t provider_overhead_us;/* Handshake time not spent in PQCP primitives */
-    uint32_t certificate_bytes;   /* ML-DSA public key + signature footprint */
-    uint32_t key_exchange_bytes;  /* ML-KEM public key + ciphertext footprint */
-    uint32_t transport_overhead_bytes; /* Transcript bytes outside PQ payloads */
-    uint32_t rtos_isr_count;      /* Timer ISR expiries observed during the run */
-    uint32_t rtos_yield_count;    /* Background load thread yields */
-    uint32_t rtos_jitter_p50_us;  /* Background load wake-up jitter p50 */
-    uint32_t rtos_jitter_p90_us;  /* Background load wake-up jitter p90 */
-    uint32_t rtos_jitter_p99_us;  /* Background load wake-up jitter p99 */
+    uint32_t handshake_time_ms;   /**< Handshake latency in milliseconds. */
+    uint16_t sig_level;           /**< Signature/authentication security level. */
+    uint32_t client_bytes;        /**< Approximate client-to-server payload. */
+    uint32_t server_bytes;        /**< Approximate server-to-client payload. */
+    uint32_t transcript_bytes;    /**< Total bytes exchanged. */
+    uint16_t fragments;           /**< Number of network fragments. */
+    uint8_t  cpu_percent;         /**< CPU utilization during handshake. */
+    uint32_t peak_ram_bytes;      /**< Peak RAM usage. */
+    uint32_t stack_bytes;         /**< Peak stack usage, if measurable. */
+    uint32_t heap_bytes;          /**< Peak heap usage, if measurable. */
+    uint32_t working_set_bytes;   /**< Static working set used by the flow. */
+    uint64_t auth_time_us;        /**< ML-DSA auth stage time. */
+    uint64_t key_exchange_time_us;/**< ML-KEM key exchange stage time. */
+    uint64_t provider_overhead_us;/**< Handshake time outside PQCP primitives. */
+    uint32_t certificate_bytes;   /**< ML-DSA public key + signature footprint. */
+    uint32_t key_exchange_bytes;  /**< ML-KEM public key + ciphertext footprint. */
+    uint32_t transport_overhead_bytes; /**< Transcript bytes outside PQ payloads. */
+    uint32_t rtos_isr_count;      /**< Timer ISR expiries observed during the run. */
+    uint32_t rtos_yield_count;    /**< Background load thread yields. */
+    uint32_t rtos_jitter_p50_us;  /**< Background load wake-up jitter p50. */
+    uint32_t rtos_jitter_p90_us;  /**< Background load wake-up jitter p90. */
+    uint32_t rtos_jitter_p99_us;  /**< Background load wake-up jitter p99. */
     
-    /* Percentiles (in ms) */
-    uint32_t p50_latency;
-    uint32_t p90_latency;
-    uint32_t p99_latency;
+    uint32_t p50_latency;         /**< Handshake latency p50 in milliseconds. */
+    uint32_t p90_latency;         /**< Handshake latency p90 in milliseconds. */
+    uint32_t p99_latency;         /**< Handshake latency p99 in milliseconds. */
 } pqcp_bench_protocol_result_t;
 
 /*
  * Benchmark Configuration
  */
 
+/**
+ * @brief Benchmark execution configuration.
+ */
 typedef struct pqcp_bench_config {
-    uint32_t iterations;     /* Number of iterations */
-    uint32_t warmup;         /* Warmup iterations */
-    uint8_t  use_cycles;     /* Use cycle counter (vs time) */
-    uint8_t  measure_stack;  /* Measure stack usage */
-    uint8_t  verbose;        /* Print progress */
+    uint32_t iterations;     /**< Number of measured iterations. */
+    uint32_t warmup;         /**< Warmup iterations before measurement. */
+    uint8_t  use_cycles;     /**< Use cycle counter instead of wall time. */
+    uint8_t  measure_stack;  /**< Capture stack usage when supported. */
+    uint8_t  verbose;        /**< Print per-operation progress. */
 } pqcp_bench_config_t;
 
 /* Default configuration */
