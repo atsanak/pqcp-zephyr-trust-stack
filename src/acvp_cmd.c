@@ -9,12 +9,70 @@
 #include <pqcp_zephyr/mldsa.h>
 #include <pqcp_zephyr/rng.h>
 
+#include <zephyr/kernel.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <limits.h>
 #include <stdio.h>
+
+#ifndef CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS
+#define CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS 2000
+#endif
+
+static struct k_timer acvp_serial_line_timer;
+static bool acvp_serial_line_timer_initialized;
+static bool acvp_serial_line_timer_armed;
+
+static bool acvp_serial_line_has_partial(
+    const struct pqcp_acvp_serial_line_state *state)
+{
+    return state != NULL &&
+           (state->active || state->overflow || state->len > 0U);
+}
+
+static void acvp_serial_line_timer_ensure(void)
+{
+    if (!acvp_serial_line_timer_initialized) {
+        k_timer_init(&acvp_serial_line_timer, NULL, NULL);
+        acvp_serial_line_timer_initialized = true;
+    }
+}
+
+static void acvp_serial_line_timer_stop(void)
+{
+    if (acvp_serial_line_timer_initialized && acvp_serial_line_timer_armed) {
+        k_timer_stop(&acvp_serial_line_timer);
+    }
+    acvp_serial_line_timer_armed = false;
+}
+
+static void acvp_serial_line_timer_start_once(void)
+{
+    acvp_serial_line_timer_ensure();
+    if (!acvp_serial_line_timer_armed) {
+        k_timer_start(&acvp_serial_line_timer,
+                      K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS),
+                      K_NO_WAIT);
+        acvp_serial_line_timer_armed = true;
+    }
+}
+
+static bool acvp_serial_line_timer_expired(void)
+{
+    if (!acvp_serial_line_timer_initialized || !acvp_serial_line_timer_armed) {
+        return false;
+    }
+
+    if (k_timer_status_get(&acvp_serial_line_timer) == 0U) {
+        return false;
+    }
+
+    acvp_serial_line_timer_stop();
+    return true;
+}
 
 const char *pqcp_acvp_result_str(enum pqcp_acvp_result result)
 {
@@ -327,6 +385,7 @@ void pqcp_acvp_serial_line_reset(struct pqcp_acvp_serial_line_state *state)
         return;
     }
 
+    acvp_serial_line_timer_stop();
     state->len = 0U;
     state->active = false;
     state->overflow = false;
@@ -339,6 +398,14 @@ int pqcp_acvp_serial_line_consume_char(struct pqcp_acvp_serial_line_state *state
 {
     if (state == NULL || line == NULL || line_len == NULL || line_size == 0U) {
         return -EINVAL;
+    }
+
+    if (acvp_serial_line_has_partial(state) &&
+        acvp_serial_line_timer_expired()) {
+        line[0] = '\0';
+        *line_len = 0U;
+        pqcp_acvp_serial_line_reset(state);
+        return -ETIMEDOUT;
     }
 
     if (ch == '\r' || ch == '\n') {
@@ -359,6 +426,9 @@ int pqcp_acvp_serial_line_consume_char(struct pqcp_acvp_serial_line_state *state
             state->len--;
             line[state->len] = '\0';
         }
+        if (acvp_serial_line_has_partial(state)) {
+            acvp_serial_line_timer_start_once();
+        }
         return 0;
     }
 
@@ -368,12 +438,14 @@ int pqcp_acvp_serial_line_consume_char(struct pqcp_acvp_serial_line_state *state
         if (state->len < line_size - 1U) {
             line[state->len++] = ch;
             line[state->len] = '\0';
+            acvp_serial_line_timer_start_once();
             return 0;
         }
 
         state->overflow = true;
     }
 
+    acvp_serial_line_timer_start_once();
     return 0;
 }
 

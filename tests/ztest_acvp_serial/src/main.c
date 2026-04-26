@@ -387,15 +387,13 @@ ZTEST(pqcp_acvp_serial, test_readline_timeout)
                                                &line_len),
             0);
     }
-    for (size_t i = 0U; i < strlen(slow_drip_suffix); ++i) {
-        zassert_equal(
-            pqcp_acvp_serial_line_consume_char(&state, slow_drip_suffix[i],
-                                               serial_line, sizeof(serial_line),
-                                               &line_len),
-            0);
-    }
+
+    k_sleep(K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS + 20));
+
     zassert_equal(
-        pqcp_acvp_serial_line_timeout(&state, serial_line, sizeof(serial_line)),
+        pqcp_acvp_serial_line_consume_char(&state, slow_drip_suffix[0],
+                                           serial_line, sizeof(serial_line),
+                                           &line_len),
         -ETIMEDOUT);
     zassert_equal(serial_line[0], '\0');
     zassert_false(state.active);
