@@ -439,7 +439,7 @@ if PQCP_ACVP
 config PQCP_ACVP_READLINE_TIMEOUT_MS
 	int "Serial ACVP frame timeout (ms)"
 	depends on PQCP_ACVP
-	default 5000
+	default 2000
 	range 100 60000
 	help
 	  Timeout used by the serial ACVP sample once a host starts sending a

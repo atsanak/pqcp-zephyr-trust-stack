@@ -34,7 +34,7 @@
           "response": "ERROR:INVALID_CMD"
         },
         {
-          "name": "TIMEOUT_PARTIAL_FRAME",
+          "name": "timeout_partial_frame",
           "command": "KEYGEN:MLKEM:768:",
           "append_newline": false,
           "response_timeout": 7.0,
