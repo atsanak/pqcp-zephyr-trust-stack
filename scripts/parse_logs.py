@@ -12,6 +12,7 @@ Supports two log formats:
 Usage:
     python parse_logs.py <log_file> [--output-dir <dir>]
     python parse_logs.py benchmark_results.json --from-json
+    python parse_logs.py --self-test
 """
 
 import argparse
@@ -267,15 +268,57 @@ def write_summary(results: List[Dict], output_path: Path):
     print(f"Wrote summary to {output_path}")
 
 
+def run_self_test() -> None:
+    """Exercise parser examples that mirror the emitted benchmark ABI."""
+    primitive = parse_primitive_line(
+        "PRIM,MLKEM768,MLKEM_KEYPAIR,cycles=12345,us=67,"
+        "stack=2048,text=4096,bss=256,backend=C"
+    )
+    assert primitive is not None
+    assert primitive["algorithm"] == "MLKEM"
+    assert primitive["level"] == 768
+    assert primitive["operation"] == "MLKEM_KEYPAIR"
+    assert primitive["time_unit"] == "cycles"
+    assert primitive["time_value"] == 12345
+    assert primitive["time_us"] == 67
+    assert primitive["stack_bytes"] == 2048
+    assert primitive["text_bytes"] == 4096
+    assert primitive["bss_bytes"] == 256
+    assert primitive["backend"] == "C"
+
+    metric = parse_pqcp_metric_line(
+        "PQCP_METRIC,primitive,keygen,MLKEM,768,time,67,us"
+    )
+    assert metric is not None
+    assert metric["component"] == "primitive"
+    assert metric["operation"] == "keygen"
+    assert metric["algorithm"] == "MLKEM"
+    assert metric["level"] == 768
+    assert metric["metric"] == "time"
+    assert metric["value"] == "67"
+    assert metric["unit"] == "us"
+
+    print("parse_logs.py self-test passed")
+
+
 def main():
     parser = argparse.ArgumentParser(description="PQCP Benchmark Log Parser")
-    parser.add_argument("input", help="Input log file or JSON")
+    parser.add_argument("input", nargs="?", help="Input log file or JSON")
     parser.add_argument("--output-dir", "-o", default=".",
                         help="Output directory for CSV files")
     parser.add_argument("--from-json", action="store_true",
                         help="Input is JSON instead of raw log")
+    parser.add_argument("--self-test", action="store_true",
+                        help="Run built-in parser contract tests")
     
     args = parser.parse_args()
+
+    if args.self_test:
+        run_self_test()
+        return
+
+    if args.input is None:
+        parser.error("input is required unless --self-test is used")
     
     input_path = Path(args.input)
     output_dir = Path(args.output_dir)
