@@ -25,11 +25,17 @@ extern "C" {
  * ML-DSA-87: NIST Level 5 (equivalent to AES-256)
  */
 
-/* Security level enumeration */
+/**
+ * @brief ML-DSA security parameter set selector.
+ *
+ * Values match the FIPS 204 parameter-set suffixes. Pass one of these values
+ * to the ML-DSA size helpers and key generation, signing, or verification
+ * entry points.
+ */
 typedef enum {
-    PQCP_MLDSA_44 = 44,   /* NIST Level 2 */
-    PQCP_MLDSA_65 = 65,   /* NIST Level 3 (recommended) */
-    PQCP_MLDSA_87 = 87    /* NIST Level 5 */
+    PQCP_MLDSA_44 = 44,   /**< ML-DSA-44, NIST security level 2. */
+    PQCP_MLDSA_65 = 65,   /**< ML-DSA-65, NIST security level 3. */
+    PQCP_MLDSA_87 = 87    /**< ML-DSA-87, NIST security level 5. */
 } pqcp_mldsa_level_t;
 
 /* Key and signature sizes per security level */

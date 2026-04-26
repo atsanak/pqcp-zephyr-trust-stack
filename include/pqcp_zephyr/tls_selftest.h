@@ -17,52 +17,6 @@
 extern "C" {
 #endif
 
-typedef struct pqcp_tls_selftest_config {
-    uint16_t kem_level;
-    uint16_t sig_level;
-    bool initialize_rng;
-    bool initialize_psa;
-    bool emit_metrics;
-} pqcp_tls_selftest_config_t;
-
-typedef struct pqcp_tls_selftest_report {
-    uint16_t kem_level;
-    uint16_t sig_level;
-
-    uint64_t kem_keygen_us;
-    uint64_t kem_encaps_us;
-    uint64_t kem_decaps_us;
-    uint64_t sig_keygen_us;
-    uint64_t sig_sign_us;
-    uint64_t sig_verify_us;
-
-    uint64_t auth_us;
-    uint64_t key_exchange_us;
-    uint64_t handshake_us;
-    uint64_t provider_overhead_us;
-
-    uint32_t client_bytes;
-    uint32_t server_bytes;
-    uint32_t transcript_bytes;
-    uint32_t certificate_bytes;
-    uint32_t key_exchange_bytes;
-    uint32_t transport_overhead_bytes;
-    uint16_t packets;
-
-    uint32_t working_set_bytes;
-    uint32_t stack_bytes;
-    uint32_t heap_bytes;
-    bool psa_ready;
-} pqcp_tls_selftest_report_t;
-
-#define PQCP_TLS_SELFTEST_CONFIG_DEFAULT { \
-    .kem_level = 768, \
-    .sig_level = 65, \
-    .initialize_rng = true, \
-    .initialize_psa = false, \
-    .emit_metrics = true, \
-}
-
 /**
  * @brief Shared TLS self-test configuration.
  *
@@ -74,6 +28,13 @@ typedef struct pqcp_tls_selftest_report {
  * This API is intended for offline self-test, benchmark, and CI coverage
  * flows. It is not a replacement for a production TLS session manager.
  */
+typedef struct pqcp_tls_selftest_config {
+    uint16_t kem_level;     /**< ML-KEM parameter set, e.g. 768. */
+    uint16_t sig_level;     /**< ML-DSA parameter set, e.g. 65. */
+    bool initialize_rng;    /**< Initialize the PQCP RNG path before testing. */
+    bool initialize_psa;    /**< Initialize PSA Crypto before testing. */
+    bool emit_metrics;      /**< Emit stable PQCP_METRIC records on success. */
+} pqcp_tls_selftest_config_t;
 
 /**
  * @brief Structured report produced by the TLS self-test harness.
@@ -94,6 +55,44 @@ typedef struct pqcp_tls_selftest_report {
  * The report structure is shared by the TLS sample, protocol benchmark sample,
  * and ztest coverage so those paths stay aligned on metric names and meaning.
  */
+typedef struct pqcp_tls_selftest_report {
+    uint16_t kem_level;                 /**< ML-KEM parameter set used. */
+    uint16_t sig_level;                 /**< ML-DSA parameter set used. */
+
+    uint64_t kem_keygen_us;             /**< ML-KEM key generation time. */
+    uint64_t kem_encaps_us;             /**< ML-KEM encapsulation time. */
+    uint64_t kem_decaps_us;             /**< ML-KEM decapsulation time. */
+    uint64_t sig_keygen_us;             /**< ML-DSA key generation time. */
+    uint64_t sig_sign_us;               /**< ML-DSA signing time. */
+    uint64_t sig_verify_us;             /**< ML-DSA verification time. */
+
+    uint64_t auth_us;                   /**< Authentication-stage duration. */
+    uint64_t key_exchange_us;           /**< Key-exchange-stage duration. */
+    uint64_t handshake_us;              /**< Synthetic handshake duration. */
+    uint64_t provider_overhead_us;      /**< Residual provider overhead. */
+
+    uint32_t client_bytes;              /**< Synthetic client flight bytes. */
+    uint32_t server_bytes;              /**< Synthetic server flight bytes. */
+    uint32_t transcript_bytes;          /**< Transcript bytes accounted. */
+    uint32_t certificate_bytes;         /**< Certificate payload bytes. */
+    uint32_t key_exchange_bytes;        /**< Key exchange payload bytes. */
+    uint32_t transport_overhead_bytes;  /**< Framing/transport overhead. */
+    uint16_t packets;                   /**< Synthetic packet count. */
+
+    uint32_t working_set_bytes;         /**< Estimated working set size. */
+    uint32_t stack_bytes;               /**< Observed stack usage, if known. */
+    uint32_t heap_bytes;                /**< Observed heap usage, if known. */
+    bool psa_ready;                     /**< Whether PSA Crypto was ready. */
+} pqcp_tls_selftest_report_t;
+
+/** @brief Default TLS self-test configuration: ML-KEM-768 plus ML-DSA-65. */
+#define PQCP_TLS_SELFTEST_CONFIG_DEFAULT { \
+    .kem_level = 768, \
+    .sig_level = 65, \
+    .initialize_rng = true, \
+    .initialize_psa = false, \
+    .emit_metrics = true, \
+}
 
 /**
  * @brief Initialize PSA crypto for TLS self-tests.

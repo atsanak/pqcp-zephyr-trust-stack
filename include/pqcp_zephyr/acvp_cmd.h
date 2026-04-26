@@ -90,12 +90,16 @@ struct pqcp_acvp_response {
  */
 #define PQCP_ACVP_MLKEM_KEYGEN_RESPONSE_BYTES_MAX \
     (PQCP_MLKEM_PK_SIZE_MAX + PQCP_MLKEM_SK_SIZE_MAX)
+/** @brief Maximum decoded ML-KEM encapsulation request size. */
 #define PQCP_ACVP_MLKEM_ENCAPS_REQUEST_BYTES_MAX \
     PQCP_MLKEM_PK_SIZE_MAX
+/** @brief Maximum decoded ML-KEM encapsulation response size. */
 #define PQCP_ACVP_MLKEM_ENCAPS_RESPONSE_BYTES_MAX \
     (PQCP_MLKEM_CT_SIZE_MAX + PQCP_MLKEM_SS_SIZE)
+/** @brief Maximum decoded ML-KEM decapsulation request size. */
 #define PQCP_ACVP_MLKEM_DECAPS_REQUEST_BYTES_MAX \
     (PQCP_MLKEM_CT_SIZE_MAX + PQCP_MLKEM_SK_SIZE_MAX)
+/** @brief Maximum decoded ML-KEM decapsulation response size. */
 #define PQCP_ACVP_MLKEM_DECAPS_RESPONSE_BYTES_MAX \
     PQCP_MLKEM_SS_SIZE
 
@@ -104,10 +108,13 @@ struct pqcp_acvp_response {
  */
 #define PQCP_ACVP_MLDSA_KEYGEN_RESPONSE_BYTES_MAX \
     (PQCP_MLDSA_PK_SIZE_MAX + PQCP_MLDSA_SK_SIZE_MAX)
+/** @brief Maximum decoded ML-DSA signing request size. */
 #define PQCP_ACVP_MLDSA_SIGN_REQUEST_BYTES_MAX \
     (PQCP_MLDSA_SK_SIZE_MAX + PQCP_ACVP_MAX_MESSAGE_BYTES)
+/** @brief Maximum decoded ML-DSA signing response size. */
 #define PQCP_ACVP_MLDSA_SIGN_RESPONSE_BYTES_MAX \
     PQCP_MLDSA_SIG_SIZE_MAX
+/** @brief Maximum decoded ML-DSA verification request size. */
 #define PQCP_ACVP_MLDSA_VERIFY_REQUEST_BYTES_MAX \
     (PQCP_MLDSA_PK_SIZE_MAX + PQCP_MLDSA_SIG_SIZE_MAX + \
      PQCP_ACVP_MAX_MESSAGE_BYTES)
@@ -117,8 +124,10 @@ struct pqcp_acvp_response {
  */
 #define PQCP_ACVP_INPUT_BYTES_MAX \
     PQCP_ACVP_MLDSA_VERIFY_REQUEST_BYTES_MAX
+/** @brief Maximum decoded ACVP command response payload size. */
 #define PQCP_ACVP_RESPONSE_BYTES_MAX \
     PQCP_ACVP_MLDSA_KEYGEN_RESPONSE_BYTES_MAX
+/** @brief Maximum raw ACVP command line length, excluding CR/LF. */
 #define PQCP_ACVP_COMMAND_LINE_CHARS_MAX \
     ((PQCP_ACVP_INPUT_BYTES_MAX * 2U) + 64U)
 

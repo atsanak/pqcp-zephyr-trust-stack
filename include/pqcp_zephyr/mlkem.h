@@ -25,11 +25,17 @@ extern "C" {
  * ML-KEM-1024: NIST Level 5 (equivalent to AES-256)
  */
 
-/* Security level enumeration */
+/**
+ * @brief ML-KEM security parameter set selector.
+ *
+ * Values match the FIPS 203 parameter-set suffixes. Pass one of these values
+ * to the ML-KEM size helpers and key generation, encapsulation, or
+ * decapsulation entry points.
+ */
 typedef enum {
-    PQCP_MLKEM_512  = 512,   /* NIST Level 1 */
-    PQCP_MLKEM_768  = 768,   /* NIST Level 3 (recommended) */
-    PQCP_MLKEM_1024 = 1024   /* NIST Level 5 */
+    PQCP_MLKEM_512  = 512,   /**< ML-KEM-512, NIST security level 1. */
+    PQCP_MLKEM_768  = 768,   /**< ML-KEM-768, NIST security level 3. */
+    PQCP_MLKEM_1024 = 1024   /**< ML-KEM-1024, NIST security level 5. */
 } pqcp_mlkem_level_t;
 
 /* Key and ciphertext sizes per security level */
