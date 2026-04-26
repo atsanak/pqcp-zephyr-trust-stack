@@ -41,29 +41,11 @@ class SanitizerCase:
 
 # Cases exercised under ASan/UBSan on native_sim/native/64.
 #
-# ztest_tls_selftest remains opt-in because its printk hook assertions are
-# native_sim-specific under ASan, but the protocol benchmark now runs by
-# default again. That keeps the release gate's sanitizer path honest: the
-# full TLS-style KEM + ML-DSA handshake must execute, emit protocol metrics,
-# and return Zephyr's success marker under ASan/UBSan.
-#
-# 1. ztest_tls_selftest — moved to OPT_IN_CASES.
-#    Two of its ztests (test_tls_selftest_report_success and
-#    test_tls_selftest_emits_metrics) depend on runtime properties that
-#    native_sim + ASan does not reliably provide:
-#      a. `report.handshake_us > 0` — under ASan the cycle counter delta
-#         for a sub-cycle-resolution operation floors to 0us.
-#      b. `strstr(printk_capture, "PQCP_METRIC,...") != NULL` — the test
-#         captures stdout via `__printk_hook_install`, which on
-#         native_sim does not intercept the PQCP_METRIC emissions
-#         produced by the sanitized build.
-#    Both failures are harness artefacts, not real memory bugs.
-#    ztest_tls_selftest is still run under the non-sanitized
-#    release-gate (qemu-smoke, profile_validation).
-#
-# The crypto primitives themselves (ML-KEM, ML-DSA, ACVP driver glue)
-# are always build+run under ASan/UBSan via ztest_primitive and
-# ztest_acvp_serial, which is where real memory-safety signal lives.
+# The default sanitizer set exercises command parsing, primitive driver glue,
+# the TLS self-test harness, and the protocol benchmark at runtime. The TLS
+# ztest uses deterministic Zephyr test entropy in its sanitizer overlay and
+# avoids sanitizer-host-specific printk hook assertions, so ASan/UBSan still
+# execute the full handshake path without relying on fragile stdout capture.
 DEFAULT_CASES = [
     SanitizerCase(
         name="ztest_acvp_serial",
@@ -78,6 +60,12 @@ DEFAULT_CASES = [
         run=True,
     ),
     SanitizerCase(
+        name="ztest_tls_selftest",
+        app_path="tests/ztest_tls_selftest",
+        overlay="overlay-sanitize.conf",
+        run=True,
+    ),
+    SanitizerCase(
         name="pqcp_bench_protocol",
         app_path="samples/pqcp_bench_protocol",
         overlay="overlay-sanitize.conf",
@@ -86,17 +74,7 @@ DEFAULT_CASES = [
     ),
 ]
 
-# Opt-in cases that can be requested explicitly via --cases on the command
-# line but are not part of DEFAULT_CASES. See note above for the
-# ztest_tls_selftest rationale.
-OPT_IN_CASES = [
-    SanitizerCase(
-        name="ztest_tls_selftest",
-        app_path="tests/ztest_tls_selftest",
-        overlay="overlay-sanitize.conf",
-        run=True,
-    ),
-]
+OPT_IN_CASES: list[SanitizerCase] = []
 
 
 def parse_args() -> argparse.Namespace:
