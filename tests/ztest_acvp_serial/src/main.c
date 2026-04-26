@@ -350,6 +350,8 @@ ZTEST(pqcp_acvp_serial, test_serial_line_garbage_rejected_and_recovered)
 ZTEST(pqcp_acvp_serial, test_readline_timeout)
 {
     static const char *partial = "KEYGEN:MLKEM:768:";
+    static const char *slow_drip_prefix = "KEY";
+    static const char *slow_drip_suffix = "GEN:";
     static const char *complete = "KEYGEN:MLKEM:768:\n";
     struct pqcp_acvp_serial_line_state state;
     struct pqcp_acvp_response resp;
@@ -373,6 +375,28 @@ ZTEST(pqcp_acvp_serial, test_readline_timeout)
     zassert_equal(strcmp(pqcp_acvp_result_str(PQCP_ACVP_ERR_LINE_TIMEOUT),
                          "TIMEOUT"),
                   0);
+    zassert_equal(serial_line[0], '\0');
+    zassert_false(state.active);
+    zassert_false(state.overflow);
+    zassert_equal(state.len, 0U);
+
+    for (size_t i = 0U; i < strlen(slow_drip_prefix); ++i) {
+        zassert_equal(
+            pqcp_acvp_serial_line_consume_char(&state, slow_drip_prefix[i],
+                                               serial_line, sizeof(serial_line),
+                                               &line_len),
+            0);
+    }
+    for (size_t i = 0U; i < strlen(slow_drip_suffix); ++i) {
+        zassert_equal(
+            pqcp_acvp_serial_line_consume_char(&state, slow_drip_suffix[i],
+                                               serial_line, sizeof(serial_line),
+                                               &line_len),
+            0);
+    }
+    zassert_equal(
+        pqcp_acvp_serial_line_timeout(&state, serial_line, sizeof(serial_line)),
+        -ETIMEDOUT);
     zassert_equal(serial_line[0], '\0');
     zassert_false(state.active);
     zassert_false(state.overflow);

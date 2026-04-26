@@ -109,10 +109,12 @@ static int uart_readline(char *line, size_t line_size, size_t *line_len)
         }
 
         if (state.active || state.overflow) {
-            k_timer_start(&inactivity_timer,
-                          K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS),
-                          K_NO_WAIT);
-            timer_armed = true;
+            if (!timer_armed) {
+                k_timer_start(&inactivity_timer,
+                              K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS),
+                              K_NO_WAIT);
+                timer_armed = true;
+            }
         } else {
             k_timer_stop(&inactivity_timer);
             timer_armed = false;
