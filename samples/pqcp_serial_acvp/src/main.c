@@ -68,8 +68,6 @@ static void console_rx_thread(void *arg1, void *arg2, void *arg3)
 static int uart_readline(char *line, size_t line_size, size_t *line_len)
 {
     struct pqcp_acvp_serial_line_state state;
-    struct k_timer inactivity_timer;
-    bool timer_armed = false;
     char ch;
     int ret;
 
@@ -77,22 +75,13 @@ static int uart_readline(char *line, size_t line_size, size_t *line_len)
     *line_len = 0U;
     line[0] = '\0';
 
-    k_timer_init(&inactivity_timer, NULL, NULL);
-
     while (1) {
-        k_timeout_t timeout = K_FOREVER;
-
-        if (timer_armed) {
-            uint32_t remaining_ms = k_timer_remaining_get(&inactivity_timer);
-
-            timeout = K_MSEC((remaining_ms == 0U) ? 1U : remaining_ms);
-        }
+        k_timeout_t timeout = (state.active || state.overflow) ?
+            K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS) : K_FOREVER;
 
         ret = k_msgq_get(&console_rx_msgq, &ch, timeout);
         if (ret == -EAGAIN) {
             ret = pqcp_acvp_serial_line_timeout(&state, line, line_size);
-            k_timer_stop(&inactivity_timer);
-            timer_armed = false;
             if (ret == -ETIMEDOUT) {
                 return ret;
             }
@@ -104,20 +93,7 @@ static int uart_readline(char *line, size_t line_size, size_t *line_len)
         ret = pqcp_acvp_serial_line_consume_char(&state, ch, line, line_size,
                                                  line_len);
         if (ret != 0) {
-            k_timer_stop(&inactivity_timer);
             return ret;
-        }
-
-        if (state.active || state.overflow) {
-            if (!timer_armed) {
-                k_timer_start(&inactivity_timer,
-                              K_MSEC(CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS),
-                              K_NO_WAIT);
-                timer_armed = true;
-            }
-        } else {
-            k_timer_stop(&inactivity_timer);
-            timer_armed = false;
         }
     }
 }
