@@ -201,7 +201,11 @@ void pqcp_bench_run_all(const pqcp_bench_config_t *config);
  * @brief Print a benchmark result in log format.
  *
  * Outputs a line like:
- * PRIM,MLKEM768,KEYGEN,cycles=12345,stack=2048,text=4096,bss=256
+ * PRIM,MLKEM768,MLKEM_KEYPAIR,cycles=12345,us=67,stack=2048,text=4096,bss=256,backend=C
+ *
+ * The operation field is the stable token returned by pqcp_bench_op_name(),
+ * such as MLKEM_KEYPAIR, MLKEM_ENCAPS, MLKEM_DECAPS, MLDSA_KEYPAIR,
+ * MLDSA_SIGN, or MLDSA_VERIFY.
  *
  * @param result The benchmark result to print.
  */
