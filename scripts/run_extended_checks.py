@@ -588,16 +588,32 @@ def evaluate_cost_of_assurance_regressions(
                     "max_ratio and/or max_candidate"
                 )
 
-            candidate_value = parse_numeric_metric(candidate, metric_name, f"{name} candidate")
+            try:
+                candidate_value = parse_numeric_metric(
+                    candidate,
+                    metric_name,
+                    f"{name} candidate",
+                )
+            except RuntimeError as exc:
+                failures.append(str(exc))
+                continue
+
             baseline_value: float | None = None
             if "max_ratio" in raw_rule:
-                baseline_value = parse_numeric_metric(
-                    baseline, metric_name, f"{name} baseline"
-                )
+                try:
+                    baseline_value = parse_numeric_metric(
+                        baseline,
+                        metric_name,
+                        f"{name} baseline",
+                    )
+                except RuntimeError as exc:
+                    failures.append(str(exc))
+                    continue
                 if baseline_value <= 0.0:
-                    raise RuntimeError(
+                    failures.append(
                         f"[cost] Baseline metric {metric_name} for {name} must be > 0"
                     )
+                    continue
 
             status_bits: list[str] = [f"candidate={candidate_value:.2f}"]
             if baseline_value is not None:
