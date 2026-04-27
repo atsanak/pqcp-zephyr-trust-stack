@@ -1,14 +1,13 @@
 # CLAUDE.md — pqcp-zephyr-trust-stack session memory
 
 > Auto-managed context for AI coding sessions.
-> Last updated: 2026-04-26 by Codex.
-> HEAD: d3f0299b (main, 2026-04-26) — release workflow YAML startup issue
->   fixed locally and pushed. Local `py_compile`, workflow YAML parsing,
->   `run_extended_checks.py --strict`, and
->   `run_extended_checks.py --strict --run-cost-of-assurance-smoke` pass.
->   GitHub Actions jobs currently do not start because the account reports
->   failed payments or a spending-limit block; this is an account/billing
->   issue, not a repository test failure.
+> Last updated: 2026-04-27 by Codex.
+> HEAD before this memory update: 10b1e905 (main, 2026-04-27) — post-v1.0.0
+>   release-hardening patch set pushed. Local bundle generation, consumer smoke,
+>   Doxygen, version checks, strict extended checks, and release-check validation
+>   have been exercised locally. GitHub Actions / GitHub Release publishing are
+>   still blocked by account billing or spending-limit state, not by repository
+>   test failures.
 
 ---
 
@@ -447,6 +446,53 @@ Still open for post-v1.0.0:
   job steps ran. Check-run annotations identify the cause as GitHub
   account billing/spending-limit state, not workflow YAML or Zephyr
   test execution.
+
+## Patch set 5 — post-v1.0.0 release hardening
+
+Current verified state at the start of this patch set:
+
+- origin/main = `15acb9af18a770fd73a8e98aa51c33f61f239894`
+- Remote tag `v1.0.0` exists as annotated tag object
+  `07a20ffd205a3713dd066e1de87aea55d6121330`
+- Remote tag `v1.0.0` peels to commit
+  `120f8b1bbcb2caa7fdba7f10644172c151533bf5`
+- Code/tag side is ready and validated locally
+- GitHub Release page publishing remains blocked by GitHub Actions
+  billing/spending-limit state
+
+Completed in this patch set:
+
+- `c64d71f` feat(release): add local release bundle workflow independent of
+  GitHub Actions. Adds `scripts/prepare_release_bundle.py`,
+  `docs/release.md`, ignored `output/`, and README release-packaging guidance.
+- `463e36f` docs(west): strengthen consumer onboarding and cold-start
+  validation. Adds `scripts/consumer_smoke.py` and a dedicated README
+  consumer-integration section for clean west workspaces.
+- `a0bfaf7` docs(api): clarify public contracts and integration semantics.
+  Adds `docs/api-overview.md`, uses it as the Doxygen main page, and clarifies
+  buffer ownership, deterministic/KAT-only paths, non-reentrancy, and stable log
+  contracts in public headers.
+- `dc4948c` docs(release): add maintainer checklist for local release
+  verification. Adds `docs/maintainer-release-checklist.md` with concrete
+  no-Actions release verification steps.
+- `10b1e90` chore(maint): add local product-readiness wrapper. Adds
+  `scripts/verify_product_readiness.py`, a thin orchestrator around existing
+  checks, consumer smoke, local bundle generation, and `release_check.py`.
+
+Local validation during this patch set:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/prepare_release_bundle.py --tag v1.0.0`
+- `python3 scripts/consumer_smoke.py --run-timeout 30`
+- `doxygen docs/Doxyfile` with zero warnings
+- `python3 scripts/verify_product_readiness.py --tag v1.0.0 --skip-cost-smoke --skip-release-check`
+
+Remaining release-publication blocker:
+
+- GitHub Release page readiness still requires restoring GitHub Actions
+  billing/minutes and rerunning the tag-triggered release workflow. Until then,
+  use `scripts/prepare_release_bundle.py` for local release artifacts and do
+  not force-push or recreate the existing `v1.0.0` tag.
 
 ## Completed tasks (verified at 771ce93)
 
