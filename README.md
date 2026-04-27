@@ -1613,6 +1613,17 @@ This helper:
 Use it before large refactors, before cutting a release, or when touching the
 shared ACVP/TLS/benchmark infrastructure.
 
+For a maintainer-oriented local sequence that calls the existing checks instead
+of reimplementing them, run:
+
+```bash
+python scripts/verify_product_readiness.py --tag v1.0.0
+```
+
+That wrapper runs script compilation, version/changelog/tag consistency, strict
+extended checks, the cost-of-assurance smoke, the consumer smoke helper, local
+release-bundle generation, and the full `release_check.py` gate.
+
 For memory-safety oriented hardening, pair it with the sanitizer runner:
 
 ```bash
