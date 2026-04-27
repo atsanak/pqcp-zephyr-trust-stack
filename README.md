@@ -1780,6 +1780,8 @@ notes extracted from `CHANGELOG.md`, API documentation generated from
 `docs/Doxyfile`, and a JSON manifest recording the version, tag object, tag
 commit, source commit, Zephyr revision, release date, and dependency pins. See
 [`docs/release.md`](docs/release.md) for the full local packaging workflow.
+For a command-by-command maintainer checklist, see
+[`docs/maintainer-release-checklist.md`](docs/maintainer-release-checklist.md).
 
 Once the tagged release is out, move the `## [Unreleased]` content into a
 versioned heading such as `## [0.9.0] - 2026-04-17`, add a fresh empty
