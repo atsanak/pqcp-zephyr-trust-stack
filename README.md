@@ -171,6 +171,45 @@ For release-oriented integrations, pin the manifest repo revision to the tag or
 commit that matches the documented version macros in
 `include/pqcp_zephyr/version.h` and the top release entry in `CHANGELOG.md`.
 
+### Consumer Integration
+
+The repository-root manifest makes this project usable as the west manifest
+repository for a clean consumer workspace:
+
+```bash
+west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
+cd my-workspace
+west update
+python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py
+```
+
+After `west update`, the workspace layout is:
+
+- `pqcp-zephyr-trust-stack/`: this module and its samples/tests
+- `zephyr/`: the Zephyr tree imported by the manifest
+- `modules/crypto/mlkem-native`: pinned ML-KEM backend
+- `modules/crypto/mldsa-native`: pinned ML-DSA backend
+
+Zephyr discovers the module through `pqcp-zephyr-trust-stack/zephyr/module.yml`,
+which points Zephyr's module loader at this repository's top-level
+`CMakeLists.txt` and `Kconfig`. Consumer applications do not need to copy
+module CMake fragments when the project is present in the west workspace.
+
+The release baseline encoded in `west.yml` is the pinned Zephyr revision
+`3568e1b6d5cdd51a6b964a2a1d6d29200fea2056` (the Zephyr v4.3.0 release
+commit). Newer Zephyr revisions may work, but treat them as compatibility
+probes until they have been validated with `scripts/run_extended_checks.py`.
+
+The minimum consumer validation build is the RNG ztest on `qemu_x86_64`, which
+is what `scripts/consumer_smoke.py` runs by default. To use another target or
+board:
+
+```bash
+python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py \
+  --board qemu_x86_64 \
+  --target tests/ztest_acvp_serial
+```
+
 ### Adding to Your Zephyr Project
 
 **Option 1: Via west.yml**
