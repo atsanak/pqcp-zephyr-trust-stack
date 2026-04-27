@@ -137,6 +137,10 @@ struct pqcp_acvp_response {
  * This state machine keeps UART framing behavior shared between the serial
  * sample, the host-side timeout scenarios, and ztest coverage. It is not a
  * general-purpose production transport API.
+ *
+ * Callers own both this state object and the line buffer passed to
+ * @ref pqcp_acvp_serial_line_consume_char. Reset the state before first use
+ * and after any transport-level disconnect.
  */
 struct pqcp_acvp_serial_line_state {
     size_t len;       /**< Current buffered line length */
@@ -410,6 +414,8 @@ void pqcp_acvp_serial_line_reset(struct pqcp_acvp_serial_line_state *state);
  * - backspace / DEL removes the most recent buffered character
  * - oversize frames continue consuming bytes until newline, then return
  *   `-ENOSPC`
+ * - timeout handling is explicit: transports call
+ *   @ref pqcp_acvp_serial_line_timeout when their per-frame timer expires
  *
  * @param state Shared serial line state.
  * @param ch Input character.
@@ -441,7 +447,9 @@ int pqcp_acvp_serial_line_consume_char(struct pqcp_acvp_serial_line_state *state
  * @retval -ETIMEDOUT A partial frame was discarded and the caller should emit
  *         `ERROR:TIMEOUT`.
  *
- * @note Intended for the lab/test ACVP serial harness and ztest coverage.
+ * @note Intended for the lab/test ACVP serial harness and ztest coverage. The
+ *       helper clears @p line before returning `-ETIMEDOUT` so the next
+ *       command can start from an idle receiver state.
  */
 int pqcp_acvp_serial_line_timeout(struct pqcp_acvp_serial_line_state *state,
                                   char *line, size_t line_size);

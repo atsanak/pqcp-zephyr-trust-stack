@@ -1,7 +1,7 @@
 PROJECT_NAME           = "PQCP Zephyr Trust Stack"
 PROJECT_NUMBER         = 1.0.0
 OUTPUT_DIRECTORY       = .
-INPUT                  = include/pqcp_zephyr
+INPUT                  = include/pqcp_zephyr docs/api-overview.md
 RECURSIVE              = YES
 EXTRACT_ALL            = NO
 GENERATE_HTML          = YES
@@ -10,3 +10,4 @@ GENERATE_LATEX         = NO
 QUIET                  = YES
 WARN_IF_UNDOCUMENTED   = YES
 OPTIMIZE_OUTPUT_FOR_C  = YES
+USE_MDFILE_AS_MAINPAGE = docs/api-overview.md

@@ -95,21 +95,27 @@ size_t pqcp_mldsa_sig_size(pqcp_mldsa_level_t level);
 /**
  * @brief Generate an ML-DSA keypair.
  *
- * Generates a fresh ML-DSA keypair using the configured RNG backend.
+ * Generates a fresh ML-DSA keypair using the configured RNG backend. The
+ * caller owns both output buffers and is responsible for clearing the secret
+ * key when it is no longer needed.
  *
  * @param level  Security level (PQCP_MLDSA_44, 65, or 87).
  * @param pk     Output buffer for public key (must be pqcp_mldsa_pk_size(level) bytes).
  * @param sk     Output buffer for secret key (must be pqcp_mldsa_sk_size(level) bytes).
  *
- * @return PQCP_MLDSA_SUCCESS on success, negative error code on failure.
+ * @retval PQCP_MLDSA_SUCCESS Keypair generated successfully.
+ * @retval PQCP_MLDSA_ERR_INVALID_ARG Invalid level or NULL output buffer.
+ * @retval PQCP_MLDSA_ERR_RNG The configured RNG path is not ready.
+ * @retval PQCP_MLDSA_ERR_INTERNAL The backend reported a generation failure.
  */
 int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk);
 
 /**
  * @brief Sign a message using ML-DSA (pure mode).
  *
- * Signs a message using deterministic ML-DSA per FIPS-204.
- * Uses hedged randomness internally for side-channel resistance.
+ * Signs a message using the pure ML-DSA API. The current native backend uses
+ * the FIPS 204 signing interface and writes a fixed-size signature for
+ * @p level into caller-owned @p sig.
  *
  * @param level    Security level.
  * @param sk       Secret key (pqcp_mldsa_sk_size(level) bytes).
@@ -119,7 +125,15 @@ int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk);
  * @param ctx_len  Length of context string (0-255).
  * @param sig      Output signature buffer (pqcp_mldsa_sig_size(level) bytes).
  *
- * @return PQCP_MLDSA_SUCCESS on success, negative error code on failure.
+ * @retval PQCP_MLDSA_SUCCESS Signature generated successfully.
+ * @retval PQCP_MLDSA_ERR_INVALID_ARG Invalid level, NULL key/signature buffer,
+ *         or NULL message with non-zero @p msg_len.
+ * @retval PQCP_MLDSA_ERR_CONTEXT_LEN @p ctx_len exceeds
+ *         @ref PQCP_MLDSA_CONTEXT_MAX.
+ * @retval PQCP_MLDSA_ERR_INTERNAL The backend reported a signing failure.
+ *
+ * @note @p ctx may be NULL only when @p ctx_len is zero. The function does not
+ *       retain pointers after returning.
  */
 int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
                     const uint8_t *msg, size_t msg_len,
@@ -129,7 +143,7 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
 /**
  * @brief Verify an ML-DSA signature (pure mode).
  *
- * Verifies a signature on a message.
+ * Verifies a fixed-size ML-DSA signature on a message.
  *
  * @param level    Security level.
  * @param pk       Public key (pqcp_mldsa_pk_size(level) bytes).
@@ -139,7 +153,12 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
  * @param ctx_len  Length of context string (0-255).
  * @param sig      Signature to verify (pqcp_mldsa_sig_size(level) bytes).
  *
- * @return PQCP_MLDSA_SUCCESS if signature is valid, PQCP_MLDSA_ERR_VERIFY if invalid.
+ * @retval PQCP_MLDSA_SUCCESS Signature is valid.
+ * @retval PQCP_MLDSA_ERR_VERIFY Signature verification failed cleanly.
+ * @retval PQCP_MLDSA_ERR_INVALID_ARG Invalid level, NULL key/signature buffer,
+ *         or NULL message with non-zero @p msg_len.
+ * @retval PQCP_MLDSA_ERR_CONTEXT_LEN @p ctx_len exceeds
+ *         @ref PQCP_MLDSA_CONTEXT_MAX.
  */
 int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
                       const uint8_t *msg, size_t msg_len,
@@ -149,8 +168,12 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
 /**
  * @brief Sign a pre-hashed message (HashML-DSA).
  *
- * Signs a message hash for large messages. The caller is responsible
- * for computing the hash using an appropriate algorithm.
+ * Compatibility helper for signing caller-supplied digest bytes.
+ *
+ * The current implementation treats @p hash as the message input to the pure
+ * ML-DSA signing path and ignores @p hash_oid / @p oid_len. It is useful for
+ * applications that already pre-hash large messages and want a stable wrapper,
+ * but it should not be interpreted as a separate certified HashML-DSA mode.
  *
  * @param level      Security level.
  * @param sk         Secret key.
@@ -162,7 +185,10 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
  * @param ctx_len    Length of context string.
  * @param sig        Output signature buffer.
  *
- * @return PQCP_MLDSA_SUCCESS on success, negative error code on failure.
+ * @retval PQCP_MLDSA_SUCCESS Signature generated successfully.
+ * @retval PQCP_MLDSA_ERR_INVALID_ARG Invalid arguments.
+ * @retval PQCP_MLDSA_ERR_CONTEXT_LEN Context length exceeds 255 bytes.
+ * @retval PQCP_MLDSA_ERR_INTERNAL The backend reported a signing failure.
  */
 int pqcp_mldsa_sign_hash(pqcp_mldsa_level_t level, const uint8_t *sk,
                          const uint8_t *hash, size_t hash_len,
@@ -171,7 +197,11 @@ int pqcp_mldsa_sign_hash(pqcp_mldsa_level_t level, const uint8_t *sk,
                          uint8_t *sig);
 
 /**
- * @brief Verify a HashML-DSA signature.
+ * @brief Verify a signature over caller-supplied digest bytes.
+ *
+ * The current implementation mirrors @ref pqcp_mldsa_sign_hash by treating
+ * @p hash as the message input to the pure ML-DSA verification path and
+ * ignoring @p hash_oid / @p oid_len.
  *
  * @param level      Security level.
  * @param pk         Public key.
@@ -183,7 +213,10 @@ int pqcp_mldsa_sign_hash(pqcp_mldsa_level_t level, const uint8_t *sk,
  * @param ctx_len    Length of context string.
  * @param sig        Signature to verify.
  *
- * @return PQCP_MLDSA_SUCCESS if valid, PQCP_MLDSA_ERR_VERIFY if invalid.
+ * @retval PQCP_MLDSA_SUCCESS Signature is valid.
+ * @retval PQCP_MLDSA_ERR_VERIFY Signature verification failed cleanly.
+ * @retval PQCP_MLDSA_ERR_INVALID_ARG Invalid arguments.
+ * @retval PQCP_MLDSA_ERR_CONTEXT_LEN Context length exceeds 255 bytes.
  */
 int pqcp_mldsa_verify_hash(pqcp_mldsa_level_t level, const uint8_t *pk,
                            const uint8_t *hash, size_t hash_len,
@@ -199,10 +232,17 @@ int pqcp_mldsa_verify_hash(pqcp_mldsa_level_t level, const uint8_t *pk,
  * CONFIG_PQCP_MLDSA_STREAMING is enabled.
  */
 
-/* Opaque streaming context */
+/**
+ * @brief Opaque streaming context.
+ *
+ * Allocate storage with at least @ref PQCP_MLDSA_STREAM_CTX_SIZE bytes and
+ * pass it as a `pqcp_mldsa_stream_ctx_t *`. The implementation owns the
+ * contents only until finalization returns; callers still own and should clear
+ * the backing storage if it held secret-key material.
+ */
 typedef struct pqcp_mldsa_stream_ctx pqcp_mldsa_stream_ctx_t;
 
-/* Size of streaming context buffer (use for static allocation) */
+/** @brief Minimum backing storage size for a streaming context. */
 #define PQCP_MLDSA_STREAM_CTX_SIZE \
     (PQCP_MLDSA_SK_SIZE_MAX + PQCP_MLDSA_SIG_SIZE_MAX + \
      PQCP_MLDSA_CONTEXT_MAX + 600)
@@ -216,7 +256,8 @@ typedef struct pqcp_mldsa_stream_ctx pqcp_mldsa_stream_ctx_t;
  * @param context    Optional application context string.
  * @param ctx_len    Length of context string.
  *
- * @return PQCP_MLDSA_SUCCESS on success.
+ * @retval PQCP_MLDSA_SUCCESS Context initialized successfully.
+ * @retval Negative error code on invalid arguments or unsupported levels.
  */
 int pqcp_mldsa_sign_stream_init(pqcp_mldsa_stream_ctx_t *ctx,
                                 pqcp_mldsa_level_t level,
@@ -230,7 +271,8 @@ int pqcp_mldsa_sign_stream_init(pqcp_mldsa_stream_ctx_t *ctx,
  * @param data       Message chunk to process.
  * @param len        Length of chunk.
  *
- * @return PQCP_MLDSA_SUCCESS on success.
+ * @retval PQCP_MLDSA_SUCCESS Chunk accepted successfully.
+ * @retval Negative error code if @p ctx or @p data is invalid.
  */
 int pqcp_mldsa_sign_stream_update(pqcp_mldsa_stream_ctx_t *ctx,
                                   const uint8_t *data, size_t len);
@@ -241,7 +283,8 @@ int pqcp_mldsa_sign_stream_update(pqcp_mldsa_stream_ctx_t *ctx,
  * @param ctx        Streaming context.
  * @param sig        Output signature buffer.
  *
- * @return PQCP_MLDSA_SUCCESS on success.
+ * @retval PQCP_MLDSA_SUCCESS Signature generated successfully.
+ * @retval Negative error code if the context or output buffer is invalid.
  */
 int pqcp_mldsa_sign_stream_final(pqcp_mldsa_stream_ctx_t *ctx, uint8_t *sig);
 
@@ -255,7 +298,8 @@ int pqcp_mldsa_sign_stream_final(pqcp_mldsa_stream_ctx_t *ctx, uint8_t *sig);
  * @param context    Optional application context string.
  * @param ctx_len    Length of context string.
  *
- * @return PQCP_MLDSA_SUCCESS on success.
+ * @retval PQCP_MLDSA_SUCCESS Context initialized successfully.
+ * @retval Negative error code on invalid arguments or unsupported levels.
  */
 int pqcp_mldsa_verify_stream_init(pqcp_mldsa_stream_ctx_t *ctx,
                                   pqcp_mldsa_level_t level,
@@ -270,7 +314,8 @@ int pqcp_mldsa_verify_stream_init(pqcp_mldsa_stream_ctx_t *ctx,
  * @param data       Message chunk to process.
  * @param len        Length of chunk.
  *
- * @return PQCP_MLDSA_SUCCESS on success.
+ * @retval PQCP_MLDSA_SUCCESS Chunk accepted successfully.
+ * @retval Negative error code if @p ctx or @p data is invalid.
  */
 int pqcp_mldsa_verify_stream_update(pqcp_mldsa_stream_ctx_t *ctx,
                                     const uint8_t *data, size_t len);
@@ -280,7 +325,9 @@ int pqcp_mldsa_verify_stream_update(pqcp_mldsa_stream_ctx_t *ctx,
  *
  * @param ctx        Streaming context.
  *
- * @return PQCP_MLDSA_SUCCESS if signature valid, PQCP_MLDSA_ERR_VERIFY if invalid.
+ * @retval PQCP_MLDSA_SUCCESS Signature is valid.
+ * @retval PQCP_MLDSA_ERR_VERIFY Signature verification failed cleanly.
+ * @retval Negative error code if the context is invalid.
  */
 int pqcp_mldsa_verify_stream_final(pqcp_mldsa_stream_ctx_t *ctx);
 
@@ -295,7 +342,12 @@ int pqcp_mldsa_verify_stream_final(pqcp_mldsa_stream_ctx_t *ctx);
  * @param pk     Output public key buffer.
  * @param sk     Output secret key buffer.
  *
- * @return PQCP_MLDSA_SUCCESS on success.
+ * @retval PQCP_MLDSA_SUCCESS Keypair generated successfully.
+ * @retval PQCP_MLDSA_ERR_INVALID_ARG Invalid level or NULL buffer.
+ * @retval PQCP_MLDSA_ERR_RNG Deterministic RNG seeding failed.
+ *
+ * @note Test/KAT only. Production key generation must use
+ *       @ref pqcp_mldsa_keypair with the configured production RNG.
  */
 int pqcp_mldsa_keypair_deterministic(pqcp_mldsa_level_t level,
                                      const uint8_t seed[32],

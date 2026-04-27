@@ -202,6 +202,10 @@ void pqcp_bench_run_all(const pqcp_bench_config_t *config);
  * such as MLKEM_KEYPAIR, MLKEM_ENCAPS, MLKEM_DECAPS, MLDSA_KEYPAIR,
  * MLDSA_SIGN, or MLDSA_VERIFY.
  *
+ * @note The `PRIM,...` line is a stable parser contract for
+ *       `scripts/parse_logs.py`. Add new comma-separated fields only after the
+ *       existing fields, and update parser tests in the same change.
+ *
  * @param result The benchmark result to print.
  */
 void pqcp_bench_print_result(const pqcp_bench_result_t *result);
@@ -212,6 +216,10 @@ void pqcp_bench_print_result(const pqcp_bench_result_t *result);
  * Outputs both PQCP_METRIC format and legacy TLS format:
  * PQCP_METRIC,protocol,handshake,MLKEM,768,time,150,ms
  * TLS,MLKEM768,handshake_ms=150,cpu_pct=45,peak_kib=32,...
+ *
+ * @note `PQCP_METRIC` lines use the fixed eight-field format documented below.
+ *       New metric names are allowed, but field order and units are consumed by
+ *       release tooling and must remain compatible.
  *
  * @param result The protocol benchmark result to print.
  */
