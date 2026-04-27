@@ -63,6 +63,16 @@ python3 scripts/run_extended_checks.py \
 python3 scripts/release_check.py
 ```
 
+For a single command that sequences those existing checks, plus the consumer
+smoke and local release bundle generation, run:
+
+```bash
+python3 scripts/verify_product_readiness.py --tag v1.0.0
+```
+
+Use `--skip-release-check` only when iterating on the wrapper itself; the full
+release gate remains the authoritative readiness signal.
+
 On non-Linux hosts, `scripts/run_sanitizer_checks.py` may skip native
 ASan/UBSan execution by design. Do not weaken the release gate for that; use a
 Linux host for strict sanitizer confirmation when required.
