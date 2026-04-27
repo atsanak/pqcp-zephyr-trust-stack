@@ -54,6 +54,10 @@ typedef struct pqcp_tls_selftest_config {
  *
  * The report structure is shared by the TLS sample, protocol benchmark sample,
  * and ztest coverage so those paths stay aligned on metric names and meaning.
+ *
+ * The current implementation uses module-static cryptographic work buffers.
+ * Serialize calls to `pqcp_tls_selftest_run()` if multiple threads could
+ * exercise the harness at the same time.
  */
 typedef struct pqcp_tls_selftest_report {
     uint16_t kem_level;                 /**< ML-KEM parameter set used. */
@@ -134,7 +138,9 @@ int pqcp_tls_selftest_init_psa(bool *ready);
  *         mismatched shared secrets.
  *
  * @note Intended for both reusable test/benchmark harnesses and sample code
- *       paths that want a shared offline TLS/PSA/PQCP validation flow.
+ *       paths that want a shared offline TLS/PSA/PQCP validation flow. This
+ *       function is not reentrant because the implementation uses shared
+ *       module-static work buffers.
  */
 int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
                           pqcp_tls_selftest_report_t *report);
