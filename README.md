@@ -1721,6 +1721,27 @@ workflow runs the same gate, QEMU builds, and changelog extraction steps
 without publishing a GitHub Release. Use it to validate the release pipeline on
 `main` before pushing any release tag.
 
+When GitHub Actions or GitHub Releases are unavailable, maintainers can still
+prepare local, auditable release artifacts without mutating the source tree:
+
+```bash
+python scripts/prepare_release_bundle.py --tag v1.0.0
+```
+
+For an exact source bundle, check out the tag first and require the selected tag
+to point at the current checkout:
+
+```bash
+git checkout v1.0.0
+python scripts/prepare_release_bundle.py --require-tag-on-head
+```
+
+The local bundle is written under `output/release/<tag>/` and includes release
+notes extracted from `CHANGELOG.md`, API documentation generated from
+`docs/Doxyfile`, and a JSON manifest recording the version, tag object, tag
+commit, source commit, Zephyr revision, release date, and dependency pins. See
+[`docs/release.md`](docs/release.md) for the full local packaging workflow.
+
 Once the tagged release is out, move the `## [Unreleased]` content into a
 versioned heading such as `## [0.9.0] - 2026-04-17`, add a fresh empty
 `## [Unreleased]` section above it, and commit that rollover to start the next
@@ -1736,7 +1757,7 @@ Downstream consumers can track the formal module version through:
 - `include/pqcp_zephyr/version.h`
 - `CHANGELOG.md`
 
-The current pre-release version is `0.9.0`, exported through both
+The current release version is `1.0.0`, exported through both
 `PQCP_ZEPHYR_VERSION_STRING` and the compatibility alias `PQCP_VERSION_STRING`.
 The extended-checks helper verifies that the compatibility macro and the top
 release entry in `CHANGELOG.md` stay aligned. It also checks that the README's
