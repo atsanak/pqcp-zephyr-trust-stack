@@ -494,6 +494,49 @@ Remaining release-publication blocker:
   use `scripts/prepare_release_bundle.py` for local release artifacts and do
   not force-push or recreate the existing `v1.0.0` tag.
 
+## Patch set 6 — audit follow-up hardening
+
+Completed:
+
+- `bef28ea` chore(release): harden local release workflow helpers.
+  - Added `scripts/local_workflow.py` so local maintainer helpers share west
+    discovery, host-environment cleanup, subprocess logging, and marker-aware
+    timeout handling.
+  - Updated `scripts/consumer_smoke.py` with explicit `--module-mode` choices:
+    `manifest` proves west/module.yml discovery, `extra-module` uses
+    `-DZEPHYR_EXTRA_MODULES` for development checkouts, and `auto` prefers
+    manifest mode before falling back with a visible note.
+  - Hardened `scripts/prepare_release_bundle.py` with idempotent output
+    cleanup, `--require-clean`, `--exact-tag`, and `--verify-remote-tag`.
+  - Updated `scripts/verify_product_readiness.py` to reuse shared helpers,
+    fail clearly when no west workspace exists, support `--preflight-only`, and
+    forward the consumer module visibility mode.
+  - Added `scripts/test_local_release_workflows.py` for focused pure-Python
+    tests of release-date parsing, west dependency parsing, bundle cleanup, and
+    consumer-smoke command construction.
+  - Aligned README and release docs with the executable behavior:
+    `release_check.py --tag v1.0.0`, exact-tag local bundles, remote tag
+    verification, and manifest-vs-extra-module consumer smoke semantics.
+
+Validation for `bef28ea`:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_local_release_workflows.py`
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/prepare_release_bundle.py --tag v1.0.0 --verify-remote-tag --output-dir /tmp/pqcp-release-validate-hardening`
+- `python3 scripts/consumer_smoke.py --module-mode extra-module --build-only --build-dir /tmp/pqcp-consumer-smoke-hardening`
+- `python3 scripts/consumer_smoke.py --module-mode manifest --build-only --build-dir /tmp/pqcp-consumer-smoke-manifest-check`
+  failed early and intentionally in this local development workspace because
+  the checkout is not declared by the active west manifest; use a clean
+  `west init -m ...` consumer workspace for manifest-mode validation.
+- `python3 scripts/run_extended_checks.py --strict`
+- `python3 scripts/verify_product_readiness.py --tag v1.0.0 --preflight-only --skip-cost-smoke --skip-consumer-smoke --skip-release-bundle`
+
+Remaining release-publication blocker:
+
+- GitHub Release page readiness is still external: restore GitHub Actions
+  billing/minutes and rerun the tag-triggered release workflow for `v1.0.0`.
+
 ## Completed tasks (verified at 771ce93)
 
 - [x] T1: Benchmark CSV hardened — avg_cycles + avg_us fields, parse_logs.py updated
