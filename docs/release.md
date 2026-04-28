@@ -24,17 +24,18 @@ tag itself:
 ```bash
 git fetch origin --tags
 git checkout v1.0.0
-python3 scripts/prepare_release_bundle.py --require-tag-on-head
+python3 scripts/prepare_release_bundle.py --exact-tag --verify-remote-tag
 ```
 
-The `--require-tag-on-head` flag fails if the selected tag does not point to
-the current checkout. That is the recommended mode for publishing replacement
-assets for a tagged release.
+The `--exact-tag` flag requires a clean checkout and fails if the selected tag
+does not point to the current checkout. `--verify-remote-tag` additionally
+checks that `origin` has the same annotated tag object and peeled commit. That
+is the recommended mode for publishing replacement assets for a tagged release.
 
 ## Maintainer-Branch Bundle
 
 For post-tag maintainer hardening work, run from `main` without
-`--require-tag-on-head`:
+`--exact-tag`:
 
 ```bash
 python3 scripts/prepare_release_bundle.py --tag v1.0.0
@@ -51,8 +52,9 @@ Before relying on a local bundle, run:
 
 ```bash
 python3 -m py_compile scripts/*.py
+python3 scripts/test_local_release_workflows.py
 python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0
-python3 scripts/release_check.py
+python3 scripts/release_check.py --tag v1.0.0
 python3 scripts/prepare_release_bundle.py --tag v1.0.0
 ```
 

@@ -78,6 +78,32 @@ def parse_args() -> argparse.Namespace:
             "checked-out commit. Useful when producing an exact tag bundle."
         ),
     )
+    parser.add_argument(
+        "--require-clean",
+        action="store_true",
+        help="Fail if the working tree has uncommitted changes.",
+    )
+    parser.add_argument(
+        "--exact-tag",
+        action="store_true",
+        help=(
+            "Strict publishing mode: require a clean checkout and require the "
+            "selected tag to point to HEAD."
+        ),
+    )
+    parser.add_argument(
+        "--verify-remote-tag",
+        action="store_true",
+        help="Verify origin has the selected tag object and peeled commit.",
+    )
+    parser.add_argument(
+        "--keep-existing-output",
+        action="store_true",
+        help=(
+            "Do not clean output/release/<tag> before writing. By default the "
+            "bundle directory is recreated so stale files cannot survive."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -144,6 +170,41 @@ def parse_west_dependencies(module_path: Path) -> dict[str, str]:
         if revision is not None:
             dependencies[name] = revision
     return dependencies
+
+
+def verify_remote_tag(module_path: Path, tag: str, tag_object: str, tag_commit: str) -> None:
+    """Verify that origin has the local tag object and peeled commit."""
+    output = git(module_path, "ls-remote", "origin", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}")
+    remote: dict[str, str] = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) == 2:
+            remote[parts[1]] = parts[0]
+
+    object_ref = f"refs/tags/{tag}"
+    commit_ref = f"refs/tags/{tag}^{{}}"
+    if remote.get(object_ref) != tag_object:
+        raise RuntimeError(
+            f"origin {object_ref} mismatch: expected {tag_object}, "
+            f"found {remote.get(object_ref, '<missing>')}"
+        )
+    if remote.get(commit_ref) != tag_commit:
+        raise RuntimeError(
+            f"origin {commit_ref} mismatch: expected {tag_commit}, "
+            f"found {remote.get(commit_ref, '<missing>')}"
+        )
+
+
+def prepare_bundle_dir(bundle_dir: Path, tag: str, *, keep_existing: bool) -> None:
+    """Create an idempotent generated bundle directory."""
+    if bundle_dir.name != tag:
+        raise RuntimeError(
+            f"refusing to prepare unsafe bundle path {bundle_dir}: "
+            f"final directory name must match tag {tag}"
+        )
+    if bundle_dir.exists() and not keep_existing:
+        shutil.rmtree(bundle_dir)
+    bundle_dir.mkdir(parents=True, exist_ok=True)
 
 
 def generate_api_docs(module_path: Path, bundle_dir: Path, doxygen: str | None) -> Path:
@@ -246,11 +307,17 @@ def main() -> int:
 
     # Verify the tag exists before doing any expensive work.
     head_commit = git(module_path, "rev-parse", "HEAD")
+    tag_object = git(module_path, "rev-parse", f"refs/tags/{tag}")
     tag_commit = git(module_path, "rev-parse", f"refs/tags/{tag}^{{}}")
-    if args.require_tag_on_head and tag_commit != head_commit:
+    working_tree_dirty = bool(git(module_path, "status", "--porcelain"))
+    if (args.require_clean or args.exact_tag) and working_tree_dirty:
+        raise RuntimeError("working tree is dirty; commit, stash, or clean changes first")
+    if (args.require_tag_on_head or args.exact_tag) and tag_commit != head_commit:
         raise RuntimeError(
             f"{tag} points to {tag_commit}, but the current checkout is {head_commit}"
         )
+    if args.verify_remote_tag:
+        verify_remote_tag(module_path, tag, tag_object, tag_commit)
 
     changelog_text = (module_path / "CHANGELOG.md").read_text(encoding="utf-8")
     release_date = parse_release_date(changelog_text, version)
@@ -260,7 +327,7 @@ def main() -> int:
     if not output_dir.is_absolute():
         output_dir = module_path / output_dir
     bundle_dir = output_dir / tag
-    bundle_dir.mkdir(parents=True, exist_ok=True)
+    prepare_bundle_dir(bundle_dir, tag, keep_existing=args.keep_existing_output)
 
     release_notes_path = bundle_dir / f"release-notes-{tag}.md"
     release_notes_path.write_text(release_notes, encoding="utf-8")
@@ -282,8 +349,10 @@ def main() -> int:
     print("Local release bundle prepared")
     print(f"  version       : {version}")
     print(f"  tag           : {tag}")
+    print(f"  tag object    : {tag_object}")
     print(f"  tag commit    : {tag_commit}")
     print(f"  source commit : {head_commit}")
+    print(f"  dirty         : {working_tree_dirty}")
     if tag_commit != head_commit:
         print("  note          : tag does not point to current HEAD; manifest records both")
     print(f"  output        : {bundle_dir}")

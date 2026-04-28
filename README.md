@@ -180,7 +180,7 @@ repository for a clean consumer workspace:
 west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
 cd my-workspace
 west update
-python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py
+python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py --module-mode manifest
 ```
 
 After `west update`, the workspace layout is:
@@ -200,12 +200,15 @@ The release baseline encoded in `west.yml` is the pinned Zephyr revision
 commit). Newer Zephyr revisions may work, but treat them as compatibility
 probes until they have been validated with `scripts/run_extended_checks.py`.
 
-The minimum consumer validation build is the RNG ztest on `qemu_x86_64`, which
-is what `scripts/consumer_smoke.py` runs by default. To use another target or
-board:
+The minimum consumer validation build is the RNG ztest on `qemu_x86_64`.
+`scripts/consumer_smoke.py --module-mode manifest` proves west/module.yml
+discovery without injecting `ZEPHYR_EXTRA_MODULES`. For local development
+checkouts that are not listed in the active west manifest, use
+`--module-mode extra-module`. To use another target or board:
 
 ```bash
 python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py \
+  --module-mode manifest \
   --board qemu_x86_64 \
   --target tests/ztest_acvp_serial
 ```
@@ -1622,7 +1625,10 @@ python scripts/verify_product_readiness.py --tag v1.0.0
 
 That wrapper runs script compilation, version/changelog/tag consistency, strict
 extended checks, the cost-of-assurance smoke, the consumer smoke helper, local
-release-bundle generation, and the full `release_check.py` gate.
+release-bundle generation, and the full `release_check.py` gate. By default the
+consumer smoke auto-detects whether this checkout is a west manifest project;
+pass `--consumer-module-mode manifest` to require true module discovery or
+`--consumer-module-mode extra-module` for local development workspaces.
 
 For memory-safety oriented hardening, pair it with the sanitizer runner:
 
@@ -1739,7 +1745,7 @@ Keep the next release notes in the `## [Unreleased]` block in
 Before tagging, run the full release gate locally:
 
 ```bash
-python scripts/release_check.py
+python scripts/release_check.py --tag v1.0.0
 ```
 
 Then validate the full GitHub Actions release path without publishing:
@@ -1763,7 +1769,9 @@ automatically:
 - runs `python scripts/release_check.py` and stops the release if it fails;
 - builds every sample and ztest on `qemu_x86_64`;
 - uploads `release_check_results.xml`, `build_summary.txt`, the release log, and the per-build logs as workflow artifacts;
-- creates a GitHub Release titled with the tag name and populated from the current `## [Unreleased]` changelog block.
+- creates a GitHub Release titled with the tag name and populated from the
+  matching versioned changelog section, with the empty `## [Unreleased]`
+  placeholder preserved for the next cycle.
 
 The companion
 [`release-dry-run.yml`](.github/workflows/release-dry-run.yml)
@@ -1783,7 +1791,7 @@ to point at the current checkout:
 
 ```bash
 git checkout v1.0.0
-python scripts/prepare_release_bundle.py --require-tag-on-head
+python scripts/prepare_release_bundle.py --exact-tag --verify-remote-tag
 ```
 
 The local bundle is written under `output/release/<tag>/` and includes release
