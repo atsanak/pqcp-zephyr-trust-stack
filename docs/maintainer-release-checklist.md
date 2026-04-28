@@ -92,6 +92,17 @@ must show no failing required claims. The JSON form is intended for scripts and
 paper/release artifact review because it binds claims to concrete validators,
 commands, artifact paths, and hashes.
 
+To replay-check an already generated ledger without rerunning QEMU builds:
+
+```bash
+python3 scripts/verify_assurance_ledger.py \
+  benchmark_results/release_check/assurance_ledger.json \
+  --markdown benchmark_results/release_check/assurance_ledger.md
+```
+
+This catches stale Markdown summaries, missing claim IDs, missing artifacts, and
+SHA-256 drift in evidence artifacts.
+
 ## 4. Run Focused Consumer And Harness Smokes
 
 ```bash

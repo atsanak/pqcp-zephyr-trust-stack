@@ -308,6 +308,17 @@ def main() -> int:
     ]
     if args.tag:
         assurance_ledger_cmd.extend(["--tag", args.tag])
+    assurance_ledger_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_assurance_ledger.py"),
+        str(assurance_ledger_json),
+        "--markdown",
+        str(assurance_ledger_md),
+        "--claims",
+        str(module_path / "scripts/assurance_claims.json"),
+        "--module-path",
+        str(module_path),
+    ]
 
     steps = [
         Step(
@@ -525,6 +536,11 @@ def main() -> int:
         Step(
             name="assurance ledger",
             cmd=assurance_ledger_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="assurance ledger verification",
+            cmd=assurance_ledger_verify_cmd,
             cwd=module_path,
         ),
     ]

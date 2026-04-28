@@ -586,6 +586,37 @@ Remaining release-publication blocker:
   Actions billing/minutes. The Assurance Ledger is local and does not depend on
   Actions.
 
+## Patch set 8 — replayable assurance ledger verification
+
+Goal:
+
+- Make generated Assurance Ledgers independently replay-checkable so maintainers
+  can validate an evidence package without rerunning the full Zephyr/QEMU gate.
+
+Implemented scope:
+
+- `scripts/verify_assurance_ledger.py` verifies generated ledger JSON/Markdown
+  pairs for schema version, required claim coverage, summary count consistency,
+  required-claim failures, Markdown/JSON claim-ID parity, artifact existence, and
+  recorded SHA-256 values.
+- `scripts/test_assurance_ledger.py` now covers verifier success, artifact hash
+  drift, stale Markdown, and summary drift in addition to generator behavior.
+- `scripts/release_check.py` runs the verifier as a blocking step immediately
+  after generating `assurance_ledger.json` and `assurance_ledger.md`.
+- `docs/release.md` and `docs/maintainer-release-checklist.md` document how to
+  replay-check an existing ledger without rebuilding.
+
+Validation performed during implementation:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_assurance_ledger.py`
+- `python3 scripts/test_local_release_workflows.py`
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-ledger-verify`
+  - produced `assurance_ledger.json` and `assurance_ledger.md`;
+  - ledger summary: pass=7, fail=0, not_applicable=0;
+  - final verifier step printed `[PASS] assurance ledger verification`.
+
 ## Completed tasks (verified at 771ce93)
 
 - [x] T1: Benchmark CSV hardened — avg_cycles + avg_us fields, parse_logs.py updated
