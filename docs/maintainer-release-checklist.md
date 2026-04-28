@@ -53,6 +53,7 @@ This checks `include/pqcp_zephyr/version.h`, `CMakeLists.txt`,
 
 ```bash
 python3 -m py_compile scripts/*.py
+python3 scripts/test_local_release_workflows.py
 
 python3 scripts/run_extended_checks.py --strict
 
@@ -60,7 +61,7 @@ python3 scripts/run_extended_checks.py \
   --strict \
   --run-cost-of-assurance-smoke
 
-python3 scripts/release_check.py
+python3 scripts/release_check.py --tag v1.0.0
 ```
 
 For a single command that sequences those existing checks, plus the consumer
@@ -80,7 +81,7 @@ Linux host for strict sanitizer confirmation when required.
 ## 4. Run Focused Consumer And Harness Smokes
 
 ```bash
-python3 scripts/consumer_smoke.py
+python3 scripts/consumer_smoke.py --module-mode manifest
 
 west build -p always -b qemu_x86_64 tests/ztest_acvp_serial
 west build -d build -t run
@@ -91,6 +92,9 @@ west build -p always -b qemu_x86_64 tests/ztest_rng
 
 west build -p always -b qemu_x86_64 tests/ztest_tls_selftest
 ```
+
+Use `--module-mode extra-module` only for a local development checkout that is
+not listed in the active west manifest.
 
 If a QEMU run prints `PROJECT EXECUTION SUCCESSFUL` but does not exit promptly
 on macOS, prefer the repository wrappers (`release_check.py` or
@@ -117,7 +121,7 @@ For an exact bundle of the tagged source:
 
 ```bash
 git checkout v1.0.0
-python3 scripts/prepare_release_bundle.py --require-tag-on-head
+python3 scripts/prepare_release_bundle.py --exact-tag --verify-remote-tag
 ```
 
 The bundle is written under `output/release/<tag>/` and contains release notes,

@@ -5,21 +5,20 @@
 from __future__ import annotations
 
 import argparse
-import os
-import signal
-import shlex
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-HOST_ENV_BLACKLIST = (
-    "CFLAGS",
-    "CXXFLAGS",
-    "CPPFLAGS",
-    "LDFLAGS",
-    "CPATH",
-    "SDKROOT",
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from local_workflow import (  # noqa: E402
+    clean_env,
+    detect_west_root,
+    discover_west,
+    is_west_manifest_project,
+    run_command,
 )
 
 
@@ -67,6 +66,18 @@ def parse_args() -> argparse.Namespace:
         help="Only build the target; do not run west build -t run.",
     )
     parser.add_argument(
+        "--module-mode",
+        choices=("auto", "manifest", "extra-module"),
+        default="auto",
+        help=(
+            "How to make the module visible to Zephyr. 'manifest' requires "
+            "west/module.yml discovery through the active west manifest; "
+            "'extra-module' injects -DZEPHYR_EXTRA_MODULES for in-tree "
+            "development; 'auto' prefers manifest discovery and falls back to "
+            "extra-module with an explicit note."
+        ),
+    )
+    parser.add_argument(
         "--run-timeout",
         type=int,
         default=120,
@@ -75,110 +86,58 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def clean_env() -> dict[str, str]:
-    env = os.environ.copy()
-    for key in HOST_ENV_BLACKLIST:
-        env.pop(key, None)
-    return env
-
-
-def detect_west_root(start: Path) -> Path:
-    current = start.resolve()
-    while current != current.parent:
-        if (current / ".west").exists():
-            return current
-        current = current.parent
-    raise RuntimeError(
-        "unable to find a west workspace root; pass --west-root explicitly"
-    )
-
-
-def discover_west(explicit: str | None, west_root: Path, module_path: Path) -> list[str]:
-    candidates: list[list[str]] = []
-    if explicit:
-        candidates.append(shlex.split(explicit))
-
-    path_west = shutil.which("west")
-    if path_west:
-        candidates.append([path_west])
-
-    for candidate in (
-        west_root / ".venv/bin/west",
-        module_path / ".venv/bin/west",
-    ):
-        if candidate.exists():
-            candidates.append([str(candidate)])
-
-    candidates.append([sys.executable, "-m", "west"])
-
-    seen: set[tuple[str, ...]] = set()
-    for command in candidates:
-        key = tuple(command)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            result = subprocess.run(
-                command + ["--version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-        except OSError:
-            continue
-        if result.returncode == 0:
-            return command
-    raise RuntimeError("unable to find a working west command")
-
-
-def run_command(
-    cmd: list[str],
-    cwd: Path,
+def resolve_module_mode(
+    requested: str,
+    west_cmd: list[str],
+    west_root: Path,
+    module_path: Path,
     env: dict[str, str],
-    *,
-    timeout: int | None = None,
-    success_markers: tuple[str, ...] = (),
 ) -> str:
-    print("+ " + " ".join(shlex.quote(part) for part in cmd))
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(cwd),
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        start_new_session=True,
+    """Resolve auto/manifest/extra-module into the mode used for this build."""
+    declared = is_west_manifest_project(west_cmd, west_root, module_path, env)
+    if requested == "manifest":
+        if not declared:
+            raise RuntimeError(
+                f"{module_path} is not declared by the active west manifest at "
+                f"{west_root}; rerun from a clean west init workspace or use "
+                "--module-mode extra-module for local development checkouts"
+            )
+        return "manifest"
+    if requested == "extra-module":
+        return "extra-module"
+    if declared:
+        return "manifest"
+    print(
+        "[INFO] module is not declared in the active west manifest; "
+        "falling back to -DZEPHYR_EXTRA_MODULES for this development checkout"
     )
-    try:
-        stdout, _ = proc.communicate(timeout=timeout)
-        returncode = proc.returncode
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            stdout, _ = proc.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            stdout, _ = proc.communicate()
-        returncode = 124
+    return "extra-module"
 
-    stdout = stdout or ""
-    if stdout:
-        print(stdout, end="" if stdout.endswith("\n") else "\n")
-    if returncode == 124 and success_markers and all(marker in stdout for marker in success_markers):
-        print("[PASS] command reached timeout after printing expected success markers")
-        return stdout
-    if returncode != 0:
-        raise RuntimeError(f"command failed with exit {returncode}")
-    return stdout
+
+def west_build_command(
+    west_cmd: list[str],
+    *,
+    board: str,
+    target: Path,
+    build_dir: Path,
+    module_path: Path,
+    module_mode: str,
+) -> list[str]:
+    """Build the west command for the selected module visibility mode."""
+    cmd = [
+        *west_cmd,
+        "build",
+        "-p",
+        "always",
+        "-b",
+        board,
+        str(target),
+        "-d",
+        str(build_dir),
+    ]
+    if module_mode == "extra-module":
+        cmd.extend(["--", f"-DZEPHYR_EXTRA_MODULES={module_path}"])
+    return cmd
 
 
 def main() -> int:
@@ -189,6 +148,7 @@ def main() -> int:
     build_dir = args.build_dir if args.build_dir.is_absolute() else module_path / args.build_dir
     west_cmd = discover_west(args.west, west_root, module_path)
     env = clean_env()
+    module_mode = resolve_module_mode(args.module_mode, west_cmd, west_root, module_path, env)
 
     if not target.exists():
         raise RuntimeError(f"target path does not exist: {target}")
@@ -199,21 +159,17 @@ def main() -> int:
     print(f"  target    : {target}")
     print(f"  board     : {args.board}")
     print(f"  build dir : {build_dir}")
+    print(f"  mode      : {module_mode}")
 
     run_command(
-        [
-            *west_cmd,
-            "build",
-            "-p",
-            "always",
-            "-b",
-            args.board,
-            str(target),
-            "-d",
-            str(build_dir),
-            "--",
-            f"-DZEPHYR_EXTRA_MODULES={module_path}",
-        ],
+        west_build_command(
+            west_cmd,
+            board=args.board,
+            target=target,
+            build_dir=build_dir,
+            module_path=module_path,
+            module_mode=module_mode,
+        ),
         cwd=west_root,
         env=env,
     )

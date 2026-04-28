@@ -5,24 +5,18 @@
 from __future__ import annotations
 
 import argparse
-import os
-import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-HOST_ENV_BLACKLIST = (
-    "CFLAGS",
-    "CXXFLAGS",
-    "CPPFLAGS",
-    "LDFLAGS",
-    "CPATH",
-    "SDKROOT",
-)
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from local_workflow import clean_env, command_to_text, detect_west_root  # noqa: E402
 
 
 @dataclass
@@ -63,6 +57,25 @@ def parse_args() -> argparse.Namespace:
         help="Output root for generated validation artifacts.",
     )
     parser.add_argument(
+        "--consumer-module-mode",
+        choices=("auto", "manifest", "extra-module"),
+        default="auto",
+        help=(
+            "Module visibility mode forwarded to consumer_smoke.py. Use "
+            "'manifest' to prove west/module.yml discovery, or 'extra-module' "
+            "for local development workspaces that do not list this checkout "
+            "in the active manifest."
+        ),
+    )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help=(
+            "Run the quick preflight sequence and skip the full release gate. "
+            "Useful while iterating; not a release readiness substitute."
+        ),
+    )
+    parser.add_argument(
         "--skip-cost-smoke",
         action="store_true",
         help="Skip the explicit cost-of-assurance smoke step.",
@@ -85,25 +98,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_env() -> dict[str, str]:
-    env = os.environ.copy()
-    for key in HOST_ENV_BLACKLIST:
-        env.pop(key, None)
-    return env
-
-
-def detect_west_root(start: Path) -> Path:
-    current = start.resolve()
-    while current != current.parent:
-        if (current / ".west").exists():
-            return current
-        current = current.parent
-    return start.resolve()
-
-
 def run_step(step: Step, env: dict[str, str]) -> None:
     print(f"\n[RUN ] {step.name}")
-    print("       " + " ".join(shlex.quote(part) for part in step.cmd))
+    print("       " + command_to_text(step.cmd))
     result = subprocess.run(step.cmd, cwd=str(step.cwd), env=env, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"{step.name} failed with exit {result.returncode}")
@@ -184,6 +181,8 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
                     str(west_root),
                     "--build-dir",
                     str(output_root / "consumer_smoke"),
+                    "--module-mode",
+                    args.consumer_module_mode,
                 ],
                 module_path,
             )
@@ -207,7 +206,7 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
             )
         )
 
-    if not args.skip_release_check:
+    if not args.skip_release_check and not args.preflight_only:
         steps.append(
             Step(
                 "full release gate",
@@ -232,12 +231,14 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
 
 def main() -> int:
     args = parse_args()
-    env = build_env()
+    env = clean_env()
     steps = build_steps(args)
 
     print("PQCP product-readiness verification")
     print(f"  module: {args.module_path.resolve()}")
     print(f"  tag   : {args.tag}")
+    if args.preflight_only:
+        print("  mode  : preflight only (full release gate skipped)")
 
     for step in steps:
         run_step(step, env)
