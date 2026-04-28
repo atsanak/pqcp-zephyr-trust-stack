@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "claims": [
+    {
+      "id": "release.version_consistency",
+      "category": "release",
+      "claim": "version.h, CMakeLists.txt, CHANGELOG.md, and the optional release tag agree on the same semantic version.",
+      "required": true
+    },
+    {
+      "id": "release.tag_integrity",
+      "category": "release",
+      "claim": "When a release tag is supplied, the local annotated tag exists and peels to a concrete source commit.",
+      "required": true
+    },
+    {
+      "id": "kat.offline_provenance",
+      "category": "kat",
+      "claim": "Vendored NIST ACVP fixtures match the checked-in KAT header constants.",
+      "required": true
+    },
+    {
+      "id": "benchmark.csv_validity",
+      "category": "benchmark",
+      "claim": "The benchmark CSV has the expected schema, required rows, positive numeric fields, and bounded PQCP/baseline timing ratios.",
+      "required": true
+    },
+    {
+      "id": "benchmark.provenance_binding",
+      "category": "benchmark",
+      "claim": "The benchmark_provenance.json sidecar cryptographically binds to the benchmark CSV bytes.",
+      "required": true
+    },
+    {
+      "id": "cost_of_assurance.guardrails",
+      "category": "cost_of_assurance",
+      "claim": "Every configured cost-of-assurance guardrail metric was evaluated and passed.",
+      "required": true
+    },
+    {
+      "id": "release.local_bundle",
+      "category": "release",
+      "claim": "A local release bundle manifest exists and hashes the extracted release notes for the selected version.",
+      "required": true
+    }
+  ]
+}

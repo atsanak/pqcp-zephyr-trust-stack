@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import Counter
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -156,6 +157,14 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_COST_OF_ASSURANCE_REGRESSION_FILE,
         help="Checked-in qemu_x86_64 cost-of-assurance regression thresholds",
+    )
+    parser.add_argument(
+        "--cost-of-assurance-evidence",
+        type=Path,
+        help=(
+            "Optional JSON output path recording each configured "
+            "cost-of-assurance metric evaluation."
+        ),
     )
     parser.add_argument(
         "--run-mcu-protocol-budgets",
@@ -525,6 +534,7 @@ def evaluate_cost_of_assurance_regressions(
     primitive_rows: List[dict[str, str]],
     protocol_rows: List[dict[str, str]],
     regression_file: Path,
+    evidence_output: Optional[Path] = None,
 ) -> int:
     config_path = (
         regression_file.resolve()
@@ -541,6 +551,13 @@ def evaluate_cost_of_assurance_regressions(
     print(f"[cost] Numeric regression thresholds: {config_path}")
 
     failures: list[str] = []
+    evidence: dict[str, object] = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generator": "scripts/run_extended_checks.py",
+        "regression_file": str(config_path),
+        "comparisons": [],
+    }
 
     for item in comparisons:
         if not isinstance(item, dict):
@@ -562,18 +579,30 @@ def evaluate_cost_of_assurance_regressions(
                 shared_selectors[key] = value
         candidate_selectors.update(shared_selectors)
         baseline_selectors.update(shared_selectors)
+        comparison_evidence: dict[str, object] = {
+            "name": name,
+            "row_type": row_type,
+            "candidate_selectors": candidate_selectors,
+            "baseline_selectors": baseline_selectors,
+            "metrics": [],
+            "passed": True,
+            "failure_reason": None,
+        }
+        evidence["comparisons"].append(comparison_evidence)
 
         candidate = find_matching_row(selected_rows, candidate_selectors)
         baseline = find_matching_row(selected_rows, baseline_selectors)
         if candidate is None:
-            failures.append(
-                f"Missing candidate row for {name}: {candidate_selectors}"
-            )
+            failure = f"Missing candidate row for {name}: {candidate_selectors}"
+            failures.append(failure)
+            comparison_evidence["passed"] = False
+            comparison_evidence["failure_reason"] = failure
             continue
         if baseline is None:
-            failures.append(
-                f"Missing baseline row for {name}: {baseline_selectors}"
-            )
+            failure = f"Missing baseline row for {name}: {baseline_selectors}"
+            failures.append(failure)
+            comparison_evidence["passed"] = False
+            comparison_evidence["failure_reason"] = failure
             continue
 
         metrics = item.get("metrics", {})
@@ -592,31 +621,72 @@ def evaluate_cost_of_assurance_regressions(
                     "max_ratio and/or max_candidate"
                 )
             if metric_name not in candidate:
-                metric_key_failures.append(
+                failure = (
                     f"[cost] Comparison {name} candidate row is missing configured "
                     f"metric column '{metric_name}' (available: "
                     f"{available_metric_columns(candidate)})"
                 )
+                metric_key_failures.append(failure)
+                comparison_evidence["metrics"].append(
+                    {
+                        "metric": metric_name,
+                        "candidate_value": None,
+                        "baseline_value": None,
+                        "ratio": None,
+                        "threshold": raw_rule,
+                        "passed": False,
+                        "failure_reason": failure,
+                    }
+                )
             if "max_ratio" in raw_rule and metric_name not in baseline:
-                metric_key_failures.append(
+                failure = (
                     f"[cost] Comparison {name} baseline row is missing configured "
                     f"metric column '{metric_name}' (available: "
                     f"{available_metric_columns(baseline)})"
                 )
+                metric_key_failures.append(failure)
+                comparison_evidence["metrics"].append(
+                    {
+                        "metric": metric_name,
+                        "candidate_value": None,
+                        "baseline_value": None,
+                        "ratio": None,
+                        "threshold": raw_rule,
+                        "passed": False,
+                        "failure_reason": failure,
+                    }
+                )
         if metric_key_failures:
             failures.extend(metric_key_failures)
+            comparison_evidence["passed"] = False
+            comparison_evidence["failure_reason"] = "; ".join(metric_key_failures)
             continue
 
         print(f"[cost] Regression comparison: {name}")
         for metric_name, raw_rule in metrics.items():
+            metric_evidence: dict[str, object] = {
+                "metric": metric_name,
+                "candidate_value": None,
+                "baseline_value": None,
+                "ratio": None,
+                "threshold": raw_rule,
+                "passed": True,
+                "failure_reason": None,
+            }
+            comparison_evidence["metrics"].append(metric_evidence)
             try:
                 candidate_value = parse_numeric_metric(
                     candidate,
                     metric_name,
                     f"{name} candidate",
                 )
+                metric_evidence["candidate_value"] = candidate_value
             except RuntimeError as exc:
-                failures.append(str(exc))
+                failure = str(exc)
+                failures.append(failure)
+                metric_evidence["passed"] = False
+                metric_evidence["failure_reason"] = failure
+                comparison_evidence["passed"] = False
                 continue
 
             baseline_value: float | None = None
@@ -627,18 +697,28 @@ def evaluate_cost_of_assurance_regressions(
                         metric_name,
                         f"{name} baseline",
                     )
+                    metric_evidence["baseline_value"] = baseline_value
                 except RuntimeError as exc:
-                    failures.append(str(exc))
+                    failure = str(exc)
+                    failures.append(failure)
+                    metric_evidence["passed"] = False
+                    metric_evidence["failure_reason"] = failure
+                    comparison_evidence["passed"] = False
                     continue
                 if baseline_value <= 0.0:
-                    failures.append(
+                    failure = (
                         f"[cost] Baseline metric {metric_name} for {name} must be > 0"
                     )
+                    failures.append(failure)
+                    metric_evidence["passed"] = False
+                    metric_evidence["failure_reason"] = failure
+                    comparison_evidence["passed"] = False
                     continue
 
             status_bits: list[str] = [f"candidate={candidate_value:.2f}"]
             if baseline_value is not None:
                 ratio = candidate_value / baseline_value
+                metric_evidence["ratio"] = ratio
                 max_ratio = float(raw_rule["max_ratio"])
                 status_bits.extend(
                     [
@@ -654,6 +734,11 @@ def evaluate_cost_of_assurance_regressions(
                         f"{name} metric {metric_name}: ratio "
                         f"{ratio:.2f} > {max_ratio:.2f}"
                     )
+                    metric_evidence["passed"] = False
+                    metric_evidence["failure_reason"] = (
+                        f"ratio {ratio:.2f} > {max_ratio:.2f}"
+                    )
+                    comparison_evidence["passed"] = False
 
             if "max_candidate" in raw_rule:
                 max_candidate = float(raw_rule["max_candidate"])
@@ -668,8 +753,22 @@ def evaluate_cost_of_assurance_regressions(
                         f"{name} metric {metric_name}: candidate "
                         f"{candidate_value:.2f} > absolute limit {max_candidate:.2f}"
                     )
+                    metric_evidence["passed"] = False
+                    metric_evidence["failure_reason"] = (
+                        f"candidate {candidate_value:.2f} > absolute limit "
+                        f"{max_candidate:.2f}"
+                    )
+                    comparison_evidence["passed"] = False
 
             print(f"  - {metric_name}: " + ", ".join(status_bits))
+
+    if evidence_output is not None:
+        evidence_output.parent.mkdir(parents=True, exist_ok=True)
+        evidence_output.write_text(
+            json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"[cost] Wrote regression evidence: {evidence_output}")
 
     if failures:
         print("[cost] Regression failures detected:")
@@ -717,6 +816,7 @@ def run_cost_of_assurance_smoke(
     verbose: bool,
     output_root: Path,
     regression_file: Path,
+    evidence_output: Optional[Path] = None,
 ) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     benchmark_script = module_path / "scripts/run_benchmarks.py"
@@ -874,6 +974,7 @@ def run_cost_of_assurance_smoke(
         primitive_rows=primitives,
         protocol_rows=protocols,
         regression_file=regression_file,
+        evidence_output=evidence_output,
     )
     if regression_result != 0:
         return regression_result
@@ -1015,6 +1116,11 @@ def main() -> int:
             verbose=args.verbose,
             output_root=args.cost_of_assurance_output_root.resolve(),
             regression_file=args.cost_of_assurance_regression_file,
+            evidence_output=(
+                args.cost_of_assurance_evidence.resolve()
+                if args.cost_of_assurance_evidence is not None
+                else None
+            ),
         )
         if coa_result != 0:
             return coa_result

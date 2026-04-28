@@ -58,5 +58,33 @@ python3 scripts/release_check.py --tag v1.0.0
 python3 scripts/prepare_release_bundle.py --tag v1.0.0
 ```
 
+## Assurance Ledger
+
+`scripts/release_check.py --tag v1.0.0` now writes an Assurance Ledger under
+its output root:
+
+- `assurance_ledger.json`: machine-readable claim/evidence status
+- `assurance_ledger.md`: human-readable summary of the same claim IDs
+- `cost_of_assurance_evidence.json`: per-metric guardrail evidence consumed by
+  the ledger
+
+The ledger is intentionally local and QEMU-oriented. It links release metadata,
+offline KAT provenance, benchmark CSV validity, benchmark provenance binding,
+cost-of-assurance guardrails, and the local release bundle manifest. Any
+required claim failure makes `release_check.py` fail.
+
+To regenerate only the ledger from existing artifacts:
+
+```bash
+python3 scripts/generate_assurance_ledger.py \
+  --tag v1.0.0 \
+  --benchmark-csv benchmark_results/release_check/benchmark_results.csv \
+  --benchmark-provenance benchmark_results/release_check/benchmark_provenance.json \
+  --cost-of-assurance-evidence benchmark_results/release_check/cost_of_assurance_evidence.json \
+  --release-bundle-root benchmark_results/release_check/local_release_bundle \
+  --output-json benchmark_results/release_check/assurance_ledger.json \
+  --output-md benchmark_results/release_check/assurance_ledger.md
+```
+
 If GitHub Actions is later restored, rerun the normal release workflow and
 compare the generated release notes with `output/release/v1.0.0/release-notes-v1.0.0.md`.
