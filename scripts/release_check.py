@@ -259,6 +259,11 @@ def main() -> int:
     kat_build_dir = output_root / "ztest_acvp_kat_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
+    benchmark_provenance_path = benchmark_csv_path.with_name("benchmark_provenance.json")
+    cost_evidence_path = output_root / "cost_of_assurance_evidence.json"
+    release_bundle_root = output_root / "local_release_bundle"
+    assurance_ledger_json = output_root / "assurance_ledger.json"
+    assurance_ledger_md = output_root / "assurance_ledger.md"
     junit_output = output_root / "release_check_results.xml"
     version_check_cmd = [
         sys.executable,
@@ -270,6 +275,39 @@ def main() -> int:
     ]
     if args.tag:
         version_check_cmd.extend(["--tag", args.tag])
+    release_bundle_cmd = [
+        sys.executable,
+        str(module_path / "scripts/prepare_release_bundle.py"),
+        "--module-path",
+        str(module_path),
+        "--output-dir",
+        str(release_bundle_root),
+        "--skip-api-docs",
+    ]
+    if args.tag:
+        release_bundle_cmd.extend(["--tag", args.tag])
+    assurance_ledger_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_assurance_ledger.py"),
+        "--module-path",
+        str(module_path),
+        "--claims",
+        str(module_path / "scripts/assurance_claims.json"),
+        "--benchmark-csv",
+        str(benchmark_csv_path),
+        "--benchmark-provenance",
+        str(benchmark_provenance_path),
+        "--cost-of-assurance-evidence",
+        str(cost_evidence_path),
+        "--release-bundle-root",
+        str(release_bundle_root),
+        "--output-json",
+        str(assurance_ledger_json),
+        "--output-md",
+        str(assurance_ledger_md),
+    ]
+    if args.tag:
+        assurance_ledger_cmd.extend(["--tag", args.tag])
 
     steps = [
         Step(
@@ -330,6 +368,8 @@ def main() -> int:
                 str(module_path),
                 "--strict",
                 "--run-cost-of-assurance-smoke",
+                "--cost-of-assurance-evidence",
+                str(cost_evidence_path),
             ],
             cwd=module_path,
         ),
@@ -475,6 +515,16 @@ def main() -> int:
                 "--output",
                 str(profile_output_dir),
             ],
+            cwd=module_path,
+        ),
+        Step(
+            name="local release bundle",
+            cmd=release_bundle_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="assurance ledger",
+            cmd=assurance_ledger_cmd,
             cwd=module_path,
         ),
     ]

@@ -78,6 +78,20 @@ On non-Linux hosts, `scripts/run_sanitizer_checks.py` may skip native
 ASan/UBSan execution by design. Do not weaken the release gate for that; use a
 Linux host for strict sanitizer confirmation when required.
 
+The release gate also produces an Assurance Ledger under the selected
+`--output-root`:
+
+```text
+assurance_ledger.json
+assurance_ledger.md
+cost_of_assurance_evidence.json
+```
+
+Inspect `assurance_ledger.md` before publishing or sharing a local bundle. It
+must show no failing required claims. The JSON form is intended for scripts and
+paper/release artifact review because it binds claims to concrete validators,
+commands, artifact paths, and hashes.
+
 ## 4. Run Focused Consumer And Harness Smokes
 
 ```bash

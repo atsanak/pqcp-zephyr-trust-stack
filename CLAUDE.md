@@ -537,6 +537,55 @@ Remaining release-publication blocker:
 - GitHub Release page readiness is still external: restore GitHub Actions
   billing/minutes and rerun the tag-triggered release workflow for `v1.0.0`.
 
+## Patch set 7 — local assurance ledger novelty
+
+Goal:
+
+- Add a QEMU/local-only Assurance Ledger that turns release claims into
+  machine-readable claim/evidence records instead of relying on prose alone.
+
+Implemented scope:
+
+- `scripts/run_extended_checks.py` can now write
+  `cost_of_assurance_evidence.json` for every configured regression metric,
+  including candidate values, baseline values, ratios, absolute thresholds, and
+  per-metric pass/fail status.
+- `scripts/generate_assurance_ledger.py` generates both JSON and Markdown
+  ledgers from existing release artifacts.
+- `scripts/assurance_claims.json` defines the first required claim set:
+  version consistency, tag integrity, offline KAT provenance, benchmark CSV
+  validity, benchmark provenance binding, cost-of-assurance guardrails, and the
+  local release bundle manifest.
+- `scripts/test_assurance_ledger.py` covers synthetic pass/fail cases for
+  missing provenance, corrupted CSV hashes, missing guardrail evidence, tagless
+  runs, and Markdown/JSON claim-ID consistency.
+- `scripts/release_check.py` now treats the Assurance Ledger as a blocking final
+  gate after existing benchmark, KAT, resource-budget, and local-bundle checks.
+- `docs/release.md` and `docs/maintainer-release-checklist.md` explain where to
+  find and how to inspect the generated ledger.
+- Calibrated the ML-KEM-768 + ML-DSA-65 protocol provider-overhead absolute
+  guardrail to 76 us after a local QEMU run measured a 43 us candidate value;
+  the ratio guardrail remains intact.
+
+Validation performed during implementation:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_assurance_ledger.py`
+- `python3 scripts/test_local_release_workflows.py`
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/run_extended_checks.py --strict --run-cost-of-assurance-smoke --cost-of-assurance-evidence /tmp/pqcp-coa-evidence.json`
+  - produced 6 comparison evidence records and 44 metric evaluations.
+- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-assurance`
+  - produced `assurance_ledger.json`, `assurance_ledger.md`, and
+    `cost_of_assurance_evidence.json`;
+  - ledger summary: pass=7, fail=0, not_applicable=0.
+
+Remaining release-publication blocker:
+
+- Still external: GitHub Release page publication requires restored GitHub
+  Actions billing/minutes. The Assurance Ledger is local and does not depend on
+  Actions.
+
 ## Completed tasks (verified at 771ce93)
 
 - [x] T1: Benchmark CSV hardened — avg_cycles + avg_us fields, parse_logs.py updated
