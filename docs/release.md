@@ -73,7 +73,12 @@ offline KAT provenance, benchmark CSV validity, benchmark provenance binding,
 cost-of-assurance guardrails, and the local release bundle manifest. Any
 required claim failure makes `release_check.py` fail.
 
-To regenerate only the ledger from existing artifacts:
+`release_check.py` also verifies the generated ledger before it reports PASS.
+That replay check validates the JSON schema, claim coverage, Markdown/JSON
+claim parity, artifact existence, and recorded SHA-256 values without rerunning
+the expensive Zephyr builds.
+
+To regenerate and verify only the ledger from existing artifacts:
 
 ```bash
 python3 scripts/generate_assurance_ledger.py \
@@ -84,6 +89,10 @@ python3 scripts/generate_assurance_ledger.py \
   --release-bundle-root benchmark_results/release_check/local_release_bundle \
   --output-json benchmark_results/release_check/assurance_ledger.json \
   --output-md benchmark_results/release_check/assurance_ledger.md
+
+python3 scripts/verify_assurance_ledger.py \
+  benchmark_results/release_check/assurance_ledger.json \
+  --markdown benchmark_results/release_check/assurance_ledger.md
 ```
 
 If GitHub Actions is later restored, rerun the normal release workflow and

@@ -13,6 +13,7 @@ from argparse import Namespace
 from pathlib import Path
 
 import generate_assurance_ledger as ledger
+import verify_assurance_ledger as ledger_verify
 from export_results import CSV_FIELDNAMES, EXPECTED_PRIMITIVE_ROWS
 
 
@@ -175,6 +176,13 @@ class AssuranceLedgerTests(unittest.TestCase):
             output_md=root / "assurance_ledger.md",
         )
 
+    def write_ledger_pair(self, root: Path, result: dict[str, object]) -> tuple[Path, Path]:
+        json_path = root / "assurance_ledger.json"
+        md_path = root / "assurance_ledger.md"
+        json_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        md_path.write_text(ledger.render_markdown(result), encoding="utf-8")
+        return json_path, md_path
+
     def test_passing_ledger_from_synthetic_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -295,6 +303,120 @@ class AssuranceLedgerTests(unittest.TestCase):
             markdown = ledger.render_markdown(result)
             for claim in result["claims"]:
                 self.assertIn(claim["id"], markdown)
+
+    def test_verify_generated_ledger_pair_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(
+                root,
+                [
+                    "release.version_consistency",
+                    "benchmark.csv_validity",
+                    "benchmark.provenance_binding",
+                    "cost_of_assurance.guardrails",
+                    "release.local_bundle",
+                ],
+            )
+            result = ledger.build_ledger(
+                self.make_args(
+                    root,
+                    claims,
+                    csv_path,
+                    self.make_provenance(csv_path),
+                    self.make_cost_evidence(root),
+                    self.make_release_bundle(root),
+                    tag="v1.2.3",
+                )
+            )
+            json_path, md_path = self.write_ledger_pair(root, result)
+            failures = ledger_verify.verify_ledger(
+                json_path,
+                markdown=md_path,
+                claims_path=claims,
+                module_path=root,
+            )
+            self.assertEqual(failures, [])
+
+    def test_verify_ledger_detects_artifact_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            provenance = self.make_provenance(csv_path)
+            claims = self.make_claims(root, ["benchmark.provenance_binding"])
+            result = ledger.build_ledger(
+                self.make_args(
+                    root,
+                    claims,
+                    csv_path,
+                    provenance,
+                    self.make_cost_evidence(root),
+                    self.make_release_bundle(root),
+                )
+            )
+            json_path, md_path = self.write_ledger_pair(root, result)
+            provenance.write_text("tampered\n", encoding="utf-8")
+            failures = ledger_verify.verify_ledger(
+                json_path,
+                markdown=md_path,
+                claims_path=claims,
+                module_path=root,
+            )
+            self.assertTrue(any("sha256 mismatch" in failure for failure in failures))
+
+    def test_verify_ledger_detects_markdown_claim_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(root, ["benchmark.csv_validity"])
+            result = ledger.build_ledger(
+                self.make_args(
+                    root,
+                    claims,
+                    csv_path,
+                    self.make_provenance(csv_path),
+                    self.make_cost_evidence(root),
+                    self.make_release_bundle(root),
+                )
+            )
+            json_path, md_path = self.write_ledger_pair(root, result)
+            md_path.write_text("# stale ledger\n", encoding="utf-8")
+            failures = ledger_verify.verify_ledger(
+                json_path,
+                markdown=md_path,
+                claims_path=claims,
+                module_path=root,
+            )
+            self.assertTrue(any("markdown is missing claim id" in failure for failure in failures))
+
+    def test_verify_ledger_detects_summary_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(root, ["benchmark.csv_validity"])
+            result = ledger.build_ledger(
+                self.make_args(
+                    root,
+                    claims,
+                    csv_path,
+                    self.make_provenance(csv_path),
+                    self.make_cost_evidence(root),
+                    self.make_release_bundle(root),
+                )
+            )
+            result["summary"]["pass"] = 0
+            json_path, md_path = self.write_ledger_pair(root, result)
+            failures = ledger_verify.verify_ledger(
+                json_path,
+                markdown=md_path,
+                claims_path=claims,
+                module_path=root,
+            )
+            self.assertTrue(any("summary.pass" in failure for failure in failures))
 
 
 if __name__ == "__main__":
