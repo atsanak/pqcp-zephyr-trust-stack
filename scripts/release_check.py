@@ -319,6 +319,17 @@ def main() -> int:
         "--module-path",
         str(module_path),
     ]
+    evidence_pack_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_release_evidence_pack.py"),
+        str(output_root),
+        "--module-path",
+        str(module_path),
+        "--claims",
+        str(module_path / "scripts/assurance_claims.json"),
+    ]
+    if args.tag:
+        evidence_pack_verify_cmd.extend(["--tag", args.tag])
 
     steps = [
         Step(
@@ -541,6 +552,11 @@ def main() -> int:
         Step(
             name="assurance ledger verification",
             cmd=assurance_ledger_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="release evidence pack verification",
+            cmd=evidence_pack_verify_cmd,
             cwd=module_path,
         ),
     ]

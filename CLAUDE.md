@@ -617,6 +617,44 @@ Validation performed during implementation:
   - ledger summary: pass=7, fail=0, not_applicable=0;
   - final verifier step printed `[PASS] assurance ledger verification`.
 
+## Patch set 9 — release evidence pack verification
+
+Goal:
+
+- Verify the complete `release_check.py` output root as a coherent evidence
+  package, not just as individually generated artifacts.
+
+Implemented scope:
+
+- `scripts/verify_release_evidence_pack.py` validates an existing release-check
+  output directory without rerunning Zephyr builds or QEMU.
+- The pack verifier checks the assurance ledger, benchmark CSV/provenance pair,
+  benchmark summary, cost-of-assurance evidence, MCU protocol footprint CSV,
+  local release manifest, release notes hash, and ledger/bundle commit metadata
+  alignment.
+- `scripts/test_release_evidence_pack.py` covers valid synthetic packs, missing
+  MCU footprint evidence, tampered release notes, and manifest/ledger commit
+  mismatches.
+- `scripts/release_check.py` now runs the evidence pack verifier as a blocking
+  final step after assurance ledger verification.
+- `docs/release.md` and `docs/maintainer-release-checklist.md` document the
+  replay command for existing release output roots.
+
+Validation performed during implementation:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_assurance_ledger.py`
+- `python3 scripts/test_release_evidence_pack.py`
+- `python3 scripts/test_local_release_workflows.py`
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/verify_release_evidence_pack.py /tmp/pqcp-release-check-ledger-verify --tag v1.0.0`
+- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-pack-verify`
+  - produced fresh benchmark, cost-of-assurance, resource-budget, local bundle,
+    assurance ledger, and evidence-pack artifacts;
+  - final steps printed `[PASS] assurance ledger verification` and
+    `[PASS] release evidence pack verification`;
+  - release validation sequence completed successfully.
+
 ## Completed tasks (verified at 771ce93)
 
 - [x] T1: Benchmark CSV hardened — avg_cycles + avg_us fields, parse_logs.py updated
