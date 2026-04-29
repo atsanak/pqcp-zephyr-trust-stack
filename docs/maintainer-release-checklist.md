@@ -103,6 +103,18 @@ python3 scripts/verify_assurance_ledger.py \
 This catches stale Markdown summaries, missing claim IDs, missing artifacts, and
 SHA-256 drift in evidence artifacts.
 
+To replay-check the full release output root without rerunning Zephyr builds:
+
+```bash
+python3 scripts/verify_release_evidence_pack.py \
+  benchmark_results/release_check \
+  --tag v1.0.0
+```
+
+This validates the ledger, benchmark CSV/provenance, benchmark summary,
+cost-of-assurance evidence, MCU footprint CSV, local release manifest, release
+notes hash, and ledger/bundle commit metadata alignment.
+
 ## 4. Run Focused Consumer And Harness Smokes
 
 ```bash

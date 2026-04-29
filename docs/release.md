@@ -78,6 +78,12 @@ That replay check validates the JSON schema, claim coverage, Markdown/JSON
 claim parity, artifact existence, and recorded SHA-256 values without rerunning
 the expensive Zephyr builds.
 
+After the ledger replay check, `release_check.py` verifies the whole release
+evidence pack as a coherent directory. That pack-level check validates the
+benchmark CSV/provenance pair, benchmark summary, cost-of-assurance evidence,
+MCU footprint CSV, local release manifest, release notes hash, and ledger/bundle
+commit metadata alignment.
+
 To regenerate and verify only the ledger from existing artifacts:
 
 ```bash
@@ -93,6 +99,14 @@ python3 scripts/generate_assurance_ledger.py \
 python3 scripts/verify_assurance_ledger.py \
   benchmark_results/release_check/assurance_ledger.json \
   --markdown benchmark_results/release_check/assurance_ledger.md
+```
+
+To verify a complete existing release-check output directory:
+
+```bash
+python3 scripts/verify_release_evidence_pack.py \
+  benchmark_results/release_check \
+  --tag v1.0.0
 ```
 
 If GitHub Actions is later restored, rerun the normal release workflow and
