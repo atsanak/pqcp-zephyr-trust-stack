@@ -679,6 +679,48 @@ Validation performed during implementation:
 
 ---
 
+## Patch set 8 - transcript-bound assurance evidence (2026-04-29)
+
+Base HEAD: `a81785e`
+
+Implemented:
+
+- `scripts/release_check.py` now captures stdout/stderr transcripts for every
+  release-gate step under the selected output root.
+- Evidence-producing steps are summarized in
+  `transcripts/evidence_transcript_manifest.json` with SHA-256 hashes, sizes,
+  commands, working directory, return code, and durations.
+- Raw cost-of-assurance QEMU stdout logs from `runs/*/run.log` are also hashed
+  into the transcript manifest.
+- `scripts/generate_assurance_ledger.py` now requires a transcript manifest and
+  blocks the ledger if any required ACVP/KAT/benchmark/resource transcript or
+  raw QEMU stdout log is missing, empty, failed, size-drifted, or hash-drifted.
+- `scripts/assurance_claims.json` adds the required
+  `release.transcript_binding` claim.
+- `scripts/test_assurance_ledger.py` covers passing transcript evidence,
+  missing required transcript entries, and tampered transcript hashes.
+- `scripts/test_release_evidence_pack.py` now builds synthetic evidence packs
+  with transcript manifests so the replay verifier exercises the new claim.
+- `docs/release.md` and `docs/maintainer-release-checklist.md` document the
+  generated transcript manifest and how it strengthens local release evidence.
+
+Validation performed during implementation:
+
+- `git diff --check`
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_assurance_ledger.py`
+- `python3 scripts/test_release_evidence_pack.py`
+- `python3 scripts/test_local_release_workflows.py`
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-transcripts`
+  - produced `transcripts/evidence_transcript_manifest.json`;
+  - captured six required execution transcripts plus raw QEMU stdout log
+    hashes;
+  - ledger summary printed `pass=8 fail=0 not_applicable=0`;
+  - final release evidence pack verification passed.
+
+---
+
 ## Verification requirements
 
 Before claiming a task is complete, verify it with the repo itself:

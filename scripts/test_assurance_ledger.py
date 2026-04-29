@@ -150,6 +150,66 @@ class AssuranceLedgerTests(unittest.TestCase):
         )
         return root / "bundle"
 
+    def make_transcript_manifest(
+        self,
+        root: Path,
+        *,
+        required_steps: list[str] | None = None,
+        omit_step: str | None = None,
+    ) -> Path:
+        manifest = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        steps = required_steps or [
+            "ACVP serial ztest run",
+            "ACVP KAT ztest run",
+            "benchmark_csv",
+        ]
+        transcripts: list[dict[str, object]] = []
+        for index, step in enumerate(steps, start=1):
+            if step == omit_step:
+                continue
+            path = manifest.parent / f"{index:02d}-{step.lower().replace(' ', '-')}.log"
+            path.write_text(f"{step}\nPROJECT EXECUTION SUCCESSFUL\n", encoding="utf-8")
+            transcripts.append(
+                {
+                    "step": step,
+                    "command": ["true"],
+                    "command_text": "true",
+                    "cwd": str(root),
+                    "returncode": 0,
+                    "duration_seconds": 0.1,
+                    "transcript_path": path.name,
+                    "sha256": sha256(path),
+                    "size_bytes": path.stat().st_size,
+                }
+            )
+        qemu_log = root / "cost_of_assurance_smoke" / "runs" / "qemu-smoke" / "run.log"
+        qemu_log.parent.mkdir(parents=True, exist_ok=True)
+        qemu_log.write_text("PQCP_METRIC layer=primitive operation=KEYGEN cycles=123 us=4\n", encoding="utf-8")
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": steps,
+                    "transcripts": transcripts,
+                    "qemu_stdout_transcripts": [
+                        {
+                            "label": "qemu stdout: qemu-smoke",
+                            "transcript_path": "../cost_of_assurance_smoke/runs/qemu-smoke/run.log",
+                            "sha256": sha256(qemu_log),
+                            "size_bytes": qemu_log.stat().st_size,
+                        }
+                    ],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest
+
     def make_args(
         self,
         root: Path,
@@ -170,6 +230,7 @@ class AssuranceLedgerTests(unittest.TestCase):
             benchmark_provenance=provenance,
             cost_of_assurance_evidence=cost_evidence,
             release_bundle_root=bundle,
+            transcript_manifest=self.make_transcript_manifest(root),
             kat_header=root / "missing_kat_vectors.h",
             kat_vectors_dir=root / "missing_nist_vectors",
             output_json=root / "assurance_ledger.json",
@@ -262,6 +323,89 @@ class AssuranceLedgerTests(unittest.TestCase):
                 )
             )
             self.assertEqual(result["claims"][0]["status"], "fail")
+
+    def test_transcript_binding_passes_with_hashed_required_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(root, ["release.transcript_binding"])
+            result = ledger.build_ledger(
+                self.make_args(
+                    root,
+                    claims,
+                    csv_path,
+                    self.make_provenance(csv_path),
+                    self.make_cost_evidence(root),
+                    self.make_release_bundle(root),
+                )
+            )
+            self.assertEqual(result["claims"][0]["status"], "pass")
+
+    def test_transcript_binding_fails_when_required_step_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(root, ["release.transcript_binding"])
+            args = self.make_args(
+                root,
+                claims,
+                csv_path,
+                self.make_provenance(csv_path),
+                self.make_cost_evidence(root),
+                self.make_release_bundle(root),
+            )
+            args.transcript_manifest = self.make_transcript_manifest(
+                root,
+                required_steps=["ACVP serial ztest run", "ACVP KAT ztest run"],
+                omit_step="ACVP KAT ztest run",
+            )
+            result = ledger.build_ledger(args)
+            self.assertEqual(result["claims"][0]["status"], "fail")
+            self.assertIn("required transcript step missing", result["claims"][0]["failure_reason"])
+
+    def test_transcript_binding_fails_on_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(root, ["release.transcript_binding"])
+            args = self.make_args(
+                root,
+                claims,
+                csv_path,
+                self.make_provenance(csv_path),
+                self.make_cost_evidence(root),
+                self.make_release_bundle(root),
+            )
+            manifest = args.transcript_manifest
+            first_log = next(manifest.parent.glob("*.log"))
+            first_log.write_text("tampered\n", encoding="utf-8")
+            result = ledger.build_ledger(args)
+            self.assertEqual(result["claims"][0]["status"], "fail")
+            self.assertIn("transcript sha256 mismatch", result["claims"][0]["failure_reason"])
+
+    def test_transcript_binding_fails_on_qemu_stdout_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            csv_path = self.make_benchmark_csv(root)
+            claims = self.make_claims(root, ["release.transcript_binding"])
+            args = self.make_args(
+                root,
+                claims,
+                csv_path,
+                self.make_provenance(csv_path),
+                self.make_cost_evidence(root),
+                self.make_release_bundle(root),
+            )
+            qemu_log = root / "cost_of_assurance_smoke" / "runs" / "qemu-smoke" / "run.log"
+            qemu_log.write_text("tampered qemu stdout\n", encoding="utf-8")
+            result = ledger.build_ledger(args)
+            self.assertEqual(result["claims"][0]["status"], "fail")
+            self.assertIn("qemu stdout", result["claims"][0]["failure_reason"])
+            self.assertIn("sha256 mismatch", result["claims"][0]["failure_reason"])
 
     def test_tag_claim_is_not_applicable_without_tag(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

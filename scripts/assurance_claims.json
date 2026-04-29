@@ -42,6 +42,12 @@
       "category": "release",
       "claim": "A local release bundle manifest exists and hashes the extracted release notes for the selected version.",
       "required": true
+    },
+    {
+      "id": "release.transcript_binding",
+      "category": "release",
+      "claim": "Release evidence claims are bound to captured release-check stdout transcripts with recorded SHA-256 hashes.",
+      "required": true
     }
   ]
 }

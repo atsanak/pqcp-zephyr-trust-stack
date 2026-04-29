@@ -85,12 +85,14 @@ The release gate also produces an Assurance Ledger under the selected
 assurance_ledger.json
 assurance_ledger.md
 cost_of_assurance_evidence.json
+transcripts/evidence_transcript_manifest.json
 ```
 
 Inspect `assurance_ledger.md` before publishing or sharing a local bundle. It
 must show no failing required claims. The JSON form is intended for scripts and
 paper/release artifact review because it binds claims to concrete validators,
-commands, artifact paths, and hashes.
+commands, artifact paths, release-check transcript files, raw QEMU stdout
+logs, and hashes.
 
 To replay-check an already generated ledger without rerunning QEMU builds:
 
@@ -100,8 +102,9 @@ python3 scripts/verify_assurance_ledger.py \
   --markdown benchmark_results/release_check/assurance_ledger.md
 ```
 
-This catches stale Markdown summaries, missing claim IDs, missing artifacts, and
-SHA-256 drift in evidence artifacts.
+This catches stale Markdown summaries, missing claim IDs, missing artifacts,
+missing release-check transcripts, missing raw QEMU stdout logs, and SHA-256
+drift in evidence artifacts.
 
 To replay-check the full release output root without rerunning Zephyr builds:
 
@@ -113,7 +116,7 @@ python3 scripts/verify_release_evidence_pack.py \
 
 This validates the ledger, benchmark CSV/provenance, benchmark summary,
 cost-of-assurance evidence, MCU footprint CSV, local release manifest, release
-notes hash, and ledger/bundle commit metadata alignment.
+notes hash, transcript hashes, and ledger/bundle commit metadata alignment.
 
 ## 4. Run Focused Consumer And Harness Smokes
 
