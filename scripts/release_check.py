@@ -7,6 +7,8 @@ Run the project release validation sequence with clear per-step PASS/FAIL output
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shlex
@@ -16,6 +18,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 from xml.etree import ElementTree as ET
@@ -31,6 +34,15 @@ HOST_ENV_BLACKLIST = (
 
 XML_INVALID_CHARS_RE = re.compile(
     "[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD]"
+)
+
+REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
+    "Extended Checks (strict cost-of-assurance smoke)",
+    "ACVP serial ztest run",
+    "ACVP KAT ztest run",
+    "benchmark_csv",
+    "benchmark_csv_validate",
+    "resource_budgets",
 )
 
 
@@ -137,6 +149,91 @@ def discover_tool(name: str) -> str:
 
 def sanitize_junit_text(text: str) -> str:
     return XML_INVALID_CHARS_RE.sub("", text)
+
+
+def slugify_step_name(name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", name.strip().lower()).strip("-")
+    return slug or "step"
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def command_to_text(cmd: list[str]) -> str:
+    return " ".join(shlex.quote(part) for part in cmd)
+
+
+def write_step_transcript(
+    *,
+    index: int,
+    step: Step,
+    result: StepResult,
+    transcript_dir: Path,
+) -> dict[str, object]:
+    transcript_dir.mkdir(parents=True, exist_ok=True)
+    path = transcript_dir / f"{index:02d}-{slugify_step_name(step.name)}.log"
+    body = [
+        f"step: {step.name}",
+        f"returncode: {result.returncode}",
+        f"duration_seconds: {result.duration_seconds:.3f}",
+        f"cwd: {step.cwd}",
+        f"command: {command_to_text(step.cmd)}",
+        "",
+        result.output,
+    ]
+    path.write_text("\n".join(body), encoding="utf-8")
+    return {
+        "step": step.name,
+        "command": step.cmd,
+        "command_text": command_to_text(step.cmd),
+        "cwd": str(step.cwd),
+        "returncode": result.returncode,
+        "duration_seconds": round(result.duration_seconds, 3),
+        "transcript_path": path.name,
+        "sha256": sha256_file(path),
+        "size_bytes": path.stat().st_size,
+    }
+
+
+def write_evidence_transcript_manifest(
+    *,
+    entries: list[dict[str, object]],
+    transcript_dir: Path,
+    qemu_stdout_roots: list[Path],
+    output_path: Path,
+) -> None:
+    transcript_dir.mkdir(parents=True, exist_ok=True)
+    required = set(REQUIRED_EVIDENCE_TRANSCRIPT_STEPS)
+    selected = [entry for entry in entries if entry.get("step") in required]
+    qemu_stdout_transcripts = []
+    for root in qemu_stdout_roots:
+        if not root.exists():
+            continue
+        for log_path in sorted(root.glob("runs/*/run.log")):
+            if not log_path.is_file():
+                continue
+            qemu_stdout_transcripts.append(
+                {
+                    "label": f"qemu stdout: {log_path.parent.name}",
+                    "transcript_path": os.path.relpath(log_path, transcript_dir),
+                    "sha256": sha256_file(log_path),
+                    "size_bytes": log_path.stat().st_size,
+                }
+            )
+    manifest = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generator": "scripts/release_check.py",
+        "required_steps": list(REQUIRED_EVIDENCE_TRANSCRIPT_STEPS),
+        "transcripts": selected,
+        "qemu_stdout_transcripts": qemu_stdout_transcripts,
+    }
+    output_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def write_junit_report(results: List[StepResult], output_path: Path) -> None:
@@ -261,9 +358,12 @@ def main() -> int:
     benchmark_csv_path = output_root / "benchmark_results.csv"
     benchmark_provenance_path = benchmark_csv_path.with_name("benchmark_provenance.json")
     cost_evidence_path = output_root / "cost_of_assurance_evidence.json"
+    cost_smoke_output_root = output_root / "cost_of_assurance_smoke"
     release_bundle_root = output_root / "local_release_bundle"
     assurance_ledger_json = output_root / "assurance_ledger.json"
     assurance_ledger_md = output_root / "assurance_ledger.md"
+    transcript_dir = output_root / "transcripts"
+    evidence_transcript_manifest = transcript_dir / "evidence_transcript_manifest.json"
     junit_output = output_root / "release_check_results.xml"
     version_check_cmd = [
         sys.executable,
@@ -301,6 +401,8 @@ def main() -> int:
         str(cost_evidence_path),
         "--release-bundle-root",
         str(release_bundle_root),
+        "--transcript-manifest",
+        str(evidence_transcript_manifest),
         "--output-json",
         str(assurance_ledger_json),
         "--output-md",
@@ -390,6 +492,8 @@ def main() -> int:
                 str(module_path),
                 "--strict",
                 "--run-cost-of-assurance-smoke",
+                "--cost-of-assurance-output-root",
+                str(cost_smoke_output_root),
                 "--cost-of-assurance-evidence",
                 str(cost_evidence_path),
             ],
@@ -568,9 +672,25 @@ def main() -> int:
     print(f"  output    : {output_root}")
 
     results: List[StepResult] = []
-    for step in steps:
+    transcript_entries: list[dict[str, object]] = []
+    for index, step in enumerate(steps, start=1):
+        if step.name == "assurance ledger":
+            write_evidence_transcript_manifest(
+                entries=transcript_entries,
+                transcript_dir=transcript_dir,
+                qemu_stdout_roots=[cost_smoke_output_root],
+                output_path=evidence_transcript_manifest,
+            )
         result = run_step(step, env, args.verbose)
         results.append(result)
+        transcript_entries.append(
+            write_step_transcript(
+                index=index,
+                step=step,
+                result=result,
+                transcript_dir=transcript_dir,
+            )
+        )
         write_junit_report(results, junit_output)
         if result.returncode != 0:
             print(f"[INFO] Wrote JUnit report to {junit_output}")

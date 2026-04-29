@@ -45,6 +45,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             "benchmark.provenance_binding",
             "cost_of_assurance.guardrails",
             "release.local_bundle",
+            "release.transcript_binding",
         }
         path = root / "claims.json"
         path.write_text(
@@ -182,6 +183,54 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             )
         return path
 
+    def make_transcript_manifest(self, output_root: Path) -> Path:
+        manifest = output_root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest.parent.mkdir(parents=True)
+        steps = ["ACVP serial ztest run", "ACVP KAT ztest run", "benchmark_csv"]
+        transcripts: list[dict[str, object]] = []
+        for index, step in enumerate(steps, start=1):
+            path = manifest.parent / f"{index:02d}-{step.lower().replace(' ', '-')}.log"
+            path.write_text(f"{step}\nPROJECT EXECUTION SUCCESSFUL\n", encoding="utf-8")
+            transcripts.append(
+                {
+                    "step": step,
+                    "command": ["true"],
+                    "command_text": "true",
+                    "cwd": str(output_root),
+                    "returncode": 0,
+                    "duration_seconds": 0.1,
+                    "transcript_path": path.name,
+                    "sha256": sha256(path),
+                    "size_bytes": path.stat().st_size,
+                }
+            )
+        qemu_log = output_root / "cost_of_assurance_smoke" / "runs" / "qemu-smoke" / "run.log"
+        qemu_log.parent.mkdir(parents=True)
+        qemu_log.write_text("PQCP_METRIC layer=protocol operation=HANDSHAKE cycles=456 us=7\n", encoding="utf-8")
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": steps,
+                    "transcripts": transcripts,
+                    "qemu_stdout_transcripts": [
+                        {
+                            "label": "qemu stdout: qemu-smoke",
+                            "transcript_path": "../cost_of_assurance_smoke/runs/qemu-smoke/run.log",
+                            "sha256": sha256(qemu_log),
+                            "size_bytes": qemu_log.stat().st_size,
+                        }
+                    ],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest
+
     def make_pack(self, root: Path) -> tuple[Path, Path, Path]:
         module = root / "module"
         output = root / "release-output"
@@ -193,6 +242,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
         provenance = self.make_provenance(csv_path)
         cost = self.make_cost_evidence(output)
         bundle = self.make_release_bundle(output)
+        transcript_manifest = self.make_transcript_manifest(output)
         self.make_mcu_footprint(output)
         (output / "benchmark_summary.md").write_text("| summary |\n", encoding="utf-8")
 
@@ -205,6 +255,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             benchmark_provenance=provenance,
             cost_of_assurance_evidence=cost,
             release_bundle_root=bundle,
+            transcript_manifest=transcript_manifest,
             kat_header=module / "missing_kat_vectors.h",
             kat_vectors_dir=module / "missing_nist_vectors",
             output_json=output / "assurance_ledger.json",

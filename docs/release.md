@@ -67,11 +67,15 @@ its output root:
 - `assurance_ledger.md`: human-readable summary of the same claim IDs
 - `cost_of_assurance_evidence.json`: per-metric guardrail evidence consumed by
   the ledger
+- `transcripts/evidence_transcript_manifest.json`: SHA-256 binding for
+  release-check stdout transcripts from ACVP, KAT, benchmark, and resource
+  evidence steps, plus raw QEMU stdout logs from cost-of-assurance runs
 
 The ledger is intentionally local and QEMU-oriented. It links release metadata,
 offline KAT provenance, benchmark CSV validity, benchmark provenance binding,
-cost-of-assurance guardrails, and the local release bundle manifest. Any
-required claim failure makes `release_check.py` fail.
+cost-of-assurance guardrails, release-check transcript hashes, raw QEMU stdout
+hashes, and the local release bundle manifest. Any required claim failure makes
+`release_check.py` fail.
 
 `release_check.py` also verifies the generated ledger before it reports PASS.
 That replay check validates the JSON schema, claim coverage, Markdown/JSON
@@ -81,8 +85,8 @@ the expensive Zephyr builds.
 After the ledger replay check, `release_check.py` verifies the whole release
 evidence pack as a coherent directory. That pack-level check validates the
 benchmark CSV/provenance pair, benchmark summary, cost-of-assurance evidence,
-MCU footprint CSV, local release manifest, release notes hash, and ledger/bundle
-commit metadata alignment.
+MCU footprint CSV, local release manifest, release notes hash, transcript
+hashes, and ledger/bundle commit metadata alignment.
 
 To regenerate and verify only the ledger from existing artifacts:
 
@@ -93,6 +97,7 @@ python3 scripts/generate_assurance_ledger.py \
   --benchmark-provenance benchmark_results/release_check/benchmark_provenance.json \
   --cost-of-assurance-evidence benchmark_results/release_check/cost_of_assurance_evidence.json \
   --release-bundle-root benchmark_results/release_check/local_release_bundle \
+  --transcript-manifest benchmark_results/release_check/transcripts/evidence_transcript_manifest.json \
   --output-json benchmark_results/release_check/assurance_ledger.json \
   --output-md benchmark_results/release_check/assurance_ledger.md
 

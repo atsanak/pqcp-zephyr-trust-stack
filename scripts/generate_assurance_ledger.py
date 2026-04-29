@@ -37,6 +37,14 @@ from verify_kat_provenance import (  # noqa: E402
 
 LEDGER_SCHEMA_VERSION = 1
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
+REQUIRED_TRANSCRIPT_STEPS = (
+    "Extended Checks (strict cost-of-assurance smoke)",
+    "ACVP serial ztest run",
+    "ACVP KAT ztest run",
+    "benchmark_csv",
+    "benchmark_csv_validate",
+    "resource_budgets",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark-provenance", type=Path, required=True)
     parser.add_argument("--cost-of-assurance-evidence", type=Path, required=True)
     parser.add_argument("--release-bundle-root", type=Path, required=True)
+    parser.add_argument("--transcript-manifest", type=Path, required=True)
     parser.add_argument("--kat-header", type=Path, default=DEFAULT_KAT_HEADER)
     parser.add_argument("--kat-vectors-dir", type=Path, default=DEFAULT_VECTORS_DIR)
     parser.add_argument("--output-json", type=Path, required=True)
@@ -590,12 +599,159 @@ def evaluate_local_bundle(
     )
 
 
+def resolve_transcript_path(manifest_path: Path, raw_path: object) -> Path | None:
+    if not isinstance(raw_path, str) or not raw_path:
+        return None
+    candidate = Path(raw_path)
+    if candidate.is_absolute():
+        return candidate
+    return (manifest_path.parent / candidate).resolve()
+
+
+def evaluate_transcript_binding(
+    spec: dict[str, Any],
+    *,
+    manifest_path: Path,
+) -> dict[str, object]:
+    artifacts = [artifact(manifest_path, label="release-check transcript manifest")]
+    validators = ["scripts/release_check.py transcript capture"]
+    commands = ["python3 scripts/release_check.py --tag <tag> --output-root <output-root>"]
+    if not manifest_path.exists():
+        return fail_claim(
+            spec,
+            reason=f"transcript manifest not found: {manifest_path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return fail_claim(
+            spec,
+            reason=f"invalid transcript manifest JSON: {exc}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    transcripts = manifest.get("transcripts")
+    qemu_stdout_transcripts = manifest.get("qemu_stdout_transcripts")
+    required_steps = manifest.get("required_steps", list(REQUIRED_TRANSCRIPT_STEPS))
+    failures: list[str] = []
+    transcript_artifacts: list[dict[str, object]] = []
+    if manifest.get("schema_version") != 1:
+        failures.append(f"unsupported schema_version={manifest.get('schema_version')!r}")
+    if not isinstance(required_steps, list) or not all(isinstance(item, str) for item in required_steps):
+        failures.append("required_steps must be a list of strings")
+        required_steps = list(REQUIRED_TRANSCRIPT_STEPS)
+    if not isinstance(transcripts, list) or not transcripts:
+        failures.append("transcripts must be a non-empty list")
+        transcripts = []
+    if not isinstance(qemu_stdout_transcripts, list) or not qemu_stdout_transcripts:
+        failures.append("qemu_stdout_transcripts must be a non-empty list")
+        qemu_stdout_transcripts = []
+
+    by_step: dict[str, dict[str, Any]] = {}
+    for item in transcripts:
+        if not isinstance(item, dict):
+            failures.append("transcript entry must be an object")
+            continue
+        step_name = item.get("step")
+        if not isinstance(step_name, str) or not step_name:
+            failures.append("transcript entry missing step name")
+            continue
+        by_step[step_name] = item
+
+    for step_name in required_steps:
+        entry = by_step.get(step_name)
+        if entry is None:
+            failures.append(f"required transcript step missing: {step_name}")
+            continue
+        transcript_path = resolve_transcript_path(manifest_path, entry.get("transcript_path"))
+        if transcript_path is None:
+            failures.append(f"{step_name}: transcript path missing")
+            continue
+        transcript_artifacts.append(artifact(transcript_path, label=f"transcript: {step_name}"))
+        if entry.get("returncode") != 0:
+            failures.append(f"{step_name}: returncode {entry.get('returncode')} != 0")
+        if not transcript_path.exists():
+            failures.append(f"{step_name}: transcript file missing: {transcript_path}")
+            continue
+        if not transcript_path.is_file():
+            failures.append(f"{step_name}: transcript path is not a file: {transcript_path}")
+            continue
+        size_bytes = transcript_path.stat().st_size
+        if size_bytes <= 0:
+            failures.append(f"{step_name}: transcript file is empty")
+        if entry.get("size_bytes") != size_bytes:
+            failures.append(
+                f"{step_name}: size_bytes {entry.get('size_bytes')!r} != actual {size_bytes}"
+            )
+        actual_sha = sha256_file(transcript_path)
+        if entry.get("sha256") != actual_sha:
+            failures.append(f"{step_name}: transcript sha256 mismatch")
+
+    for index, entry in enumerate(qemu_stdout_transcripts, start=1):
+        if not isinstance(entry, dict):
+            failures.append(f"qemu stdout transcript entry {index} must be an object")
+            continue
+        label = entry.get("label")
+        if not isinstance(label, str) or not label:
+            label = f"qemu stdout transcript {index}"
+        transcript_path = resolve_transcript_path(manifest_path, entry.get("transcript_path"))
+        if transcript_path is None:
+            failures.append(f"{label}: transcript path missing")
+            continue
+        transcript_artifacts.append(artifact(transcript_path, label=label))
+        if not transcript_path.exists():
+            failures.append(f"{label}: transcript file missing: {transcript_path}")
+            continue
+        if not transcript_path.is_file():
+            failures.append(f"{label}: transcript path is not a file: {transcript_path}")
+            continue
+        size_bytes = transcript_path.stat().st_size
+        if size_bytes <= 0:
+            failures.append(f"{label}: transcript file is empty")
+        if entry.get("size_bytes") != size_bytes:
+            failures.append(
+                f"{label}: size_bytes {entry.get('size_bytes')!r} != actual {size_bytes}"
+            )
+        actual_sha = sha256_file(transcript_path)
+        if entry.get("sha256") != actual_sha:
+            failures.append(f"{label}: transcript sha256 mismatch")
+
+    details = {
+        "required_steps": required_steps,
+        "transcript_count": len(transcripts),
+        "qemu_stdout_transcript_count": len(qemu_stdout_transcripts),
+    }
+    all_artifacts = artifacts + transcript_artifacts
+    if failures:
+        return fail_claim(
+            spec,
+            reason="; ".join(failures),
+            validators=validators,
+            evidence_artifacts=all_artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=all_artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, Callable[[dict[str, Any]], dict[str, object]]]:
     module_path = args.module_path.resolve()
     benchmark_csv = resolve_path(args.benchmark_csv, module_path)
     benchmark_provenance = resolve_path(args.benchmark_provenance, module_path)
     cost_evidence = resolve_path(args.cost_of_assurance_evidence, module_path)
     release_bundle_root = resolve_path(args.release_bundle_root, module_path)
+    transcript_manifest = resolve_path(args.transcript_manifest, module_path)
     kat_header = resolve_path(args.kat_header, module_path)
     kat_vectors_dir = resolve_path(args.kat_vectors_dir, module_path)
     tag = args.tag
@@ -635,6 +791,10 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             bundle_root=release_bundle_root,
             version=version,
             tag=tag,
+        ),
+        "release.transcript_binding": lambda spec: evaluate_transcript_binding(
+            spec,
+            manifest_path=transcript_manifest,
         ),
     }
 
