@@ -84,6 +84,7 @@ The release gate also produces an Assurance Ledger under the selected
 ```text
 assurance_ledger.json
 assurance_ledger.md
+assurance_report.html
 cost_of_assurance_evidence.json
 transcripts/evidence_transcript_manifest.json
 ```
@@ -92,7 +93,40 @@ Inspect `assurance_ledger.md` before publishing or sharing a local bundle. It
 must show no failing required claims. The JSON form is intended for scripts and
 paper/release artifact review because it binds claims to concrete validators,
 commands, artifact paths, release-check transcript files, raw QEMU stdout
-logs, and hashes.
+logs, and hashes. `assurance_report.html` is a self-contained,
+dependency-free HTML view of the same JSON ledger and is the
+recommended artifact to share with reviewers or attach to a release pack.
+
+The ledger schema is `schema_version=2`. Beyond the original release/KAT/
+benchmark/cost-of-assurance/transcript-binding claims, every release pack
+must also report `pass` for:
+
+- `kat.mlkem_512`, `kat.mlkem_768`, `kat.mlkem_1024` — per-parameter-set
+  ML-KEM KAT decomposition.
+- `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87` — per-parameter-set
+  ML-DSA KAT decomposition.
+- `benchmark.mlkem_throughput`, `benchmark.mldsa_throughput` —
+  per-primitive benchmark CSV row coverage.
+- `acvp.negative_path_rejection`, `acvp.timeout_recovery` — bound to the
+  `ACVP serial ztest run` transcript markers.
+- `acvp.negative_scenarios_replay`, `acvp.mlkem_negative_paths`,
+  `acvp.mldsa_negative_paths` — bound to the new
+  `ACVP serial negative ztest run` transcript markers from
+  `tests/ztest_acvp_serial_negative`.
+
+A failing required claim names the offending parameter set, primitive, or
+case directly in `failure_reason` rather than disappearing into the older
+aggregate `kat.offline_provenance` / `benchmark.csv_validity` rows.
+
+If the ACVP negative scenario fixture is updated, regenerate the
+matching C header before running the gate:
+
+```bash
+python3 scripts/generate_acvp_negative_header.py
+```
+
+`release_check.py` runs the same command with `--check` as a release-gate
+step, so a stale header is caught at gate time.
 
 To replay-check an already generated ledger without rerunning QEMU builds:
 
@@ -104,7 +138,8 @@ python3 scripts/verify_assurance_ledger.py \
 
 This catches stale Markdown summaries, missing claim IDs, missing artifacts,
 missing release-check transcripts, missing raw QEMU stdout logs, and SHA-256
-drift in evidence artifacts.
+drift in evidence artifacts. Legacy `schema_version=1` packs replay with a
+clearly-labelled `[warn]` line noting the reduced claim coverage.
 
 To replay-check the full release output root without rerunning Zephyr builds:
 
@@ -116,7 +151,9 @@ python3 scripts/verify_release_evidence_pack.py \
 
 This validates the ledger, benchmark CSV/provenance, benchmark summary,
 cost-of-assurance evidence, MCU footprint CSV, local release manifest, release
-notes hash, transcript hashes, and ledger/bundle commit metadata alignment.
+notes hash, transcript hashes, ledger/bundle commit metadata alignment, and
+(for `schema_version >= 2` packs) that `assurance_report.html` exists and
+contains every claim id from the ledger.
 
 ## 4. Run Focused Consumer And Harness Smokes
 
