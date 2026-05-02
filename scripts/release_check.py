@@ -39,6 +39,7 @@ XML_INVALID_CHARS_RE = re.compile(
 REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "Extended Checks (strict cost-of-assurance smoke)",
     "ACVP serial ztest run",
+    "ACVP serial negative ztest run",
     "ACVP KAT ztest run",
     "benchmark_csv",
     "benchmark_csv_validate",
@@ -302,6 +303,7 @@ def main() -> int:
     cppcheck_cmd = discover_tool("cppcheck")
     env = build_env()
     ztest_build_dir = output_root / "ztest_acvp_serial_qemu"
+    ztest_negative_build_dir = output_root / "ztest_acvp_serial_negative_qemu"
     kat_build_dir = output_root / "ztest_acvp_kat_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
@@ -480,6 +482,49 @@ def main() -> int:
             timeout=120,
             success_markers=(
                 "TESTSUITE pqcp_acvp_serial succeeded",
+                "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="ACVP serial negative scenario header check",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/generate_acvp_negative_header.py"),
+                "--check",
+            ],
+            cwd=module_path,
+        ),
+        Step(
+            name="ACVP serial negative ztest build",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "qemu_x86_64",
+                str(module_path / "tests/ztest_acvp_serial_negative"),
+                "-d",
+                str(ztest_negative_build_dir),
+                "--",
+                f"-DZEPHYR_EXTRA_MODULES={module_path}",
+            ],
+            cwd=west_root,
+        ),
+        Step(
+            name="ACVP serial negative ztest run",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-d",
+                str(ztest_negative_build_dir),
+                "-t",
+                "run",
+            ],
+            cwd=west_root,
+            timeout=120,
+            success_markers=(
+                "TESTSUITE pqcp_acvp_serial_negative succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
         ),

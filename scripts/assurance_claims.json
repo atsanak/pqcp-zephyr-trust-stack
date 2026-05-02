@@ -108,6 +108,24 @@
       "category": "acvp",
       "claim": "The ACVP serial readline timeout fires under stalled-frame conditions, emits ERROR:TIMEOUT, and recovers cleanly for the next command (proven by ztest_acvp_serial::test_readline_timeout in the captured ACVP serial transcript).",
       "required": true
+    },
+    {
+      "id": "acvp.negative_scenarios_replay",
+      "category": "acvp",
+      "claim": "Every replay-eligible case from scripts/acvp_negative_scenarios.json is exercised directly through pqcp_acvp_process_command() by tests/ztest_acvp_serial_negative and produces the documented ERROR:* response on the wire.",
+      "required": true
+    },
+    {
+      "id": "acvp.mlkem_negative_paths",
+      "category": "acvp",
+      "claim": "ML-KEM-specific negative paths (INVALID_LEVEL for unsupported levels, WRONG_SIZE for truncated/oversize encaps and decaps payloads, INVALID_HEX for non-hex encaps payloads) are rejected with the documented ERROR:* responses by tests/ztest_acvp_serial_negative.",
+      "required": true
+    },
+    {
+      "id": "acvp.mldsa_negative_paths",
+      "category": "acvp",
+      "claim": "ML-DSA-specific negative paths (WRONG_SIZE for short SIGN payload, INVALID_HEX for non-hex SIGN payload, WRONG_SIZE for truncated VERIFY payload, INVALID_CMD for too-many VERIFY fields) are rejected with the documented ERROR:* responses by tests/ztest_acvp_serial_negative.",
+      "required": true
     }
   ]
 }
