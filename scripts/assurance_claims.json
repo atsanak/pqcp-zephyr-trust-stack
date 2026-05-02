@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -16,7 +16,43 @@
     {
       "id": "kat.offline_provenance",
       "category": "kat",
-      "claim": "Vendored NIST ACVP fixtures match the checked-in KAT header constants.",
+      "claim": "Vendored NIST ACVP fixtures match the checked-in KAT header constants (aggregate over every parameter set).",
+      "required": true
+    },
+    {
+      "id": "kat.mlkem_512",
+      "category": "kat",
+      "claim": "ML-KEM-512 keygen and encaps NIST ACVP vectors match the checked-in KAT header constants.",
+      "required": true
+    },
+    {
+      "id": "kat.mlkem_768",
+      "category": "kat",
+      "claim": "ML-KEM-768 keygen and encaps NIST ACVP vectors match the checked-in KAT header constants.",
+      "required": true
+    },
+    {
+      "id": "kat.mlkem_1024",
+      "category": "kat",
+      "claim": "ML-KEM-1024 keygen and encaps NIST ACVP vectors match the checked-in KAT header constants.",
+      "required": true
+    },
+    {
+      "id": "kat.mldsa_44",
+      "category": "kat",
+      "claim": "ML-DSA-44 siggen and sigver NIST ACVP vectors match the checked-in KAT header constants.",
+      "required": true
+    },
+    {
+      "id": "kat.mldsa_65",
+      "category": "kat",
+      "claim": "ML-DSA-65 siggen and sigver NIST ACVP vectors match the checked-in KAT header constants.",
+      "required": true
+    },
+    {
+      "id": "kat.mldsa_87",
+      "category": "kat",
+      "claim": "ML-DSA-87 siggen and sigver NIST ACVP vectors match the checked-in KAT header constants.",
       "required": true
     },
     {
@@ -29,6 +65,18 @@
       "id": "benchmark.provenance_binding",
       "category": "benchmark",
       "claim": "The benchmark_provenance.json sidecar cryptographically binds to the benchmark CSV bytes.",
+      "required": true
+    },
+    {
+      "id": "benchmark.mlkem_throughput",
+      "category": "benchmark",
+      "claim": "The benchmark CSV contains valid ML-KEM rows for every configured parameter set with positive cycles and time values.",
+      "required": true
+    },
+    {
+      "id": "benchmark.mldsa_throughput",
+      "category": "benchmark",
+      "claim": "The benchmark CSV contains valid ML-DSA rows for every configured parameter set with positive cycles and time values.",
       "required": true
     },
     {
@@ -47,6 +95,18 @@
       "id": "release.transcript_binding",
       "category": "release",
       "claim": "Release evidence claims are bound to captured release-check stdout transcripts with recorded SHA-256 hashes.",
+      "required": true
+    },
+    {
+      "id": "acvp.negative_path_rejection",
+      "category": "acvp",
+      "claim": "The ACVP serial harness rejects malformed inputs (bad hex, unknown commands, wrong sizes, oversize payloads) with the documented ERROR:* responses, as exercised by ztest_acvp_serial and bound to acvp_negative_scenarios.json.",
+      "required": true
+    },
+    {
+      "id": "acvp.timeout_recovery",
+      "category": "acvp",
+      "claim": "The ACVP serial readline timeout fires under stalled-frame conditions, emits ERROR:TIMEOUT, and recovers cleanly for the next command (proven by ztest_acvp_serial::test_readline_timeout in the captured ACVP serial transcript).",
       "required": true
     }
   ]

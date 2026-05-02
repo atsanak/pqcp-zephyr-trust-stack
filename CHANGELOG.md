@@ -8,6 +8,31 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
+### Added
+
+- Assurance claims catalog now exposes per-primitive KAT claims
+  (`kat.mlkem_512/768/1024`, `kat.mldsa_44/65/87`), per-primitive
+  benchmark claims (`benchmark.mlkem_throughput`,
+  `benchmark.mldsa_throughput`), and ACVP robustness claims
+  (`acvp.negative_path_rejection`, `acvp.timeout_recovery`).
+- `acvp.negative_path_rejection` binds to
+  `scripts/acvp_negative_scenarios.json` and the captured ACVP serial
+  ztest run transcript, requiring the documented ztest markers for
+  malformed-command, invalid-hex/wrong-size, and serial-garbage-recovery
+  cases.
+- `acvp.timeout_recovery` requires the `test_readline_timeout` and
+  `ERROR:TIMEOUT` markers in the same transcript.
+
+### Changed
+
+- Assurance claims catalog schema bumped from `schema_version=1` to
+  `schema_version=2`. Both generator and verifier accept either version;
+  v1 catalogs and v1 replay-only ledgers warn that they cover the
+  reduced legacy claim set.
+- `release_check.py` and `run_extended_checks.py` now share
+  `HOST_ENV_BLACKLIST`, `detect_west_root`, `discover_west`, `clean_env`,
+  and `command_to_text` from `scripts/local_workflow.py`.
+
 ## [1.0.0] - 2026-04-26
 
 First production-quality release of the Zephyr PQC trust stack. Supports

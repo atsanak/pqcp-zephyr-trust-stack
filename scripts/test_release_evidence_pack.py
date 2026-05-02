@@ -258,6 +258,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             transcript_manifest=transcript_manifest,
             kat_header=module / "missing_kat_vectors.h",
             kat_vectors_dir=module / "missing_nist_vectors",
+            negative_scenarios=module / "missing_acvp_negative_scenarios.json",
             output_json=output / "assurance_ledger.json",
             output_md=output / "assurance_ledger.md",
         )

@@ -15,6 +15,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
 VALID_STATUSES = {"pass", "fail", "not_applicable"}
+SUPPORTED_LEDGER_SCHEMA_VERSIONS = (1, 2)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2)
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,9 +88,20 @@ def load_required_claim_ids(path: Path, failures: list[str]) -> set[str]:
     catalog = load_json(path, "claim catalog", failures)
     if not catalog:
         return set()
-    if catalog.get("schema_version") != 1:
-        failures.append(f"claim catalog has unsupported schema_version={catalog.get('schema_version')!r}")
+    schema_version = catalog.get("schema_version")
+    if schema_version not in SUPPORTED_CLAIMS_SCHEMA_VERSIONS:
+        failures.append(
+            f"claim catalog has unsupported schema_version={schema_version!r} "
+            f"(supported: {list(SUPPORTED_CLAIMS_SCHEMA_VERSIONS)})"
+        )
         return set()
+    if schema_version == 1:
+        print(
+            f"[warn] {path} uses claims schema_version=1; this is the legacy claim "
+            "set without per-primitive KAT/benchmark or ACVP negative/timeout claims. "
+            "Replays of older evidence packs will pass with reduced coverage.",
+            file=sys.stderr,
+        )
     claims = catalog.get("claims")
     if not isinstance(claims, list):
         failures.append("claim catalog 'claims' must be a list")
@@ -206,8 +219,19 @@ def verify_ledger(
     if not ledger:
         return failures
 
-    if ledger.get("schema_version") != 1:
-        failures.append(f"ledger has unsupported schema_version={ledger.get('schema_version')!r}")
+    ledger_schema = ledger.get("schema_version")
+    if ledger_schema not in SUPPORTED_LEDGER_SCHEMA_VERSIONS:
+        failures.append(
+            f"ledger has unsupported schema_version={ledger_schema!r} "
+            f"(supported: {list(SUPPORTED_LEDGER_SCHEMA_VERSIONS)})"
+        )
+    elif ledger_schema == 1:
+        print(
+            f"[warn] {ledger_json} is a legacy schema_version=1 ledger; replay-only "
+            "compatibility verification — re-generate with the current "
+            "generate_assurance_ledger.py to capture per-primitive and ACVP claims.",
+            file=sys.stderr,
+        )
     claims = ledger.get("claims")
     if not isinstance(claims, list) or not claims:
         failures.append("ledger claims must be a non-empty list")
