@@ -268,6 +268,9 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             encoding="utf-8",
         )
         args.output_md.write_text(ledger.render_markdown(result), encoding="utf-8")
+        import render_assurance_report
+        report_html = render_assurance_report.render_report(result)
+        (output / "assurance_report.html").write_text(report_html, encoding="utf-8")
         return module, output, claims
 
     def test_valid_synthetic_pack_passes(self) -> None:
@@ -320,6 +323,46 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 claims_path=claims,
             )
             self.assertTrue(any("source_commit" in item for item in failures))
+
+    def test_missing_assurance_report_html_fails_for_v2_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            (output / "assurance_report.html").unlink()
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("assurance report HTML not found" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
+
+    def test_assurance_report_html_must_contain_every_claim_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            report_path = output / "assurance_report.html"
+            ledger_json = json.loads(
+                (output / "assurance_ledger.json").read_text(encoding="utf-8")
+            )
+            claim_ids = [c["id"] for c in ledger_json["claims"]]
+            body = report_path.read_text(encoding="utf-8")
+            for claim_id in claim_ids:
+                self.assertIn(claim_id, body)
+            # Drop one claim id from the HTML and confirm the verifier catches it.
+            tampered = body.replace(claim_ids[0], "REDACTED-CLAIM-ID")
+            report_path.write_text(tampered, encoding="utf-8")
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("missing claim id" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
 
 
 if __name__ == "__main__":
