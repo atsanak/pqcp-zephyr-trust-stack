@@ -113,13 +113,12 @@ IMPLEMENTATION_FAMILIES: Dict[str, Dict[str, Any]] = {
 DEFAULT_BENCHMARK_MATRIX = SCRIPT_DIR / "benchmark_matrix.json"
 DEFAULT_COST_OF_ASSURANCE_MATRIX = SCRIPT_DIR / "cost_of_assurance_matrix.json"
 DEFAULT_PROFILE_VALIDATION_MATRIX = SCRIPT_DIR / "profile_validation_matrix.json"
-HOST_ENV_BLACKLIST = (
-    "CFLAGS",
-    "CXXFLAGS",
-    "CPPFLAGS",
-    "LDFLAGS",
-    "CPATH",
-    "SDKROOT",
+
+sys.path.insert(0, str(SCRIPT_DIR))
+from local_workflow import (  # noqa: E402
+    HOST_ENV_BLACKLIST,
+    detect_west_root as _shared_detect_west_root,
+    discover_west as _shared_discover_west,
 )
 
 SAMPLES: Dict[str, Dict[str, Any]] = {
@@ -400,49 +399,7 @@ def load_config_file(path: Path) -> Dict[str, Any]:
 
 
 def discover_west(explicit: Optional[str], west_root: Path, module_path: Path) -> List[str]:
-    candidates: List[List[str]] = []
-
-    if explicit:
-        candidates.append(shlex.split(explicit))
-
-    path_west = shutil.which("west")
-    if path_west:
-        candidates.append([path_west])
-
-    for candidate in (
-        west_root / ".venv/bin/west",
-        module_path / ".venv/bin/west",
-    ):
-        if candidate.exists():
-            candidates.append([str(candidate)])
-
-    candidates.append([sys.executable, "-m", "west"])
-
-    seen = set()
-    for command in candidates:
-        key = tuple(command)
-        if key in seen:
-            continue
-        seen.add(key)
-
-        try:
-            result = subprocess.run(
-                command + ["--version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-        except OSError:
-            continue
-
-        if result.returncode == 0:
-            return command
-
-    raise RuntimeError(
-        "Unable to find a working west command. Pass --west or activate a Zephyr venv."
-    )
+    return _shared_discover_west(explicit, west_root, module_path)
 
 
 ROM_LIKE_SECTION_NAMES = {
@@ -1286,12 +1243,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def detect_west_root(start: Path) -> Path:
-    current = start.resolve()
-    while current != current.parent:
-        if (current / ".west").exists():
-            return current
-        current = current.parent
-    return start.resolve()
+    return _shared_detect_west_root(start, strict=False)
 
 
 def main() -> int:
