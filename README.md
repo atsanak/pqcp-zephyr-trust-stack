@@ -5,6 +5,53 @@
 
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
+## What is novel here?
+
+This repository is intentionally not "another PQC sample". The
+engineering bar is set by four properties that, together, are unusual
+for a Zephyr module:
+
+- **Claim-to-evidence assurance ledger.** Every release-relevant
+  behaviour ("ML-DSA-65 KAT vectors match the header", "the ACVP
+  harness rejects malformed input", "the benchmark CSV is bound to its
+  provenance sidecar") is encoded as a typed claim in
+  [`scripts/assurance_claims.json`](scripts/assurance_claims.json) with
+  a dedicated evaluator. The release gate produces a JSON ledger
+  ([`assurance_ledger.json`](docs/assurance-model.md)) and a
+  self-contained HTML report that can be handed to a reviewer or
+  attached to a paper. The ledger has a versioned schema with a
+  documented backward-compatibility shim — old packs degrade
+  gracefully instead of hard-failing.
+- **Offline KAT provenance binding.** The `tests/ztest_acvp_kat`
+  vectors are vendored from NIST ACVP fixtures and pinned to
+  `kat_vectors.h` constants by
+  [`scripts/verify_kat_provenance.py`](scripts/verify_kat_provenance.py).
+  Per-parameter-set claims (`kat.mlkem_512`, `kat.mlkem_768`,
+  `kat.mlkem_1024`, `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87`)
+  decompose KAT verification so a regression in a single primitive is
+  named directly in the failure reason rather than hidden in an
+  aggregate.
+- **QEMU-only local release gate with transcript-hash assurance.**
+  [`scripts/release_check.py`](scripts/release_check.py) runs the
+  entire validation sequence locally — no GitHub Actions required —
+  and captures stdout transcripts for every required step. Each
+  transcript is SHA-256-hashed into
+  `transcripts/evidence_transcript_manifest.json`. The replay verifier
+  re-hashes every file and rejects the pack if any transcript is
+  missing, empty, size-drifted, or hash-drifted. This makes the
+  release pack tamper-evident.
+- **ACVP serial validation on embedded Zephyr targets.** The serial
+  wire format (`KEYGEN:MLKEM:768:...`, `ERROR:TIMEOUT`,
+  `ERROR:INVALID_HEX`, `ERROR:WRONG_SIZE`) is exercised under
+  `qemu_x86_64` ztests and bound to two assurance claims
+  (`acvp.negative_path_rejection`, `acvp.timeout_recovery`) that
+  require specific markers in the captured transcript. The same wire
+  format runs unmodified on `nucleo_h743zi`-class hardware.
+
+For the underlying architecture see
+[`docs/assurance-model.md`](docs/assurance-model.md). For the public C
+API surface see [`docs/api-overview.md`](docs/api-overview.md).
+
 ## Performance
 
 > QEMU x86_64 emulation. Cycle counts are emulation-approximate; generate the
