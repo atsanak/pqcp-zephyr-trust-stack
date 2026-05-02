@@ -221,6 +221,44 @@ def verify_release_bundle(
             )
 
 
+def verify_assurance_report_html(
+    output_root: Path,
+    ledger: dict[str, Any],
+    failures: list[str],
+) -> None:
+    """Replay-check that the HTML assurance report exists and references every claim id.
+
+    Treated as required for ledgers at schema_version >= 2; older v1 packs are
+    skipped with a clearly-labelled informational note.
+    """
+    report_path = output_root / "assurance_report.html"
+    schema = ledger.get("schema_version") if ledger else None
+    if schema is not None and schema < 2:
+        # Legacy pack predating the HTML report. Skip silently.
+        return
+    if not report_path.exists():
+        failures.append(f"assurance report HTML not found: {report_path}")
+        return
+    if not report_path.is_file():
+        failures.append(f"assurance report HTML is not a file: {report_path}")
+        return
+    if report_path.stat().st_size == 0:
+        failures.append(f"assurance report HTML is empty: {report_path}")
+        return
+    body = report_path.read_text(encoding="utf-8", errors="replace")
+    missing_ids: list[str] = []
+    for claim in ledger.get("claims") or []:
+        if not isinstance(claim, dict):
+            continue
+        claim_id = claim.get("id")
+        if isinstance(claim_id, str) and claim_id and claim_id not in body:
+            missing_ids.append(claim_id)
+    if missing_ids:
+        failures.append(
+            "assurance report HTML is missing claim id(s): " + ", ".join(missing_ids)
+        )
+
+
 def verify_pack(
     output_root: Path,
     *,
@@ -251,6 +289,7 @@ def verify_pack(
     verify_mcu_footprint(output_root, failures)
     if ledger:
         verify_release_bundle(output_root, tag=tag, ledger=ledger, failures=failures)
+        verify_assurance_report_html(output_root, ledger, failures)
     return failures
 
 

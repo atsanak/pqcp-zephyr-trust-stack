@@ -311,6 +311,7 @@ def main() -> int:
     release_bundle_root = output_root / "local_release_bundle"
     assurance_ledger_json = output_root / "assurance_ledger.json"
     assurance_ledger_md = output_root / "assurance_ledger.md"
+    assurance_report_html = output_root / "assurance_report.html"
     transcript_dir = output_root / "transcripts"
     evidence_transcript_manifest = transcript_dir / "evidence_transcript_manifest.json"
     junit_output = output_root / "release_check_results.xml"
@@ -647,6 +648,37 @@ def main() -> int:
 
     write_junit_report(results, junit_output)
     print(f"[INFO] Wrote JUnit report to {junit_output}")
+
+    # Non-blocking final step: render the HTML assurance report from the ledger.
+    # Failure here is logged as a warning but does not abort the gate, since the
+    # underlying ledger is already authoritative.
+    report_cmd = [
+        sys.executable,
+        str(module_path / "scripts/render_assurance_report.py"),
+        str(assurance_ledger_json),
+        "--output",
+        str(assurance_report_html),
+    ]
+    print("[RUN ] assurance report (HTML, non-blocking)")
+    report_proc = subprocess.run(
+        report_cmd,
+        cwd=str(module_path),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if report_proc.stdout:
+        print(report_proc.stdout, end="" if report_proc.stdout.endswith("\n") else "\n")
+    if report_proc.returncode == 0:
+        print(f"[PASS] assurance report written to {assurance_report_html}")
+    else:
+        print(
+            f"[WARN] assurance report rendering failed (exit {report_proc.returncode}); "
+            f"the JSON ledger remains authoritative."
+        )
+
     print("[PASS] Release validation sequence completed successfully.")
     return 0
 
