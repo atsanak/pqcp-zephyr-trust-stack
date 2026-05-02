@@ -30,13 +30,37 @@ from export_results import validate_benchmark_csv, verify_provenance  # noqa: E4
 from verify_kat_provenance import (  # noqa: E402
     DEFAULT_HEADER as DEFAULT_KAT_HEADER,
     DEFAULT_VECTORS_DIR,
+    VECTOR_SPECS,
+    fixture_constants,
     load_all_fixture_constants,
     load_header_constants,
     verify_vectors,
 )
 
-LEDGER_SCHEMA_VERSION = 1
+LEDGER_SCHEMA_VERSION = 2
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
+DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
+
+PER_PRIMITIVE_KAT_CLAIMS = {
+    "kat.mlkem_512": "ML-KEM-512",
+    "kat.mlkem_768": "ML-KEM-768",
+    "kat.mlkem_1024": "ML-KEM-1024",
+    "kat.mldsa_44": "ML-DSA-44",
+    "kat.mldsa_65": "ML-DSA-65",
+    "kat.mldsa_87": "ML-DSA-87",
+}
+
+PER_PRIMITIVE_BENCH_CLAIMS = {
+    "benchmark.mlkem_throughput": (
+        "ML-KEM",
+        ("ML-KEM-512", "ML-KEM-768", "ML-KEM-1024"),
+    ),
+    "benchmark.mldsa_throughput": (
+        "ML-DSA",
+        ("ML-DSA-44", "ML-DSA-65", "ML-DSA-87"),
+    ),
+}
 REQUIRED_TRANSCRIPT_STEPS = (
     "Extended Checks (strict cost-of-assurance smoke)",
     "ACVP serial ztest run",
@@ -62,6 +86,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transcript-manifest", type=Path, required=True)
     parser.add_argument("--kat-header", type=Path, default=DEFAULT_KAT_HEADER)
     parser.add_argument("--kat-vectors-dir", type=Path, default=DEFAULT_VECTORS_DIR)
+    parser.add_argument(
+        "--negative-scenarios",
+        type=Path,
+        default=DEFAULT_NEGATIVE_SCENARIOS,
+        help="ACVP negative-scenario fixture used by acvp.negative_path_rejection.",
+    )
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
     return parser.parse_args()
@@ -175,8 +205,19 @@ def resolve_path(path: Path, module_path: Path) -> Path:
 
 def load_claim_specs(path: Path) -> list[dict[str, Any]]:
     raw = json.loads(path.read_text(encoding="utf-8"))
-    if raw.get("schema_version") != 1:
-        raise RuntimeError(f"unsupported assurance claims schema in {path}")
+    schema_version = raw.get("schema_version")
+    if schema_version not in SUPPORTED_CLAIMS_SCHEMA_VERSIONS:
+        raise RuntimeError(
+            f"unsupported assurance claims schema_version={schema_version!r} in {path}; "
+            f"supported versions: {list(SUPPORTED_CLAIMS_SCHEMA_VERSIONS)}"
+        )
+    if schema_version == 1:
+        print(
+            f"[warn] {path} uses claims schema_version=1; per-primitive KAT and "
+            "benchmark claims and the ACVP negative/timeout claims will not be "
+            "populated. Update the catalog to schema_version=2 for the full set.",
+            file=sys.stderr,
+        )
     claims = raw.get("claims")
     if not isinstance(claims, list) or not claims:
         raise RuntimeError(f"{path} does not define any claims")
@@ -359,6 +400,337 @@ def evaluate_kat_provenance(
         evidence_artifacts=artifacts,
         commands=commands,
         details={"fixture_count": len(list(vectors_dir.glob("*.json")))},
+    )
+
+
+def evaluate_kat_per_primitive(
+    spec: dict[str, Any],
+    *,
+    header: Path,
+    vectors_dir: Path,
+    parameter_set: str,
+) -> dict[str, object]:
+    """Verify the subset of NIST ACVP fixtures for a single parameter set."""
+    relevant_specs = [s for s in VECTOR_SPECS if s.parameter_set == parameter_set]
+    fixture_paths = [vectors_dir / s.fixture for s in relevant_specs]
+    artifacts = [artifact(header, label="KAT header")]
+    artifacts.extend(
+        artifact(path, label=f"{parameter_set} fixture: {path.name}") for path in fixture_paths
+    )
+    validators = ["scripts/verify_kat_provenance.py"]
+    commands = [f"python3 scripts/verify_kat_provenance.py --header {header}"]
+
+    if not relevant_specs:
+        return fail_claim(
+            spec,
+            reason=f"no VECTOR_SPECS configured for {parameter_set}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    try:
+        header_strings, header_numeric = load_header_constants(header)
+        fixture_strings: dict[str, str] = {}
+        fixture_numeric: dict[str, int] = {}
+        for vec_spec in relevant_specs:
+            strings, numeric, _meta = fixture_constants(vec_spec, vectors_dir)
+            fixture_strings.update(strings)
+            fixture_numeric.update(numeric)
+        mismatches = verify_vectors(
+            header_strings,
+            header_numeric,
+            fixture_strings,
+            fixture_numeric,
+        )
+    except Exception as exc:  # noqa: BLE001 - render exact validation defect.
+        return fail_claim(
+            spec,
+            reason=f"{parameter_set}: {exc}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    details = {
+        "parameter_set": parameter_set,
+        "fixtures": [s.fixture for s in relevant_specs],
+        "operations": [s.operation for s in relevant_specs],
+    }
+    if mismatches:
+        return fail_claim(
+            spec,
+            reason=f"{parameter_set}: " + "; ".join(mismatches),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
+def evaluate_benchmark_per_primitive(
+    spec: dict[str, Any],
+    *,
+    csv_path: Path,
+    algorithm: str,
+    parameter_levels: tuple[str, ...],
+) -> dict[str, object]:
+    """Verify per-parameter-set rows for ML-KEM or ML-DSA in the benchmark CSV."""
+    artifacts = [artifact(csv_path, label="benchmark CSV")]
+    validators = ["scripts/export_results.py --validate-only"]
+    commands = [f"python3 scripts/export_results.py --validate-only {csv_path}"]
+    if not csv_path.exists():
+        return fail_claim(
+            spec,
+            reason=f"benchmark CSV not found: {csv_path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    expected_levels = set(parameter_levels)
+    rows_per_level: dict[str, int] = {}
+    failures: list[str] = []
+    matched_total = 0
+    for row in rows:
+        parameter_set = str(row.get("parameter_set", "")).strip()
+        if parameter_set not in expected_levels:
+            continue
+        matched_total += 1
+        rows_per_level[parameter_set] = rows_per_level.get(parameter_set, 0) + 1
+        for column in ("cycles", "time_us"):
+            raw = row.get(column, "")
+            try:
+                value = float(raw) if raw not in ("", None) else 0.0
+            except ValueError:
+                failures.append(
+                    f"{parameter_set} row has non-numeric {column}={raw!r}"
+                )
+                continue
+            if value <= 0.0:
+                failures.append(
+                    f"{parameter_set} row has non-positive {column}={value}"
+                )
+
+    missing_levels = [level for level in parameter_levels if level not in rows_per_level]
+    if missing_levels:
+        failures.append(
+            f"missing benchmark rows for {algorithm} parameter sets: {', '.join(missing_levels)}"
+        )
+
+    details = {
+        "algorithm": algorithm,
+        "expected_parameter_sets": list(parameter_levels),
+        "rows_per_parameter_set": rows_per_level,
+        "matched_row_count": matched_total,
+    }
+    if failures:
+        return fail_claim(
+            spec,
+            reason="; ".join(failures),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
+def _read_acvp_serial_transcript(manifest_path: Path) -> tuple[Path | None, str | None, str]:
+    """Return (transcript_path, sha256, body) for the ACVP serial ztest run."""
+    if not manifest_path.exists():
+        return None, None, ""
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None, None, ""
+    for entry in manifest.get("transcripts", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("step") != "ACVP serial ztest run":
+            continue
+        path = resolve_transcript_path(manifest_path, entry.get("transcript_path"))
+        if path is None or not path.exists() or not path.is_file():
+            return None, entry.get("sha256"), ""
+        return path, entry.get("sha256"), path.read_text(encoding="utf-8", errors="replace")
+    return None, None, ""
+
+
+def evaluate_acvp_negative_paths(
+    spec: dict[str, Any],
+    *,
+    scenarios_path: Path,
+    transcript_manifest: Path,
+) -> dict[str, object]:
+    artifacts = [
+        artifact(scenarios_path, label="ACVP negative scenarios fixture"),
+        artifact(transcript_manifest, label="release-check transcript manifest"),
+    ]
+    validators = [
+        "tests/ztest_acvp_serial::test_rejects_malformed_commands",
+        "tests/ztest_acvp_serial::test_rejects_invalid_hex_and_wrong_sizes",
+        "tests/ztest_acvp_serial::test_serial_line_garbage_rejected_and_recovered",
+    ]
+    commands = [
+        "west build -b qemu_x86_64 tests/ztest_acvp_serial -t run",
+    ]
+
+    if not scenarios_path.exists():
+        return fail_claim(
+            spec,
+            reason=f"ACVP negative scenarios fixture not found: {scenarios_path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    try:
+        scenarios = json.loads(scenarios_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return fail_claim(
+            spec,
+            reason=f"invalid ACVP negative scenarios JSON: {exc}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    expected_errors = []
+    for scenario in scenarios.get("scenarios", []) or []:
+        if not isinstance(scenario, dict):
+            continue
+        for case in scenario.get("expected_errors", []) or []:
+            if isinstance(case, dict) and isinstance(case.get("response"), str):
+                expected_errors.append(case["response"])
+    expected_error_set = sorted(set(expected_errors))
+    if not expected_error_set:
+        return fail_claim(
+            spec,
+            reason="ACVP negative scenarios fixture defines no expected_errors",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    transcript_path, transcript_sha, transcript_body = _read_acvp_serial_transcript(
+        transcript_manifest
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "ACVP serial ztest run transcript missing or empty in transcript manifest "
+                f"{transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="ACVP serial ztest run transcript"))
+
+    required_markers = (
+        "test_rejects_malformed_commands",
+        "test_rejects_invalid_hex_and_wrong_sizes",
+        "test_serial_line_garbage_rejected_and_recovered",
+        "TESTSUITE pqcp_acvp_serial succeeded",
+    )
+    missing_markers = [m for m in required_markers if m not in transcript_body]
+    details = {
+        "expected_error_responses": expected_error_set,
+        "scenarios_path": str(scenarios_path),
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+    }
+    if missing_markers:
+        return fail_claim(
+            spec,
+            reason=(
+                "ACVP serial transcript missing expected ztest markers: "
+                + ", ".join(missing_markers)
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
+def evaluate_acvp_timeout_recovery(
+    spec: dict[str, Any],
+    *,
+    transcript_manifest: Path,
+) -> dict[str, object]:
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["tests/ztest_acvp_serial::test_readline_timeout"]
+    commands = ["west build -b qemu_x86_64 tests/ztest_acvp_serial -t run"]
+
+    transcript_path, transcript_sha, transcript_body = _read_acvp_serial_transcript(
+        transcript_manifest
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "ACVP serial ztest run transcript missing or empty in transcript manifest "
+                f"{transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="ACVP serial ztest run transcript"))
+
+    required_markers = (
+        "test_readline_timeout",
+        "ERROR:TIMEOUT",
+        "TESTSUITE pqcp_acvp_serial succeeded",
+    )
+    missing = [m for m in required_markers if m not in transcript_body]
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "required_markers": list(required_markers),
+    }
+    if missing:
+        return fail_claim(
+            spec,
+            reason=(
+                "ACVP serial transcript missing expected timeout-recovery markers: "
+                + ", ".join(missing)
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
     )
 
 
@@ -754,9 +1126,10 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     transcript_manifest = resolve_path(args.transcript_manifest, module_path)
     kat_header = resolve_path(args.kat_header, module_path)
     kat_vectors_dir = resolve_path(args.kat_vectors_dir, module_path)
+    negative_scenarios = resolve_path(args.negative_scenarios, module_path)
     tag = args.tag
 
-    return {
+    evaluators: dict[str, Callable[[dict[str, Any]], dict[str, object]]] = {
         "release.version_consistency": lambda spec: evaluate_version_consistency(
             spec,
             module_path=module_path,
@@ -796,7 +1169,35 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec,
             manifest_path=transcript_manifest,
         ),
+        "acvp.negative_path_rejection": lambda spec: evaluate_acvp_negative_paths(
+            spec,
+            scenarios_path=negative_scenarios,
+            transcript_manifest=transcript_manifest,
+        ),
+        "acvp.timeout_recovery": lambda spec: evaluate_acvp_timeout_recovery(
+            spec,
+            transcript_manifest=transcript_manifest,
+        ),
     }
+    for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():
+        evaluators[claim_id] = (
+            lambda spec, _ps=parameter_set: evaluate_kat_per_primitive(
+                spec,
+                header=kat_header,
+                vectors_dir=kat_vectors_dir,
+                parameter_set=_ps,
+            )
+        )
+    for claim_id, (algorithm, levels) in PER_PRIMITIVE_BENCH_CLAIMS.items():
+        evaluators[claim_id] = (
+            lambda spec, _alg=algorithm, _lv=levels: evaluate_benchmark_per_primitive(
+                spec,
+                csv_path=benchmark_csv,
+                algorithm=_alg,
+                parameter_levels=_lv,
+            )
+        )
+    return evaluators
 
 
 def render_markdown(ledger: dict[str, object]) -> str:

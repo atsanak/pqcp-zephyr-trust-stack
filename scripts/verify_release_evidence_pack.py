@@ -114,7 +114,8 @@ def verify_cost_evidence(output_root: Path, failures: list[str]) -> None:
     if not evidence:
         return
     comparisons = evidence.get("comparisons")
-    if evidence.get("schema_version") != 1:
+    if evidence.get("schema_version") != 1:  # cost-of-assurance evidence schema is independent of ledger schema_version
+
         failures.append(
             f"cost-of-assurance evidence schema_version={evidence.get('schema_version')!r}, expected 1"
         )

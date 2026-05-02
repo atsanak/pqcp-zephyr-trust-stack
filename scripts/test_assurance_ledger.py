@@ -37,12 +37,12 @@ class AssuranceLedgerTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def make_claims(self, root: Path, claim_ids: list[str]) -> Path:
+    def make_claims(self, root: Path, claim_ids: list[str], *, schema_version: int = 1) -> Path:
         all_claims = json.loads((ledger.DEFAULT_CLAIMS).read_text(encoding="utf-8"))["claims"]
         selected = [claim for claim in all_claims if claim["id"] in claim_ids]
         path = root / "claims.json"
         path.write_text(
-            json.dumps({"schema_version": 1, "claims": selected}, indent=2) + "\n",
+            json.dumps({"schema_version": schema_version, "claims": selected}, indent=2) + "\n",
             encoding="utf-8",
         )
         return path
@@ -233,6 +233,7 @@ class AssuranceLedgerTests(unittest.TestCase):
             transcript_manifest=self.make_transcript_manifest(root),
             kat_header=root / "missing_kat_vectors.h",
             kat_vectors_dir=root / "missing_nist_vectors",
+            negative_scenarios=root / "missing_acvp_negative_scenarios.json",
             output_json=root / "assurance_ledger.json",
             output_md=root / "assurance_ledger.md",
         )
@@ -561,6 +562,219 @@ class AssuranceLedgerTests(unittest.TestCase):
                 module_path=root,
             )
             self.assertTrue(any("summary.pass" in failure for failure in failures))
+
+    def _write_acvp_serial_transcript(
+        self,
+        root: Path,
+        body: str,
+        *,
+        manifest_extra_steps: list[str] | None = None,
+    ) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-acvp-serial-ztest-run.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        transcripts = [
+            {
+                "step": "ACVP serial ztest run",
+                "command": ["true"],
+                "command_text": "true",
+                "cwd": str(root),
+                "returncode": 0,
+                "duration_seconds": 0.1,
+                "transcript_path": transcript_path.name,
+                "sha256": sha256(transcript_path),
+                "size_bytes": transcript_path.stat().st_size,
+            }
+        ]
+        for step in manifest_extra_steps or []:
+            transcripts.append(
+                {
+                    "step": step,
+                    "command": ["true"],
+                    "command_text": "true",
+                    "cwd": str(root),
+                    "returncode": 0,
+                    "duration_seconds": 0.1,
+                    "transcript_path": transcript_path.name,
+                    "sha256": sha256(transcript_path),
+                    "size_bytes": transcript_path.stat().st_size,
+                }
+            )
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["ACVP serial ztest run"],
+                    "transcripts": transcripts,
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_acvp_negative_path_claim_passes_with_required_ztest_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            transcript_body = (
+                "test_rejects_malformed_commands\n"
+                "test_rejects_invalid_hex_and_wrong_sizes\n"
+                "test_serial_line_garbage_rejected_and_recovered\n"
+                "TESTSUITE pqcp_acvp_serial succeeded\n"
+            )
+            manifest = self._write_acvp_serial_transcript(root, transcript_body)
+            scenarios_path = ledger.DEFAULT_NEGATIVE_SCENARIOS
+            spec = {
+                "id": "acvp.negative_path_rejection",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_negative_paths(
+                spec,
+                scenarios_path=scenarios_path,
+                transcript_manifest=manifest,
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+            self.assertIn("expected_error_responses", result["details"])
+
+    def test_acvp_negative_path_claim_fails_when_marker_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            manifest = self._write_acvp_serial_transcript(
+                root,
+                "TESTSUITE pqcp_acvp_serial succeeded\n",  # missing test_rejects_* markers
+            )
+            spec = {
+                "id": "acvp.negative_path_rejection",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_negative_paths(
+                spec,
+                scenarios_path=ledger.DEFAULT_NEGATIVE_SCENARIOS,
+                transcript_manifest=manifest,
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("test_rejects_malformed_commands", result["failure_reason"])
+
+    def test_acvp_timeout_recovery_claim_fails_when_marker_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            manifest = self._write_acvp_serial_transcript(
+                root,
+                "TESTSUITE pqcp_acvp_serial succeeded\n",  # no ERROR:TIMEOUT
+            )
+            spec = {
+                "id": "acvp.timeout_recovery",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_timeout_recovery(
+                spec,
+                transcript_manifest=manifest,
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("ERROR:TIMEOUT", result["failure_reason"])
+
+    def test_acvp_timeout_recovery_claim_passes_with_required_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.make_module(root)
+            manifest = self._write_acvp_serial_transcript(
+                root,
+                "test_readline_timeout\nERROR:TIMEOUT\nTESTSUITE pqcp_acvp_serial succeeded\n",
+            )
+            spec = {
+                "id": "acvp.timeout_recovery",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_timeout_recovery(
+                spec,
+                transcript_manifest=manifest,
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_per_primitive_kat_claim_passes_against_real_fixtures(self) -> None:
+        spec = {
+            "id": "kat.mlkem_512",
+            "category": "kat",
+            "claim": "x",
+            "required": True,
+        }
+        result = ledger.evaluate_kat_per_primitive(
+            spec,
+            header=ledger.DEFAULT_KAT_HEADER,
+            vectors_dir=ledger.DEFAULT_VECTORS_DIR,
+            parameter_set="ML-KEM-512",
+        )
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["parameter_set"], "ML-KEM-512")
+
+    def test_per_primitive_benchmark_passes_with_complete_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_path = self.make_benchmark_csv(root)
+            spec = {
+                "id": "benchmark.mlkem_throughput",
+                "category": "benchmark",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_benchmark_per_primitive(
+                spec,
+                csv_path=csv_path,
+                algorithm="ML-KEM",
+                parameter_levels=("ML-KEM-512", "ML-KEM-768", "ML-KEM-1024"),
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_per_primitive_benchmark_fails_when_level_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_path = self.make_benchmark_csv(root)
+            spec = {
+                "id": "benchmark.mldsa_throughput",
+                "category": "benchmark",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_benchmark_per_primitive(
+                spec,
+                csv_path=csv_path,
+                algorithm="ML-DSA",
+                parameter_levels=("ML-DSA-44", "ML-DSA-65", "ML-DSA-87", "ML-DSA-999"),
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("ML-DSA-999", result["failure_reason"])
+
+    def test_v2_schema_load_does_not_warn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            claims = self.make_claims(root, ["release.version_consistency"], schema_version=2)
+            specs = ledger.load_claim_specs(claims)
+            self.assertEqual(len(specs), 1)
+            self.assertEqual(specs[0]["id"], "release.version_consistency")
+
+    def test_unsupported_schema_version_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            claims = self.make_claims(root, ["release.version_consistency"], schema_version=99)
+            with self.assertRaises(RuntimeError) as cm:
+                ledger.load_claim_specs(claims)
+            self.assertIn("schema_version=99", str(cm.exception))
 
 
 if __name__ == "__main__":
