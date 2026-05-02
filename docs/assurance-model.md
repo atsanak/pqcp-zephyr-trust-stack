@@ -1,0 +1,193 @@
+# Assurance Model
+
+This document describes the architecture of the assurance subsystem that
+backs every local release of `pqcp-zephyr-trust-stack`. It is intended as
+a short technical reference for maintainers, reviewers, and integrators
+who want to understand exactly what evidence the project produces, how
+that evidence is bound to source artifacts, and how to verify a release
+pack later without rerunning Zephyr or QEMU.
+
+## Goals
+
+- **Auditability.** Every release-relevant claim ("the benchmark CSV is
+  valid", "the ACVP harness rejects malformed input", "the ML-DSA-65 KAT
+  vectors match the header") has an explicit identifier, an evaluator,
+  and a list of evidence artifacts with recorded SHA-256 hashes.
+- **Replayability.** A maintainer who hands an evidence pack to a
+  reviewer, or who comes back to it months later, can run a single
+  command to re-verify the pack without rebuilding any binaries.
+- **Local-first.** None of this depends on GitHub Actions. The release
+  gate, the assurance ledger, and the replay verifier all run on a
+  developer's workstation against a working Zephyr SDK.
+
+## Components
+
+```
+            ┌────────────────────────┐
+            │   release_check.py     │  authoritative release gate
+            │   (sequential steps)   │  writes JUnit + transcripts
+            └─────────┬──────────────┘
+                      │ generates
+       ┌──────────────┼─────────────────────────────┐
+       ▼              ▼                             ▼
+ transcripts/   benchmark_results.csv     local_release_bundle/
+   *.log        + benchmark_provenance       + release-manifest-*.json
+   manifest     cost_of_assurance_evidence
+                mcu_protocol_footprint/
+                      │
+                      ▼
+            ┌────────────────────────────┐
+            │ generate_assurance_ledger  │  reads claims catalog +
+            │ (per-claim evaluators)     │  evidence, emits ledger
+            └─────────┬──────────────────┘
+                      ▼
+              assurance_ledger.json   <── machine-readable
+              assurance_ledger.md     <── human-readable
+              assurance_report.html   <── self-contained, shareable
+                      │
+                      ▼
+            ┌────────────────────────────┐
+            │ verify_assurance_ledger    │  schema, claim coverage,
+            │ verify_release_evidence_   │  artifact existence + sha256,
+            │ pack                       │  HTML report, transcript
+            └────────────────────────────┘     hashes
+```
+
+| Script | Role |
+|--------|------|
+| `scripts/local_workflow.py` | Shared helpers: west discovery, host-env scrubbing, marker-aware subprocess timeout. |
+| `scripts/release_check.py` | Sequential release gate: builds, ACVP/KAT runs, benchmark CSV, cost-of-assurance, sanitizers, MCU footprint, release bundle, ledger generation, ledger verification, pack verification, HTML report. |
+| `scripts/prepare_release_bundle.py` | Produces `release-manifest-*.json` + extracted release notes, with optional `--require-clean` and `--verify-remote-tag` discipline. |
+| `scripts/generate_assurance_ledger.py` | Per-claim evaluators that turn raw evidence into a JSON ledger. |
+| `scripts/verify_assurance_ledger.py` | Replay-only schema + sha256 + claim-coverage check on an existing ledger. |
+| `scripts/verify_release_evidence_pack.py` | Pack-level replay: ledger, benchmark, cost-of-assurance, MCU footprint, release bundle, HTML report. |
+| `scripts/render_assurance_report.py` | Pure-Python HTML renderer for the JSON ledger. |
+
+## Claim catalog
+
+The catalog at [`scripts/assurance_claims.json`](../scripts/assurance_claims.json)
+is the source of truth for what the project actually claims. Each entry
+has an `id`, a `category` (`release`, `kat`, `benchmark`,
+`cost_of_assurance`, `acvp`), a one-sentence `claim` describing the
+behaviour being asserted, and a `required` flag.
+
+Highlights:
+
+- `kat.mlkem_512`, `kat.mlkem_768`, `kat.mlkem_1024`,
+  `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87` —
+  per-parameter-set KAT decomposition. A regression in ML-DSA-65 names
+  ML-DSA-65 in the failure reason rather than disappearing into an
+  aggregate.
+- `benchmark.mlkem_throughput`, `benchmark.mldsa_throughput` —
+  per-primitive benchmark CSV checks.
+- `acvp.negative_path_rejection` — proves the ACVP serial harness
+  rejects malformed inputs (bad hex, unknown commands, wrong sizes,
+  oversize payloads) by binding `scripts/acvp_negative_scenarios.json`
+  to the captured `ACVP serial ztest run` transcript and requiring the
+  documented ztest markers (`test_rejects_malformed_commands`,
+  `test_rejects_invalid_hex_and_wrong_sizes`,
+  `test_serial_line_garbage_rejected_and_recovered`).
+- `acvp.timeout_recovery` — proves `ERROR:TIMEOUT` is emitted by
+  requiring the `test_readline_timeout` and `ERROR:TIMEOUT` markers in
+  the same transcript.
+- `release.transcript_binding` — every required release-check step has
+  a captured stdout transcript with a recorded SHA-256, plus QEMU
+  cost-of-assurance run logs.
+
+## Schema versioning and the compatibility shim
+
+The catalog and the ledger carry a `schema_version`.
+
+- **schema_version = 1** is the legacy 8-claim set shipped with the
+  initial assurance work. It contained `kat.offline_provenance` and
+  `benchmark.csv_validity` as aggregate claims.
+- **schema_version = 2** (current) adds the per-primitive KAT claims,
+  per-primitive benchmark claims, and the two ACVP robustness claims.
+
+`generate_assurance_ledger.py` and `verify_assurance_ledger.py` both
+accept either version. Loading a v1 catalog or replaying a v1 ledger
+emits a single `[warn]` line that names the path and explains the
+reduced coverage. Older evidence packs therefore degrade gracefully
+instead of hard-failing — a maintainer can hand an old pack to a
+reviewer and the verifier will still pass while clearly labelling it as
+legacy.
+
+## How transcript hashing works
+
+`release_check.py` runs every gate step under a transcript-capturing
+wrapper. For each step it writes
+`transcripts/<NN>-<slug>.log` containing the full stdout/stderr stream
+plus a header recording the command, working directory, return code,
+and duration. Just before the assurance ledger step runs, the gate
+writes
+`transcripts/evidence_transcript_manifest.json`
+containing one entry per *required* evidence-producing step
+(`Extended Checks (strict cost-of-assurance smoke)`, `ACVP serial ztest
+run`, `ACVP KAT ztest run`, `benchmark_csv`, `benchmark_csv_validate`,
+`resource_budgets`) plus one entry per QEMU stdout log under
+`cost_of_assurance_smoke/runs/*/run.log`. Each entry records the file
+path, its SHA-256, and its size in bytes.
+
+When `evaluate_transcript_binding` runs, it re-hashes every referenced
+file and rejects the manifest if any required step is missing,
+returncode-non-zero, size-drifted, or hash-drifted. The negative-ACVP
+and timeout-recovery evaluators perform a similar check but additionally
+grep the transcript body for the documented ztest markers and the
+`ERROR:TIMEOUT` literal.
+
+## Producing vs replaying an evidence pack
+
+**Producing** — run the full gate. This requires a working Zephyr SDK,
+`west`, `cppcheck`, `qemu-system-x86`, and (optionally) an ARM toolchain
+for the MCU protocol footprint step:
+
+```sh
+python3 scripts/release_check.py \
+    --tag v1.0.0 \
+    --output-root /tmp/pqcp-release-pack
+```
+
+The output root will contain the JUnit report, the JSON+MD ledger, the
+HTML assurance report, the captured transcripts, the local release
+bundle, the benchmark CSV with provenance sidecar, the cost-of-assurance
+evidence, and the MCU footprint CSV.
+
+**Replaying** — verify a previously produced pack. This requires only
+Python 3.12; no Zephyr SDK, no QEMU, no compilation:
+
+```sh
+python3 scripts/verify_release_evidence_pack.py /tmp/pqcp-release-pack \
+    --tag v1.0.0
+```
+
+The replay verifier checks that the ledger schema is supported, every
+required claim is present and has a valid status, every recorded
+SHA-256 still matches the file on disk, the benchmark CSV is
+schema-valid and bound to its provenance sidecar, the cost-of-assurance
+metrics all passed, the MCU footprint rows have positive ROM/RAM, the
+release bundle manifest agrees with the ledger on version + commit + tag
++ dirty-tree, every claim id appears in the HTML assurance report, and
+no transcript file has been tampered with since generation. Any failure
+exits non-zero and lists the offending claim, file, and reason.
+
+## Extending the claim set
+
+To add a new claim:
+
+1. Append an entry to [`scripts/assurance_claims.json`](../scripts/assurance_claims.json)
+   with a stable `id`, a `category`, and a one-sentence `claim`.
+2. Add an evaluator in `scripts/generate_assurance_ledger.py` that
+   takes the spec plus its inputs and returns either `pass_claim`,
+   `fail_claim`, or `not_applicable_claim`.
+3. Wire the evaluator into `build_claim_evaluators()`.
+4. Add a focused test in `scripts/test_assurance_ledger.py` that
+   exercises the pass and fail paths.
+5. If the claim depends on a new release-check artifact, also add the
+   generating step to `scripts/release_check.py` and (where relevant)
+   to `REQUIRED_EVIDENCE_TRANSCRIPT_STEPS` so the new transcript is
+   bound by `release.transcript_binding`.
+
+The replay verifier needs no changes for category- and claim-level
+additions: it iterates the catalog and checks the recorded artifacts
+generically. It only needs touching when a new *artifact type*
+(comparable to the HTML report or the benchmark CSV) is introduced.

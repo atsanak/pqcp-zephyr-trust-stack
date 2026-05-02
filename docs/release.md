@@ -4,6 +4,33 @@ This repository can prepare release artifacts locally without GitHub Actions.
 Use this path when Actions minutes, billing, or the GitHub Release workflow are
 unavailable but the code/tag side has already been validated.
 
+## How to cut a release and prove it (TL;DR)
+
+Three commands, in order:
+
+```bash
+# 1. Run the full release gate locally. Produces JUnit, ledger, HTML report,
+#    transcripts, benchmark CSV + provenance, MCU footprint, release bundle.
+python3 scripts/release_check.py --tag v1.0.0 \
+    --output-root /tmp/pqcp-release-pack
+
+# 2. (only when publishing assets exactly aligned with a tag)
+git checkout v1.0.0
+python3 scripts/prepare_release_bundle.py --exact-tag --verify-remote-tag
+
+# 3. Hand the pack to a reviewer (or come back to it later) and replay-verify
+#    it without rebuilding anything. Requires only Python 3.12.
+python3 scripts/verify_release_evidence_pack.py /tmp/pqcp-release-pack \
+    --tag v1.0.0
+```
+
+Step (1) writes `assurance_ledger.json`, `assurance_ledger.md`,
+`assurance_report.html`, and `transcripts/evidence_transcript_manifest.json`
+under the output root. Step (3) re-checks every recorded SHA-256, every
+required claim id, and every transcript hash, and exits non-zero with the
+exact offending file/claim if anything has drifted. See
+[`assurance-model.md`](assurance-model.md) for the architecture.
+
 ## What This Produces
 
 `scripts/prepare_release_bundle.py` writes an ignored local bundle under
