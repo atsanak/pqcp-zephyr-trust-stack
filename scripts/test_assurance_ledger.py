@@ -768,6 +768,111 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(len(specs), 1)
             self.assertEqual(specs[0]["id"], "release.version_consistency")
 
+    def _write_negative_transcript_manifest(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-acvp-serial-negative-ztest-run.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["ACVP serial negative ztest run"],
+                    "transcripts": [
+                        {
+                            "step": "ACVP serial negative ztest run",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_acvp_negative_replay_passes_with_suite_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_ACVP_NEG case=INVALID_MLKEM_ENCAPS_HEX "
+                "command=ENCAPS:MLKEM:768:zz response=ERROR:INVALID_HEX\n"
+                "PQCP_ACVP_NEG case=WRONG_SIZE_SIGN "
+                "command=SIGN:MLDSA:65:00 response=ERROR:WRONG_SIZE\n"
+                "TESTSUITE pqcp_acvp_serial_negative succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+            )
+            manifest = self._write_negative_transcript_manifest(root, body)
+            spec = {
+                "id": "acvp.negative_scenarios_replay",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_negative_replay(
+                spec,
+                scenarios_path=ledger.DEFAULT_NEGATIVE_SCENARIOS,
+                transcript_manifest=manifest,
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_acvp_mlkem_negative_paths_fail_when_marker_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                # Only MLDSA cases in the transcript -> mlkem claim must fail.
+                "PQCP_ACVP_NEG case=WRONG_SIZE_SIGN "
+                "command=SIGN:MLDSA:65:00 response=ERROR:WRONG_SIZE\n"
+                "TESTSUITE pqcp_acvp_serial_negative succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+            )
+            manifest = self._write_negative_transcript_manifest(root, body)
+            spec = {
+                "id": "acvp.mlkem_negative_paths",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_negative_replay(
+                spec,
+                scenarios_path=ledger.DEFAULT_NEGATIVE_SCENARIOS,
+                transcript_manifest=manifest,
+                required_response_substrings=("MLKEM",),
+                label="ML-KEM negative paths",
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("MLKEM", result["failure_reason"])
+
+    def test_acvp_negative_replay_fails_when_suite_marker_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = "PROJECT EXECUTION SUCCESSFUL\n"  # missing TESTSUITE pqcp_acvp_serial_negative succeeded
+            manifest = self._write_negative_transcript_manifest(root, body)
+            spec = {
+                "id": "acvp.negative_scenarios_replay",
+                "category": "acvp",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_acvp_negative_replay(
+                spec,
+                scenarios_path=ledger.DEFAULT_NEGATIVE_SCENARIOS,
+                transcript_manifest=manifest,
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("pqcp_acvp_serial_negative", result["failure_reason"])
+
     def test_unsupported_schema_version_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

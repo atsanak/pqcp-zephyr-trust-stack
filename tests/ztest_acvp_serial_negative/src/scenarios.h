@@ -1,0 +1,87 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Auto-generated from scripts/acvp_negative_scenarios.json by
+ * scripts/generate_acvp_negative_header.py. Do not edit by hand.
+ */
+#ifndef PQCP_ZTEST_ACVP_NEGATIVE_SCENARIOS_H
+#define PQCP_ZTEST_ACVP_NEGATIVE_SCENARIOS_H
+
+#include <stddef.h>
+
+struct pqcp_acvp_negative_case {
+    const char *name;
+    const char *command;
+    const char *expected_response;
+};
+
+#define PQCP_ACVP_NEGATIVE_CASE_COUNT 13
+
+static const struct pqcp_acvp_negative_case pqcp_acvp_negative_cases[] = {
+    {
+        .name = "INVALID_SEED_HEX",
+        .command = "SEED:DRBG:0:abc",
+        .expected_response = "ERROR:INVALID_HEX",
+    },
+    {
+        .name = "TRUNCATED_KEYGEN",
+        .command = "KEYGEN:MLKEM",
+        .expected_response = "ERROR:MISSING_ARGS",
+    },
+    {
+        .name = "UNSUPPORTED_MLKEM_LEVEL",
+        .command = "KEYGEN:MLKEM:999:",
+        .expected_response = "ERROR:INVALID_LEVEL",
+    },
+    {
+        .name = "SERIAL_GARBAGE_PREFIX",
+        .command = "\x1b[31mKEYGEN:MLKEM:768:",
+        .expected_response = "ERROR:INVALID_CMD",
+    },
+    {
+        .name = "INVALID_MLKEM_ENCAPS_HEX",
+        .command = "ENCAPS:MLKEM:768:zz",
+        .expected_response = "ERROR:INVALID_HEX",
+    },
+    {
+        .name = "TRUNCATED_MLKEM_ENCAPS_PAYLOAD",
+        .command = "ENCAPS:MLKEM:768:001122",
+        .expected_response = "ERROR:WRONG_SIZE",
+    },
+    {
+        .name = "OVERSIZE_MLKEM_ENCAPS_PAYLOAD",
+        .command = "ENCAPS:MLKEM:768:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .expected_response = "ERROR:WRONG_SIZE",
+    },
+    {
+        .name = "TRUNCATED_MLKEM_DECAPS_PAYLOAD",
+        .command = "DECAPS:MLKEM:768:001122",
+        .expected_response = "ERROR:WRONG_SIZE",
+    },
+    {
+        .name = "TOO_MANY_VERIFY_FIELDS",
+        .command = "VERIFY:MLDSA:65:00:11",
+        .expected_response = "ERROR:INVALID_CMD",
+    },
+    {
+        .name = "STRICT_HELP_FORM",
+        .command = "HELP:",
+        .expected_response = "ERROR:INVALID_CMD",
+    },
+    {
+        .name = "WRONG_SIZE_SIGN",
+        .command = "SIGN:MLDSA:65:00",
+        .expected_response = "ERROR:WRONG_SIZE",
+    },
+    {
+        .name = "INVALID_SIGN_HEX",
+        .command = "SIGN:MLDSA:65:zz",
+        .expected_response = "ERROR:INVALID_HEX",
+    },
+    {
+        .name = "TRUNCATED_VERIFY_PAYLOAD",
+        .command = "VERIFY:MLDSA:65:001122",
+        .expected_response = "ERROR:WRONG_SIZE",
+    },
+};
+
+#endif /* PQCP_ZTEST_ACVP_NEGATIVE_SCENARIOS_H */

@@ -554,6 +554,12 @@ def evaluate_benchmark_per_primitive(
 
 def _read_acvp_serial_transcript(manifest_path: Path) -> tuple[Path | None, str | None, str]:
     """Return (transcript_path, sha256, body) for the ACVP serial ztest run."""
+    return _read_named_transcript(manifest_path, "ACVP serial ztest run")
+
+
+def _read_named_transcript(
+    manifest_path: Path, step_name: str
+) -> tuple[Path | None, str | None, str]:
     if not manifest_path.exists():
         return None, None, ""
     try:
@@ -563,13 +569,106 @@ def _read_acvp_serial_transcript(manifest_path: Path) -> tuple[Path | None, str 
     for entry in manifest.get("transcripts", []) or []:
         if not isinstance(entry, dict):
             continue
-        if entry.get("step") != "ACVP serial ztest run":
+        if entry.get("step") != step_name:
             continue
         path = resolve_transcript_path(manifest_path, entry.get("transcript_path"))
         if path is None or not path.exists() or not path.is_file():
             return None, entry.get("sha256"), ""
         return path, entry.get("sha256"), path.read_text(encoding="utf-8", errors="replace")
     return None, None, ""
+
+
+def evaluate_acvp_negative_replay(
+    spec: dict[str, Any],
+    *,
+    scenarios_path: Path,
+    transcript_manifest: Path,
+    required_response_substrings: tuple[str, ...] = (),
+    label: str = "ACVP negative replay",
+) -> dict[str, object]:
+    """Bind tests/ztest_acvp_serial_negative output to the given claim.
+
+    The C-side test iterates every replay-eligible case from
+    scripts/acvp_negative_scenarios.json and asserts the produced wire
+    response matches the documented ERROR:* string. This evaluator does
+    not re-run the test; it verifies the captured transcript reports
+    suite success and (optionally) that a category-specific marker — for
+    example "MLKEM" or "MLDSA" in a case name — actually appeared in the
+    test output.
+    """
+    artifacts = [
+        artifact(scenarios_path, label="ACVP negative scenarios fixture"),
+        artifact(transcript_manifest, label="release-check transcript manifest"),
+    ]
+    validators = ["tests/ztest_acvp_serial_negative::test_every_negative_scenario_rejected"]
+    commands = ["west build -b qemu_x86_64 tests/ztest_acvp_serial_negative -t run"]
+
+    if not scenarios_path.exists():
+        return fail_claim(
+            spec,
+            reason=f"ACVP negative scenarios fixture not found: {scenarios_path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "ACVP serial negative ztest run"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "ACVP serial negative ztest run transcript missing or empty in "
+                f"transcript manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="ACVP serial negative ztest transcript"))
+
+    required_markers = (
+        "TESTSUITE pqcp_acvp_serial_negative succeeded",
+        "PROJECT EXECUTION SUCCESSFUL",
+    )
+    missing_markers = [m for m in required_markers if m not in transcript_body]
+    missing_substrings = [
+        sub for sub in required_response_substrings if sub not in transcript_body
+    ]
+    details = {
+        "scenarios_path": str(scenarios_path),
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "label": label,
+        "required_response_substrings": list(required_response_substrings),
+    }
+    failures: list[str] = []
+    if missing_markers:
+        failures.append(
+            "missing required suite marker(s): " + ", ".join(missing_markers)
+        )
+    if missing_substrings:
+        failures.append(
+            "missing required category substring(s): "
+            + ", ".join(missing_substrings)
+        )
+    if failures:
+        return fail_claim(
+            spec,
+            reason="; ".join(failures),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
 
 
 def evaluate_acvp_negative_paths(
@@ -1177,6 +1276,26 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         "acvp.timeout_recovery": lambda spec: evaluate_acvp_timeout_recovery(
             spec,
             transcript_manifest=transcript_manifest,
+        ),
+        "acvp.negative_scenarios_replay": lambda spec: evaluate_acvp_negative_replay(
+            spec,
+            scenarios_path=negative_scenarios,
+            transcript_manifest=transcript_manifest,
+            label="full negative scenario replay",
+        ),
+        "acvp.mlkem_negative_paths": lambda spec: evaluate_acvp_negative_replay(
+            spec,
+            scenarios_path=negative_scenarios,
+            transcript_manifest=transcript_manifest,
+            required_response_substrings=("MLKEM",),
+            label="ML-KEM negative paths",
+        ),
+        "acvp.mldsa_negative_paths": lambda spec: evaluate_acvp_negative_replay(
+            spec,
+            scenarios_path=negative_scenarios,
+            transcript_manifest=transcript_manifest,
+            required_response_substrings=("MLDSA",),
+            label="ML-DSA negative paths",
         ),
     }
     for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():
