@@ -23,13 +23,13 @@ from pathlib import Path
 from typing import List, Optional
 from xml.etree import ElementTree as ET
 
-HOST_ENV_BLACKLIST = (
-    "CFLAGS",
-    "CXXFLAGS",
-    "CPPFLAGS",
-    "LDFLAGS",
-    "CPATH",
-    "SDKROOT",
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from local_workflow import (  # noqa: E402
+    HOST_ENV_BLACKLIST,
+    clean_env,
+    command_to_text,
+    detect_west_root as _shared_detect_west_root,
+    discover_west as _shared_discover_west,
 )
 
 XML_INVALID_CHARS_RE = re.compile(
@@ -82,62 +82,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def detect_west_root(start: Path) -> Path:
-    current = start.resolve()
-    while current != current.parent:
-        if (current / ".west").exists():
-            return current
-        current = current.parent
-    return start.resolve()
+    return _shared_detect_west_root(start, strict=False)
 
 
 def discover_west(explicit: Optional[str], west_root: Path, module_path: Path) -> List[str]:
-    candidates: List[List[str]] = []
-
-    if explicit:
-        candidates.append(shlex.split(explicit))
-
-    path_west = shutil.which("west")
-    if path_west:
-        candidates.append([path_west])
-
-    for candidate in (
-        west_root / ".venv/bin/west",
-        module_path / ".venv/bin/west",
-    ):
-        if candidate.exists():
-            candidates.append([str(candidate)])
-
-    candidates.append([sys.executable, "-m", "west"])
-
-    seen = set()
-    for command in candidates:
-        key = tuple(command)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            result = subprocess.run(
-                command + ["--version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-        except OSError:
-            continue
-
-        if result.returncode == 0:
-            return command
-
-    raise RuntimeError("Unable to find a working west command")
+    return _shared_discover_west(explicit, west_root, module_path)
 
 
 def build_env() -> dict[str, str]:
-    env = os.environ.copy()
-    for key in HOST_ENV_BLACKLIST:
-        env.pop(key, None)
-    return env
+    return clean_env()
 
 
 def discover_tool(name: str) -> str:
@@ -162,10 +115,6 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def command_to_text(cmd: list[str]) -> str:
-    return " ".join(shlex.quote(part) for part in cmd)
 
 
 def write_step_transcript(
