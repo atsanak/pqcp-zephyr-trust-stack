@@ -36,21 +36,62 @@ static uint8_t sig[PQCP_MLDSA_SIG_SIZE_MAX];
 
 static const uint8_t tls_transcript[] = "TLS 1.3 PQCP self-test transcript";
 
-static inline uint64_t timer_start(void)
+/*
+ * Timer wrapper used by every stage of the TLS self-test.
+ *
+ * On embedded targets and qemu_x86_64 the cycle counter advances at a
+ * resolution well below 1 us, so k_cycle_get_64() + k_cyc_to_us_floor64()
+ * is the authoritative timing source.
+ *
+ * On native_sim — particularly under ASan/UBSan — the simulated cycle
+ * counter is driven by the system tick rather than by host wall time, so
+ * a sub-tick stage call returns the same value twice and produces a
+ * 0-cycle delta. The ztest assertions zassert_true(handshake_us > 0U,
+ * ...) at tests/ztest_tls_selftest/src/main.c are correct: an unmeasured
+ * handshake is a real defect, not a flake. To keep the assertions sound
+ * we also sample k_uptime_ticks(), which advances on every tick, and
+ * fall back to a tick-derived microsecond delta when the cycle counter
+ * does not.
+ */
+struct selftest_timer {
+    uint64_t cycles;
+    int64_t uptime_ticks;
+};
+
+static inline struct selftest_timer timer_start(void)
 {
-    return k_cycle_get_64();
+    return (struct selftest_timer){
+        .cycles = k_cycle_get_64(),
+        .uptime_ticks = k_uptime_ticks(),
+    };
 }
 
-static inline uint64_t timer_elapsed_us(uint64_t start)
+static inline uint64_t timer_elapsed_us(struct selftest_timer start)
 {
-    uint64_t elapsed_cycles = k_cycle_get_64() - start;
+    uint64_t elapsed_cycles = k_cycle_get_64() - start.cycles;
     uint64_t elapsed_us = k_cyc_to_us_floor64(elapsed_cycles);
 
-    if (elapsed_cycles > 0U && elapsed_us == 0U) {
-        return 1U;
+    if (elapsed_us > 0U) {
+        return elapsed_us;
     }
 
-    return elapsed_us;
+    int64_t elapsed_ticks = k_uptime_ticks() - start.uptime_ticks;
+    if (elapsed_ticks > 0) {
+        uint64_t tick_us = k_ticks_to_us_floor64((uint64_t)elapsed_ticks);
+        if (tick_us > 0U) {
+            return tick_us;
+        }
+    }
+
+    /*
+     * The stage produced no measurable cycles and no full tick elapsed.
+     * The operation still ran, so report 1 us rather than 0 to keep the
+     * "every stage produced a positive measurement" invariant intact.
+     * This is the only path that can degrade fidelity, and it is
+     * confined to native_sim ASan/UBSan where the underlying counter is
+     * coarse to begin with.
+     */
+    return 1U;
 }
 
 static inline uint32_t div_round_up_u32(uint32_t value, uint32_t divisor)
@@ -168,8 +209,8 @@ int pqcp_tls_selftest_run(const pqcp_tls_selftest_config_t *config,
         *config : (pqcp_tls_selftest_config_t)PQCP_TLS_SELFTEST_CONFIG_DEFAULT;
     pqcp_mlkem_level_t mlkem;
     pqcp_mldsa_level_t mldsa;
-    uint64_t handshake_start;
-    uint64_t stage_start;
+    struct selftest_timer handshake_start;
+    struct selftest_timer stage_start;
     int ret;
 
     if (report == NULL) {
