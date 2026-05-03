@@ -38,6 +38,7 @@ XML_INVALID_CHARS_RE = re.compile(
 
 REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "Extended Checks (strict cost-of-assurance smoke)",
+    "sanitizers",
     "ACVP serial ztest run",
     "ACVP serial negative ztest run",
     "ACVP KAT ztest run",

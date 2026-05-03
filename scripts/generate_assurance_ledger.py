@@ -833,6 +833,142 @@ def evaluate_acvp_timeout_recovery(
     )
 
 
+SANITIZER_ASAN_MARKERS = (
+    "ERROR: AddressSanitizer",
+    "AddressSanitizer:",
+    "ASAN:DEADLYSIGNAL",
+)
+SANITIZER_UBSAN_MARKERS = (
+    "runtime error:",
+    "UndefinedBehaviorSanitizer",
+)
+
+
+def _evaluate_sanitizer_clean(
+    spec: dict[str, Any],
+    *,
+    transcript_manifest: Path,
+    forbidden_markers: tuple[str, ...],
+    label: str,
+) -> dict[str, object]:
+    """Bind a sanitizer-clean assertion to the captured 'sanitizers' transcript.
+
+    The release_check.py 'sanitizers' step shells out to
+    scripts/run_sanitizer_checks.py, which builds and runs every
+    sanitizer-enabled ztest under native_sim/native/64. The full per-case
+    log lives next to the assurance pack; the consolidated step
+    transcript is captured by release_check.py and listed in
+    REQUIRED_EVIDENCE_TRANSCRIPT_STEPS. This evaluator re-checks that
+    transcript for the documented sanitizer error markers and reports
+    whichever lines (if any) tripped.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["scripts/run_sanitizer_checks.py"]
+    commands = [
+        "python3 scripts/run_sanitizer_checks.py "
+        "--west-root <west-root> --module-path <module>",
+    ]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "sanitizers"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "sanitizers step transcript missing or empty in transcript "
+                f"manifest {transcript_manifest} (re-run release_check.py)"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="sanitizers step transcript"))
+
+    if "PQCP Sanitizer Checks" not in transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "sanitizers transcript does not contain the 'PQCP Sanitizer Checks' "
+                "header — release_check.py likely skipped the step"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    skipped_pattern = "Non-CI host: skipping sanitizer execution"
+    if skipped_pattern in transcript_body:
+        return not_applicable_claim(
+            spec,
+            reason=(
+                "sanitizers step skipped on this host (set PQCP_STRICT_SANITIZERS=1 "
+                "or run on a Linux host to exercise native_sim)"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    offending: list[str] = []
+    for line in transcript_body.splitlines():
+        for marker in forbidden_markers:
+            if marker in line:
+                offending.append(line.strip())
+                break
+        if len(offending) >= 5:
+            break
+
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "label": label,
+        "forbidden_markers": list(forbidden_markers),
+    }
+    if offending:
+        details["sample_offending_lines"] = offending
+        return fail_claim(
+            spec,
+            reason=(
+                f"{label}: sanitizer transcript contains {len(offending)} offending "
+                "line(s); first: " + offending[0]
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
+def evaluate_asan_clean(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    return _evaluate_sanitizer_clean(
+        spec,
+        transcript_manifest=transcript_manifest,
+        forbidden_markers=SANITIZER_ASAN_MARKERS,
+        label="ASan",
+    )
+
+
+def evaluate_ubsan_clean(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    return _evaluate_sanitizer_clean(
+        spec,
+        transcript_manifest=transcript_manifest,
+        forbidden_markers=SANITIZER_UBSAN_MARKERS,
+        label="UBSan",
+    )
+
+
 def evaluate_benchmark_csv(
     spec: dict[str, Any],
     *,
@@ -1296,6 +1432,12 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             transcript_manifest=transcript_manifest,
             required_response_substrings=("MLDSA",),
             label="ML-DSA negative paths",
+        ),
+        "security.asan_clean": lambda spec: evaluate_asan_clean(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.ubsan_clean": lambda spec: evaluate_ubsan_clean(
+            spec, transcript_manifest=transcript_manifest,
         ),
     }
     for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():
