@@ -1,0 +1,45 @@
+cff-version: 1.2.0
+title: "pqcp-zephyr-trust-stack: a production-grade Post-Quantum Cryptography trust stack for Zephyr RTOS"
+message: "If you use this software in academic work or technical reports, please cite it using the metadata below."
+type: software
+authors:
+  - alias: atsana01
+    family-names: "(repository owner — see git log for full author list)"
+    given-names: "atsana01"
+repository-code: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
+url: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
+license: Apache-2.0
+version: "1.0.0"
+date-released: "2026-04-26"
+keywords:
+  - "post-quantum cryptography"
+  - "ML-KEM"
+  - "ML-DSA"
+  - "FIPS 203"
+  - "FIPS 204"
+  - "Zephyr RTOS"
+  - "embedded security"
+  - "ACVP"
+  - "assurance ledger"
+  - "release engineering"
+abstract: >-
+  pqcp-zephyr-trust-stack is an out-of-tree Zephyr RTOS module providing
+  ML-KEM (FIPS 203) and ML-DSA (FIPS 204) primitives through a layered
+  PSA Crypto + mbedTLS provider surface, with an ACVP serial validation
+  harness, vendored NIST ACVP Known-Answer-Test fixtures, a
+  cost-of-assurance regression suite, MCU resource-budget enforcement,
+  sanitizer coverage, and a benchmark provenance sidecar. Each release
+  produces a replay-checkable Assurance Ledger that binds every
+  release-relevant claim to specific evidence artifacts with recorded
+  SHA-256 hashes; the same evidence pack can be re-verified later by a
+  reviewer with only Python 3.12, no Zephyr SDK.
+preferred-citation:
+  type: software
+  title: "pqcp-zephyr-trust-stack"
+  authors:
+    - alias: atsana01
+      family-names: "(repository owner)"
+      given-names: "atsana01"
+  version: "1.0.0"
+  date-released: "2026-04-26"
+  url: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
