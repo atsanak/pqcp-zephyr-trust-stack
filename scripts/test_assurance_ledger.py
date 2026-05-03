@@ -959,6 +959,68 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = ledger.evaluate_asan_clean(spec, transcript_manifest=manifest)
             self.assertEqual(result["status"], "not_applicable")
 
+    def _write_boot_verify_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-boot-kat.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["boot KAT self-verify ztest run"],
+                    "transcripts": [
+                        {
+                            "step": "boot KAT self-verify ztest run",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_boot_kat_self_verify_passes_with_all_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_KAT_BOOT_VERIFY: starting power-on self-test\n"
+                "PQCP_KAT_BOOT_VERIFY: all enabled primitives passed\n"
+                "PQCP_KAT_BOOT_VERIFY: ztest reached main without panic\n"
+                "TESTSUITE pqcp_kat_boot_verify succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+            )
+            manifest = self._write_boot_verify_transcript(root, body)
+            spec = {"id": "boot.kat_self_verify", "category": "boot", "claim": "x", "required": True}
+            result = ledger.evaluate_boot_kat_self_verify(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_boot_kat_self_verify_fails_when_no_post_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "TESTSUITE pqcp_kat_boot_verify succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"  # missing PQCP_KAT_BOOT_VERIFY:* lines
+            )
+            manifest = self._write_boot_verify_transcript(root, body)
+            spec = {"id": "boot.kat_self_verify", "category": "boot", "claim": "x", "required": True}
+            result = ledger.evaluate_boot_kat_self_verify(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("PQCP_KAT_BOOT_VERIFY", result["failure_reason"])
+
     def test_unsupported_schema_version_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
