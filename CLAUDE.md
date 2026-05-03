@@ -537,123 +537,45 @@ Remaining release-publication blocker:
 - GitHub Release page readiness is still external: restore GitHub Actions
   billing/minutes and rerun the tag-triggered release workflow for `v1.0.0`.
 
-## Patch set 7 — local assurance ledger novelty
+## Patch set 7 — assurance workflow consolidation and polish
 
-Goal:
+Current state:
+- Local workflow helpers exist and are used by consumer_smoke, prepare_release_bundle, verify_product_readiness.
+- Assurance Ledger, ledger verifier, evidence-pack verifier, and transcript binding are all wired into release_check.py.
+- Tests exist for local workflows, ledger, and evidence-pack verification.
 
-- Add a QEMU/local-only Assurance Ledger that turns release claims into
-  machine-readable claim/evidence records instead of relying on prose alone.
+Next tasks:
+- Clarify and de-duplicate responsibilities between:
+  local_workflow.py, prepare_release_bundle.py, generate_assurance_ledger.py,
+  verify_assurance_ledger.py, verify_release_evidence_pack.py,
+  run_extended_checks.py, and release_check.py.
+- Standardize CLI flags, help text, and exit codes across assurance-related scripts.
+- Improve error messages so failed claims and missing artifacts are obvious and actionable.
+- Align README.md, docs/release.md, and docs/maintainer-release-checklist.md with the current assurance workflow.
+- Only after consolidation: consider one tightly scoped new assurance claim or reporting improvement that plugs into the existing ledger/evidence-pack model (no new parallel systems).
+- Do not add new crypto features in this patch set.
 
-Implemented scope:
 
-- `scripts/run_extended_checks.py` can now write
-  `cost_of_assurance_evidence.json` for every configured regression metric,
-  including candidate values, baseline values, ratios, absolute thresholds, and
-  per-metric pass/fail status.
-- `scripts/generate_assurance_ledger.py` generates both JSON and Markdown
-  ledgers from existing release artifacts.
-- `scripts/assurance_claims.json` defines the first required claim set:
-  version consistency, tag integrity, offline KAT provenance, benchmark CSV
-  validity, benchmark provenance binding, cost-of-assurance guardrails, and the
-  local release bundle manifest.
-- `scripts/test_assurance_ledger.py` covers synthetic pass/fail cases for
-  missing provenance, corrupted CSV hashes, missing guardrail evidence, tagless
-  runs, and Markdown/JSON claim-ID consistency.
-- `scripts/release_check.py` now treats the Assurance Ledger as a blocking final
-  gate after existing benchmark, KAT, resource-budget, and local-bundle checks.
-- `docs/release.md` and `docs/maintainer-release-checklist.md` explain where to
-  find and how to inspect the generated ledger.
-- Calibrated the ML-KEM-768 + ML-DSA-65 protocol provider-overhead absolute
-  guardrail to 76 us after a local QEMU run measured a 43 us candidate value;
-  the ratio guardrail remains intact.
+## Patch set 8 — CI fix + novelty push + publication readiness
 
-Validation performed during implementation:
+Priority zero: Fix broken CI.
+- Read .github/workflows/ci.yml and scripts/release_check.py in full via MCP GitHub.
+- Update ci.yml to match the new --output-root and transcript-capture CLI changes 
+  introduced in the assurance layer commits.
+- All 5 jobs (qemu-smoke, release-gate, benchmark-smoke, nucleo-protocol-builds, 
+  twister-discover) must pass before novelty work begins.
 
-- `python3 -m py_compile scripts/*.py`
-- `python3 scripts/test_assurance_ledger.py`
-- `python3 scripts/test_local_release_workflows.py`
-- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
-- `python3 scripts/run_extended_checks.py --strict --run-cost-of-assurance-smoke --cost-of-assurance-evidence /tmp/pqcp-coa-evidence.json`
-  - produced 6 comparison evidence records and 44 metric evaluations.
-- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-assurance`
-  - produced `assurance_ledger.json`, `assurance_ledger.md`, and
-    `cost_of_assurance_evidence.json`;
-  - ledger summary: pass=7, fail=0, not_applicable=0.
+Novelty and publication tasks (in order after CI is green):
+1. Add negative assurance claims for ACVP rejection and timeout recovery.
+2. Decompose KAT and benchmark claims per primitive (mlkem_512/768/1024, mldsa_44/65/87).
+3. Generate a dependency-free HTML assurance report from the JSON ledger.
+4. Strengthen README "What is novel here?" section and docs/api-overview.md use-case groupings.
+5. Add docs/assurance-model.md for publication readiness.
+6. Push test coverage: tampered logs, missing validators, HTML report presence, 
+   negative ACVP end-to-end.
 
-Remaining release-publication blocker:
+Do not add new crypto primitives in this patch set.
 
-- Still external: GitHub Release page publication requires restored GitHub
-  Actions billing/minutes. The Assurance Ledger is local and does not depend on
-  Actions.
-
-## Patch set 8 — replayable assurance ledger verification
-
-Goal:
-
-- Make generated Assurance Ledgers independently replay-checkable so maintainers
-  can validate an evidence package without rerunning the full Zephyr/QEMU gate.
-
-Implemented scope:
-
-- `scripts/verify_assurance_ledger.py` verifies generated ledger JSON/Markdown
-  pairs for schema version, required claim coverage, summary count consistency,
-  required-claim failures, Markdown/JSON claim-ID parity, artifact existence, and
-  recorded SHA-256 values.
-- `scripts/test_assurance_ledger.py` now covers verifier success, artifact hash
-  drift, stale Markdown, and summary drift in addition to generator behavior.
-- `scripts/release_check.py` runs the verifier as a blocking step immediately
-  after generating `assurance_ledger.json` and `assurance_ledger.md`.
-- `docs/release.md` and `docs/maintainer-release-checklist.md` document how to
-  replay-check an existing ledger without rebuilding.
-
-Validation performed during implementation:
-
-- `python3 -m py_compile scripts/*.py`
-- `python3 scripts/test_assurance_ledger.py`
-- `python3 scripts/test_local_release_workflows.py`
-- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
-- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-ledger-verify`
-  - produced `assurance_ledger.json` and `assurance_ledger.md`;
-  - ledger summary: pass=7, fail=0, not_applicable=0;
-  - final verifier step printed `[PASS] assurance ledger verification`.
-
-## Patch set 9 — release evidence pack verification
-
-Goal:
-
-- Verify the complete `release_check.py` output root as a coherent evidence
-  package, not just as individually generated artifacts.
-
-Implemented scope:
-
-- `scripts/verify_release_evidence_pack.py` validates an existing release-check
-  output directory without rerunning Zephyr builds or QEMU.
-- The pack verifier checks the assurance ledger, benchmark CSV/provenance pair,
-  benchmark summary, cost-of-assurance evidence, MCU protocol footprint CSV,
-  local release manifest, release notes hash, and ledger/bundle commit metadata
-  alignment.
-- `scripts/test_release_evidence_pack.py` covers valid synthetic packs, missing
-  MCU footprint evidence, tampered release notes, and manifest/ledger commit
-  mismatches.
-- `scripts/release_check.py` now runs the evidence pack verifier as a blocking
-  final step after assurance ledger verification.
-- `docs/release.md` and `docs/maintainer-release-checklist.md` document the
-  replay command for existing release output roots.
-
-Validation performed during implementation:
-
-- `python3 -m py_compile scripts/*.py`
-- `python3 scripts/test_assurance_ledger.py`
-- `python3 scripts/test_release_evidence_pack.py`
-- `python3 scripts/test_local_release_workflows.py`
-- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
-- `python3 scripts/verify_release_evidence_pack.py /tmp/pqcp-release-check-ledger-verify --tag v1.0.0`
-- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-check-pack-verify`
-  - produced fresh benchmark, cost-of-assurance, resource-budget, local bundle,
-    assurance ledger, and evidence-pack artifacts;
-  - final steps printed `[PASS] assurance ledger verification` and
-    `[PASS] release evidence pack verification`;
-  - release validation sequence completed successfully.
 
 ## Completed tasks (verified at 771ce93)
 
@@ -748,6 +670,133 @@ Before tagging v1.0.0:
 - commit and push the final state to GitHub using atsana01.
 
 ---
+
+## Patch set 9 — novelty wave (boot POST + CT smoke + sanitizer claims + publication brief)
+
+Base: `b7e9114` (CONFIG_ARCH_POSIX-gated tls_selftest timer fallback).
+Final: `<see git log: head pushed in this session>`
+
+Implemented and pushed as `atsana01` (no Co-Authored-By trailers):
+
+- `d8b0305` feat(assurance): security.asan_clean and security.ubsan_clean
+  claims. Re-grep the captured `sanitizers` step transcript for
+  AddressSanitizer / runtime-error markers; degrade to
+  `not_applicable` when the helper detects a non-CI host. Adds
+  `sanitizers` to REQUIRED_EVIDENCE_TRANSCRIPT_STEPS so the transcript
+  is bound by `release.transcript_binding`.
+- `e6baaee` docs: CITATION.cff and docs/publications.md. CFF v1.2
+  metadata for archive/Zenodo/program-committee citation; a 2-page
+  workshop-style brief covering the four key technical claims with
+  reproducibility statement and explicit non-claims section.
+- `427f46e` feat(boot): CONFIG_PQCP_KAT_BOOT_VERIFY power-on self-test.
+  Opt-in Kconfig (default n, depends on PQCP_RNG_DETERMINISTIC_TEST)
+  installs a SYS_INIT(APPLICATION, 90) hook that runs deterministic
+  keygen/encaps/decaps for every enabled ML-KEM level and
+  keygen/sign/verify for every enabled ML-DSA level, k_panic on
+  failure. New `tests/ztest_kat_boot_verify` exercises the boot path
+  on qemu_x86_64 and prints a stable
+  `PQCP_KAT_BOOT_VERIFY: ztest reached main without panic` marker.
+  New `boot.kat_self_verify` claim binds to that transcript with four
+  required markers.
+- `a2566c7` feat(security): runtime constant-time smoke for ML-KEM
+  decapsulation. New `tests/ztest_ct_smoke` runs decap 32× against
+  valid + 32× against deliberately corrupted CT, asserts relative
+  median variance under a documented loose bound (50% on simulator;
+  measured at ~1% on qemu_x86_64). Stable `PQCP_CT_SMOKE alg=...
+  median_valid=... median_invalid=... delta=... relative_pct=...
+  bound_pct=...` marker re-parsed by the new `security.ct_smoke`
+  evaluator into ledger details. Documented as smoke, not proof, in
+  both `docs/assurance-model.md` and `docs/publications.md`. Did not
+  implement an objdump conditional-jump check: the hot path lives in
+  the vendored upstream `mlkem-native` library, not in `src/`, so
+  syntactic scans either generate false positives on inlined
+  upstream code or require taking on de-facto ownership of the
+  upstream library — out of scope.
+
+Local validation completed in this session (macOS host):
+
+- `python3 -m py_compile scripts/*.py` clean.
+- `python3 scripts/test_assurance_ledger.py` → 35/35 OK
+  (9 new tests covering ASan/UBSan claim pass+fail+skipped paths,
+  boot KAT self-verify pass+missing-marker, CT smoke
+  pass+over-bound+missing-marker).
+- `python3 scripts/test_release_evidence_pack.py` → 6/6 OK.
+- `python3 scripts/test_local_release_workflows.py` → 6/6 OK.
+- Catalog ↔ evaluator audit: 25 claims in
+  `scripts/assurance_claims.json`, 25 evaluators wired in
+  `build_claim_evaluators` — zero unmatched on either side.
+- HTML report smoke against the full v2 catalog: 29795 bytes, all
+  25 claim IDs present, "ALL CLAIMS PASS" headline rendered.
+- `west build -b qemu_x86_64 tests/ztest_tls_selftest -t run` →
+  TESTSUITE pqcp_tls_selftest succeeded (b7e9114 timer fix verified).
+- `west build -b qemu_x86_64 tests/ztest_acvp_serial_negative -t run`
+  → TESTSUITE pqcp_acvp_serial_negative succeeded; 13/13 cases.
+- `west build -b qemu_x86_64 tests/ztest_kat_boot_verify -t run` →
+  TESTSUITE pqcp_kat_boot_verify succeeded; boot log shows
+  `[MLKEM-768]: ok` + `[MLDSA-65]: ok` + ztest reached main
+  without panic.
+- `west build -b qemu_x86_64 tests/ztest_ct_smoke -t run` →
+  PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=35100
+  median_invalid=35500 delta=400 relative_pct=1 bound_pct=50;
+  TESTSUITE pqcp_ct_smoke succeeded.
+
+What this session does NOT validate locally:
+
+- Full `release_check.py --tag v1.0.0 --output-root ...` end-to-end:
+  release_check.py invokes `run_sanitizer_checks.py`, which builds on
+  `native_sim` (Zephyr POSIX architecture). POSIX arch is Linux-only;
+  this development host is macOS. CI on Linux is the authoritative
+  validator for the sanitizer step and therefore for the new
+  `security.asan_clean` and `security.ubsan_clean` claims.
+- Native_sim validation of the `b7e9114` CONFIG_ARCH_POSIX-gated
+  `src/tls_selftest.c` timer fallback. Same Linux-only constraint.
+
+## Sprint block — next session
+
+Open follow-ups from this session:
+
+- [ ] Confirm CI green on the latest HEAD on Linux. The previous
+  Linux CI run on `54d758e` failed at the cost-of-assurance regression
+  step because `handshake_provider_overhead` reached 80 cycles vs the
+  76 absolute limit; `b7e9114` removes the unconditional
+  `k_uptime_ticks()` call from non-POSIX builds and is expected to
+  return that metric to baseline (~67). If a Linux CI run on a HEAD
+  ≥ `b7e9114` still trips the limit, measure the actual CI value and
+  bump the limit in
+  `scripts/qemu_cost_of_assurance_regression.json` to
+  `measured_value × 1.10` — never wider headroom than that, and
+  never without a recorded measurement.
+- [ ] Root-cause the native_sim+ASan+mbedTLS handshake hang so
+  `pqcp_bench_protocol` can be re-enabled in the sanitizer run phase.
+  Currently build-only by design (commit `54d758e`); opt-in
+  `pqcp_bench_protocol_run` case is available in `OPT_IN_CASES` for
+  investigation. The runtime ASan TLS path is now covered by
+  `tests/ztest_tls_selftest` after `b7e9114`.
+- [ ] Investigate hardware-grade CT measurement to elevate
+  `security.ct_smoke` from "first-order timing smoke" to a stronger
+  property. Candidate approaches: instruction-count via QEMU's TCG
+  plugins (one notch above wall-clock cycles), or dedola-style
+  measurement on real `nucleo_h743zi`. Neither replaces a formal
+  proof; the project explicitly does not claim CT.
+- [ ] Optional: an `objdump`-based scan of the *project's own* `src/`
+  C output for new conditional jumps in any function that handles
+  secret material. Cheap to add, narrowly scoped. Would NOT scan
+  upstream `mlkem-native` / `mldsa-native`.
+- [ ] Once CI is green and billing is unblocked, retire the v1.0.0
+  GitHub Release page blocker noted in earlier patch sets.
+
+Coverage / claim catalog status at end of this session:
+
+| Category          | Claims |
+|-------------------|--------|
+| release           | 4 (version_consistency, tag_integrity, local_bundle, transcript_binding) |
+| kat               | 7 (offline_provenance + per-primitive ML-KEM-512/768/1024 and ML-DSA-44/65/87) |
+| benchmark         | 4 (csv_validity, provenance_binding, mlkem_throughput, mldsa_throughput) |
+| cost_of_assurance | 1 (guardrails) |
+| acvp              | 5 (negative_path_rejection, timeout_recovery, negative_scenarios_replay, mlkem_negative_paths, mldsa_negative_paths) |
+| security          | 3 (asan_clean, ubsan_clean, ct_smoke) |
+| boot              | 1 (kat_self_verify) |
+| **Total**         | **25** |
 
 ## Final rule
 
