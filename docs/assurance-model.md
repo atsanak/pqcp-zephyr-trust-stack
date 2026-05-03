@@ -94,6 +94,46 @@ Highlights:
   a captured stdout transcript with a recorded SHA-256, plus QEMU
   cost-of-assurance run logs.
 
+## Constant-time smoke (`security.ct_smoke`) — what it does and does not prove
+
+`tests/ztest_ct_smoke` runs ML-KEM-768 decapsulation 32 times against a
+valid ciphertext and 32 times against a deliberately corrupted one,
+records `k_cycle_get_64()` deltas, computes the absolute difference of
+the two median cycle counts, and asserts the relative variance falls
+under a documented loose bound. The captured transcript records the
+measurement on a stable marker line:
+
+```
+PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=<C> \
+    median_invalid=<C> delta=<C> relative_pct=<P> bound_pct=<B>
+```
+
+The `security.ct_smoke` assurance evaluator re-parses that line and
+records the medians, delta, relative variance, and the bound in the
+ledger details + HTML report.
+
+**What this proves:** that the public ML-KEM decapsulation API has a
+*first-order* timing profile that does not visibly bifurcate on
+ciphertext validity, which is exactly the failure mode introduced when
+a maintainer accidentally short-circuits decapsulation on an invalid
+CT. A regression here is named directly in the ledger instead of
+disappearing into "decap still works".
+
+**What this does NOT prove:** it is not a formal constant-time proof.
+A real attacker has access to far better measurement infrastructure
+than `k_cycle_get_64` on a simulated CPU. On qemu_x86_64 the cycle
+counter is itself coarse, so a "pass" here does not extend to physical
+hardware. It does not exercise data-dependent memory access patterns,
+cache footprint, or microarchitectural side channels. Side-channel
+resistance to fault injection, EM, or power analysis is explicitly out
+of scope and called out the same way in
+[`docs/publications.md`](publications.md).
+
+The claim is required because the stable marker line is a useful
+regression target; the smoke nature of the test is itself a stated
+assurance property — visibly admitting the limit is part of the
+credibility story.
+
 ## Schema versioning and the compatibility shim
 
 The catalog and the ledger carry a `schema_version`.
