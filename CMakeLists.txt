@@ -332,6 +332,19 @@ if(CONFIG_PQCP_TLS_SELFTEST)
     zephyr_library_link_libraries(pqcp_mldsa)
 endif()
 
+# Boot-time power-on self-test (FIPS-style)
+if(CONFIG_PQCP_KAT_BOOT_VERIFY)
+    zephyr_library_named(pqcp_kat_boot_verify)
+    zephyr_library_sources(${PQCP_SRC}/kat_boot_verify.c)
+    zephyr_library_link_libraries(pqcp_common)
+    if(CONFIG_PQCP_MLKEM)
+        zephyr_library_link_libraries(pqcp_mlkem)
+    endif()
+    if(CONFIG_PQCP_MLDSA)
+        zephyr_library_link_libraries(pqcp_mldsa)
+    endif()
+endif()
+
 # =============================================================================
 # PSA Crypto Driver Shims
 # =============================================================================

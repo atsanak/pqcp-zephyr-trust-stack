@@ -329,6 +329,39 @@ config PQCP_TLS_SELFTEST
 endmenu
 
 # =============================================================================
+# Boot Self-Verification
+# =============================================================================
+menu "Boot Self-Verification"
+
+config PQCP_KAT_BOOT_VERIFY
+	bool "Run primitive self-verification at boot"
+	default n
+	depends on PQCP_RNG_DETERMINISTIC_TEST
+	help
+	  When enabled, the module installs a SYS_INIT hook at the
+	  APPLICATION level that exercises every enabled ML-KEM and ML-DSA
+	  parameter set with a deterministic seed and verifies a full
+	  keygen / encaps / decaps (KEM) or keygen / sign / verify (DSA)
+	  roundtrip before the application starts running. If any primitive
+	  fails its roundtrip, the module calls k_panic() so the system
+	  cannot proceed with cryptographic services that have not
+	  passed their power-on self-test.
+
+	  This is the embedded equivalent of a FIPS power-on self-test
+	  (POST). It uses the deterministic test RNG so the boot-time
+	  seed material is reproducible and does not pull entropy from
+	  the platform RNG before SYS_INIT completes; that is why the
+	  option depends on PQCP_RNG_DETERMINISTIC_TEST. After the
+	  self-verify completes, callers MUST re-seed via
+	  pqcp_rng_register() before serving production traffic.
+
+	  Off by default because it pulls in the deterministic RNG and
+	  changes boot semantics. Consumers that want a self-checking
+	  module turn this on explicitly.
+
+endmenu
+
+# =============================================================================
 # Benchmarking Configuration
 # =============================================================================
 menu "Benchmarking Configuration"

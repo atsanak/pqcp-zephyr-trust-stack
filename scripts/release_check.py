@@ -42,6 +42,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP serial ztest run",
     "ACVP serial negative ztest run",
     "ACVP KAT ztest run",
+    "boot KAT self-verify ztest run",
     "benchmark_csv",
     "benchmark_csv_validate",
     "resource_budgets",
@@ -306,6 +307,7 @@ def main() -> int:
     ztest_build_dir = output_root / "ztest_acvp_serial_qemu"
     ztest_negative_build_dir = output_root / "ztest_acvp_serial_negative_qemu"
     kat_build_dir = output_root / "ztest_acvp_kat_qemu"
+    boot_verify_build_dir = output_root / "ztest_kat_boot_verify_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
     benchmark_provenance_path = benchmark_csv_path.with_name("benchmark_provenance.json")
@@ -570,6 +572,40 @@ def main() -> int:
             timeout=180,
             success_markers=(
                 "TESTSUITE pqcp_acvp_kat succeeded",
+                "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="boot KAT self-verify ztest build",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "qemu_x86_64",
+                str(module_path / "tests/ztest_kat_boot_verify"),
+                "-d",
+                str(boot_verify_build_dir),
+                "--",
+                f"-DZEPHYR_EXTRA_MODULES={module_path}",
+            ],
+            cwd=west_root,
+        ),
+        Step(
+            name="boot KAT self-verify ztest run",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-d",
+                str(boot_verify_build_dir),
+                "-t",
+                "run",
+            ],
+            cwd=west_root,
+            timeout=120,
+            success_markers=(
+                "TESTSUITE pqcp_kat_boot_verify succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
         ),

@@ -947,6 +947,71 @@ def _evaluate_sanitizer_clean(
     )
 
 
+def evaluate_boot_kat_self_verify(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind boot.kat_self_verify to the captured tests/ztest_kat_boot_verify run.
+
+    The C-side SYS_INIT hook in src/kat_boot_verify.c calls k_panic() on
+    any failure, so simply observing the suite-success marker plus the
+    "all enabled primitives passed" log line in the captured transcript
+    is sufficient to prove the boot self-test ran and every enabled
+    primitive completed its keygen/encaps/decaps or keygen/sign/verify
+    roundtrip.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["tests/ztest_kat_boot_verify::test_boot_self_verify_did_not_panic"]
+    commands = ["west build -b qemu_x86_64 tests/ztest_kat_boot_verify -t run"]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "boot KAT self-verify ztest run"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "boot KAT self-verify transcript missing or empty in transcript "
+                f"manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="boot KAT self-verify transcript"))
+
+    required_markers = (
+        "PQCP_KAT_BOOT_VERIFY: starting power-on self-test",
+        "PQCP_KAT_BOOT_VERIFY: all enabled primitives passed",
+        "PQCP_KAT_BOOT_VERIFY: ztest reached main without panic",
+        "TESTSUITE pqcp_kat_boot_verify succeeded",
+    )
+    missing = [m for m in required_markers if m not in transcript_body]
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "required_markers": list(required_markers),
+    }
+    if missing:
+        return fail_claim(
+            spec,
+            reason=(
+                "boot KAT self-verify transcript missing required marker(s): "
+                + ", ".join(missing)
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def evaluate_asan_clean(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -1437,6 +1502,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "security.ubsan_clean": lambda spec: evaluate_ubsan_clean(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "boot.kat_self_verify": lambda spec: evaluate_boot_kat_self_verify(
             spec, transcript_manifest=transcript_manifest,
         ),
     }
