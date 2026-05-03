@@ -873,6 +873,92 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("pqcp_acvp_serial_negative", result["failure_reason"])
 
+    def _write_sanitizers_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-sanitizers.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["sanitizers"],
+                    "transcripts": [
+                        {
+                            "step": "sanitizers",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_asan_clean_passes_when_transcript_has_no_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP Sanitizer Checks\n"
+                "[ztest_acvp_serial] Run OK (logs/ztest_acvp_serial.run.log)\n"
+                "[ztest_primitive] Run OK (logs/ztest_primitive.run.log)\n"
+                "[ztest_tls_selftest] Run OK (logs/ztest_tls_selftest.run.log)\n"
+            )
+            manifest = self._write_sanitizers_transcript(root, body)
+            spec = {"id": "security.asan_clean", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_asan_clean(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_asan_clean_fails_when_marker_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP Sanitizer Checks\n"
+                "==1234==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x...\n"
+            )
+            manifest = self._write_sanitizers_transcript(root, body)
+            spec = {"id": "security.asan_clean", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_asan_clean(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("AddressSanitizer", result["failure_reason"])
+
+    def test_ubsan_clean_fails_on_runtime_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP Sanitizer Checks\n"
+                "src/foo.c:42:7: runtime error: signed integer overflow\n"
+            )
+            manifest = self._write_sanitizers_transcript(root, body)
+            spec = {"id": "security.ubsan_clean", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_ubsan_clean(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("runtime error", result["failure_reason"])
+
+    def test_sanitizer_clean_skips_when_host_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP Sanitizer Checks\n"
+                "Non-CI host: skipping sanitizer execution. Set PQCP_STRICT_SANITIZERS=1\n"
+            )
+            manifest = self._write_sanitizers_transcript(root, body)
+            spec = {"id": "security.asan_clean", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_asan_clean(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "not_applicable")
+
     def test_unsupported_schema_version_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

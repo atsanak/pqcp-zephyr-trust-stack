@@ -126,6 +126,18 @@
       "category": "acvp",
       "claim": "ML-DSA-specific negative paths (WRONG_SIZE for short SIGN payload, INVALID_HEX for non-hex SIGN payload, WRONG_SIZE for truncated VERIFY payload, INVALID_CMD for too-many VERIFY fields) are rejected with the documented ERROR:* responses by tests/ztest_acvp_serial_negative.",
       "required": true
+    },
+    {
+      "id": "security.asan_clean",
+      "category": "security",
+      "claim": "Every sanitizer-enabled native_sim ztest run captured by scripts/run_sanitizer_checks.py finished without an AddressSanitizer error report.",
+      "required": true
+    },
+    {
+      "id": "security.ubsan_clean",
+      "category": "security",
+      "claim": "Every sanitizer-enabled native_sim ztest run captured by scripts/run_sanitizer_checks.py finished without an UndefinedBehaviorSanitizer runtime error report.",
+      "required": true
     }
   ]
 }
