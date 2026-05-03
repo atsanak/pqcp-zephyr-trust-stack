@@ -127,6 +127,25 @@ def git(module_path: Path, *args: str) -> str:
     return run(["git", *args], module_path)
 
 
+def git_optional(module_path: Path, *args: str) -> str | None:
+    """Run git and return stripped stdout, or None on non-zero exit.
+
+    Used for queries that may legitimately fail (for example "does this
+    tag exist locally?" inside a CI checkout that did not fetch tags).
+    """
+    result = subprocess.run(
+        ["git", *args],
+        cwd=str(module_path),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -249,8 +268,15 @@ def write_manifest(
     api_docs_index: Path | None,
 ) -> Path:
     head_commit = git(module_path, "rev-parse", "HEAD")
-    tag_object = git(module_path, "rev-parse", f"refs/tags/{tag}")
-    tag_commit = git(module_path, "rev-parse", f"refs/tags/{tag}^{{}}")
+    tag_object = git_optional(module_path, "rev-parse", f"refs/tags/{tag}")
+    tag_commit = git_optional(module_path, "rev-parse", f"refs/tags/{tag}^{{}}")
+    if tag_commit is None:
+        # Tag not present locally (CI checkout without --tags). The
+        # outer main() already accepted this when --tag was inferred;
+        # bind the manifest to HEAD so downstream verifiers see a
+        # coherent source_commit and a tag_commit pointing at the same
+        # checkout.
+        tag_commit = head_commit
     dirty = bool(git(module_path, "status", "--porcelain"))
     dependencies = parse_west_dependencies(module_path)
 
@@ -290,6 +316,7 @@ def main() -> int:
     module_path = args.module_path.resolve()
 
     version = args.version or parse_header_version(module_path)
+    tag_explicit = args.tag is not None
     tag = args.tag or f"v{version}"
     if normalize_tag(tag) != version:
         raise RuntimeError(f"tag {tag!r} does not match version {version!r}")
@@ -305,10 +332,30 @@ def main() -> int:
     if failures:
         raise RuntimeError("release metadata validation failed:\n  - " + "\n  - ".join(failures))
 
-    # Verify the tag exists before doing any expensive work.
+    # Verify the tag exists before doing any expensive work. If --tag was
+    # passed explicitly the tag MUST exist locally (this is a
+    # release-publishing path). If the tag was inferred from version.h
+    # (no --tag), an absent local tag is allowed — for example, CI
+    # checkouts that did not fetch tags. In that case we record that the
+    # tag was unresolved and continue with HEAD as the source commit.
     head_commit = git(module_path, "rev-parse", "HEAD")
-    tag_object = git(module_path, "rev-parse", f"refs/tags/{tag}")
-    tag_commit = git(module_path, "rev-parse", f"refs/tags/{tag}^{{}}")
+    tag_object = git_optional(module_path, "rev-parse", f"refs/tags/{tag}")
+    tag_commit = git_optional(module_path, "rev-parse", f"refs/tags/{tag}^{{}}")
+    if tag_object is None or tag_commit is None:
+        if tag_explicit or args.exact_tag or args.require_tag_on_head or args.verify_remote_tag:
+            raise RuntimeError(
+                f"git rev-parse refs/tags/{tag} failed and --tag/--exact-tag/"
+                "--require-tag-on-head/--verify-remote-tag was requested. Fetch "
+                f"the tag with `git fetch origin --tags` (or `git fetch origin tag {tag}`)."
+            )
+        print(
+            f"[warn] inferred tag {tag} is not present locally; continuing with "
+            "head_commit only. Pass --tag <tag> after fetching tags to bind the "
+            "manifest to the tag object.",
+            flush=True,
+        )
+        tag_commit = head_commit
+        tag_object = None
     working_tree_dirty = bool(git(module_path, "status", "--porcelain"))
     if (args.require_clean or args.exact_tag) and working_tree_dirty:
         raise RuntimeError("working tree is dirty; commit, stash, or clean changes first")
