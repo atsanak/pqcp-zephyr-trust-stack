@@ -1021,6 +1021,85 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("PQCP_KAT_BOOT_VERIFY", result["failure_reason"])
 
+    def _write_ct_smoke_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-ct-smoke.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-04-28T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["ct smoke ztest run"],
+                    "transcripts": [
+                        {
+                            "step": "ct smoke ztest run",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_ct_smoke_passes_when_within_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=35100 "
+                "median_invalid=35500 delta=400 relative_pct=1 bound_pct=50\n"
+                "TESTSUITE pqcp_ct_smoke succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+            )
+            manifest = self._write_ct_smoke_transcript(root, body)
+            spec = {"id": "security.ct_smoke", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_ct_smoke(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+            self.assertEqual(result["details"]["relative_variance_pct"], 1)
+            self.assertEqual(result["details"]["smoke_bound_pct"], 50)
+            self.assertTrue(result["details"]["is_smoke_test_only"])
+
+    def test_ct_smoke_fails_when_variance_exceeds_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=35100 "
+                "median_invalid=70200 delta=35100 relative_pct=100 bound_pct=50\n"
+                "TESTSUITE pqcp_ct_smoke succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+            )
+            manifest = self._write_ct_smoke_transcript(root, body)
+            spec = {"id": "security.ct_smoke", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_ct_smoke(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("100%", result["failure_reason"])
+
+    def test_ct_smoke_fails_when_marker_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "TESTSUITE pqcp_ct_smoke succeeded\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"  # no PQCP_CT_SMOKE line
+            )
+            manifest = self._write_ct_smoke_transcript(root, body)
+            spec = {"id": "security.ct_smoke", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_ct_smoke(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("PQCP_CT_SMOKE", result["failure_reason"])
+
     def test_unsupported_schema_version_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

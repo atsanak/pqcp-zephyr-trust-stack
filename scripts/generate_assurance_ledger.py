@@ -947,6 +947,101 @@ def _evaluate_sanitizer_clean(
     )
 
 
+_CT_SMOKE_RE = __import__("re").compile(
+    r"PQCP_CT_SMOKE\s+alg=(?P<alg>\S+)\s+iters=(?P<iters>\d+)\s+"
+    r"median_valid=(?P<median_valid>\d+)\s+median_invalid=(?P<median_invalid>\d+)\s+"
+    r"delta=(?P<delta>\d+)\s+relative_pct=(?P<relative_pct>\d+)\s+"
+    r"bound_pct=(?P<bound_pct>\d+)"
+)
+
+
+def evaluate_ct_smoke(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind security.ct_smoke to the captured tests/ztest_ct_smoke transcript.
+
+    The C-side ztest already enforces the variance bound with zassert; this
+    evaluator additionally re-parses the PQCP_CT_SMOKE marker line so the
+    measured numbers (medians, delta, relative_pct, bound_pct) land in the
+    ledger details and the HTML report. That makes the ct-smoke output a
+    citable, replayable artifact rather than a one-off log line.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["tests/ztest_ct_smoke::test_mlkem_decap_timing_profile_does_not_bifurcate"]
+    commands = ["west build -b qemu_x86_64 tests/ztest_ct_smoke -t run"]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "ct smoke ztest run"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "ct smoke ztest transcript missing or empty in transcript "
+                f"manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="ct smoke ztest transcript"))
+
+    if "TESTSUITE pqcp_ct_smoke succeeded" not in transcript_body:
+        return fail_claim(
+            spec,
+            reason="ct smoke transcript missing TESTSUITE pqcp_ct_smoke succeeded marker",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    match = _CT_SMOKE_RE.search(transcript_body)
+    if not match:
+        return fail_claim(
+            spec,
+            reason=(
+                "ct smoke transcript missing the PQCP_CT_SMOKE measurement line "
+                "(stable format: alg=<NAME> iters=<N> median_valid=<C> ...)"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    relative_pct = int(match.group("relative_pct"))
+    bound_pct = int(match.group("bound_pct"))
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "algorithm": match.group("alg"),
+        "iterations": int(match.group("iters")),
+        "median_valid_cycles": int(match.group("median_valid")),
+        "median_invalid_cycles": int(match.group("median_invalid")),
+        "delta_cycles": int(match.group("delta")),
+        "relative_variance_pct": relative_pct,
+        "smoke_bound_pct": bound_pct,
+        "is_smoke_test_only": True,
+    }
+    if relative_pct > bound_pct:
+        return fail_claim(
+            spec,
+            reason=(
+                f"ct smoke {match.group('alg')} relative variance "
+                f"{relative_pct}% exceeds documented bound {bound_pct}%"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def evaluate_boot_kat_self_verify(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -1505,6 +1600,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "boot.kat_self_verify": lambda spec: evaluate_boot_kat_self_verify(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.ct_smoke": lambda spec: evaluate_ct_smoke(
             spec, transcript_manifest=transcript_manifest,
         ),
     }

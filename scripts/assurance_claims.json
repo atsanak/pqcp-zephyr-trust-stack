@@ -144,6 +144,12 @@
       "category": "boot",
       "claim": "When CONFIG_PQCP_KAT_BOOT_VERIFY=y is set, the SYS_INIT(APPLICATION) hook in src/kat_boot_verify.c runs a deterministic keygen/encaps/decaps for every enabled ML-KEM level and keygen/sign/verify for every enabled ML-DSA level, and the system reaches ztest main without calling k_panic(). Proven by tests/ztest_kat_boot_verify on qemu_x86_64.",
       "required": true
+    },
+    {
+      "id": "security.ct_smoke",
+      "category": "security",
+      "claim": "ML-KEM-768 decapsulation, run 32 times against a valid and 32 times against a deliberately corrupted ciphertext, produces median cycle counts whose relative variance stays under a documented bound. This is a runtime smoke test, not a constant-time proof; the assurance documentation (docs/assurance-model.md, docs/publications.md) states the same caveats. Proven by tests/ztest_ct_smoke on qemu_x86_64.",
+      "required": true
     }
   ]
 }

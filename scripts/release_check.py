@@ -43,6 +43,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP serial negative ztest run",
     "ACVP KAT ztest run",
     "boot KAT self-verify ztest run",
+    "ct smoke ztest run",
     "benchmark_csv",
     "benchmark_csv_validate",
     "resource_budgets",
@@ -308,6 +309,7 @@ def main() -> int:
     ztest_negative_build_dir = output_root / "ztest_acvp_serial_negative_qemu"
     kat_build_dir = output_root / "ztest_acvp_kat_qemu"
     boot_verify_build_dir = output_root / "ztest_kat_boot_verify_qemu"
+    ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
     benchmark_provenance_path = benchmark_csv_path.with_name("benchmark_provenance.json")
@@ -606,6 +608,40 @@ def main() -> int:
             timeout=120,
             success_markers=(
                 "TESTSUITE pqcp_kat_boot_verify succeeded",
+                "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="ct smoke ztest build",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "qemu_x86_64",
+                str(module_path / "tests/ztest_ct_smoke"),
+                "-d",
+                str(ct_smoke_build_dir),
+                "--",
+                f"-DZEPHYR_EXTRA_MODULES={module_path}",
+            ],
+            cwd=west_root,
+        ),
+        Step(
+            name="ct smoke ztest run",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-d",
+                str(ct_smoke_build_dir),
+                "-t",
+                "run",
+            ],
+            cwd=west_root,
+            timeout=180,
+            success_markers=(
+                "TESTSUITE pqcp_ct_smoke succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
         ),
