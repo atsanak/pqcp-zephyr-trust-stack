@@ -113,6 +113,24 @@ must also report `pass` for:
   `acvp.mldsa_negative_paths` — bound to the new
   `ACVP serial negative ztest run` transcript markers from
   `tests/ztest_acvp_serial_negative`.
+- `security.asan_clean`, `security.ubsan_clean` — re-grep the captured
+  `sanitizers` step transcript for AddressSanitizer / runtime-error
+  markers and degrade to `not_applicable` on hosts that skip
+  sanitizer execution (PQCP_STRICT_SANITIZERS unset and not under CI).
+- `boot.kat_self_verify` — bound to the new `boot KAT self-verify
+  ztest run` transcript from `tests/ztest_kat_boot_verify`. Requires
+  the `PQCP_KAT_BOOT_VERIFY: starting power-on self-test`,
+  `PQCP_KAT_BOOT_VERIFY: all enabled primitives passed`, and
+  `TESTSUITE pqcp_kat_boot_verify succeeded` markers, plus the
+  `PQCP_KAT_BOOT_VERIFY: ztest reached main without panic` line proving
+  the SYS_INIT hook returned 0.
+- `security.ct_smoke` — bound to the new `ct smoke ztest run`
+  transcript from `tests/ztest_ct_smoke`. Re-parses the stable
+  `PQCP_CT_SMOKE alg=... median_valid=... median_invalid=... delta=...
+  relative_pct=... bound_pct=...` line and stores the measurement in
+  the ledger details. Marked `is_smoke_test_only=true` and accompanied
+  by an explicit non-claim section in
+  [`assurance-model.md`](assurance-model.md).
 
 A failing required claim names the offending parameter set, primitive, or
 case directly in `failure_reason` rather than disappearing into the older
