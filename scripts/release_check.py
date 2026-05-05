@@ -49,6 +49,15 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "resource_budgets",
 )
 
+CI_FAST_GATE_STEPS = (
+    "version_consistency",
+    "cppcheck",
+    "Extended Checks (strict)",
+    "sanitizers",
+    "ACVP serial negative scenario header check",
+    "kat_provenance",
+)
+
 
 @dataclass
 class Step:
@@ -80,6 +89,18 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("benchmark_results/release_check"),
         help="Root directory for release-check build artifacts",
+    )
+    parser.add_argument(
+        "--ci",
+        "--fast-gate",
+        action="store_true",
+        dest="ci",
+        help=(
+            "Run the fast CI release gate. This keeps version, static, sanitizer, "
+            "negative-scenario, and KAT provenance checks blocking in CI while "
+            "leaving full benchmark, MCU budget, local bundle, and assurance-ledger "
+            "evidence generation to the default local release path."
+        ),
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Echo commands before running them")
     return parser.parse_args()
@@ -293,6 +314,18 @@ def run_step(step: Step, env: dict[str, str], verbose: bool) -> StepResult:
         output=stdout,
         duration_seconds=duration_seconds,
     )
+
+
+def select_steps_for_mode(steps: list[Step], *, ci: bool) -> list[Step]:
+    if not ci:
+        return steps
+
+    selected = [step for step in steps if step.name in CI_FAST_GATE_STEPS]
+    selected_names = {step.name for step in selected}
+    missing = [name for name in CI_FAST_GATE_STEPS if name not in selected_names]
+    if missing:
+        raise RuntimeError(f"CI fast gate step list is stale; missing: {', '.join(missing)}")
+    return selected
 
 
 def main() -> int:
@@ -732,12 +765,14 @@ def main() -> int:
             cwd=module_path,
         ),
     ]
+    steps = select_steps_for_mode(steps, ci=args.ci)
 
     print("PQCP Release Check")
     print(f"  west root : {west_root}")
     print(f"  module    : {module_path}")
     print(f"  west cmd  : {' '.join(west_cmd)}")
     print(f"  output    : {output_root}")
+    print(f"  mode      : {'CI fast gate' if args.ci else 'full local release gate'}")
 
     results: List[StepResult] = []
     transcript_entries: list[dict[str, object]] = []
@@ -766,6 +801,10 @@ def main() -> int:
 
     write_junit_report(results, junit_output)
     print(f"[INFO] Wrote JUnit report to {junit_output}")
+
+    if args.ci:
+        print("[PASS] CI fast release gate completed successfully.")
+        return 0
 
     # Non-blocking final step: render the HTML assurance report from the ledger.
     # Failure here is logged as a warning but does not abort the gate, since the

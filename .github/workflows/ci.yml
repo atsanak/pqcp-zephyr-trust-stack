@@ -546,9 +546,11 @@ jobs:
       - name: Run release gate (release_check.py)
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         shell: bash
+        timeout-minutes: 20
         run: |
           set -o pipefail
           python "$GITHUB_WORKSPACE/scripts/release_check.py" \
+            --ci \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$GITHUB_WORKSPACE" \
             --output-root "$RUNNER_TEMP/release-check-output" \
