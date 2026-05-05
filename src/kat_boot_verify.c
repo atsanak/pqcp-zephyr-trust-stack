@@ -57,16 +57,25 @@ static const uint8_t kat_boot_seed[48] = {
 
 static const uint8_t kat_boot_message[] = "PQCP boot self-verify";
 
+#if defined(CONFIG_PQCP_MLKEM_LEVEL_512) || \
+	defined(CONFIG_PQCP_MLKEM_LEVEL_768) || \
+	defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
+#define PQCP_KAT_BOOT_VERIFY_HAS_MLKEM 1
+#endif
+
+#if defined(CONFIG_PQCP_MLDSA_LEVEL_44) || \
+	defined(CONFIG_PQCP_MLDSA_LEVEL_65) || \
+	defined(CONFIG_PQCP_MLDSA_LEVEL_87)
+#define PQCP_KAT_BOOT_VERIFY_HAS_MLDSA 1
+#endif
+
 /* Static buffers sized at maxima to avoid touching the heap during boot. */
+#ifdef PQCP_KAT_BOOT_VERIFY_HAS_MLKEM
 static uint8_t kem_pk[PQCP_MLKEM_PK_SIZE_MAX];
 static uint8_t kem_sk[PQCP_MLKEM_SK_SIZE_MAX];
 static uint8_t kem_ct[PQCP_MLKEM_CT_SIZE_MAX];
 static uint8_t kem_ss_a[PQCP_MLKEM_SS_SIZE];
 static uint8_t kem_ss_b[PQCP_MLKEM_SS_SIZE];
-
-static uint8_t dsa_pk[PQCP_MLDSA_PK_SIZE_MAX];
-static uint8_t dsa_sk[PQCP_MLDSA_SK_SIZE_MAX];
-static uint8_t dsa_sig[PQCP_MLDSA_SIG_SIZE_MAX];
 
 static int kat_verify_mlkem(pqcp_mlkem_level_t level, const char *label)
 {
@@ -92,6 +101,12 @@ static int kat_verify_mlkem(pqcp_mlkem_level_t level, const char *label)
 	LOG_INF("PQCP_KAT_BOOT_VERIFY[%s]: ok", label);
 	return 0;
 }
+#endif /* PQCP_KAT_BOOT_VERIFY_HAS_MLKEM */
+
+#ifdef PQCP_KAT_BOOT_VERIFY_HAS_MLDSA
+static uint8_t dsa_pk[PQCP_MLDSA_PK_SIZE_MAX];
+static uint8_t dsa_sk[PQCP_MLDSA_SK_SIZE_MAX];
+static uint8_t dsa_sig[PQCP_MLDSA_SIG_SIZE_MAX];
 
 static int kat_verify_mldsa(pqcp_mldsa_level_t level, const char *label)
 {
@@ -115,6 +130,7 @@ static int kat_verify_mldsa(pqcp_mldsa_level_t level, const char *label)
 	LOG_INF("PQCP_KAT_BOOT_VERIFY[%s]: ok", label);
 	return 0;
 }
+#endif /* PQCP_KAT_BOOT_VERIFY_HAS_MLDSA */
 
 static int pqcp_kat_boot_verify(void)
 {
@@ -131,33 +147,33 @@ static int pqcp_kat_boot_verify(void)
 		return rc;
 	}
 
-#if defined(CONFIG_PQCP_MLKEM_512)
+#if defined(CONFIG_PQCP_MLKEM_LEVEL_512)
 	if ((rc = kat_verify_mlkem(PQCP_MLKEM_512, "MLKEM-512")) != 0) {
 		return rc;
 	}
 #endif
-#if defined(CONFIG_PQCP_MLKEM_768)
+#if defined(CONFIG_PQCP_MLKEM_LEVEL_768)
 	if ((rc = kat_verify_mlkem(PQCP_MLKEM_768, "MLKEM-768")) != 0) {
 		return rc;
 	}
 #endif
-#if defined(CONFIG_PQCP_MLKEM_1024)
+#if defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
 	if ((rc = kat_verify_mlkem(PQCP_MLKEM_1024, "MLKEM-1024")) != 0) {
 		return rc;
 	}
 #endif
 
-#if defined(CONFIG_PQCP_MLDSA_44)
+#if defined(CONFIG_PQCP_MLDSA_LEVEL_44)
 	if ((rc = kat_verify_mldsa(PQCP_MLDSA_44, "MLDSA-44")) != 0) {
 		return rc;
 	}
 #endif
-#if defined(CONFIG_PQCP_MLDSA_65)
+#if defined(CONFIG_PQCP_MLDSA_LEVEL_65)
 	if ((rc = kat_verify_mldsa(PQCP_MLDSA_65, "MLDSA-65")) != 0) {
 		return rc;
 	}
 #endif
-#if defined(CONFIG_PQCP_MLDSA_87)
+#if defined(CONFIG_PQCP_MLDSA_LEVEL_87)
 	if ((rc = kat_verify_mldsa(PQCP_MLDSA_87, "MLDSA-87")) != 0) {
 		return rc;
 	}
