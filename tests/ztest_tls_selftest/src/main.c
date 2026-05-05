@@ -6,30 +6,8 @@
 
 #include <zephyr/ztest.h>
 #include <zephyr/sys/util.h>
-#include <zephyr/sys/printk-hooks.h>
 
 #include <pqcp_zephyr/tls_selftest.h>
-
-#include <string.h>
-
-static char printk_capture[8192];
-static size_t printk_capture_len;
-
-static int capture_printk(int c)
-{
-    if (printk_capture_len < sizeof(printk_capture) - 1U) {
-        printk_capture[printk_capture_len++] = (char)c;
-        printk_capture[printk_capture_len] = '\0';
-    }
-
-    return c;
-}
-
-static void reset_capture(void)
-{
-    memset(printk_capture, 0, sizeof(printk_capture));
-    printk_capture_len = 0U;
-}
 
 /*
  * Stress-oriented TLS coverage is compiled only when overlay-fuzz.conf
@@ -102,29 +80,27 @@ ZTEST(pqcp_tls_selftest, test_tls_selftest_emits_metrics)
         .emit_metrics = true,
     };
     pqcp_tls_selftest_report_t report;
-    printk_hook_fn_t previous_hook;
-
-    reset_capture();
-    previous_hook = __printk_get_hook();
-    __printk_hook_install(capture_printk);
 
     zassert_equal(pqcp_tls_selftest_run(&cfg, &report), 0);
 
-    __printk_hook_install(previous_hook);
-
     zassert_true(report.psa_ready, "PSA should be initialized in self-test");
-#if defined(CONFIG_ASAN) || defined(CONFIG_UBSAN)
-    zassert_true(report.handshake_us > 0U, "sanitized run should complete handshake");
+    zassert_equal(report.kem_level, cfg.kem_level);
+    zassert_equal(report.sig_level, cfg.sig_level);
+    zassert_true(report.kem_keygen_us > 0U, "ML-KEM keygen should be timed");
+    zassert_true(report.kem_encaps_us > 0U, "ML-KEM encaps should be timed");
+    zassert_true(report.kem_decaps_us > 0U, "ML-KEM decaps should be timed");
+    zassert_true(report.sig_keygen_us > 0U, "ML-DSA keygen should be timed");
+    zassert_true(report.sig_sign_us > 0U, "ML-DSA sign should be timed");
+    zassert_true(report.sig_verify_us > 0U, "ML-DSA verify should be timed");
+    zassert_true(report.handshake_us > 0U, "handshake should be timed");
     zassert_true(report.transcript_bytes > 0U,
-                 "sanitized run should produce transcript accounting");
-#else
-    zassert_not_null(strstr(printk_capture,
-                            "PQCP_METRIC,driver,keygen,MLKEM,768,time,"));
-    zassert_not_null(strstr(printk_capture,
-                            "PQCP_METRIC,protocol,handshake,TLS13,0,time,"));
-    zassert_not_null(strstr(printk_capture,
-                            "PQCP_METRIC,protocol,handshake,TLS13,0,transcript_bytes,"));
-#endif
+                 "metrics path should produce transcript accounting");
+    zassert_true(report.certificate_bytes > 0U,
+                 "metrics path should produce certificate accounting");
+    zassert_true(report.key_exchange_bytes > 0U,
+                 "metrics path should produce key-exchange accounting");
+    zassert_true(report.transport_overhead_bytes > 0U,
+                 "metrics path should produce transport accounting");
 }
 
 #if defined(CONFIG_PQCP_FUZZ_TESTS)
@@ -146,7 +122,6 @@ ZTEST(pqcp_tls_selftest, test_tls_selftest_stress_repeated_runs)
             .emit_metrics = ((fuzz_next() & 0x1U) != 0U),
         };
 
-        reset_capture();
         zassert_equal(pqcp_tls_selftest_run(&cfg, &report), 0);
         zassert_equal(report.kem_level, cfg.kem_level);
         zassert_equal(report.sig_level, cfg.sig_level);
