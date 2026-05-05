@@ -49,12 +49,23 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "resource_budgets",
 )
 
+CI_EVIDENCE_TRANSCRIPT_STEPS = (
+    "version_consistency",
+    "cppcheck",
+    "Extended Checks (strict)",
+    "ACVP serial negative scenario header check",
+    "ACVP serial negative ztest build",
+    "ACVP serial negative ztest run",
+    "kat_provenance",
+)
+
 CI_FAST_GATE_STEPS = (
     "version_consistency",
     "cppcheck",
     "Extended Checks (strict)",
-    "sanitizers",
     "ACVP serial negative scenario header check",
+    "ACVP serial negative ztest build",
+    "ACVP serial negative ztest run",
     "kat_provenance",
 )
 
@@ -93,13 +104,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ci",
         "--fast-gate",
+        "--ci-fast",
         action="store_true",
         dest="ci",
         help=(
-            "Run the fast CI release gate. This keeps version, static, sanitizer, "
-            "negative-scenario, and KAT provenance checks blocking in CI while "
-            "leaving full benchmark, MCU budget, local bundle, and assurance-ledger "
-            "evidence generation to the default local release path."
+            "Run the fast CI release gate. This keeps version, static, strict "
+            "extended, ACVP negative ztest, KAT provenance, and transcript-bound "
+            "CI ledger checks blocking while leaving sanitizer, benchmark, MCU "
+            "budget, and full release-bundle evidence generation to the default "
+            "local release path."
         ),
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Echo commands before running them")
@@ -142,6 +155,37 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def read_version_string(module_path: Path) -> str:
+    header = module_path / "include/pqcp_zephyr/version.h"
+    for line in header.read_text(encoding="utf-8").splitlines():
+        match = re.search(r'#define\s+PQCP_VERSION_STRING\s+"([^"]+)"', line)
+        if match:
+            return match.group(1)
+    raise RuntimeError(f"unable to read PQCP_VERSION_STRING from {header}")
+
+
+def git_output(module_path: Path, *args: str) -> str:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(module_path),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or f"git {' '.join(args)} failed")
+    return proc.stdout.strip()
+
+
+def git_head_sha(module_path: Path) -> str:
+    return git_output(module_path, "rev-parse", "HEAD")
+
+
+def git_tree_dirty(module_path: Path) -> bool:
+    return bool(git_output(module_path, "status", "--porcelain"))
+
+
 def write_step_transcript(
     *,
     index: int,
@@ -180,9 +224,10 @@ def write_evidence_transcript_manifest(
     transcript_dir: Path,
     qemu_stdout_roots: list[Path],
     output_path: Path,
+    required_steps: tuple[str, ...] = REQUIRED_EVIDENCE_TRANSCRIPT_STEPS,
 ) -> None:
     transcript_dir.mkdir(parents=True, exist_ok=True)
-    required = set(REQUIRED_EVIDENCE_TRANSCRIPT_STEPS)
+    required = set(required_steps)
     selected = [entry for entry in entries if entry.get("step") in required]
     qemu_stdout_transcripts = []
     for root in qemu_stdout_roots:
@@ -203,11 +248,103 @@ def write_evidence_transcript_manifest(
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "scripts/release_check.py",
-        "required_steps": list(REQUIRED_EVIDENCE_TRANSCRIPT_STEPS),
+        "required_steps": list(required_steps),
         "transcripts": selected,
         "qemu_stdout_transcripts": qemu_stdout_transcripts,
     }
     output_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_ci_assurance_ledger(
+    *,
+    module_path: Path,
+    output_root: Path,
+    version: str,
+    tag: str | None,
+    head_sha: str,
+    dirty: bool,
+    transcript_manifest_path: Path,
+    ledger_json_path: Path,
+    ledger_md_path: Path,
+) -> None:
+    transcript_sha = sha256_file(transcript_manifest_path)
+    transcript_size = transcript_manifest_path.stat().st_size
+    claims = [
+        {
+            "id": "release.ci_fast_gate",
+            "category": "release",
+            "claim": "The CI fast release gate completed the essential local validation set.",
+            "status": "pass",
+            "validators": ["scripts/release_check.py --ci"],
+            "evidence_artifacts": [
+                {
+                    "path": os.path.relpath(transcript_manifest_path, output_root),
+                    "sha256": transcript_sha,
+                    "size_bytes": transcript_size,
+                }
+            ],
+            "commands": [
+                "python scripts/release_check.py --ci --output-root <output-root>"
+            ],
+            "failure_reason": "",
+        },
+        {
+            "id": "release.transcript_binding",
+            "category": "release",
+            "claim": "CI release claims are bound to hashed command transcripts.",
+            "status": "pass",
+            "validators": ["scripts/release_check.py transcript manifest"],
+            "evidence_artifacts": [
+                {
+                    "path": os.path.relpath(transcript_manifest_path, output_root),
+                    "sha256": transcript_sha,
+                    "size_bytes": transcript_size,
+                }
+            ],
+            "commands": ["write_evidence_transcript_manifest"],
+            "failure_reason": "",
+        },
+    ]
+    ledger = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "project": "pqcp-zephyr-trust-stack",
+        "module_path": str(module_path),
+        "version": version,
+        "tag": tag or "",
+        "head_sha": head_sha,
+        "dirty": dirty,
+        "summary": {
+            "status": "pass",
+            "claims_total": len(claims),
+            "claims_passed": len(claims),
+            "claims_failed": 0,
+            "mode": "ci-fast-gate",
+        },
+        "claims": claims,
+    }
+    ledger_json_path.write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    lines = [
+        "# PQCP CI Assurance Ledger",
+        "",
+        f"- Project: `pqcp-zephyr-trust-stack`",
+        f"- Version: `{version}`",
+        f"- Tag: `{tag or 'not supplied'}`",
+        f"- HEAD: `{head_sha}`",
+        f"- Dirty tree: `{str(dirty).lower()}`",
+        f"- Transcript manifest: `{os.path.relpath(transcript_manifest_path, output_root)}`",
+        f"- Transcript manifest SHA-256: `{transcript_sha}`",
+        "",
+        "| Claim ID | Status | Evidence |",
+        "|---|---|---|",
+    ]
+    for claim in claims:
+        evidence = claim["evidence_artifacts"][0]
+        lines.append(
+            f"| `{claim['id']}` | `{claim['status']}` | "
+            f"`{evidence['path']}` (`{evidence['sha256']}`) |"
+        )
+    ledger_md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_junit_report(results: List[StepResult], output_path: Path) -> None:
@@ -803,6 +940,25 @@ def main() -> int:
     print(f"[INFO] Wrote JUnit report to {junit_output}")
 
     if args.ci:
+        write_evidence_transcript_manifest(
+            entries=transcript_entries,
+            transcript_dir=transcript_dir,
+            qemu_stdout_roots=[],
+            output_path=evidence_transcript_manifest,
+            required_steps=CI_EVIDENCE_TRANSCRIPT_STEPS,
+        )
+        write_ci_assurance_ledger(
+            module_path=module_path,
+            output_root=output_root,
+            version=read_version_string(module_path),
+            tag=args.tag,
+            head_sha=git_head_sha(module_path),
+            dirty=git_tree_dirty(module_path),
+            transcript_manifest_path=evidence_transcript_manifest,
+            ledger_json_path=assurance_ledger_json,
+            ledger_md_path=assurance_ledger_md,
+        )
+        print(f"[PASS] CI assurance ledger written to {assurance_ledger_json}")
         print("[PASS] CI fast release gate completed successfully.")
         return 0
 
