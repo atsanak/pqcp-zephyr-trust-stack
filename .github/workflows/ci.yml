@@ -290,6 +290,7 @@ jobs:
 
       - name: Upload Twister results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: twister-results
@@ -392,6 +393,7 @@ jobs:
 
       - name: Upload nucleo protocol build logs
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: nucleo-protocol-builds
@@ -478,6 +480,7 @@ jobs:
 
       - name: Upload benchmark smoke artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-smoke-${{ github.run_id }}
@@ -558,6 +561,7 @@ jobs:
 
       - name: Publish release gate JUnit
         if: always()
+        continue-on-error: true
         uses: mikepenz/action-junit-report@v4
         with:
           report_paths: ${{ runner.temp }}/release-check-output/release_check_results.xml
@@ -568,6 +572,7 @@ jobs:
 
       - name: Upload release gate artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: release-gate-${{ github.run_id }}
