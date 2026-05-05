@@ -575,3 +575,4 @@ jobs:
             ${{ runner.temp }}/release-check.log
             ${{ runner.temp }}/release-check-output/release_check_results.xml
             ${{ runner.temp }}/release-check-output
+          if-no-files-found: warn
