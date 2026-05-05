@@ -1951,16 +1951,19 @@ west build -t run
 - [Zephyr Random Subsystem](https://docs.zephyrproject.org/latest/services/crypto/random/index.html)
 - [TF-PSA-Crypto ML-DSA Driver](https://github.com/Mbed-TLS/TF-PSA-Crypto/issues/633)
 
-## License
+## License and Contribution Terms
 
-SPDX-License-Identifier: Apache-2.0
+This repository is proprietary and is not open source.
 
-## Contributing
+It is shared only with authorized collaborators for private review, testing, feedback, and contribution.
 
-1. Fork and create a feature branch
-2. Ensure all tests pass on `qemu_x86_64`
-3. Add tests for new functionality
-4. Submit a pull request
+You may view, test, review, and contribute to this project only if you have been explicitly granted access by Angelos Tsanaktsidis.
+
+You may not copy, publish, distribute, deploy, commercialize, reuse, or create a competing product from this repository without prior written permission.
+
+By submitting a contribution, you agree that your contribution may be used, modified, and integrated into this project by Angelos Tsanaktsidis under the terms described in the LICENSE file.
+
+See the LICENSE file for full terms.
 
 ## Authors
 
