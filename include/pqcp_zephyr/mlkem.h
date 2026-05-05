@@ -1,10 +1,12 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
  * PQCP Zephyr Trust Stack - ML-KEM API
  *
  * This header provides the Zephyr-facing API for ML-KEM (FIPS-203)
  * operations using mlkem-native as the underlying implementation.
+ *
+ * Stability: stable production API for the 1.0.x line.
  */
 
 #ifndef PQCP_ZEPHYR_MLKEM_H

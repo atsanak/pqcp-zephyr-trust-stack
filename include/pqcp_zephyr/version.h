@@ -1,7 +1,9 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
  * PQCP Zephyr Trust Stack - Version Information
+ *
+ * Stability: stable production API for the 1.0.x line.
  */
 
 #ifndef PQCP_ZEPHYR_VERSION_H_

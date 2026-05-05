@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """
 Drive the pqcp_serial_acvp sample over either a serial port or a subprocess.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """Run the local product-readiness verification sequence."""
 
 from __future__ import annotations

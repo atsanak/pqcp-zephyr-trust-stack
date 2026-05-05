@@ -1,10 +1,13 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
  * PQCP ACVP Command Library
  *
  * Reusable command handlers for ACVP testing. These can be used
  * by the serial ACVP sample or programmatically by tests.
+ *
+ * Stability: stable validation API for the 1.0.x line. The ACVP wire
+ * grammar is stable, but this header is not a production transport API.
  */
 
 #ifndef PQCP_ZEPHYR_ACVP_CMD_H_

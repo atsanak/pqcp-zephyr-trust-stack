@@ -5,6 +5,10 @@
 
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
+> **Access note:** this repository is proprietary and is not open source. It is
+> shared only with authorized collaborators for private review, testing,
+> feedback, and contribution under the terms in [`LICENSE`](LICENSE).
+
 ## What is novel here?
 
 This repository is intentionally not "another PQC sample". The
@@ -146,7 +150,7 @@ without having to rebuild the matrix themselves.
 - Hardware RNG quality (depends on platform entropy source)
 - TLS record-layer security (provided by mbedTLS)
 
-## Roadmap to v1.0.0
+## v1.0.0 Release Status
 
 - [x] CI: west Twister discovery job
 - [x] CI: KAT vector NIST provenance verification
@@ -1954,6 +1958,8 @@ west build -t run
 ## License and Contribution Terms
 
 This repository is proprietary and is not open source.
+
+Repository-owned files use the SPDX expression `LicenseRef-Proprietary-Collaborative-Evaluation`.
 
 It is shared only with authorized collaborators for private review, testing, feedback, and contribution.
 

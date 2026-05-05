@@ -1,10 +1,13 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
  * PQCP Zephyr Trust Stack - Benchmarking API
  *
  * This header provides the benchmarking harness for measuring performance
  * of PQCP cryptographic operations and protocols.
+ *
+ * Stability: stable analysis API for the 1.0.x line. `PQCP_METRIC` field
+ * ordering is part of the public benchmark contract.
  */
 
 #ifndef PQCP_ZEPHYR_BENCH_H

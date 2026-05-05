@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """Verify a generated PQCP assurance ledger without rerunning Zephyr builds."""
 
 from __future__ import annotations

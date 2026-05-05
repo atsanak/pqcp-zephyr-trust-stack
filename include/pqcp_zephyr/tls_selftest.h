@@ -1,10 +1,13 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
  * PQCP Zephyr Trust Stack - TLS Self-Test Helpers
  *
  * Shared self-test and protocol benchmarking helpers for exercising the
  * PQCP TLS/PSA integration path without requiring live networking.
+ *
+ * Stability: stable validation API for the 1.0.x line. This is not a general
+ * production TLS session API.
  */
 
 #ifndef PQCP_ZEPHYR_TLS_SELFTEST_H_

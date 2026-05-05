@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
 /*
  * If we got far enough to run a ZTEST entry point, the SYS_INIT hook
  * installed by src/kat_boot_verify.c (under CONFIG_PQCP_KAT_BOOT_VERIFY=y)

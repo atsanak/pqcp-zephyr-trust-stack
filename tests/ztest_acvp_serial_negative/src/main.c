@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
 /*
  * Negative-scenario replay for the PQCP ACVP serial harness.
  *

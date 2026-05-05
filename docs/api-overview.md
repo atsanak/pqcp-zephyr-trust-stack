@@ -6,6 +6,11 @@ symbols from `src/`.
 
 ## Stable Production Headers
 
+These headers are tagged as stable in their file-level comments. Downstream
+applications may rely on their symbol names and buffer-size contracts across
+the 1.0.x line unless a future changelog explicitly announces a breaking
+change.
+
 - `mlkem.h`: ML-KEM key generation, encapsulation, decapsulation, and size
   helpers for FIPS 203 parameter sets 512, 768, and 1024.
 - `mldsa.h`: ML-DSA key generation, pure signing, verification, hash-helper,
@@ -16,6 +21,10 @@ symbols from `src/`.
   compatibility checks.
 
 ## Validation And Analysis Headers
+
+These headers are stable for validation, test, benchmark, or host-integration
+workflows. They are not general-purpose production transport or TLS session
+APIs unless explicitly documented by the header.
 
 - `acvp_cmd.h`: lab/test-oriented ACVP command parser, formatter, and serial
   line-state helpers. The wire grammar is stable, but this is not a production
