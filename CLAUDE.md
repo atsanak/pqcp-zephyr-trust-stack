@@ -798,6 +798,54 @@ Coverage / claim catalog status at end of this session:
 | boot              | 1 (kat_self_verify) |
 | **Total**         | **25** |
 
+## Patch set 8 — CI fix + partner-readiness polish
+
+Blocking CI issue diagnosed:
+
+- Failed run `25258540634`, release-gate job `74061837924`, did not hit a
+  workflow-level timeout. The failure was `exit 124` from the internal
+  120-second wall-clock timeout in `scripts/run_sanitizer_checks.py`.
+- The active sub-step was the `pqcp_bench_protocol` sanitizer runtime run
+  inside `release_check.py`; the build completed, then the sanitizer image
+  exceeded the per-case run timeout.
+- The CI release-gate now uses `release_check.py --ci`, which runs the
+  essential fast gate and leaves full evidence bundle generation to local
+  release validation.
+
+Partner-readiness pass:
+
+- Repository-owned source files now use the proprietary SPDX expression
+  `LicenseRef-Proprietary-Collaborative-Evaluation`.
+- `LICENSE` remains the proprietary collaborative evaluation license text
+  supplied by Angelos Tsanaktsidis.
+- README first-impression copy now states that the repository is proprietary
+  and not open source before the technical sections.
+- `CONTRIBUTING.md` keeps the proprietary contribution terms and adds the
+  local validation commands expected before partner pull requests.
+- Public API overview and header comments distinguish stable production
+  APIs from validation/analysis contracts.
+
+Validation completed locally for this patch set:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_local_release_workflows.py` → 6/6 OK
+- `python3 scripts/test_assurance_ledger.py` → 35/35 OK
+- `python3 scripts/test_release_evidence_pack.py` → 6/6 OK
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `doxygen docs/Doxyfile` with zero warnings
+- `python3 scripts/release_check.py --ci --output-root /tmp/pqcp-ci-fast-gate`
+
+Open follow-ups:
+
+- Confirm the latest Linux CI run completes green after the fast-gate split.
+- Run `scripts/consumer_smoke.py --module-mode manifest` from a clean west
+  workspace after the partner-readiness commit is pushed.
+- Run the full local release gate with
+  `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-release-partner`
+  on a clean tree before partner distribution.
+- Create the GitHub Release page for `v1.0.0` once billing/spending limits
+  allow release publishing.
+
 ## Final rule
 
 Do not confuse motion with progress.

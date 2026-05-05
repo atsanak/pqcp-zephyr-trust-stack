@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """
 Measure non-MCU resource-budget rows and print reviewed JSON updates.
 

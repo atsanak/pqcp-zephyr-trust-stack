@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """Run the smallest west-based consumer smoke check for this module."""
 
 from __future__ import annotations

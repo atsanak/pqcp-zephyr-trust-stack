@@ -1,10 +1,12 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
  * PQCP Zephyr Trust Stack - RNG Abstraction
  *
  * This header provides the random number generator abstraction for PQCP.
  * It supports multiple RNG backends configurable via Kconfig.
+ *
+ * Stability: stable production API for the 1.0.x line.
  */
 
 #ifndef PQCP_ZEPHYR_RNG_H

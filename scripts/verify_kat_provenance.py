@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """Verify checked-in ACVP KAT vectors against vendored NIST ACVP fixtures."""
 
 from __future__ import annotations
@@ -346,7 +346,7 @@ def render_header(
     metadata: Dict[str, dict],
 ) -> str:
     lines = [
-        "/* SPDX-License-Identifier: Apache-2.0 */",
+        "/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */",
         "/*",
         " * Vendored ACVP KAT vectors for all FIPS 203 / FIPS 204 parameter sets.",
         " *",

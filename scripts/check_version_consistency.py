@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """
 Validate version consistency across version.h, CMakeLists.txt, CHANGELOG.md
 (optional), and an optional git tag.

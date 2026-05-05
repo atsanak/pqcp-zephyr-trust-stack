@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
 /*
  * Auto-generated from scripts/acvp_negative_scenarios.json by
  * scripts/generate_acvp_negative_header.py. Do not edit by hand.

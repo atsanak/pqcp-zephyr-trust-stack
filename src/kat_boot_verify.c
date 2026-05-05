@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
 /*
  * Power-on self-test for the PQCP module.
  *
