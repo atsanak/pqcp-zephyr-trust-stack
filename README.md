@@ -247,7 +247,7 @@ which points Zephyr's module loader at this repository's top-level
 module CMake fragments when the project is present in the west workspace.
 
 The release baseline encoded in `west.yml` is the pinned Zephyr revision
-`3568e1b6d5cdd51a6b964a2a1d6d29200fea2056` (the Zephyr v4.3.0 release
+`684c9e8f32e4373a21098559f748f06915f950c9` (the Zephyr v4.4.0 release
 commit). Newer Zephyr revisions may work, but treat them as compatibility
 probes until they have been validated with `scripts/run_extended_checks.py`.
 
@@ -1085,7 +1085,7 @@ python scripts/run_benchmarks.py \
   --output benchmark_results/profile-budget-smoke
 ```
 
-The checked-in budgets are based on the current Zephyr `v4.3.0` baseline builds
+The checked-in budgets are based on the current Zephyr `v4.4.0` baseline builds
 with modest headroom for toolchain and configuration drift. Update them
 deliberately when a real feature change increases footprint, and keep the
 profile matrix, README, and release checklist in sync when doing so.
@@ -1700,7 +1700,7 @@ run:
 python scripts/run_extended_checks.py \
   --west-root /path/to/zephyrproject \
   --module-path "$PWD" \
-  --zephyr-ref v4.4.0-rc1 \
+  --zephyr-ref v4.4.0 \
   --skip-graphviz \
   --run-compatibility-smoke \
   --strict
@@ -1718,7 +1718,7 @@ upcoming Zephyr revision, use:
 python scripts/run_extended_checks.py \
   --west-root /path/to/zephyrproject \
   --module-path "$PWD" \
-  --zephyr-ref v4.4.0-rc1 \
+  --zephyr-ref v4.4.0 \
   --skip-graphviz \
   --run-compatibility-smoke \
   --compatibility-board-list qemu_x86_64,nucleo_h743zi \
@@ -1729,7 +1729,8 @@ python scripts/run_extended_checks.py \
 
 GitHub Actions coverage is defined in `.github/workflows/ci.yml`. The workflow
 sets up a Zephyr workspace, installs the Zephyr SDK toolchains needed for
-`qemu_x86_64`, and runs on `ubuntu-22.04` with Python 3.12 and Zephyr v4.3.0.
+`qemu_x86_64`, and runs on `ubuntu-22.04` with Python 3.12, Zephyr v4.4.0,
+and Zephyr SDK 1.0.1.
 The fast CI path runs:
 
 - `tests/ztest_rng`
@@ -1785,7 +1786,7 @@ When launched manually, the extended-checks workflow also accepts:
 - a `zephyr_ref` input for trying a newer Zephyr tag/branch/commit
 - a `run_sanitizers` toggle for native_sim ASan/UBSan coverage
 
-If the manual `zephyr_ref` differs from the baseline `v4.3.0`, the workflow
+If the manual `zephyr_ref` differs from the baseline `v4.4.0`, the workflow
 also runs an explicit compatibility-smoke build step so Zephyr drift is called
 out separately from the default static-analysis output.
 
@@ -1896,7 +1897,7 @@ python scripts/run_benchmarks.py \
 python scripts/run_extended_checks.py \
   --west-root /path/to/zephyrproject \
   --module-path "$PWD" \
-  --zephyr-ref v4.4.0-rc1 \
+  --zephyr-ref v4.4.0 \
   --skip-graphviz \
   --run-compatibility-smoke \
   --compatibility-board-list qemu_x86_64,nucleo_h743zi \
@@ -1918,7 +1919,8 @@ python scripts/run_acvp_serial_session.py \
 
 ## Zephyr Compatibility
 
-The GitHub workflows currently validate this module against Zephyr `v4.3.0`.
+The GitHub workflows currently validate this module against Zephyr `v4.4.0`
+with Zephyr SDK `1.0.1`.
 That is the tested baseline for release-quality integration.
 
 Nearby Zephyr revisions may also work, but they should be treated as
