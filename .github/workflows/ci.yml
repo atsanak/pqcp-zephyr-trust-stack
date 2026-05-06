@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+env:
+  ZEPHYR_REF: v4.4.0
+  ZEPHYR_SDK_VERSION: "1.0.1"
+
 jobs:
   qemu-smoke:
     runs-on: ubuntu-22.04
@@ -44,11 +48,11 @@ jobs:
       - name: Initialize Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_REF" zephyrproject
           cd zephyrproject
           west update
           west packages pip --install --ignore-venv-check
-          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          west sdk install --version "$ZEPHYR_SDK_VERSION" --gnu-toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
       - name: Check Python tooling
@@ -280,11 +284,11 @@ jobs:
       - name: Set up Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_REF" zephyrproject
           cd zephyrproject
           west update
           west packages pip --install --ignore-venv-check
-          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          west sdk install --version "$ZEPHYR_SDK_VERSION" --gnu-toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
       - name: Run Twister discovery (build-only, no flash)
@@ -348,11 +352,11 @@ jobs:
       - name: Set up Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_REF" zephyrproject
           cd zephyrproject
           west update
           west packages pip --install --ignore-venv-check
-          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          west sdk install --version "$ZEPHYR_SDK_VERSION" --gnu-toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
       - name: Build nucleo_h743zi protocol suite samples
@@ -458,11 +462,11 @@ jobs:
       - name: Set up Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_REF" zephyrproject
           cd zephyrproject
           west update
           west packages pip --install --ignore-venv-check
-          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          west sdk install --version "$ZEPHYR_SDK_VERSION" --gnu-toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
       - name: Export benchmark smoke CSV + provenance
@@ -549,11 +553,11 @@ jobs:
       - name: Initialize Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 zephyrproject
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_REF" zephyrproject
           cd zephyrproject
           west update
           west packages pip --install --ignore-venv-check
-          west sdk install --toolchains x86_64-zephyr-elf arm-zephyr-eabi
+          west sdk install --version "$ZEPHYR_SDK_VERSION" --gnu-toolchains x86_64-zephyr-elf arm-zephyr-eabi
           echo "ZEPHYR_WORKSPACE=$PWD" >> "$GITHUB_ENV"
 
       - name: Run release gate (release_check.py)
