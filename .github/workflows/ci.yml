@@ -423,6 +423,7 @@ jobs:
     # authoritative benchmark export lives inside release_check.py, which
     # runs its own export_results.py invocation against the full matrix.
     runs-on: ubuntu-22.04
+    continue-on-error: true
     needs:
       - qemu-smoke
 
