@@ -56,7 +56,10 @@ EXPECTED_PRIMITIVE_ROWS = {
     "ML-DSA-65": ("keygen", "sign", "verify"),
     "ML-DSA-87": ("keygen", "sign", "verify"),
 }
-MIN_PQCP_BASELINE_TIME_RATIO = 0.2
+# This is a sanity floor, not a regression budget.  QEMU/native timing can make
+# the PQCP path substantially faster than the clean baseline, so only reject
+# near-zero ratios that indicate broken timing extraction.
+MIN_PQCP_BASELINE_TIME_RATIO = 0.1
 MAX_PQCP_BASELINE_TIME_RATIO = 10.0
 
 
