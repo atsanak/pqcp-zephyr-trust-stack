@@ -23,6 +23,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from check_version_consistency import parse_header_version  # noqa: E402
 
 LICENSE_EXPRESSION = "LicenseRef-Proprietary-Collaborative-Evaluation"
+DEFAULT_PROFILE = SCRIPT_DIR / "pqc_assurance_profile.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -113,6 +114,37 @@ def claim_statuses(ledger: dict[str, Any]) -> dict[str, str]:
     return statuses
 
 
+def load_profile_metadata(module_path: Path) -> dict[str, dict[str, Any]]:
+    """Return CBOM component profile metadata from pqc_assurance_profile.json."""
+    profile_path = module_path / "scripts/pqc_assurance_profile.json"
+    if not profile_path.exists():
+        profile_path = DEFAULT_PROFILE
+    if not profile_path.exists():
+        return {}
+    try:
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    metadata: dict[str, dict[str, Any]] = {}
+    for item in profile.get("asset_lifecycle") or []:
+        if not isinstance(item, dict):
+            continue
+        component = item.get("cbom_component")
+        asset_id = item.get("asset_id")
+        if not isinstance(component, str) or not component:
+            continue
+        if not isinstance(asset_id, str) or not asset_id:
+            continue
+        metadata[component] = {
+            "trace_asset_id": asset_id,
+            "lifecycle_status": item.get("lifecycle_status", "unknown"),
+            "production_allowed": bool(item.get("production_allowed", False)),
+            "profile_support": item.get("profile_support") or [],
+            "validation_scope": item.get("validation_scope") or [],
+        }
+    return metadata
+
+
 def crypto_asset(
     *,
     name: str,
@@ -176,6 +208,7 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
         dependencies = {}
     sdk_version = parse_sdk_version(module_path) or "unknown"
     statuses = claim_statuses(ledger)
+    profile_metadata = load_profile_metadata(module_path)
 
     components: list[dict[str, Any]] = [
         crypto_asset(
@@ -319,6 +352,26 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
     ]
 
     for component in components:
+        metadata = profile_metadata.get(str(component.get("name")))
+        if metadata:
+            component.setdefault("properties", []).extend(
+                [
+                    property_item("pqcp:trace_asset_id", metadata["trace_asset_id"]),
+                    property_item("pqcp:lifecycle_status", metadata["lifecycle_status"]),
+                    property_item(
+                        "pqcp:production_allowed",
+                        str(metadata["production_allowed"]).lower(),
+                    ),
+                    property_item(
+                        "pqcp:profile_support",
+                        ",".join(str(item) for item in metadata["profile_support"]),
+                    ),
+                    property_item(
+                        "pqcp:validation_scope",
+                        ",".join(str(item) for item in metadata["validation_scope"]),
+                    ),
+                ]
+            )
         linked_claims = ""
         for prop in component.get("properties", []):
             if prop.get("name") == "pqcp:claim_ids":

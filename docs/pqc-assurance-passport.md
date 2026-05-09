@@ -25,6 +25,12 @@ release review.
   or deterministic RNG being represented as production-capable.
 - `pqc_assurance_digest.json` — stable SHA-256 digest manifest over the core
   passport artifacts. This is the future bridge to firmware/device attestation.
+- `pqc_assurance_profile_result.json` — profile replay result that checks which
+  assets are production-allowed, validation-only, test-only, or profile-scoped.
+- `pqc_evidence_quality_result.json` — claim quality replay result that assigns
+  every required claim to a validation class and execution environment.
+- `pqc_migration_readiness.json` / `pqc_migration_readiness.md` — generated
+  profile summary for partner review and maintenance planning.
 - `acvp_negative_scenario_floor_result.json` — proof that every compatibility
   floor ACVP negative scenario is still present, uniquely named, and still
   expects an `ERROR:*` or explicitly marked recovery response.
@@ -69,6 +75,10 @@ python3 scripts/verify_assurance_policy.py \
   --evidence-graph /tmp/pqcp-passport/pqc_evidence_graph.json \
   --assurance-digest /tmp/pqcp-passport/pqc_assurance_digest.json \
   --firmware-digest-header /tmp/pqcp-passport/generated/pqcp_assurance_digest_generated.h \
+  --assurance-profile-result /tmp/pqcp-passport/pqc_assurance_profile_result.json \
+  --evidence-quality-result /tmp/pqcp-passport/pqc_evidence_quality_result.json \
+  --migration-readiness-json /tmp/pqcp-passport/pqc_migration_readiness.json \
+  --migration-readiness-md /tmp/pqcp-passport/pqc_migration_readiness.md \
   --output /tmp/pqcp-passport/pqc_policy_result.json
 ```
 
@@ -89,6 +99,10 @@ directory and wants deterministic answers to concrete questions:
   tests, transcript markers, and assurance claims?
 - Did the ACVP negative scenario set preserve the compatibility floor, including
   timeout recovery and post-timeout valid-command recovery?
+- Which assets are production-allowed in each local profile, and which are
+  explicitly limited to validation, lab, smoke, or test use?
+- Does every required claim have a declared evidence class and execution
+  environment?
 
 If any answer is inconsistent, `verify_release_evidence_pack.py` exits non-zero
 and reports the exact file, claim, or artifact hash that failed.
@@ -136,3 +150,19 @@ boot KAT self-verify hook, and the constant-time smoke test to:
 the same links. The graph is intentionally review-oriented: it is not a formal
 proof system, but it makes drift visible when a source file, claim ID, test path,
 or CBOM component disappears.
+
+## Assurance Profile And Evidence Quality
+
+Passport schema v5 adds two policy inputs and one generated report:
+
+- `scripts/pqc_assurance_profile.json` defines the local review profiles:
+  `native_lab`, `qemu_release`, `mcu_minimal`, and `gateway`.
+- `scripts/pqc_evidence_quality.json` maps each required claim to the
+  validation class and environment that supports it.
+- `scripts/generate_migration_readiness_report.py` turns the profile and
+  quality replay results into `pqc_migration_readiness.json` and
+  `pqc_migration_readiness.md`.
+
+The profile verifier rejects stale CBOM profile properties, missing trace-map
+assets, missing required claims, deterministic RNG in production-oriented
+profiles, and test-only assets represented as production-capable.

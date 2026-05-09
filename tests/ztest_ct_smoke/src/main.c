@@ -5,7 +5,7 @@
  * THIS IS EXPLICITLY A SMOKE TEST, NOT A PROOF.
  *
  * What it does:
- *   - Generates a single ML-KEM-768 keypair with the deterministic test
+ *   - Generates ML-KEM-512/768/1024 keypairs with the deterministic test
  *     RNG so the run is reproducible.
  *   - Encapsulates against the public key to obtain a valid ciphertext +
  *     shared secret.
@@ -93,23 +93,23 @@ static uint64_t median_u64(uint64_t *samples, size_t n)
 	return samples[n / 2U];
 }
 
-ZTEST(pqcp_ct_smoke, test_mlkem_decap_timing_profile_does_not_bifurcate)
+static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
 {
 	zassert_equal(pqcp_rng_init(), 0);
 	zassert_equal(pqcp_rng_deterministic_seed(ct_smoke_seed,
 						  sizeof(ct_smoke_seed)),
 		      0);
 
-	zassert_equal(pqcp_mlkem_keypair(PQCP_MLKEM_768, kem_pk, kem_sk),
+	zassert_equal(pqcp_mlkem_keypair(level, kem_pk, kem_sk),
 		      PQCP_MLKEM_SUCCESS);
 
-	zassert_equal(pqcp_mlkem_encapsulate(PQCP_MLKEM_768, kem_pk,
+	zassert_equal(pqcp_mlkem_encapsulate(level, kem_pk,
 					     kem_ct_valid,
 					     kem_ss_throwaway),
 		      PQCP_MLKEM_SUCCESS);
 
 	memcpy(kem_ct_invalid, kem_ct_valid,
-	       pqcp_mlkem_ct_size(PQCP_MLKEM_768));
+	       pqcp_mlkem_ct_size(level));
 	kem_ct_invalid[0] ^= 0xFFU;
 
 	uint64_t valid_samples[CT_SMOKE_ITERATIONS];
@@ -117,13 +117,13 @@ ZTEST(pqcp_ct_smoke, test_mlkem_decap_timing_profile_does_not_bifurcate)
 
 	for (size_t i = 0; i < CT_SMOKE_ITERATIONS; ++i) {
 		uint64_t t0 = k_cycle_get_64();
-		(void)pqcp_mlkem_decapsulate(PQCP_MLKEM_768, kem_ct_valid,
+		(void)pqcp_mlkem_decapsulate(level, kem_ct_valid,
 					     kem_sk, kem_ss_throwaway);
 		valid_samples[i] = k_cycle_get_64() - t0;
 	}
 	for (size_t i = 0; i < CT_SMOKE_ITERATIONS; ++i) {
 		uint64_t t0 = k_cycle_get_64();
-		(void)pqcp_mlkem_decapsulate(PQCP_MLKEM_768, kem_ct_invalid,
+		(void)pqcp_mlkem_decapsulate(level, kem_ct_invalid,
 					     kem_sk, kem_ss_throwaway);
 		invalid_samples[i] = k_cycle_get_64() - t0;
 	}
@@ -145,9 +145,10 @@ ZTEST(pqcp_ct_smoke, test_mlkem_decap_timing_profile_does_not_bifurcate)
 	 *         median_invalid=<C> delta=<C> relative_pct=<P>
 	 *         bound_pct=<B>
 	 */
-	printk("PQCP_CT_SMOKE alg=MLKEM-768 iters=%u "
+	printk("PQCP_CT_SMOKE alg=%s iters=%u "
 	       "median_valid=%llu median_invalid=%llu delta=%llu "
 	       "relative_pct=%llu bound_pct=%u\n",
+	       name,
 	       (unsigned int)CT_SMOKE_ITERATIONS,
 	       (unsigned long long)median_valid,
 	       (unsigned long long)median_invalid,
@@ -156,9 +157,17 @@ ZTEST(pqcp_ct_smoke, test_mlkem_decap_timing_profile_does_not_bifurcate)
 	       (unsigned int)CT_SMOKE_RELATIVE_BOUND_PERCENT);
 
 	zassert_true(relative_pct <= CT_SMOKE_RELATIVE_BOUND_PERCENT,
-		     "decap median timing variance %llu%% > smoke bound %u%%",
+		     "%s decap median timing variance %llu%% > smoke bound %u%%",
+		     name,
 		     (unsigned long long)relative_pct,
 		     (unsigned int)CT_SMOKE_RELATIVE_BOUND_PERCENT);
+}
+
+ZTEST(pqcp_ct_smoke, test_mlkem_decap_timing_profile_does_not_bifurcate)
+{
+	run_mlkem_decap_ct_smoke(PQCP_MLKEM_512, "MLKEM-512");
+	run_mlkem_decap_ct_smoke(PQCP_MLKEM_768, "MLKEM-768");
+	run_mlkem_decap_ct_smoke(PQCP_MLKEM_1024, "MLKEM-1024");
 }
 
 ZTEST_SUITE(pqcp_ct_smoke, NULL, NULL, NULL, NULL, NULL);

@@ -97,7 +97,7 @@ logs, and hashes. `assurance_report.html` is a self-contained,
 dependency-free HTML view of the same JSON ledger and is the
 recommended artifact to share with reviewers or attach to a release pack.
 
-The ledger schema is `schema_version=4`. Beyond the original release/KAT/
+The ledger schema is `schema_version=5`. Beyond the original release/KAT/
 benchmark/cost-of-assurance/transcript-binding claims, every release pack
 must also report `pass` or an explicitly documented `not_applicable` for:
 
@@ -143,12 +143,22 @@ must also report `pass` or an explicitly documented `not_applicable` for:
 - `firmware.assurance_digest_embeddable` — backed by
   `generated/pqcp_assurance_digest_generated.h` and the build-only
   `samples/pqcp_assurance_status` sample.
+- `supply_chain.assurance_profile_policy` — backed by
+  `pqc_assurance_profile_result.json` from
+  `scripts/verify_pqc_assurance_profile.py`.
+- `supply_chain.evidence_quality_index` — backed by
+  `pqc_evidence_quality_result.json` from
+  `scripts/verify_pqc_evidence_quality.py`.
+- `crypto_agility.profile_separation` and `security.production_rng_policy` —
+  backed by the assurance profile and the CBOM `pqcp:*` properties.
+- `release.migration_readiness` — backed by
+  `pqc_migration_readiness.json` and `pqc_migration_readiness.md`.
 
 A failing required claim names the offending parameter set, primitive, or
 case directly in `failure_reason` rather than disappearing into the older
 aggregate `kat.offline_provenance` / `benchmark.csv_validity` rows.
 
-Current full release packs use ledger `schema_version=4`, which adds the PQC
+Current full release packs use ledger `schema_version=5`, which adds the PQC
 Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 
 - `pqc_cbom.cdx.json`
@@ -160,6 +170,10 @@ Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 - `pqc_evidence_graph.json`
 - `pqc_evidence_graph.md`
 - `generated/pqcp_assurance_digest_generated.h`
+- `pqc_assurance_profile_result.json`
+- `pqc_evidence_quality_result.json`
+- `pqc_migration_readiness.json`
+- `pqc_migration_readiness.md`
 
 `pqc_policy_result.json` must have `"passed": true`. The policy verifier checks
 required claim statuses, required PQC crypto assets, deterministic RNG
@@ -206,7 +220,9 @@ contains every claim id from the ledger. For `schema_version >= 3` packs it also
 replays the PQC Assurance Passport policy and digest checks. For
 `schema_version >= 4` packs it additionally requires the negative scenario floor
 result, asset trace result, evidence graph, and generated firmware digest
-header.
+header. For `schema_version >= 5` packs it also requires the assurance profile,
+evidence quality, and migration-readiness artifacts and checks that the digest
+manifest includes them.
 
 ## 4. Run Focused Consumer And Harness Smokes
 

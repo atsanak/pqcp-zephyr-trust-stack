@@ -157,6 +157,52 @@ class PQCAssurancePassportTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "pqc_evidence_graph.md").write_text("# graph\n", encoding="utf-8")
+        (root / "pqc_assurance_profile_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"profiles": 4, "assets": 13},
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "pqc_evidence_quality_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"ledger_claims": 38, "quality_entries": 38},
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "pqc_migration_readiness.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"asset_count": 1, "blocked_condition_count": 0},
+                    "blocked_conditions": [],
+                    "assets": [{"name": "ML-KEM-768"}],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "pqc_migration_readiness.md").write_text(
+            "# PQC Migration Readiness\n\nML-KEM-768\n",
+            encoding="utf-8",
+        )
         (root / "generated").mkdir()
         (root / "generated/pqcp_assurance_digest_generated.h").write_text(
             "#define PQCP_ASSURANCE_DIGEST_ROOT_SHA256 "
@@ -198,6 +244,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
             cost_of_assurance_evidence=root / "cost_of_assurance_evidence.json",
             evidence_graph=root / "pqc_evidence_graph.json",
             asset_trace_result=root / "pqc_asset_trace_result.json",
+            assurance_profile_result=root / "pqc_assurance_profile_result.json",
+            evidence_quality_result=root / "pqc_evidence_quality_result.json",
+            migration_readiness_json=root / "pqc_migration_readiness.json",
+            migration_readiness_md=root / "pqc_migration_readiness.md",
             output=attestation_path,
             digest_output=digest_path,
         )
@@ -212,6 +262,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 root / "benchmark_provenance.json",
                 root / "pqc_evidence_graph.json",
                 root / "pqc_asset_trace_result.json",
+                root / "pqc_assurance_profile_result.json",
+                root / "pqc_evidence_quality_result.json",
+                root / "pqc_migration_readiness.json",
+                root / "pqc_migration_readiness.md",
                 release_manifest,
             ],
             attestation_path=attestation_path,
@@ -245,6 +299,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
+                assurance_profile_result_path=root / "pqc_assurance_profile_result.json",
+                evidence_quality_result_path=root / "pqc_evidence_quality_result.json",
+                migration_readiness_json_path=root / "pqc_migration_readiness.json",
+                migration_readiness_md_path=root / "pqc_migration_readiness.md",
             )
             self.assertTrue(result["passed"], result["failures"])
 
@@ -267,6 +325,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
+                assurance_profile_result_path=root / "pqc_assurance_profile_result.json",
+                evidence_quality_result_path=root / "pqc_evidence_quality_result.json",
+                migration_readiness_json_path=root / "pqc_migration_readiness.json",
+                migration_readiness_md_path=root / "pqc_migration_readiness.md",
             )
             self.assertFalse(result["passed"])
             self.assertTrue(any("ML-KEM-768" in failure for failure in result["failures"]))
@@ -286,6 +348,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
+                assurance_profile_result_path=root / "pqc_assurance_profile_result.json",
+                evidence_quality_result_path=root / "pqc_evidence_quality_result.json",
+                migration_readiness_json_path=root / "pqc_migration_readiness.json",
+                migration_readiness_md_path=root / "pqc_migration_readiness.md",
             )
             self.assertFalse(result["passed"])
             self.assertTrue(any("hash mismatch" in failure for failure in result["failures"]))
@@ -311,6 +377,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
+                assurance_profile_result_path=root / "pqc_assurance_profile_result.json",
+                evidence_quality_result_path=root / "pqc_evidence_quality_result.json",
+                migration_readiness_json_path=root / "pqc_migration_readiness.json",
+                migration_readiness_md_path=root / "pqc_migration_readiness.md",
             )
             self.assertFalse(result["passed"])
             self.assertTrue(any("Deterministic test RNG" in failure for failure in result["failures"]))

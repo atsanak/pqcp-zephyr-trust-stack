@@ -32,7 +32,10 @@ Step (1) writes `assurance_ledger.json`, `assurance_ledger.md`,
 v2 release roots also contain `acvp_negative_scenario_floor_result.json`,
 `pqc_asset_trace_result.json`, `pqc_evidence_graph.json`,
 `pqc_evidence_graph.md`, and
-`generated/pqcp_assurance_digest_generated.h`.
+`generated/pqcp_assurance_digest_generated.h`. Schema v5 release roots also
+contain `pqc_assurance_profile_result.json`,
+`pqc_evidence_quality_result.json`, `pqc_migration_readiness.json`, and
+`pqc_migration_readiness.md`.
 Step (3) re-checks every recorded SHA-256, every required claim id, every
 Passport subject hash, and every transcript hash, and exits non-zero with the
 exact offending file/claim if anything has drifted. See
@@ -170,6 +173,12 @@ The full local release gate now emits the Passport artifacts described in
   traceability links.
 - `generated/pqcp_assurance_digest_generated.h`: firmware-embeddable assurance
   digest header generated from `pqc_assurance_digest.json`.
+- `pqc_assurance_profile_result.json`: profile replay result for production,
+  validation, lab, smoke, and test-only asset separation.
+- `pqc_evidence_quality_result.json`: evidence-class replay result for every
+  required claim in the ledger.
+- `pqc_migration_readiness.json` / `pqc_migration_readiness.md`: partner-review
+  summary generated from the profile, quality result, and CBOM properties.
 
 The CI fast gate intentionally skips the full Passport because it would require
 the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence
