@@ -53,6 +53,7 @@ This checks `include/pqcp_zephyr/version.h`, `CMakeLists.txt`,
 
 ```bash
 python3 -m py_compile scripts/*.py
+python3 scripts/run_local_tool_tests.py
 python3 scripts/test_local_release_workflows.py
 
 python3 scripts/run_extended_checks.py --strict
@@ -64,8 +65,9 @@ python3 scripts/run_extended_checks.py \
 python3 scripts/release_check.py --tag v1.0.0
 ```
 
-For a single command that sequences those existing checks, plus the consumer
-smoke and local release bundle generation, run:
+For a single command that sequences those existing checks, the pure-Python
+tooling regression suite, the consumer smoke, and local release bundle
+generation, run:
 
 ```bash
 python3 scripts/verify_product_readiness.py --tag v1.0.0

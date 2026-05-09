@@ -1685,11 +1685,12 @@ of reimplementing them, run:
 python scripts/verify_product_readiness.py --tag v1.0.0
 ```
 
-That wrapper runs script compilation, version/changelog/tag consistency, strict
-extended checks, the cost-of-assurance smoke, the consumer smoke helper, local
-release-bundle generation, and the full `release_check.py` gate. By default the
-consumer smoke auto-detects whether this checkout is a west manifest project;
-pass `--consumer-module-mode manifest` to require true module discovery or
+That wrapper runs script compilation, version/changelog/tag consistency, the
+pure-Python release-tool regression suite, strict extended checks, the
+cost-of-assurance smoke, the consumer smoke helper, local release-bundle
+generation, and the full `release_check.py` gate. By default the consumer smoke
+auto-detects whether this checkout is a west manifest project; pass
+`--consumer-module-mode manifest` to require true module discovery or
 `--consumer-module-mode extra-module` for local development workspaces.
 
 For memory-safety oriented hardening, pair it with the sanitizer runner:
