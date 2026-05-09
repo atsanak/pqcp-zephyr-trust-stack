@@ -480,7 +480,7 @@ def parse_expected_commands(
                 f"{scenario_name}.expected_errors[{index}] must be a JSON object"
             )
 
-        command = str(raw_item.get("command", "")).strip()
+        command = expand_expected_command(raw_item).strip()
         if not command:
             raise SessionError(
                 f"{scenario_name}.expected_errors[{index}] must include a command"
@@ -546,6 +546,26 @@ def parse_expected_commands(
         )
 
     return tuple(expectations)
+
+
+def expand_expected_command(raw_item: dict) -> str:
+    command = str(raw_item.get("command", ""))
+    repeat = raw_item.get("repeat_hex")
+    if repeat is None:
+        return command
+    if not isinstance(repeat, dict):
+        raise SessionError("expected_errors repeat_hex must be an object")
+    byte = str(repeat.get("byte", "00"))
+    count = repeat.get("count")
+    if len(byte) != 2:
+        raise SessionError("expected_errors repeat_hex.byte must be two hex characters")
+    try:
+        int(byte, 16)
+    except ValueError as exc:
+        raise SessionError("expected_errors repeat_hex.byte must be hexadecimal") from exc
+    if not isinstance(count, int) or count < 0:
+        raise SessionError("expected_errors repeat_hex.count must be a non-negative integer")
+    return command + (byte.lower() * count)
 
 
 def default_scenario(args: argparse.Namespace) -> SmokeScenario:
