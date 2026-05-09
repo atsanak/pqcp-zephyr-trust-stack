@@ -22,6 +22,7 @@ TOOL_TESTS = (
     "test_assurance_ledger.py",
     "test_pqc_assurance_passport.py",
     "test_release_evidence_pack.py",
+    "test_release_environment.py",
     "test_local_release_workflows.py",
     "test_pqc_assurance_profile.py",
     "test_pqc_evidence_quality.py",

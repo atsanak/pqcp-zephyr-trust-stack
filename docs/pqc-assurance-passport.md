@@ -23,6 +23,9 @@ release review.
 - `pqc_policy_result.json` — partner-review policy result that fails on missing
   required claims, missing crypto assets, stale hashes, inconsistent metadata,
   or deterministic RNG being represented as production-capable.
+- `pqc_environment_result.json` — local replay result checking that west
+  dependency pins, workflow Zephyr/SDK settings, release manifest dependencies,
+  and CBOM dependency components agree.
 - `pqc_assurance_digest.json` — stable SHA-256 digest manifest over the core
   passport artifacts. This is the future bridge to firmware/device attestation.
 - `pqc_assurance_profile_result.json` — profile replay result that checks which
@@ -112,6 +115,8 @@ directory and wants deterministic answers to concrete questions:
   cost-of-assurance artifacts support those claims?
 - Do the ledger, CBOM, attestation, release manifest, and transcript hashes
   agree on version, tag, source commit, and dirty-tree state?
+- Do west.yml pins, workflow Zephyr/SDK settings, release manifest dependency
+  revisions, and CBOM dependency components agree?
 - Is deterministic RNG clearly marked as test-only rather than production
   usable?
 - Can every crypto asset be traced back to concrete source files, Kconfig,

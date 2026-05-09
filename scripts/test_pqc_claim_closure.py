@@ -65,6 +65,7 @@ class PQCClaimClosureTests(unittest.TestCase):
         )
         policy = write_json(root / "pqc_policy_result.json", {"schema_version": 3, "passed": True, "failures": []})
         profile = write_json(root / "pqc_assurance_profile_result.json", {"schema_version": 1, "passed": True})
+        environment = write_json(root / "pqc_environment_result.json", {"schema_version": 1, "passed": True})
         quality = write_json(root / "pqc_evidence_quality_result.json", {"schema_version": 1, "passed": True})
         readiness = write_json(
             root / "pqc_migration_readiness.json",
@@ -89,6 +90,7 @@ class PQCClaimClosureTests(unittest.TestCase):
             ledger,
             cbom,
             attestation,
+            environment,
             profile,
             quality,
             readiness,

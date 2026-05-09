@@ -492,6 +492,7 @@ def main() -> int:
     assurance_ledger_md = output_root / "assurance_ledger.md"
     assurance_report_html = output_root / "assurance_report.html"
     pqc_cbom_path = output_root / "pqc_cbom.cdx.json"
+    pqc_environment_result_path = output_root / "pqc_environment_result.json"
     pqc_attestation_path = output_root / "pqc_attestation.intoto.json"
     pqc_policy_result_path = output_root / "pqc_policy_result.json"
     pqc_assurance_digest_path = output_root / "pqc_assurance_digest.json"
@@ -624,6 +625,8 @@ def main() -> int:
         str(pqc_migration_readiness_json_path),
         "--migration-readiness-md",
         str(pqc_migration_readiness_md_path),
+        "--environment-result",
+        str(pqc_environment_result_path),
         "--output",
         str(pqc_attestation_path),
         "--digest-output",
@@ -708,6 +711,18 @@ def main() -> int:
         str(pqc_cbom_path),
         "--output",
         str(pqc_asset_trace_result_path),
+    ]
+    pqc_environment_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_release_environment.py"),
+        "--module-path",
+        str(module_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--output",
+        str(pqc_environment_result_path),
     ]
     pqc_evidence_graph_cmd = [
         sys.executable,
@@ -1152,6 +1167,11 @@ def main() -> int:
         Step(
             name="PQC CBOM",
             cmd=pqc_cbom_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC release environment",
+            cmd=pqc_environment_cmd,
             cwd=module_path,
         ),
         Step(
