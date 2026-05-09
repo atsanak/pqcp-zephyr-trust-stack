@@ -21,6 +21,8 @@ class ACVPNegativeScenarioFloorTests(unittest.TestCase):
     def test_current_fixture_satisfies_floor(self) -> None:
         result = validator.validate(validator.DEFAULT_SCENARIOS, validator.DEFAULT_FLOOR)
         self.assertTrue(result["passed"], result["failures"])
+        self.assertEqual(result["scenario_count"], result["case_count"])
+        self.assertGreaterEqual(result["scenario_count"], result["floor_count"])
 
     def test_removing_timeout_partial_frame_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
