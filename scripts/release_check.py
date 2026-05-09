@@ -489,9 +489,15 @@ def main() -> int:
     assurance_ledger_json = output_root / "assurance_ledger.json"
     assurance_ledger_md = output_root / "assurance_ledger.md"
     assurance_report_html = output_root / "assurance_report.html"
+    pqc_cbom_path = output_root / "pqc_cbom.cdx.json"
+    pqc_attestation_path = output_root / "pqc_attestation.intoto.json"
+    pqc_policy_result_path = output_root / "pqc_policy_result.json"
+    pqc_assurance_digest_path = output_root / "pqc_assurance_digest.json"
     transcript_dir = output_root / "transcripts"
     evidence_transcript_manifest = transcript_dir / "evidence_transcript_manifest.json"
     junit_output = output_root / "release_check_results.xml"
+    release_tag = args.tag or f"v{read_version_string(module_path)}"
+    release_manifest_path = release_bundle_root / release_tag / f"release-manifest-{release_tag}.json"
     version_check_cmd = [
         sys.executable,
         str(module_path / "scripts/check_version_consistency.py"),
@@ -547,6 +553,69 @@ def main() -> int:
         str(module_path / "scripts/assurance_claims.json"),
         "--module-path",
         str(module_path),
+    ]
+    assurance_report_cmd = [
+        sys.executable,
+        str(module_path / "scripts/render_assurance_report.py"),
+        str(assurance_ledger_json),
+        "--output",
+        str(assurance_report_html),
+    ]
+    pqc_cbom_cmd = [
+        sys.executable,
+        str(module_path / "scripts/export_pqc_cbom.py"),
+        "--module-path",
+        str(module_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--output",
+        str(pqc_cbom_path),
+    ]
+    pqc_attestation_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_pqc_attestation.py"),
+        "--module-path",
+        str(module_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--ledger-md",
+        str(assurance_ledger_md),
+        "--assurance-report",
+        str(assurance_report_html),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--transcript-manifest",
+        str(evidence_transcript_manifest),
+        "--benchmark-csv",
+        str(benchmark_csv_path),
+        "--benchmark-provenance",
+        str(benchmark_provenance_path),
+        "--cost-of-assurance-evidence",
+        str(cost_evidence_path),
+        "--output",
+        str(pqc_attestation_path),
+        "--digest-output",
+        str(pqc_assurance_digest_path),
+    ]
+    pqc_policy_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_assurance_policy.py"),
+        "--policy",
+        str(module_path / "scripts/pqc_assurance_policy.json"),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--attestation",
+        str(pqc_attestation_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--output",
+        str(pqc_policy_result_path),
     ]
     evidence_pack_verify_cmd = [
         sys.executable,
@@ -897,6 +966,26 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="assurance report",
+            cmd=assurance_report_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC CBOM",
+            cmd=pqc_cbom_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC assurance attestation",
+            cmd=pqc_attestation_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC assurance policy",
+            cmd=pqc_policy_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="release evidence pack verification",
             cmd=evidence_pack_verify_cmd,
             cwd=module_path,
@@ -961,36 +1050,6 @@ def main() -> int:
         print(f"[PASS] CI assurance ledger written to {assurance_ledger_json}")
         print("[PASS] CI fast release gate completed successfully.")
         return 0
-
-    # Non-blocking final step: render the HTML assurance report from the ledger.
-    # Failure here is logged as a warning but does not abort the gate, since the
-    # underlying ledger is already authoritative.
-    report_cmd = [
-        sys.executable,
-        str(module_path / "scripts/render_assurance_report.py"),
-        str(assurance_ledger_json),
-        "--output",
-        str(assurance_report_html),
-    ]
-    print("[RUN ] assurance report (HTML, non-blocking)")
-    report_proc = subprocess.run(
-        report_cmd,
-        cwd=str(module_path),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
-    )
-    if report_proc.stdout:
-        print(report_proc.stdout, end="" if report_proc.stdout.endswith("\n") else "\n")
-    if report_proc.returncode == 0:
-        print(f"[PASS] assurance report written to {assurance_report_html}")
-    else:
-        print(
-            f"[WARN] assurance report rendering failed (exit {report_proc.returncode}); "
-            f"the JSON ledger remains authoritative."
-        )
 
     print("[PASS] Release validation sequence completed successfully.")
     return 0

@@ -279,6 +279,20 @@ def write_manifest(
         tag_commit = head_commit
     dirty = bool(git(module_path, "status", "--porcelain"))
     dependencies = parse_west_dependencies(module_path)
+    passport_root = bundle_dir.parent.parent
+    passport_artifacts = {}
+    for name in (
+        "pqc_cbom.cdx.json",
+        "pqc_attestation.intoto.json",
+        "pqc_policy_result.json",
+        "pqc_assurance_digest.json",
+    ):
+        candidate = passport_root / name
+        if candidate.exists() and candidate.is_file():
+            passport_artifacts[name] = {
+                "path": str(candidate.relative_to(passport_root)),
+                "sha256": sha256_file(candidate),
+            }
 
     manifest = {
         "schema_version": 1,
@@ -304,6 +318,7 @@ def write_manifest(
             if api_docs_index is not None
             else None
         ),
+        "passport_artifacts": passport_artifacts,
     }
 
     manifest_path = bundle_dir / f"release-manifest-{tag}.json"

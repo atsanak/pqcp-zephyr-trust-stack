@@ -37,8 +37,8 @@ from verify_kat_provenance import (  # noqa: E402
     verify_vectors,
 )
 
-LEDGER_SCHEMA_VERSION = 2
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2)
+LEDGER_SCHEMA_VERSION = 3
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -94,6 +94,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
+    parser.add_argument("--cbom", type=Path, help="Optional pqc_cbom.cdx.json artifact")
+    parser.add_argument("--attestation", type=Path, help="Optional pqc_attestation.intoto.json artifact")
+    parser.add_argument("--policy-result", type=Path, help="Optional pqc_policy_result.json artifact")
+    parser.add_argument("--assurance-digest", type=Path, help="Optional pqc_assurance_digest.json artifact")
     return parser.parse_args()
 
 
@@ -215,7 +219,7 @@ def load_claim_specs(path: Path) -> list[dict[str, Any]]:
         print(
             f"[warn] {path} uses claims schema_version=1; per-primitive KAT and "
             "benchmark claims and the ACVP negative/timeout claims will not be "
-            "populated. Update the catalog to schema_version=2 for the full set.",
+            "populated. Update the catalog to schema_version=3 for the full set.",
             file=sys.stderr,
         )
     claims = raw.get("claims")
@@ -803,7 +807,6 @@ def evaluate_acvp_timeout_recovery(
 
     required_markers = (
         "test_readline_timeout",
-        "ERROR:TIMEOUT",
         "TESTSUITE pqcp_acvp_serial succeeded",
     )
     missing = [m for m in required_markers if m not in transcript_body]
@@ -811,6 +814,8 @@ def evaluate_acvp_timeout_recovery(
         "transcript_path": str(transcript_path),
         "transcript_sha256": transcript_sha,
         "required_markers": list(required_markers),
+        "wire_response_asserted_by_ztest": "ERROR:TIMEOUT",
+        "wire_response_literal_present": "ERROR:TIMEOUT" in transcript_body,
     }
     if missing:
         return fail_claim(
@@ -885,18 +890,6 @@ def _evaluate_sanitizer_clean(
         )
     artifacts.append(artifact(transcript_path, label="sanitizers step transcript"))
 
-    if "PQCP Sanitizer Checks" not in transcript_body:
-        return fail_claim(
-            spec,
-            reason=(
-                "sanitizers transcript does not contain the 'PQCP Sanitizer Checks' "
-                "header — release_check.py likely skipped the step"
-            ),
-            validators=validators,
-            evidence_artifacts=artifacts,
-            commands=commands,
-        )
-
     skipped_pattern = "Non-CI host: skipping sanitizer execution"
     if skipped_pattern in transcript_body:
         return not_applicable_claim(
@@ -904,6 +897,18 @@ def _evaluate_sanitizer_clean(
             reason=(
                 "sanitizers step skipped on this host (set PQCP_STRICT_SANITIZERS=1 "
                 "or run on a Linux host to exercise native_sim)"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    if "PQCP Sanitizer Checks" not in transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "sanitizers transcript does not contain the 'PQCP Sanitizer Checks' "
+                "header — release_check.py likely skipped the step"
             ),
             validators=validators,
             evidence_artifacts=artifacts,
@@ -1512,6 +1517,79 @@ def evaluate_transcript_binding(
     )
 
 
+def evaluate_json_artifact_claim(
+    spec: dict[str, Any],
+    *,
+    path: Path | None,
+    label: str,
+    expected_schema_version: int = 1,
+    required_keys: tuple[str, ...] = (),
+    success_field: str | None = None,
+) -> dict[str, object]:
+    validators = [label]
+    commands = [f"generate {label}"]
+    if path is None:
+        return not_applicable_claim(
+            spec,
+            reason=f"{label} path was not supplied to generate_assurance_ledger.py",
+            validators=validators,
+            evidence_artifacts=[],
+            commands=commands,
+        )
+    artifacts = [artifact(path, label=label)]
+    if not path.exists():
+        return not_applicable_claim(
+            spec,
+            reason=f"{label} has not been generated yet: {path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return fail_claim(
+            spec,
+            reason=f"{label} is not valid JSON: {exc}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    failures: list[str] = []
+    if expected_schema_version is not None and payload.get("schema_version") != expected_schema_version:
+        # CycloneDX and in-toto use different schema markers; accept them below.
+        if not (label == "PQC CBOM" and payload.get("bomFormat") == "CycloneDX"):
+            if not (label == "PQC assurance attestation" and payload.get("_type") == "https://in-toto.io/Statement/v1"):
+                failures.append(
+                    f"schema marker mismatch for {label}: {payload.get('schema_version')!r}"
+                )
+    for key in required_keys:
+        if key not in payload:
+            failures.append(f"{label} missing required key {key!r}")
+    if success_field is not None and payload.get(success_field) is not True:
+        failures.append(f"{label} field {success_field!r} is not true")
+    details = {
+        "path": str(path),
+        "size_bytes": path.stat().st_size if path.exists() else 0,
+    }
+    if failures:
+        return fail_claim(
+            spec,
+            reason="; ".join(failures),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, Callable[[dict[str, Any]], dict[str, object]]]:
     module_path = args.module_path.resolve()
     benchmark_csv = resolve_path(args.benchmark_csv, module_path)
@@ -1522,6 +1600,14 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     kat_header = resolve_path(args.kat_header, module_path)
     kat_vectors_dir = resolve_path(args.kat_vectors_dir, module_path)
     negative_scenarios = resolve_path(args.negative_scenarios, module_path)
+    cbom_arg = getattr(args, "cbom", None)
+    attestation_arg = getattr(args, "attestation", None)
+    policy_result_arg = getattr(args, "policy_result", None)
+    assurance_digest_arg = getattr(args, "assurance_digest", None)
+    cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
+    attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
+    policy_result = resolve_path(policy_result_arg, module_path) if policy_result_arg else None
+    assurance_digest = resolve_path(assurance_digest_arg, module_path) if assurance_digest_arg else None
     tag = args.tag
 
     evaluators: dict[str, Callable[[dict[str, Any]], dict[str, object]]] = {
@@ -1604,6 +1690,31 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         ),
         "security.ct_smoke": lambda spec: evaluate_ct_smoke(
             spec, transcript_manifest=transcript_manifest,
+        ),
+        "supply_chain.cbom_crypto_inventory": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=cbom,
+            label="PQC CBOM",
+            required_keys=("bomFormat", "specVersion", "components"),
+        ),
+        "supply_chain.pqc_assurance_attestation": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=attestation,
+            label="PQC assurance attestation",
+            required_keys=("_type", "predicateType", "subject", "predicate"),
+        ),
+        "release.policy_pass": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=policy_result,
+            label="PQC assurance policy result",
+            required_keys=("schema_version", "passed", "checks"),
+            success_field="passed",
+        ),
+        "firmware.assurance_digest_manifest": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=assurance_digest,
+            label="PQC assurance digest manifest",
+            required_keys=("schema_version", "digest_algorithm", "artifacts"),
         ),
     }
     for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():

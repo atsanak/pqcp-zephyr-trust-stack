@@ -672,7 +672,7 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.make_module(root)
             manifest = self._write_acvp_serial_transcript(
                 root,
-                "TESTSUITE pqcp_acvp_serial succeeded\n",  # no ERROR:TIMEOUT
+                "TESTSUITE pqcp_acvp_serial succeeded\n",  # no timeout ztest marker
             )
             spec = {
                 "id": "acvp.timeout_recovery",
@@ -685,7 +685,7 @@ class AssuranceLedgerTests(unittest.TestCase):
                 transcript_manifest=manifest,
             )
             self.assertEqual(result["status"], "fail")
-            self.assertIn("ERROR:TIMEOUT", result["failure_reason"])
+            self.assertIn("test_readline_timeout", result["failure_reason"])
 
     def test_acvp_timeout_recovery_claim_passes_with_required_markers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -693,7 +693,7 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.make_module(root)
             manifest = self._write_acvp_serial_transcript(
                 root,
-                "test_readline_timeout\nERROR:TIMEOUT\nTESTSUITE pqcp_acvp_serial succeeded\n",
+                "test_readline_timeout\nTESTSUITE pqcp_acvp_serial succeeded\n",
             )
             spec = {
                 "id": "acvp.timeout_recovery",
@@ -706,6 +706,8 @@ class AssuranceLedgerTests(unittest.TestCase):
                 transcript_manifest=manifest,
             )
             self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+            self.assertEqual(result["details"]["wire_response_asserted_by_ztest"], "ERROR:TIMEOUT")
+            self.assertFalse(result["details"]["wire_response_literal_present"])
 
     def test_per_primitive_kat_claim_passes_against_real_fixtures(self) -> None:
         spec = {
@@ -952,6 +954,18 @@ class AssuranceLedgerTests(unittest.TestCase):
             root = Path(tmp)
             body = (
                 "PQCP Sanitizer Checks\n"
+                "Non-CI host: skipping sanitizer execution. Set PQCP_STRICT_SANITIZERS=1\n"
+            )
+            manifest = self._write_sanitizers_transcript(root, body)
+            spec = {"id": "security.asan_clean", "category": "security", "claim": "x", "required": True}
+            result = ledger.evaluate_asan_clean(spec, transcript_manifest=manifest)
+            self.assertEqual(result["status"], "not_applicable")
+
+    def test_sanitizer_clean_skips_when_host_unsupported_without_header(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "Sanitizer checks for native_sim/native/64 require a Linux host.\n"
                 "Non-CI host: skipping sanitizer execution. Set PQCP_STRICT_SANITIZERS=1\n"
             )
             manifest = self._write_sanitizers_transcript(root, body)

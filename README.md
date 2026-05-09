@@ -26,6 +26,14 @@ for a Zephyr module:
   attached to a paper. The ledger has a versioned schema with a
   documented backward-compatibility shim — old packs degrade
   gracefully instead of hard-failing.
+- **PQC Assurance Passport for partner review.** The full local release
+  gate now wraps the ledger with a CycloneDX-style cryptography BOM
+  (`pqc_cbom.cdx.json`), an unsigned in-toto Statement-style evidence
+  attestation (`pqc_attestation.intoto.json`), a partner policy result
+  (`pqc_policy_result.json`), and a stable digest manifest
+  (`pqc_assurance_digest.json`). This is not a certification claim; it
+  is a replay-verifiable bridge between PQC inventory, release
+  metadata, transcript hashes, and local validation evidence.
 - **Offline KAT provenance binding.** The `tests/ztest_acvp_kat`
   vectors are vendored from NIST ACVP fixtures and pinned to
   `kat_vectors.h` constants by
@@ -53,8 +61,9 @@ for a Zephyr module:
   format runs unmodified on `nucleo_h743zi`-class hardware.
 
 For the underlying architecture see
-[`docs/assurance-model.md`](docs/assurance-model.md). For the public C
-API surface see [`docs/api-overview.md`](docs/api-overview.md).
+[`docs/assurance-model.md`](docs/assurance-model.md). For the Passport
+artifact model see [`docs/pqc-assurance-passport.md`](docs/pqc-assurance-passport.md).
+For the public C API surface see [`docs/api-overview.md`](docs/api-overview.md).
 
 ## Performance
 

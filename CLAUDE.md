@@ -846,6 +846,44 @@ Open follow-ups:
 - Create the GitHub Release page for `v1.0.0` once billing/spending limits
   allow release publishing.
 
+## Patch set 9 — PQC Assurance Passport
+
+Novelty added:
+
+- The local release evidence pack now produces a **PQC Assurance Passport**:
+  ledger + HTML report + CycloneDX-style PQC CBOM + unsigned in-toto-style
+  attestation + partner policy result + stable assurance digest manifest.
+- New generated artifacts in full local `release_check.py` output roots:
+  `pqc_cbom.cdx.json`, `pqc_attestation.intoto.json`,
+  `pqc_policy_result.json`, and `pqc_assurance_digest.json`.
+- `scripts/assurance_claims.json` is schema version 3 and adds four
+  supply-chain / passport claims:
+  `supply_chain.cbom_crypto_inventory`,
+  `supply_chain.pqc_assurance_attestation`, `release.policy_pass`, and
+  `firmware.assurance_digest_manifest`.
+- The Passport is intentionally hash-bound and replay-verifiable, not signed.
+  Signing remains a future key-custody decision.
+
+Validation completed locally for this patch set:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_assurance_ledger.py` → 36/36 OK
+- `python3 scripts/test_pqc_assurance_passport.py` → 5/5 OK
+- `python3 scripts/test_release_evidence_pack.py` → 6/6 OK
+- `python3 scripts/test_local_release_workflows.py` → 6/6 OK
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-passport-full`
+  completed successfully and verified the Passport artifacts via
+  `scripts/verify_release_evidence_pack.py`.
+
+Open follow-ups:
+
+- Confirm Linux CI green after this Passport integration lands on `main`.
+- Decide whether future Passport versions should be signed, and if so define
+  key ownership, custody, rotation, and revocation policy before adding code.
+- Keep hardware attestation explicitly out-of-scope until a real device-side
+  digest embedding and measurement flow exists.
+
 ## Final rule
 
 Do not confuse motion with progress.
