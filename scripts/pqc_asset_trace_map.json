@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "description": "Trace PQC assurance passport cryptographic assets to source files, Kconfig symbols, claim IDs, tests, and transcript markers.",
+  "assets": [
+    {
+      "id": "crypto.mlkem_512",
+      "name": "ML-KEM-512",
+      "category": "kem",
+      "cbom_component": "ML-KEM-512",
+      "source_files": [
+        "include/pqcp_zephyr/mlkem.h",
+        "src/mlkem_zephyr.c",
+        "src/mlkem_baseline.c",
+        "tests/ztest_acvp_kat/src/kat_vectors.h",
+        "tests/ztest_acvp_kat/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLKEM",
+        "PQCP_MLKEM_LEVEL_512"
+      ],
+      "claim_ids": [
+        "kat.mlkem_512",
+        "benchmark.mlkem_throughput"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_kat",
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "PASS - test_mlkem_512_keygen_vectors",
+        "PASS - test_mlkem_512_encaps_vectors"
+      ]
+    },
+    {
+      "id": "crypto.mlkem_768",
+      "name": "ML-KEM-768",
+      "category": "kem",
+      "cbom_component": "ML-KEM-768",
+      "source_files": [
+        "include/pqcp_zephyr/mlkem.h",
+        "src/mlkem_zephyr.c",
+        "src/mlkem_baseline.c",
+        "src/psa_mlkem_driver.c",
+        "tests/ztest_acvp_kat/src/kat_vectors.h",
+        "tests/ztest_ct_smoke/src/main.c",
+        "tests/ztest_primitive/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLKEM",
+        "PQCP_MLKEM_LEVEL_768",
+        "PQCP_PSA_DRIVER_MLKEM"
+      ],
+      "claim_ids": [
+        "kat.mlkem_768",
+        "benchmark.mlkem_throughput",
+        "security.ct_smoke"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_kat",
+        "tests/ztest_ct_smoke",
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "PASS - test_mlkem_768_keygen_vectors",
+        "PASS - test_mlkem_768_encaps_vectors",
+        "PQCP_CT_SMOKE alg=MLKEM-768"
+      ]
+    },
+    {
+      "id": "crypto.mlkem_1024",
+      "name": "ML-KEM-1024",
+      "category": "kem",
+      "cbom_component": "ML-KEM-1024",
+      "source_files": [
+        "include/pqcp_zephyr/mlkem.h",
+        "src/mlkem_zephyr.c",
+        "src/mlkem_baseline.c",
+        "tests/ztest_acvp_kat/src/kat_vectors.h",
+        "tests/ztest_acvp_kat/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLKEM",
+        "PQCP_MLKEM_LEVEL_1024"
+      ],
+      "claim_ids": [
+        "kat.mlkem_1024",
+        "benchmark.mlkem_throughput"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_kat",
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "PASS - test_mlkem_1024_keygen_vectors",
+        "PASS - test_mlkem_1024_encaps_vectors"
+      ]
+    },
+    {
+      "id": "crypto.mldsa_44",
+      "name": "ML-DSA-44",
+      "category": "signature",
+      "cbom_component": "ML-DSA-44",
+      "source_files": [
+        "include/pqcp_zephyr/mldsa.h",
+        "src/mldsa_zephyr.c",
+        "src/mldsa_baseline.c",
+        "src/mldsa_streaming.c",
+        "tests/ztest_acvp_kat/src/kat_vectors.h",
+        "tests/ztest_acvp_kat/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLDSA",
+        "PQCP_MLDSA_LEVEL_44"
+      ],
+      "claim_ids": [
+        "kat.mldsa_44",
+        "benchmark.mldsa_throughput"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_kat",
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "PASS - test_mldsa_44_siggen_vectors",
+        "PASS - test_mldsa_44_sigver_vectors"
+      ]
+    },
+    {
+      "id": "crypto.mldsa_65",
+      "name": "ML-DSA-65",
+      "category": "signature",
+      "cbom_component": "ML-DSA-65",
+      "source_files": [
+        "include/pqcp_zephyr/mldsa.h",
+        "src/mldsa_zephyr.c",
+        "src/mldsa_baseline.c",
+        "src/mldsa_streaming.c",
+        "src/psa_mldsa_driver.c",
+        "tests/ztest_acvp_kat/src/kat_vectors.h",
+        "tests/ztest_primitive/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLDSA",
+        "PQCP_MLDSA_LEVEL_65",
+        "PQCP_PSA_DRIVER_MLDSA"
+      ],
+      "claim_ids": [
+        "kat.mldsa_65",
+        "benchmark.mldsa_throughput"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_kat",
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "PASS - test_mldsa_65_siggen_vectors",
+        "PASS - test_mldsa_65_sigver_vectors"
+      ]
+    },
+    {
+      "id": "crypto.mldsa_87",
+      "name": "ML-DSA-87",
+      "category": "signature",
+      "cbom_component": "ML-DSA-87",
+      "source_files": [
+        "include/pqcp_zephyr/mldsa.h",
+        "src/mldsa_zephyr.c",
+        "src/mldsa_baseline.c",
+        "src/mldsa_streaming.c",
+        "tests/ztest_acvp_kat/src/kat_vectors.h",
+        "tests/ztest_acvp_kat/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLDSA",
+        "PQCP_MLDSA_LEVEL_87"
+      ],
+      "claim_ids": [
+        "kat.mldsa_87",
+        "benchmark.mldsa_throughput"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_kat",
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "PASS - test_mldsa_87_siggen_vectors",
+        "PASS - test_mldsa_87_sigver_vectors"
+      ]
+    },
+    {
+      "id": "validation.acvp_serial",
+      "name": "ACVP serial validation harness",
+      "category": "validation",
+      "cbom_component": "ACVP serial validation harness",
+      "source_files": [
+        "include/pqcp_zephyr/acvp_cmd.h",
+        "src/acvp_cmd.c",
+        "samples/pqcp_serial_acvp/src/main.c",
+        "scripts/acvp_negative_scenarios.json",
+        "scripts/acvp_negative_scenario_floor.json",
+        "tests/ztest_acvp_serial/src/main.c",
+        "tests/ztest_acvp_serial_negative/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_ACVP",
+        "PQCP_ACVP_READLINE_TIMEOUT_MS",
+        "PQCP_KAT_SMOKE_ONLY"
+      ],
+      "claim_ids": [
+        "acvp.negative_path_rejection",
+        "acvp.timeout_recovery",
+        "acvp.negative_scenarios_replay",
+        "acvp.mlkem_negative_paths",
+        "acvp.mldsa_negative_paths"
+      ],
+      "ztests": [
+        "tests/ztest_acvp_serial",
+        "tests/ztest_acvp_serial_negative"
+      ],
+      "transcript_markers": [
+        "PASS - test_readline_timeout",
+        "PQCP_ACVP_NEG case=INVALID_MLKEM_ENCAPS_HEX",
+        "PQCP_ACVP_NEG case=POST_TIMEOUT_HELP_RECOVERY"
+      ]
+    },
+    {
+      "id": "validation.tls_selftest",
+      "name": "TLS/PSA PQC self-test path",
+      "category": "validation",
+      "cbom_component": "TLS/PSA PQC self-test path",
+      "source_files": [
+        "include/pqcp_zephyr/tls_selftest.h",
+        "src/tls_selftest.c",
+        "samples/pqcp_tls_mbedtls_psa/src/main.c",
+        "tests/ztest_tls_selftest/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_TLS_SELFTEST",
+        "PQCP_PSA_DRIVER",
+        "PQCP_PSA_DRIVER_MLKEM",
+        "PQCP_PSA_DRIVER_MLDSA"
+      ],
+      "claim_ids": [
+        "security.asan_clean",
+        "security.ubsan_clean"
+      ],
+      "ztests": [
+        "tests/ztest_tls_selftest"
+      ],
+      "transcript_markers": [
+        "TESTSUITE pqcp_tls_selftest succeeded",
+        "PQCP_METRIC,protocol,handshake,TLS13,0,status,PASS,"
+      ]
+    },
+    {
+      "id": "rng.zephyr_entropy",
+      "name": "Zephyr entropy RNG",
+      "category": "rng",
+      "cbom_component": "Zephyr entropy RNG",
+      "source_files": [
+        "include/pqcp_zephyr/rng.h",
+        "src/rng_common.c",
+        "src/rng_zephyr_entropy.c",
+        "tests/ztest_rng/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_RNG_ZEPHYR_ENTROPY"
+      ],
+      "claim_ids": [],
+      "ztests": [
+        "tests/ztest_rng"
+      ],
+      "transcript_markers": [
+        "TESTSUITE pqcp_rng succeeded"
+      ]
+    },
+    {
+      "id": "rng.psa",
+      "name": "PSA RNG",
+      "category": "rng",
+      "cbom_component": "PSA RNG",
+      "source_files": [
+        "include/pqcp_zephyr/rng.h",
+        "src/rng_common.c",
+        "src/rng_psa.c",
+        "tests/ztest_rng/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_RNG_PSA"
+      ],
+      "claim_ids": [],
+      "ztests": [
+        "tests/ztest_rng"
+      ],
+      "transcript_markers": [
+        "TESTSUITE pqcp_rng succeeded"
+      ]
+    },
+    {
+      "id": "rng.deterministic_test",
+      "name": "Deterministic test RNG",
+      "category": "rng",
+      "cbom_component": "Deterministic test RNG",
+      "source_files": [
+        "include/pqcp_zephyr/rng.h",
+        "src/rng_common.c",
+        "src/rng_deterministic.c",
+        "samples/pqcp_kat_deterministic/src/main.c",
+        "tests/ztest_primitive/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_RNG_CUSTOM",
+        "PQCP_RNG_DETERMINISTIC_TEST"
+      ],
+      "claim_ids": [
+        "kat.offline_provenance"
+      ],
+      "ztests": [
+        "tests/ztest_primitive"
+      ],
+      "transcript_markers": [
+        "CONFIG_PQCP_RNG_DETERMINISTIC_TEST",
+        "KAT deterministic demo"
+      ]
+    },
+    {
+      "id": "boot.kat_self_verify",
+      "name": "KAT boot self-verify hook",
+      "category": "boot",
+      "cbom_component": null,
+      "source_files": [
+        "src/kat_boot_verify.c",
+        "tests/ztest_kat_boot_verify/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_KAT_BOOT_VERIFY",
+        "PQCP_RNG_DETERMINISTIC_TEST"
+      ],
+      "claim_ids": [
+        "boot.kat_self_verify"
+      ],
+      "ztests": [
+        "tests/ztest_kat_boot_verify"
+      ],
+      "transcript_markers": [
+        "PQCP_KAT_BOOT_VERIFY: starting power-on self-test",
+        "PQCP_KAT_BOOT_VERIFY: all enabled primitives passed"
+      ]
+    },
+    {
+      "id": "security.ct_smoke",
+      "name": "Constant-time smoke test",
+      "category": "security",
+      "cbom_component": null,
+      "source_files": [
+        "tests/ztest_ct_smoke/src/main.c"
+      ],
+      "kconfig_symbols": [
+        "PQCP_MLKEM_LEVEL_768"
+      ],
+      "claim_ids": [
+        "security.ct_smoke"
+      ],
+      "ztests": [
+        "tests/ztest_ct_smoke"
+      ],
+      "transcript_markers": [
+        "PQCP_CT_SMOKE alg=MLKEM-768"
+      ]
+    }
+  ]
+}
