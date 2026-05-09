@@ -884,6 +884,75 @@ Open follow-ups:
 - Keep hardware attestation explicitly out-of-scope until a real device-side
   digest embedding and measurement flow exists.
 
+## Patch set 10 — strengthened Passport v2 evidence path
+
+Novelty added:
+
+- ACVP negative scenarios now have an append-only compatibility floor:
+  `scripts/acvp_negative_scenario_floor.json` plus
+  `scripts/validate_acvp_negative_scenarios.py`. Existing scenarios must not be
+  removed, renamed, duplicated, or weakened; additive cases cover odd-length
+  hex, empty payload, boundary-minus-one verify input, oversize verify input,
+  lowercase algorithm rejection, timeout partial frame, and post-timeout
+  recovery.
+- The Passport now includes a crypto asset trace map:
+  `scripts/pqc_asset_trace_map.json` and
+  `scripts/verify_pqc_asset_trace_map.py` link ML-KEM, ML-DSA, ACVP, TLS,
+  RNG, boot KAT, and CT-smoke assets to source files, Kconfig symbols, claims,
+  ztests, transcript markers, and CBOM components.
+- `scripts/generate_pqc_evidence_graph.py` emits
+  `pqc_evidence_graph.json` and `pqc_evidence_graph.md`, making
+  asset-to-claim/source/test/marker/CBOM relationships reviewable without
+  rerunning Zephyr.
+- `scripts/export_firmware_assurance_digest.py` exports
+  `pqc_assurance_digest.json` into
+  `generated/pqcp_assurance_digest_generated.h`, and
+  `samples/pqcp_assurance_status` proves that digest can be compiled into a
+  firmware image. This is firmware embeddability only, not hardware
+  attestation.
+- `scripts/assurance_claims.json` is now schema version 4 with additive
+  claims for negative scenario floor, crypto asset traceability, evidence graph
+  integrity, and firmware digest embeddability.
+- `scripts/verify_assurance_policy.py` and
+  `scripts/verify_release_evidence_pack.py` now require Passport v2 artifacts
+  for schema v4 replay and fail on missing floor/trace/graph/digest-header
+  evidence.
+
+Validation completed locally for this patch set:
+
+- `python3 -m py_compile scripts/*.py`
+- `python3 scripts/test_acvp_negative_scenario_floor.py` → 5/5 OK
+- `python3 scripts/test_pqc_asset_trace_map.py` → 5/5 OK
+- `python3 scripts/test_pqc_evidence_graph.py` → 4/4 OK
+- `python3 scripts/test_firmware_assurance_digest.py` → 4/4 OK
+- `python3 scripts/test_assurance_ledger.py` → 36/36 OK
+- `python3 scripts/test_pqc_assurance_passport.py` → 5/5 OK
+- `python3 scripts/test_release_evidence_pack.py` → 7/7 OK
+- `python3 scripts/test_local_release_workflows.py` → 6/6 OK
+- `python3 scripts/check_version_consistency.py --changelog CHANGELOG.md --tag v1.0.0`
+- `python3 scripts/validate_acvp_negative_scenarios.py`
+
+Local Zephyr build note:
+
+- The workspace is Zephyr `v4.4.0` with Zephyr SDK `1.0.1` discovered under
+  `/Users/angelostsanaktsidis/zephyr-sdk-1.0.1`.
+- `west build -p always -b qemu_x86_64 tests/ztest_acvp_serial` currently fails
+  in Zephyr `lib/os/printk.c` because the macOS SDK headers are being picked up
+  by the cross build and `_FDEV_SETUP_WRITE` / `FDEV_SETUP_STREAM` are missing.
+  This occurred even after unsetting `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
+  `LDFLAGS`, and `SDKROOT`; it appears to be a local host/toolchain include
+  issue rather than a Patch set 10 source change.
+
+Open follow-ups:
+
+- Re-run the ACVP serial and negative ztests on a clean Linux Zephyr SDK host or
+  after fixing the macOS cross-toolchain include contamination.
+- Run the full local release gate:
+  `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-passport-v2`
+  after the Zephyr build environment is clean.
+- Keep signing, hardware attestation, and device trust-root policy out of scope
+  until key custody and device measurement semantics are defined.
+
 ## Final rule
 
 Do not confuse motion with progress.
