@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -149,6 +149,30 @@
       "id": "security.ct_smoke",
       "category": "security",
       "claim": "ML-KEM-768 decapsulation, run 32 times against a valid and 32 times against a deliberately corrupted ciphertext, produces median cycle counts whose relative variance stays under a documented bound. This is a runtime smoke test, not a constant-time proof; the assurance documentation (docs/assurance-model.md, docs/publications.md) states the same caveats. Proven by tests/ztest_ct_smoke on qemu_x86_64.",
+      "required": true
+    },
+    {
+      "id": "supply_chain.cbom_crypto_inventory",
+      "category": "supply_chain",
+      "claim": "The release pack includes a CycloneDX-style PQC CBOM that inventories supported ML-KEM, ML-DSA, RNG, validation, Zephyr, SDK, mlkem-native, and mldsa-native assets.",
+      "required": true
+    },
+    {
+      "id": "supply_chain.pqc_assurance_attestation",
+      "category": "supply_chain",
+      "claim": "The release pack includes an unsigned in-toto Statement-style PQC assurance attestation binding release evidence artifact hashes to the ledger metadata.",
+      "required": true
+    },
+    {
+      "id": "release.policy_pass",
+      "category": "release",
+      "claim": "The partner-review PQC assurance policy evaluated the ledger, CBOM, attestation, and release metadata and passed without failures.",
+      "required": true
+    },
+    {
+      "id": "firmware.assurance_digest_manifest",
+      "category": "firmware",
+      "claim": "The release pack exposes a stable SHA-256 digest manifest over the ledger, CBOM, attestation, transcript manifest, benchmark provenance, and release manifest for future firmware attestation binding.",
       "required": true
     }
   ]

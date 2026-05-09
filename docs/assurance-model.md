@@ -62,6 +62,31 @@ pack later without rerunning Zephyr or QEMU.
 | `scripts/verify_assurance_ledger.py` | Replay-only schema + sha256 + claim-coverage check on an existing ledger. |
 | `scripts/verify_release_evidence_pack.py` | Pack-level replay: ledger, benchmark, cost-of-assurance, MCU footprint, release bundle, HTML report. |
 | `scripts/render_assurance_report.py` | Pure-Python HTML renderer for the JSON ledger. |
+| `scripts/export_pqc_cbom.py` | Produces `pqc_cbom.cdx.json`, a CycloneDX-style cryptography BOM for the release pack. |
+| `scripts/generate_pqc_attestation.py` | Produces `pqc_attestation.intoto.json` and `pqc_assurance_digest.json` for unsigned hash-bound release evidence. |
+| `scripts/verify_assurance_policy.py` | Applies the partner-review policy in `scripts/pqc_assurance_policy.json` to the ledger, CBOM, attestation, and release manifest. |
+
+## Ledger vs Passport
+
+The **Assurance Ledger** is the claim engine: each claim has an id, a status,
+validators, commands, and evidence artifacts.
+
+The **PQC Assurance Passport** is the partner-review package built around that
+ledger. It consists of:
+
+- `assurance_ledger.json` / `assurance_ledger.md`
+- `assurance_report.html`
+- `pqc_cbom.cdx.json`
+- `pqc_attestation.intoto.json`
+- `pqc_policy_result.json`
+- `pqc_assurance_digest.json`
+- transcript, benchmark, cost-of-assurance, MCU footprint, and release-bundle
+  artifacts
+
+The passport is replay-verifiable with `verify_release_evidence_pack.py`.
+It is not a signed certificate and does not claim hardware attestation; it is a
+local, deterministic bridge between PQC crypto inventory, release claims,
+validation transcripts, and build/release metadata.
 
 ## Claim catalog
 
@@ -87,9 +112,12 @@ Highlights:
   documented ztest markers (`test_rejects_malformed_commands`,
   `test_rejects_invalid_hex_and_wrong_sizes`,
   `test_serial_line_garbage_rejected_and_recovered`).
-- `acvp.timeout_recovery` — proves `ERROR:TIMEOUT` is emitted by
-  requiring the `test_readline_timeout` and `ERROR:TIMEOUT` markers in
-  the same transcript.
+- `acvp.timeout_recovery` — proves the stalled-frame timeout path is
+  exercised by requiring the `test_readline_timeout` ztest marker and
+  successful `pqcp_acvp_serial` suite marker in the same transcript.
+  The ledger details record that the ztest asserts the locked
+  `ERROR:TIMEOUT` wire response, even when the test runner does not
+  echo the UART payload literally.
 - `release.transcript_binding` — every required release-check step has
   a captured stdout transcript with a recorded SHA-256, plus QEMU
   cost-of-assurance run logs.
@@ -141,8 +169,11 @@ The catalog and the ledger carry a `schema_version`.
 - **schema_version = 1** is the legacy 8-claim set shipped with the
   initial assurance work. It contained `kat.offline_provenance` and
   `benchmark.csv_validity` as aggregate claims.
-- **schema_version = 2** (current) adds the per-primitive KAT claims,
+- **schema_version = 2** adds the per-primitive KAT claims,
   per-primitive benchmark claims, and the two ACVP robustness claims.
+- **schema_version = 3** (current) adds Passport-oriented supply-chain and
+  firmware-preparation claims for CBOM inventory, PQC assurance attestation,
+  policy result, and the digest manifest used by future device attestation.
 
 `generate_assurance_ledger.py` and `verify_assurance_ledger.py` both
 accept either version. Loading a v1 catalog or replaying a v1 ledger
@@ -172,8 +203,10 @@ When `evaluate_transcript_binding` runs, it re-hashes every referenced
 file and rejects the manifest if any required step is missing,
 returncode-non-zero, size-drifted, or hash-drifted. The negative-ACVP
 and timeout-recovery evaluators perform a similar check but additionally
-grep the transcript body for the documented ztest markers and the
-`ERROR:TIMEOUT` literal.
+grep the transcript body for the documented ztest markers. For timeout
+recovery, the ledger records that `test_readline_timeout` asserts the
+locked `ERROR:TIMEOUT` wire response; the transcript does not need to
+duplicate the UART payload as a literal `ERROR:TIMEOUT` line.
 
 ## Producing vs replaying an evidence pack
 

@@ -25,9 +25,12 @@ python3 scripts/verify_release_evidence_pack.py /tmp/pqcp-release-pack \
 ```
 
 Step (1) writes `assurance_ledger.json`, `assurance_ledger.md`,
-`assurance_report.html`, and `transcripts/evidence_transcript_manifest.json`
-under the output root. Step (3) re-checks every recorded SHA-256, every
-required claim id, and every transcript hash, and exits non-zero with the
+`assurance_report.html`, `pqc_cbom.cdx.json`,
+`pqc_attestation.intoto.json`, `pqc_policy_result.json`,
+`pqc_assurance_digest.json`, and
+`transcripts/evidence_transcript_manifest.json` under the output root.
+Step (3) re-checks every recorded SHA-256, every required claim id, every
+Passport subject hash, and every transcript hash, and exits non-zero with the
 exact offending file/claim if anything has drifted. See
 [`assurance-model.md`](assurance-model.md) for the architecture.
 
@@ -143,3 +146,19 @@ python3 scripts/verify_release_evidence_pack.py \
 
 If GitHub Actions is later restored, rerun the normal release workflow and
 compare the generated release notes with `output/release/v1.0.0/release-notes-v1.0.0.md`.
+
+## PQC Assurance Passport
+
+The full local release gate now emits the Passport artifacts described in
+[`pqc-assurance-passport.md`](pqc-assurance-passport.md):
+
+- `pqc_cbom.cdx.json`: CycloneDX-style cryptography BOM.
+- `pqc_attestation.intoto.json`: unsigned in-toto Statement-style evidence
+  attestation.
+- `pqc_policy_result.json`: partner-review policy result.
+- `pqc_assurance_digest.json`: stable SHA-256 digest manifest for future
+  firmware attestation binding.
+
+The CI fast gate intentionally skips the full Passport because it would require
+the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence
+path. Use the local release gate when producing partner-review artifacts.

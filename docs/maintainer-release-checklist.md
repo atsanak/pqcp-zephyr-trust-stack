@@ -97,9 +97,9 @@ logs, and hashes. `assurance_report.html` is a self-contained,
 dependency-free HTML view of the same JSON ledger and is the
 recommended artifact to share with reviewers or attach to a release pack.
 
-The ledger schema is `schema_version=2`. Beyond the original release/KAT/
+The ledger schema is `schema_version=3`. Beyond the original release/KAT/
 benchmark/cost-of-assurance/transcript-binding claims, every release pack
-must also report `pass` for:
+must also report `pass` or an explicitly documented `not_applicable` for:
 
 - `kat.mlkem_512`, `kat.mlkem_768`, `kat.mlkem_1024` — per-parameter-set
   ML-KEM KAT decomposition.
@@ -136,6 +136,20 @@ A failing required claim names the offending parameter set, primitive, or
 case directly in `failure_reason` rather than disappearing into the older
 aggregate `kat.offline_provenance` / `benchmark.csv_validity` rows.
 
+Current full release packs use ledger `schema_version=3`, which adds the PQC
+Assurance Passport layer. In addition to the ledger and HTML report, inspect:
+
+- `pqc_cbom.cdx.json`
+- `pqc_attestation.intoto.json`
+- `pqc_policy_result.json`
+- `pqc_assurance_digest.json`
+
+`pqc_policy_result.json` must have `"passed": true`. The policy verifier checks
+required claim statuses, required PQC crypto assets, deterministic RNG
+test-only labelling, attestation subject hashes, and version/tag/source
+metadata consistency across the ledger, CBOM, attestation, and release
+manifest.
+
 If the ACVP negative scenario fixture is updated, regenerate the
 matching C header before running the gate:
 
@@ -171,7 +185,8 @@ This validates the ledger, benchmark CSV/provenance, benchmark summary,
 cost-of-assurance evidence, MCU footprint CSV, local release manifest, release
 notes hash, transcript hashes, ledger/bundle commit metadata alignment, and
 (for `schema_version >= 2` packs) that `assurance_report.html` exists and
-contains every claim id from the ledger.
+contains every claim id from the ledger. For `schema_version >= 3` packs it also
+replays the PQC Assurance Passport policy and digest checks.
 
 ## 4. Run Focused Consumer And Harness Smokes
 

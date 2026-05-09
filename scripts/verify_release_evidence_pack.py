@@ -20,6 +20,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from export_results import validate_benchmark_csv, verify_provenance  # noqa: E402
 from verify_assurance_ledger import verify_ledger  # noqa: E402
+from verify_assurance_policy import verify_policy  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -259,6 +260,80 @@ def verify_assurance_report_html(
         )
 
 
+def verify_passport_artifacts(
+    output_root: Path,
+    *,
+    ledger: dict[str, Any],
+    tag: str | None,
+    claims_path: Path,
+    failures: list[str],
+) -> None:
+    """Verify the PQC Assurance Passport artifacts for schema_version >= 3 packs."""
+    if (ledger.get("schema_version") or 0) < 3:
+        return
+
+    cbom_path = output_root / "pqc_cbom.cdx.json"
+    attestation_path = output_root / "pqc_attestation.intoto.json"
+    policy_result_path = output_root / "pqc_policy_result.json"
+    digest_path = output_root / "pqc_assurance_digest.json"
+    policy_path = claims_path.parent / "pqc_assurance_policy.json"
+    if not policy_path.exists():
+        policy_path = SCRIPT_DIR / "pqc_assurance_policy.json"
+    manifest_path = find_release_manifest(output_root, tag, failures)
+
+    require_file(cbom_path, "PQC CBOM", failures)
+    require_file(attestation_path, "PQC assurance attestation", failures)
+    require_file(policy_result_path, "PQC assurance policy result", failures)
+    require_file(digest_path, "PQC assurance digest manifest", failures)
+    if manifest_path is None:
+        return
+    if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
+        return
+
+    policy_replay = verify_policy(
+        policy_path=policy_path,
+        ledger_path=output_root / "assurance_ledger.json",
+        cbom_path=cbom_path,
+        attestation_path=attestation_path,
+        release_manifest_path=manifest_path,
+    )
+    if not policy_replay.get("passed"):
+        for failure in policy_replay.get("failures", []):
+            failures.append(f"PQC assurance policy replay: {failure}")
+
+    policy_result = load_json(policy_result_path, "PQC assurance policy result", failures)
+    if policy_result and policy_result.get("passed") is not True:
+        failures.append("PQC assurance policy result did not pass")
+
+    digest = load_json(digest_path, "PQC assurance digest manifest", failures)
+    if digest:
+        if digest.get("schema_version") != 1:
+            failures.append(f"PQC assurance digest schema_version={digest.get('schema_version')!r}, expected 1")
+        artifacts = digest.get("artifacts")
+        if not isinstance(artifacts, list) or not artifacts:
+            failures.append("PQC assurance digest must contain non-empty artifacts")
+        else:
+            for item in artifacts:
+                if not isinstance(item, dict):
+                    failures.append("PQC assurance digest artifact entry must be an object")
+                    continue
+                raw_path = item.get("path")
+                if not isinstance(raw_path, str) or not raw_path:
+                    failures.append("PQC assurance digest artifact missing path")
+                    continue
+                candidate = Path(raw_path)
+                if not candidate.is_absolute():
+                    candidate = output_root / candidate
+                    if not candidate.exists():
+                        candidate = output_root / "local_release_bundle" / (tag or "") / raw_path
+                if not candidate.exists() or not candidate.is_file():
+                    failures.append(f"PQC assurance digest artifact not found: {raw_path}")
+                    continue
+                actual = sha256_file(candidate)
+                if item.get("sha256") != actual:
+                    failures.append(f"PQC assurance digest hash mismatch for {raw_path}")
+
+
 def verify_pack(
     output_root: Path,
     *,
@@ -290,6 +365,13 @@ def verify_pack(
     if ledger:
         verify_release_bundle(output_root, tag=tag, ledger=ledger, failures=failures)
         verify_assurance_report_html(output_root, ledger, failures)
+        verify_passport_artifacts(
+            output_root,
+            ledger=ledger,
+            tag=tag,
+            claims_path=claims_path.resolve(),
+            failures=failures,
+        )
     return failures
 
 

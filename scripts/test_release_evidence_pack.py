@@ -13,6 +13,9 @@ from argparse import Namespace
 from pathlib import Path
 
 import generate_assurance_ledger as ledger
+import export_pqc_cbom
+import generate_pqc_attestation
+import verify_assurance_policy
 import verify_release_evidence_pack as pack_verify
 from export_results import CSV_FIELDNAMES, EXPECTED_PRIMITIVE_ROWS
 
@@ -30,6 +33,17 @@ class ReleaseEvidencePackTests(unittest.TestCase):
         )
         (root / "CMakeLists.txt").write_text(
             'set(PQCP_PROJECT_VERSION "1.2.3")\n',
+            encoding="utf-8",
+        )
+        (root / "west.yml").write_text(
+            "manifest:\n"
+            "  projects:\n"
+            "    - name: zephyr\n"
+            "      revision: zephyr-sha\n"
+            "    - name: mlkem-native\n"
+            "      revision: mlkem-sha\n"
+            "    - name: mldsa-native\n"
+            "      revision: mldsa-sha\n",
             encoding="utf-8",
         )
         (root / "CHANGELOG.md").write_text(
@@ -263,6 +277,36 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             output_md=output / "assurance_ledger.md",
         )
         result = ledger.build_ledger(args)
+        policy_required = json.loads(
+            (Path(__file__).resolve().parent / "pqc_assurance_policy.json").read_text(
+                encoding="utf-8"
+            )
+        )["required_claim_ids"]
+        existing = {claim["id"] for claim in result["claims"]}
+        for claim_id in policy_required:
+            if claim_id in existing:
+                continue
+            result["claims"].append(
+                {
+                    "id": claim_id,
+                    "category": claim_id.split(".", 1)[0],
+                    "claim": f"{claim_id} synthetic pass",
+                    "required": True,
+                    "status": "pass",
+                    "validators": [],
+                    "evidence_artifacts": [],
+                    "commands": [],
+                    "failure_reason": None,
+                    "details": {},
+                }
+            )
+        result["summary"] = {
+            "pass": sum(1 for claim in result["claims"] if claim["status"] == "pass"),
+            "fail": sum(1 for claim in result["claims"] if claim["status"] == "fail"),
+            "not_applicable": sum(
+                1 for claim in result["claims"] if claim["status"] == "not_applicable"
+            ),
+        }
         args.output_json.write_text(
             json.dumps(result, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -271,7 +315,64 @@ class ReleaseEvidencePackTests(unittest.TestCase):
         import render_assurance_report
         report_html = render_assurance_report.render_report(result)
         (output / "assurance_report.html").write_text(report_html, encoding="utf-8")
+        self.make_passport(module, output, args.output_json, transcript_manifest)
         return module, output, claims
+
+    def make_passport(
+        self,
+        module: Path,
+        output: Path,
+        ledger_path: Path,
+        transcript_manifest: Path,
+    ) -> None:
+        manifest = output / "local_release_bundle" / "v1.2.3" / "release-manifest-v1.2.3.json"
+        cbom_path = output / "pqc_cbom.cdx.json"
+        cbom = export_pqc_cbom.build_cbom(
+            module,
+            json.loads(ledger_path.read_text(encoding="utf-8")),
+            json.loads(manifest.read_text(encoding="utf-8")),
+        )
+        cbom_path.write_text(json.dumps(cbom, indent=2) + "\n", encoding="utf-8")
+        attestation_path = output / "pqc_attestation.intoto.json"
+        digest_path = output / "pqc_assurance_digest.json"
+        attestation_args = Namespace(
+            module_path=module,
+            ledger=ledger_path,
+            ledger_md=output / "assurance_ledger.md",
+            assurance_report=output / "assurance_report.html",
+            cbom=cbom_path,
+            release_manifest=manifest,
+            transcript_manifest=transcript_manifest,
+            benchmark_csv=output / "benchmark_results.csv",
+            benchmark_provenance=output / "benchmark_provenance.json",
+            cost_of_assurance_evidence=output / "cost_of_assurance_evidence.json",
+            output=attestation_path,
+            digest_output=digest_path,
+        )
+        attestation = generate_pqc_attestation.build_attestation(attestation_args)
+        attestation_path.write_text(json.dumps(attestation, indent=2) + "\n", encoding="utf-8")
+        generate_pqc_attestation.write_digest(
+            digest_path,
+            [
+                ledger_path,
+                cbom_path,
+                transcript_manifest,
+                output / "benchmark_provenance.json",
+                manifest,
+            ],
+            attestation_path=attestation_path,
+        )
+        policy = verify_assurance_policy.verify_policy(
+            policy_path=Path(__file__).resolve().parent / "pqc_assurance_policy.json",
+            ledger_path=ledger_path,
+            cbom_path=cbom_path,
+            attestation_path=attestation_path,
+            release_manifest_path=manifest,
+        )
+        (output / "pqc_policy_result.json").write_text(
+            json.dumps(policy, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     def test_valid_synthetic_pack_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

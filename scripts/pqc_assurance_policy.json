@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "PQCP partner-review default assurance policy",
+  "required_claim_ids": [
+    "release.version_consistency",
+    "release.tag_integrity",
+    "kat.offline_provenance",
+    "kat.mlkem_512",
+    "kat.mlkem_768",
+    "kat.mlkem_1024",
+    "kat.mldsa_44",
+    "kat.mldsa_65",
+    "kat.mldsa_87",
+    "benchmark.csv_validity",
+    "benchmark.provenance_binding",
+    "benchmark.mlkem_throughput",
+    "benchmark.mldsa_throughput",
+    "cost_of_assurance.guardrails",
+    "release.local_bundle",
+    "release.transcript_binding",
+    "acvp.negative_path_rejection",
+    "acvp.timeout_recovery",
+    "acvp.negative_scenarios_replay",
+    "acvp.mlkem_negative_paths",
+    "acvp.mldsa_negative_paths",
+    "security.asan_clean",
+    "security.ubsan_clean",
+    "boot.kat_self_verify",
+    "security.ct_smoke"
+  ],
+  "allow_not_applicable_claim_ids": [
+    "security.asan_clean",
+    "security.ubsan_clean"
+  ],
+  "required_cbom_components": [
+    "ML-KEM-768",
+    "ML-KEM-1024",
+    "ML-DSA-65",
+    "ML-DSA-87",
+    "Zephyr RTOS",
+    "Zephyr SDK",
+    "mlkem-native",
+    "mldsa-native"
+  ],
+  "forbidden_production_rng_components": [
+    "Deterministic test RNG"
+  ],
+  "required_attestation_subjects": [
+    "assurance_ledger.json",
+    "assurance_ledger.md",
+    "assurance_report.html",
+    "pqc_cbom.cdx.json",
+    "benchmark_results.csv",
+    "benchmark_provenance.json",
+    "cost_of_assurance_evidence.json",
+    "transcripts/evidence_transcript_manifest.json",
+    "release-manifest.json",
+    "west.yml",
+    "CMakeLists.txt"
+  ]
+}
