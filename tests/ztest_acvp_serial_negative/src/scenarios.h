@@ -45,7 +45,7 @@ static const struct pqcp_acvp_negative_case pqcp_acvp_negative_cases[] = {
     {
         .name = "EMPTY_MLKEM_ENCAPS_PAYLOAD",
         .command = "ENCAPS:MLKEM:768:",
-        .expected_response = "ERROR:WRONG_SIZE",
+        .expected_response = "ERROR:MISSING_ARGS",
     },
     {
         .name = "TRUNCATED_MLKEM_ENCAPS_PAYLOAD",
