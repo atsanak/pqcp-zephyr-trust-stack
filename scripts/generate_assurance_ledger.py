@@ -37,8 +37,8 @@ from verify_kat_provenance import (  # noqa: E402
     verify_vectors,
 )
 
-LEDGER_SCHEMA_VERSION = 3
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3)
+LEDGER_SCHEMA_VERSION = 4
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -98,6 +98,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attestation", type=Path, help="Optional pqc_attestation.intoto.json artifact")
     parser.add_argument("--policy-result", type=Path, help="Optional pqc_policy_result.json artifact")
     parser.add_argument("--assurance-digest", type=Path, help="Optional pqc_assurance_digest.json artifact")
+    parser.add_argument(
+        "--negative-scenario-floor-result",
+        type=Path,
+        help="Optional ACVP negative scenario floor validation result JSON.",
+    )
+    parser.add_argument("--asset-trace-result", type=Path, help="Optional PQC asset trace validation result JSON.")
+    parser.add_argument("--evidence-graph", type=Path, help="Optional PQC evidence graph JSON artifact.")
+    parser.add_argument("--firmware-digest-header", type=Path, help="Optional generated firmware digest header.")
     return parser.parse_args()
 
 
@@ -219,7 +227,7 @@ def load_claim_specs(path: Path) -> list[dict[str, Any]]:
         print(
             f"[warn] {path} uses claims schema_version=1; per-primitive KAT and "
             "benchmark claims and the ACVP negative/timeout claims will not be "
-            "populated. Update the catalog to schema_version=3 for the full set.",
+            "populated. Update the catalog to schema_version=4 for the full set.",
             file=sys.stderr,
         )
     claims = raw.get("claims")
@@ -1590,6 +1598,60 @@ def evaluate_json_artifact_claim(
     )
 
 
+def evaluate_file_artifact_claim(
+    spec: dict[str, Any],
+    *,
+    path: Path | None,
+    label: str,
+    required_substrings: tuple[str, ...] = (),
+) -> dict[str, object]:
+    validators = [label]
+    commands = [f"generate {label}"]
+    if path is None:
+        return not_applicable_claim(
+            spec,
+            reason=f"{label} path was not supplied to generate_assurance_ledger.py",
+            validators=validators,
+            evidence_artifacts=[],
+            commands=commands,
+        )
+    artifacts = [artifact(path, label=label)]
+    if not path.exists():
+        return not_applicable_claim(
+            spec,
+            reason=f"{label} has not been generated yet: {path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    if not path.is_file():
+        return fail_claim(
+            spec,
+            reason=f"{label} is not a file: {path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    body = path.read_text(encoding="utf-8", errors="replace")
+    missing = [text for text in required_substrings if text not in body]
+    if missing:
+        return fail_claim(
+            spec,
+            reason=f"{label} missing required text: {', '.join(missing)}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details={"size_bytes": path.stat().st_size},
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details={"size_bytes": path.stat().st_size},
+    )
+
+
 def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, Callable[[dict[str, Any]], dict[str, object]]]:
     module_path = args.module_path.resolve()
     benchmark_csv = resolve_path(args.benchmark_csv, module_path)
@@ -1604,10 +1666,18 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     attestation_arg = getattr(args, "attestation", None)
     policy_result_arg = getattr(args, "policy_result", None)
     assurance_digest_arg = getattr(args, "assurance_digest", None)
+    negative_floor_result_arg = getattr(args, "negative_scenario_floor_result", None)
+    asset_trace_result_arg = getattr(args, "asset_trace_result", None)
+    evidence_graph_arg = getattr(args, "evidence_graph", None)
+    firmware_digest_header_arg = getattr(args, "firmware_digest_header", None)
     cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
     attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
     policy_result = resolve_path(policy_result_arg, module_path) if policy_result_arg else None
     assurance_digest = resolve_path(assurance_digest_arg, module_path) if assurance_digest_arg else None
+    negative_floor_result = resolve_path(negative_floor_result_arg, module_path) if negative_floor_result_arg else None
+    asset_trace_result = resolve_path(asset_trace_result_arg, module_path) if asset_trace_result_arg else None
+    evidence_graph = resolve_path(evidence_graph_arg, module_path) if evidence_graph_arg else None
+    firmware_digest_header = resolve_path(firmware_digest_header_arg, module_path) if firmware_digest_header_arg else None
     tag = args.tag
 
     evaluators: dict[str, Callable[[dict[str, Any]], dict[str, object]]] = {
@@ -1679,6 +1749,13 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             required_response_substrings=("MLDSA",),
             label="ML-DSA negative paths",
         ),
+        "acvp.negative_scenario_floor": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=negative_floor_result,
+            label="ACVP negative scenario floor result",
+            required_keys=("schema_version", "passed", "scenario_count", "floor_count"),
+            success_field="passed",
+        ),
         "security.asan_clean": lambda spec: evaluate_asan_clean(
             spec, transcript_manifest=transcript_manifest,
         ),
@@ -1703,10 +1780,24 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             label="PQC assurance attestation",
             required_keys=("_type", "predicateType", "subject", "predicate"),
         ),
+        "supply_chain.crypto_asset_traceability": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=asset_trace_result,
+            label="PQC asset trace validation result",
+            required_keys=("schema_version", "passed", "asset_count", "checks"),
+            success_field="passed",
+        ),
+        "supply_chain.evidence_graph_integrity": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=evidence_graph,
+            label="PQC evidence graph",
+            required_keys=("schema_version", "summary", "nodes", "edges", "failures"),
+        ),
         "release.policy_pass": lambda spec: evaluate_json_artifact_claim(
             spec,
             path=policy_result,
             label="PQC assurance policy result",
+            expected_schema_version=2,
             required_keys=("schema_version", "passed", "checks"),
             success_field="passed",
         ),
@@ -1715,6 +1806,15 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             path=assurance_digest,
             label="PQC assurance digest manifest",
             required_keys=("schema_version", "digest_algorithm", "artifacts"),
+        ),
+        "firmware.assurance_digest_embeddable": lambda spec: evaluate_file_artifact_claim(
+            spec,
+            path=firmware_digest_header,
+            label="firmware assurance digest header",
+            required_substrings=(
+                "PQCP_ASSURANCE_DIGEST_ROOT_SHA256",
+                "PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT",
+            ),
         ),
     }
     for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():

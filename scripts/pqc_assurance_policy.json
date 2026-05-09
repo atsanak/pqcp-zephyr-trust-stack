@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "PQCP partner-review default assurance policy",
   "required_claim_ids": [
     "release.version_consistency",
@@ -23,14 +23,27 @@
     "acvp.negative_scenarios_replay",
     "acvp.mlkem_negative_paths",
     "acvp.mldsa_negative_paths",
+    "acvp.negative_scenario_floor",
     "security.asan_clean",
     "security.ubsan_clean",
     "boot.kat_self_verify",
-    "security.ct_smoke"
+    "security.ct_smoke",
+    "supply_chain.cbom_crypto_inventory",
+    "supply_chain.pqc_assurance_attestation",
+    "supply_chain.crypto_asset_traceability",
+    "supply_chain.evidence_graph_integrity",
+    "firmware.assurance_digest_manifest",
+    "firmware.assurance_digest_embeddable"
   ],
   "allow_not_applicable_claim_ids": [
     "security.asan_clean",
-    "security.ubsan_clean"
+    "security.ubsan_clean",
+    "supply_chain.cbom_crypto_inventory",
+    "supply_chain.pqc_assurance_attestation",
+    "supply_chain.crypto_asset_traceability",
+    "supply_chain.evidence_graph_integrity",
+    "firmware.assurance_digest_manifest",
+    "firmware.assurance_digest_embeddable"
   ],
   "required_cbom_components": [
     "ML-KEM-768",
@@ -56,6 +69,15 @@
     "transcripts/evidence_transcript_manifest.json",
     "release-manifest.json",
     "west.yml",
-    "CMakeLists.txt"
+    "CMakeLists.txt",
+    "pqc_evidence_graph.json"
+  ],
+  "required_passport_v2_artifacts": [
+    "acvp_negative_scenario_floor_result.json",
+    "pqc_asset_trace_result.json",
+    "pqc_evidence_graph.json",
+    "pqc_evidence_graph.md",
+    "pqc_assurance_digest.json",
+    "generated/pqcp_assurance_digest_generated.h"
   ]
 }

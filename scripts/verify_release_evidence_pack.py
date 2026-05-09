@@ -276,6 +276,11 @@ def verify_passport_artifacts(
     attestation_path = output_root / "pqc_attestation.intoto.json"
     policy_result_path = output_root / "pqc_policy_result.json"
     digest_path = output_root / "pqc_assurance_digest.json"
+    floor_result_path = output_root / "acvp_negative_scenario_floor_result.json"
+    asset_trace_result_path = output_root / "pqc_asset_trace_result.json"
+    evidence_graph_json = output_root / "pqc_evidence_graph.json"
+    evidence_graph_md = output_root / "pqc_evidence_graph.md"
+    firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     if not policy_path.exists():
         policy_path = SCRIPT_DIR / "pqc_assurance_policy.json"
@@ -285,6 +290,12 @@ def verify_passport_artifacts(
     require_file(attestation_path, "PQC assurance attestation", failures)
     require_file(policy_result_path, "PQC assurance policy result", failures)
     require_file(digest_path, "PQC assurance digest manifest", failures)
+    if (ledger.get("schema_version") or 0) >= 4:
+        require_file(floor_result_path, "ACVP negative scenario floor result", failures)
+        require_file(asset_trace_result_path, "PQC asset trace result", failures)
+        require_file(evidence_graph_json, "PQC evidence graph JSON", failures)
+        require_file(evidence_graph_md, "PQC evidence graph Markdown", failures)
+        require_file(firmware_digest_header, "firmware assurance digest header", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -296,6 +307,10 @@ def verify_passport_artifacts(
         cbom_path=cbom_path,
         attestation_path=attestation_path,
         release_manifest_path=manifest_path,
+        asset_trace_result_path=asset_trace_result_path if asset_trace_result_path.exists() else None,
+        evidence_graph_path=evidence_graph_json if evidence_graph_json.exists() else None,
+        assurance_digest_path=digest_path,
+        firmware_digest_header_path=firmware_digest_header if firmware_digest_header.exists() else None,
     )
     if not policy_replay.get("passed"):
         for failure in policy_replay.get("failures", []):
@@ -305,6 +320,47 @@ def verify_passport_artifacts(
     if policy_result and policy_result.get("passed") is not True:
         failures.append("PQC assurance policy result did not pass")
 
+    if (ledger.get("schema_version") or 0) >= 4:
+        floor_result = load_json(floor_result_path, "ACVP negative scenario floor result", failures)
+        if floor_result and floor_result.get("passed") is not True:
+            failures.append("ACVP negative scenario floor result did not pass")
+
+        trace_result = load_json(asset_trace_result_path, "PQC asset trace result", failures)
+        if trace_result and trace_result.get("passed") is not True:
+            failures.append("PQC asset trace result did not pass")
+
+        graph = load_json(evidence_graph_json, "PQC evidence graph", failures)
+        if graph:
+            if graph.get("schema_version") != 1:
+                failures.append(f"PQC evidence graph schema_version={graph.get('schema_version')!r}, expected 1")
+            graph_failures = graph.get("failures")
+            if not isinstance(graph_failures, list):
+                failures.append("PQC evidence graph failures field must be a list")
+            elif graph_failures:
+                failures.append("PQC evidence graph contains failures: " + "; ".join(map(str, graph_failures)))
+            claim_ids = {
+                node.get("label")
+                for node in graph.get("nodes") or []
+                if isinstance(node, dict)
+                and node.get("type") == "claim"
+                and isinstance(node.get("label"), str)
+            }
+            graph_body = evidence_graph_md.read_text(encoding="utf-8", errors="replace") if evidence_graph_md.exists() else ""
+            missing_from_md = sorted(claim_id for claim_id in claim_ids if claim_id and claim_id not in graph_body)
+            if missing_from_md:
+                failures.append(
+                    "PQC evidence graph Markdown missing claim id(s): " + ", ".join(missing_from_md)
+                )
+
+        if firmware_digest_header.exists():
+            header = firmware_digest_header.read_text(encoding="utf-8", errors="replace")
+            for macro in (
+                "PQCP_ASSURANCE_DIGEST_ROOT_SHA256",
+                "PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT",
+            ):
+                if macro not in header:
+                    failures.append(f"firmware assurance digest header missing {macro}")
+
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:
         if digest.get("schema_version") != 1:
@@ -313,6 +369,18 @@ def verify_passport_artifacts(
         if not isinstance(artifacts, list) or not artifacts:
             failures.append("PQC assurance digest must contain non-empty artifacts")
         else:
+            seen_paths = {
+                str(item.get("path"))
+                for item in artifacts
+                if isinstance(item, dict)
+            }
+            if (ledger.get("schema_version") or 0) >= 4:
+                for required_name in (
+                    "pqc_evidence_graph.json",
+                    "pqc_asset_trace_result.json",
+                ):
+                    if required_name not in seen_paths:
+                        failures.append(f"PQC assurance digest missing artifact: {required_name}")
             for item in artifacts:
                 if not isinstance(item, dict):
                     failures.append("PQC assurance digest artifact entry must be an object")

@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -128,6 +128,12 @@
       "required": true
     },
     {
+      "id": "acvp.negative_scenario_floor",
+      "category": "acvp",
+      "claim": "scripts/acvp_negative_scenario_floor.json locks every compatibility-floor negative scenario so malformed ACVP cases cannot be removed, renamed, duplicated, or weakened without a release-gate failure.",
+      "required": true
+    },
+    {
       "id": "security.asan_clean",
       "category": "security",
       "claim": "Every sanitizer-enabled native_sim ztest run captured by scripts/run_sanitizer_checks.py finished without an AddressSanitizer error report.",
@@ -164,6 +170,18 @@
       "required": true
     },
     {
+      "id": "supply_chain.crypto_asset_traceability",
+      "category": "supply_chain",
+      "claim": "The release pack includes a verified PQC asset trace map linking cryptographic assets to source files, Kconfig symbols, assurance claims, ztests, transcript markers, and CBOM components.",
+      "required": true
+    },
+    {
+      "id": "supply_chain.evidence_graph_integrity",
+      "category": "supply_chain",
+      "claim": "The release pack includes a PQC evidence graph whose asset, claim, source, test, marker, and CBOM links resolve without missing graph edges.",
+      "required": true
+    },
+    {
       "id": "release.policy_pass",
       "category": "release",
       "claim": "The partner-review PQC assurance policy evaluated the ledger, CBOM, attestation, and release metadata and passed without failures.",
@@ -173,6 +191,12 @@
       "id": "firmware.assurance_digest_manifest",
       "category": "firmware",
       "claim": "The release pack exposes a stable SHA-256 digest manifest over the ledger, CBOM, attestation, transcript manifest, benchmark provenance, and release manifest for future firmware attestation binding.",
+      "required": true
+    },
+    {
+      "id": "firmware.assurance_digest_embeddable",
+      "category": "firmware",
+      "claim": "The release pack exports the assurance digest into a generated C header and verifies that samples/pqcp_assurance_status can compile it into firmware.",
       "required": true
     }
   ]

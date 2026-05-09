@@ -54,6 +54,7 @@ CI_EVIDENCE_TRANSCRIPT_STEPS = (
     "cppcheck",
     "Extended Checks (strict)",
     "ACVP serial negative scenario header check",
+    "ACVP negative scenario floor validation",
     "ACVP serial negative ztest build",
     "ACVP serial negative ztest run",
     "kat_provenance",
@@ -64,6 +65,7 @@ CI_FAST_GATE_STEPS = (
     "cppcheck",
     "Extended Checks (strict)",
     "ACVP serial negative scenario header check",
+    "ACVP negative scenario floor validation",
     "ACVP serial negative ztest build",
     "ACVP serial negative ztest run",
     "kat_provenance",
@@ -493,6 +495,13 @@ def main() -> int:
     pqc_attestation_path = output_root / "pqc_attestation.intoto.json"
     pqc_policy_result_path = output_root / "pqc_policy_result.json"
     pqc_assurance_digest_path = output_root / "pqc_assurance_digest.json"
+    negative_floor_result_path = output_root / "acvp_negative_scenario_floor_result.json"
+    pqc_asset_trace_result_path = output_root / "pqc_asset_trace_result.json"
+    pqc_evidence_graph_json = output_root / "pqc_evidence_graph.json"
+    pqc_evidence_graph_md = output_root / "pqc_evidence_graph.md"
+    generated_include_dir = output_root / "generated"
+    firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
+    assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
     transcript_dir = output_root / "transcripts"
     evidence_transcript_manifest = transcript_dir / "evidence_transcript_manifest.json"
     junit_output = output_root / "release_check_results.xml"
@@ -536,6 +545,8 @@ def main() -> int:
         str(release_bundle_root),
         "--transcript-manifest",
         str(evidence_transcript_manifest),
+        "--negative-scenario-floor-result",
+        str(negative_floor_result_path),
         "--output-json",
         str(assurance_ledger_json),
         "--output-md",
@@ -596,6 +607,10 @@ def main() -> int:
         str(benchmark_provenance_path),
         "--cost-of-assurance-evidence",
         str(cost_evidence_path),
+        "--evidence-graph",
+        str(pqc_evidence_graph_json),
+        "--asset-trace-result",
+        str(pqc_asset_trace_result_path),
         "--output",
         str(pqc_attestation_path),
         "--digest-output",
@@ -614,8 +629,82 @@ def main() -> int:
         str(pqc_attestation_path),
         "--release-manifest",
         str(release_manifest_path),
+        "--asset-trace-result",
+        str(pqc_asset_trace_result_path),
+        "--evidence-graph",
+        str(pqc_evidence_graph_json),
+        "--assurance-digest",
+        str(pqc_assurance_digest_path),
+        "--firmware-digest-header",
+        str(firmware_digest_header_path),
         "--output",
         str(pqc_policy_result_path),
+    ]
+    negative_floor_cmd = [
+        sys.executable,
+        str(module_path / "scripts/validate_acvp_negative_scenarios.py"),
+        "--scenarios",
+        str(module_path / "scripts/acvp_negative_scenarios.json"),
+        "--floor",
+        str(module_path / "scripts/acvp_negative_scenario_floor.json"),
+        "--output",
+        str(negative_floor_result_path),
+    ]
+    pqc_asset_trace_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_asset_trace_map.py"),
+        "--trace-map",
+        str(module_path / "scripts/pqc_asset_trace_map.json"),
+        "--module-path",
+        str(module_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--output",
+        str(pqc_asset_trace_result_path),
+    ]
+    pqc_evidence_graph_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_pqc_evidence_graph.py"),
+        "--trace-map",
+        str(module_path / "scripts/pqc_asset_trace_map.json"),
+        "--module-path",
+        str(module_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--transcript-manifest",
+        str(evidence_transcript_manifest),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--output-json",
+        str(pqc_evidence_graph_json),
+        "--output-md",
+        str(pqc_evidence_graph_md),
+    ]
+    firmware_digest_header_cmd = [
+        sys.executable,
+        str(module_path / "scripts/export_firmware_assurance_digest.py"),
+        "--digest",
+        str(pqc_assurance_digest_path),
+        "--output",
+        str(firmware_digest_header_path),
+    ]
+    assurance_status_build_cmd = [
+        *west_cmd,
+        "build",
+        "-p",
+        "always",
+        "-b",
+        "qemu_x86_64",
+        str(module_path / "samples/pqcp_assurance_status"),
+        "-d",
+        str(assurance_status_build_dir),
+        "--",
+        f"-DZEPHYR_EXTRA_MODULES={module_path}",
+        f"-DPQCP_ASSURANCE_DIGEST_INCLUDE_DIR={generated_include_dir}",
     ]
     evidence_pack_verify_cmd = [
         sys.executable,
@@ -736,6 +825,11 @@ def main() -> int:
                 str(module_path / "scripts/generate_acvp_negative_header.py"),
                 "--check",
             ],
+            cwd=module_path,
+        ),
+        Step(
+            name="ACVP negative scenario floor validation",
+            cmd=negative_floor_cmd,
             cwd=module_path,
         ),
         Step(
@@ -976,9 +1070,30 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="PQC asset trace map",
+            cmd=pqc_asset_trace_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC evidence graph",
+            cmd=pqc_evidence_graph_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="PQC assurance attestation",
             cmd=pqc_attestation_cmd,
             cwd=module_path,
+        ),
+        Step(
+            name="firmware assurance digest header",
+            cmd=firmware_digest_header_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="firmware assurance status build",
+            cmd=assurance_status_build_cmd,
+            cwd=west_root,
+            timeout=240,
         ),
         Step(
             name="PQC assurance policy",
