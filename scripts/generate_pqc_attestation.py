@@ -35,6 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark-csv", type=Path)
     parser.add_argument("--benchmark-provenance", type=Path)
     parser.add_argument("--cost-of-assurance-evidence", type=Path)
+    parser.add_argument("--evidence-graph", type=Path)
+    parser.add_argument("--asset-trace-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--digest-output", type=Path)
     return parser.parse_args()
@@ -121,6 +123,8 @@ def claim_summary(ledger: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
+    evidence_graph = getattr(args, "evidence_graph", None)
+    asset_trace_result = getattr(args, "asset_trace_result", None)
     candidates: list[tuple[Path, str, bool]] = [
         (args.ledger, "assurance_ledger.json", True),
         (args.ledger_md or args.ledger.with_suffix(".md"), "assurance_ledger.md", True),
@@ -129,6 +133,8 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
         (args.benchmark_csv or args.ledger.with_name("benchmark_results.csv"), "benchmark_results.csv", True),
         (args.benchmark_provenance or args.ledger.with_name("benchmark_provenance.json"), "benchmark_provenance.json", True),
         (args.cost_of_assurance_evidence or args.ledger.with_name("cost_of_assurance_evidence.json"), "cost_of_assurance_evidence.json", True),
+        (evidence_graph or args.ledger.with_name("pqc_evidence_graph.json"), "pqc_evidence_graph.json", True),
+        (asset_trace_result or args.ledger.with_name("pqc_asset_trace_result.json"), "pqc_asset_trace_result.json", True),
         (args.transcript_manifest, "transcripts/evidence_transcript_manifest.json", True),
         (args.release_manifest, "release-manifest.json", True),
         (args.module_path / "west.yml", "west.yml", True),
@@ -236,11 +242,15 @@ def main() -> int:
     print(f"  output: {output}")
     print(f"  subjects: {len(attestation['subject'])}")
     if args.digest_output:
+        evidence_graph = getattr(args, "evidence_graph", None)
+        asset_trace_result = getattr(args, "asset_trace_result", None)
         digest_artifacts = [
             args.ledger,
             args.cbom,
             args.transcript_manifest,
             args.benchmark_provenance or args.ledger.with_name("benchmark_provenance.json"),
+            evidence_graph or args.ledger.with_name("pqc_evidence_graph.json"),
+            asset_trace_result or args.ledger.with_name("pqc_asset_trace_result.json"),
             args.release_manifest,
         ]
         write_digest(args.digest_output, digest_artifacts, attestation_path=output)

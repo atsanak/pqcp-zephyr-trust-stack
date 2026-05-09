@@ -30,6 +30,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cbom", type=Path, required=True)
     parser.add_argument("--attestation", type=Path, required=True)
     parser.add_argument("--release-manifest", type=Path)
+    parser.add_argument("--asset-trace-result", type=Path)
+    parser.add_argument("--evidence-graph", type=Path)
+    parser.add_argument("--assurance-digest", type=Path)
+    parser.add_argument("--firmware-digest-header", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -248,7 +252,89 @@ def check_attestation_subjects(
             }
         )
         if not ok:
-            failures.append(f"attestation subject hash mismatch for {name}")
+                failures.append(f"attestation subject hash mismatch for {name}")
+
+
+def default_passport_v2_paths(base: Path) -> dict[str, Path]:
+    return {
+        "acvp_negative_scenario_floor_result.json": base / "acvp_negative_scenario_floor_result.json",
+        "pqc_asset_trace_result.json": base / "pqc_asset_trace_result.json",
+        "pqc_evidence_graph.json": base / "pqc_evidence_graph.json",
+        "pqc_evidence_graph.md": base / "pqc_evidence_graph.md",
+        "pqc_assurance_digest.json": base / "pqc_assurance_digest.json",
+        "generated/pqcp_assurance_digest_generated.h": base / "generated/pqcp_assurance_digest_generated.h",
+    }
+
+
+def check_passport_v2_artifacts(
+    *,
+    policy: dict[str, Any],
+    base: Path,
+    asset_trace_result_path: Path | None,
+    evidence_graph_path: Path | None,
+    assurance_digest_path: Path | None,
+    firmware_digest_header_path: Path | None,
+    failures: list[str],
+    checks: list[dict[str, Any]],
+) -> None:
+    defaults = default_passport_v2_paths(base)
+    explicit = {
+        "pqc_asset_trace_result.json": asset_trace_result_path,
+        "pqc_evidence_graph.json": evidence_graph_path,
+        "pqc_assurance_digest.json": assurance_digest_path,
+        "generated/pqcp_assurance_digest_generated.h": firmware_digest_header_path,
+    }
+    for rel_path in policy.get("required_passport_v2_artifacts") or []:
+        path = explicit.get(rel_path) or defaults.get(rel_path) or (base / rel_path)
+        ok = path.exists() and path.is_file() and path.stat().st_size > 0
+        checks.append({"check": "passport_v2_artifact", "path": rel_path, "passed": ok})
+        if not ok:
+            failures.append(f"required Passport v2 artifact missing or empty: {rel_path}")
+
+    floor_result = load_json(defaults["acvp_negative_scenario_floor_result.json"], "ACVP negative scenario floor result", failures)
+    if floor_result:
+        ok = floor_result.get("passed") is True
+        checks.append({"check": "negative_scenario_floor_result", "passed": ok})
+        if not ok:
+            failures.append("ACVP negative scenario floor result did not pass")
+
+    trace_path = asset_trace_result_path or defaults["pqc_asset_trace_result.json"]
+    trace_result = load_json(trace_path, "PQC asset trace result", failures)
+    if trace_result:
+        ok = trace_result.get("passed") is True
+        checks.append({"check": "asset_trace_result", "passed": ok})
+        if not ok:
+            failures.append("PQC asset trace result did not pass")
+
+    graph_path = evidence_graph_path or defaults["pqc_evidence_graph.json"]
+    graph = load_json(graph_path, "PQC evidence graph", failures)
+    if graph:
+        failures_field = graph.get("failures")
+        ok = graph.get("schema_version") == 1 and isinstance(failures_field, list) and not failures_field
+        checks.append({"check": "evidence_graph_integrity", "passed": ok})
+        if not ok:
+            failures.append("PQC evidence graph contains failures or has unsupported schema")
+
+    digest_path = assurance_digest_path or defaults["pqc_assurance_digest.json"]
+    digest = load_json(digest_path, "PQC assurance digest", failures)
+    if digest:
+        artifacts = digest.get("artifacts")
+        ok = digest.get("schema_version") == 1 and isinstance(artifacts, list) and bool(artifacts)
+        checks.append({"check": "assurance_digest_manifest", "passed": ok})
+        if not ok:
+            failures.append("PQC assurance digest manifest is malformed")
+
+    header_path = firmware_digest_header_path or defaults["generated/pqcp_assurance_digest_generated.h"]
+    if header_path.exists() and header_path.is_file():
+        header = header_path.read_text(encoding="utf-8", errors="replace")
+        required = (
+            "PQCP_ASSURANCE_DIGEST_ROOT_SHA256",
+            "PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT",
+        )
+        ok = all(text in header for text in required)
+        checks.append({"check": "firmware_digest_header", "passed": ok})
+        if not ok:
+            failures.append("generated firmware digest header is missing required macros")
 
 
 def verify_policy(
@@ -258,6 +344,10 @@ def verify_policy(
     cbom_path: Path,
     attestation_path: Path,
     release_manifest_path: Path | None = None,
+    asset_trace_result_path: Path | None = None,
+    evidence_graph_path: Path | None = None,
+    assurance_digest_path: Path | None = None,
+    firmware_digest_header_path: Path | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     checks: list[dict[str, Any]] = []
@@ -273,7 +363,7 @@ def verify_policy(
     if not policy or not ledger or not cbom or not attestation:
         return {"schema_version": 1, "passed": False, "failures": failures, "checks": checks}
 
-    if policy.get("schema_version") != 1:
+    if policy.get("schema_version") not in (1, 2):
         failures.append(f"unsupported policy schema_version={policy.get('schema_version')!r}")
     check_required_claims(policy=policy, ledger=ledger, failures=failures, checks=checks)
     check_cbom(policy=policy, cbom=cbom, failures=failures, checks=checks)
@@ -305,8 +395,19 @@ def verify_policy(
         failures=failures,
         checks=checks,
     )
+    if policy.get("schema_version") == 2:
+        check_passport_v2_artifacts(
+            policy=policy,
+            base=ledger_path.parent,
+            asset_trace_result_path=asset_trace_result_path,
+            evidence_graph_path=evidence_graph_path,
+            assurance_digest_path=assurance_digest_path,
+            firmware_digest_header_path=firmware_digest_header_path,
+            failures=failures,
+            checks=checks,
+        )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "policy": str(policy_path),
         "passed": not failures,
@@ -323,6 +424,10 @@ def main() -> int:
         cbom_path=args.cbom.resolve(),
         attestation_path=args.attestation.resolve(),
         release_manifest_path=args.release_manifest.resolve() if args.release_manifest else None,
+        asset_trace_result_path=args.asset_trace_result.resolve() if args.asset_trace_result else None,
+        evidence_graph_path=args.evidence_graph.resolve() if args.evidence_graph else None,
+        assurance_digest_path=args.assurance_digest.resolve() if args.assurance_digest else None,
+        firmware_digest_header_path=args.firmware_digest_header.resolve() if args.firmware_digest_header else None,
     )
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.output.resolve().write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

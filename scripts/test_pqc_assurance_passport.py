@@ -114,6 +114,56 @@ class PQCAssurancePassportTests(unittest.TestCase):
         (root / "benchmark_results.csv").write_text("suite,parameter_set\n", encoding="utf-8")
         (root / "benchmark_provenance.json").write_text("{}\n", encoding="utf-8")
         (root / "cost_of_assurance_evidence.json").write_text("{}\n", encoding="utf-8")
+        (root / "acvp_negative_scenario_floor_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "scenario_count": 1,
+                    "floor_count": 1,
+                    "failures": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "pqc_asset_trace_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "asset_count": 1,
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "pqc_evidence_graph.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "summary": {"assets": 1, "nodes": 1, "edges": 0, "failures": 0},
+                    "failures": [],
+                    "nodes": [],
+                    "edges": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "pqc_evidence_graph.md").write_text("# graph\n", encoding="utf-8")
+        (root / "generated").mkdir()
+        (root / "generated/pqcp_assurance_digest_generated.h").write_text(
+            "#define PQCP_ASSURANCE_DIGEST_ROOT_SHA256 "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\"\n"
+            "#define PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT 1\n",
+            encoding="utf-8",
+        )
         (root / "transcripts").mkdir()
         (root / "transcripts/evidence_transcript_manifest.json").write_text("{}\n", encoding="utf-8")
         # The attestation uses the normalized subject name release-manifest.json.
@@ -146,6 +196,8 @@ class PQCAssurancePassportTests(unittest.TestCase):
             benchmark_csv=root / "benchmark_results.csv",
             benchmark_provenance=root / "benchmark_provenance.json",
             cost_of_assurance_evidence=root / "cost_of_assurance_evidence.json",
+            evidence_graph=root / "pqc_evidence_graph.json",
+            asset_trace_result=root / "pqc_asset_trace_result.json",
             output=attestation_path,
             digest_output=digest_path,
         )
@@ -158,6 +210,8 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 cbom_path,
                 root / "transcripts/evidence_transcript_manifest.json",
                 root / "benchmark_provenance.json",
+                root / "pqc_evidence_graph.json",
+                root / "pqc_asset_trace_result.json",
                 release_manifest,
             ],
             attestation_path=attestation_path,
@@ -187,6 +241,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 cbom_path=cbom,
                 attestation_path=attestation,
                 release_manifest_path=manifest,
+                asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                evidence_graph_path=root / "pqc_evidence_graph.json",
+                assurance_digest_path=root / "pqc_assurance_digest.json",
+                firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
             )
             self.assertTrue(result["passed"], result["failures"])
 
@@ -205,6 +263,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 cbom_path=cbom_path,
                 attestation_path=attestation,
                 release_manifest_path=manifest,
+                asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                evidence_graph_path=root / "pqc_evidence_graph.json",
+                assurance_digest_path=root / "pqc_assurance_digest.json",
+                firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
             )
             self.assertFalse(result["passed"])
             self.assertTrue(any("ML-KEM-768" in failure for failure in result["failures"]))
@@ -220,6 +282,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 cbom_path=cbom,
                 attestation_path=attestation,
                 release_manifest_path=manifest,
+                asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                evidence_graph_path=root / "pqc_evidence_graph.json",
+                assurance_digest_path=root / "pqc_assurance_digest.json",
+                firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
             )
             self.assertFalse(result["passed"])
             self.assertTrue(any("hash mismatch" in failure for failure in result["failures"]))
@@ -241,6 +307,10 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 cbom_path=cbom_path,
                 attestation_path=attestation,
                 release_manifest_path=manifest,
+                asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                evidence_graph_path=root / "pqc_evidence_graph.json",
+                assurance_digest_path=root / "pqc_assurance_digest.json",
+                firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
             )
             self.assertFalse(result["passed"])
             self.assertTrue(any("Deterministic test RNG" in failure for failure in result["failures"]))

@@ -15,6 +15,7 @@ from pathlib import Path
 import generate_assurance_ledger as ledger
 import export_pqc_cbom
 import generate_pqc_attestation
+import export_firmware_assurance_digest
 import verify_assurance_policy
 import verify_release_evidence_pack as pack_verify
 from export_results import CSV_FIELDNAMES, EXPECTED_PRIMITIVE_ROWS
@@ -335,6 +336,59 @@ class ReleaseEvidencePackTests(unittest.TestCase):
         cbom_path.write_text(json.dumps(cbom, indent=2) + "\n", encoding="utf-8")
         attestation_path = output / "pqc_attestation.intoto.json"
         digest_path = output / "pqc_assurance_digest.json"
+        (output / "acvp_negative_scenario_floor_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "scenario_count": 1,
+                    "floor_count": 1,
+                    "failures": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_asset_trace_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "asset_count": 1,
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_evidence_graph.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "summary": {"assets": 1, "nodes": 1, "edges": 0, "failures": 0},
+                    "failures": [],
+                    "nodes": [
+                        {
+                            "id": "claim:release.version_consistency",
+                            "type": "claim",
+                            "label": "release.version_consistency",
+                            "metadata": {},
+                        }
+                    ],
+                    "edges": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_evidence_graph.md").write_text(
+            "# graph\n\n- `release.version_consistency`\n",
+            encoding="utf-8",
+        )
         attestation_args = Namespace(
             module_path=module,
             ledger=ledger_path,
@@ -346,6 +400,8 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             benchmark_csv=output / "benchmark_results.csv",
             benchmark_provenance=output / "benchmark_provenance.json",
             cost_of_assurance_evidence=output / "cost_of_assurance_evidence.json",
+            evidence_graph=output / "pqc_evidence_graph.json",
+            asset_trace_result=output / "pqc_asset_trace_result.json",
             output=attestation_path,
             digest_output=digest_path,
         )
@@ -358,16 +414,24 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 cbom_path,
                 transcript_manifest,
                 output / "benchmark_provenance.json",
+                output / "pqc_evidence_graph.json",
+                output / "pqc_asset_trace_result.json",
                 manifest,
             ],
             attestation_path=attestation_path,
         )
+        generated = output / "generated" / "pqcp_assurance_digest_generated.h"
+        export_firmware_assurance_digest.export_header(digest_path, generated)
         policy = verify_assurance_policy.verify_policy(
             policy_path=Path(__file__).resolve().parent / "pqc_assurance_policy.json",
             ledger_path=ledger_path,
             cbom_path=cbom_path,
             attestation_path=attestation_path,
             release_manifest_path=manifest,
+            asset_trace_result_path=output / "pqc_asset_trace_result.json",
+            evidence_graph_path=output / "pqc_evidence_graph.json",
+            assurance_digest_path=digest_path,
+            firmware_digest_header_path=generated,
         )
         (output / "pqc_policy_result.json").write_text(
             json.dumps(policy, indent=2) + "\n",
@@ -462,6 +526,21 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             )
             self.assertTrue(
                 any("missing claim id" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
+
+    def test_missing_passport_v2_asset_trace_result_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            (output / "pqc_asset_trace_result.json").unlink()
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("PQC asset trace result not found" in item for item in failures),
                 f"unexpected failures: {failures}",
             )
 
