@@ -112,6 +112,7 @@ class LocalToolingRegressionTests(unittest.TestCase):
         self.assertIn("test_pqc_evidence_quality.py", run_local_tool_tests.TOOL_TESTS)
         self.assertIn("test_migration_readiness_report.py", run_local_tool_tests.TOOL_TESTS)
         self.assertIn("test_pqc_claim_closure.py", run_local_tool_tests.TOOL_TESTS)
+        self.assertIn("test_release_environment.py", run_local_tool_tests.TOOL_TESTS)
 
     def test_product_readiness_preflight_includes_tooling_tests(self) -> None:
         args = Namespace(

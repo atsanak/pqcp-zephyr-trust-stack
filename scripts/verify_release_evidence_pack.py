@@ -273,6 +273,7 @@ def verify_passport_artifacts(
         return
 
     cbom_path = output_root / "pqc_cbom.cdx.json"
+    environment_result = output_root / "pqc_environment_result.json"
     attestation_path = output_root / "pqc_attestation.intoto.json"
     policy_result_path = output_root / "pqc_policy_result.json"
     digest_path = output_root / "pqc_assurance_digest.json"
@@ -302,6 +303,7 @@ def verify_passport_artifacts(
         require_file(evidence_graph_md, "PQC evidence graph Markdown", failures)
         require_file(firmware_digest_header, "firmware assurance digest header", failures)
     if (ledger.get("schema_version") or 0) >= 5:
+        require_file(environment_result, "PQC release environment result", failures)
         require_file(assurance_profile_result, "PQC assurance profile result", failures)
         require_file(evidence_quality_result, "PQC evidence quality result", failures)
         require_file(migration_readiness_json, "PQC migration readiness JSON", failures)
@@ -377,6 +379,9 @@ def verify_passport_artifacts(
                     failures.append(f"firmware assurance digest header missing {macro}")
 
     if (ledger.get("schema_version") or 0) >= 5:
+        environment = load_json(environment_result, "PQC release environment result", failures)
+        if environment and environment.get("passed") is not True:
+            failures.append("PQC release environment result did not pass")
         profile = load_json(assurance_profile_result, "PQC assurance profile result", failures)
         if profile and profile.get("passed") is not True:
             failures.append("PQC assurance profile result did not pass")
@@ -424,6 +429,7 @@ def verify_passport_artifacts(
                         failures.append(f"PQC assurance digest missing artifact: {required_name}")
             if (ledger.get("schema_version") or 0) >= 5:
                 for required_name in (
+                    "pqc_environment_result.json",
                     "pqc_assurance_profile_result.json",
                     "pqc_evidence_quality_result.json",
                     "pqc_migration_readiness.json",

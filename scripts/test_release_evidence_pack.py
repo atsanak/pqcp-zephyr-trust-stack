@@ -390,6 +390,20 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             "# graph\n\n- `release.version_consistency`\n",
             encoding="utf-8",
         )
+        (output / "pqc_environment_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"checks": 1, "failures": 0},
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         (output / "pqc_assurance_profile_result.json").write_text(
             json.dumps(
                 {
@@ -453,6 +467,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             evidence_quality_result=output / "pqc_evidence_quality_result.json",
             migration_readiness_json=output / "pqc_migration_readiness.json",
             migration_readiness_md=output / "pqc_migration_readiness.md",
+            environment_result=output / "pqc_environment_result.json",
             output=attestation_path,
             digest_output=digest_path,
         )
@@ -467,6 +482,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 output / "benchmark_provenance.json",
                 output / "pqc_evidence_graph.json",
                 output / "pqc_asset_trace_result.json",
+                output / "pqc_environment_result.json",
                 output / "pqc_assurance_profile_result.json",
                 output / "pqc_evidence_quality_result.json",
                 output / "pqc_migration_readiness.json",

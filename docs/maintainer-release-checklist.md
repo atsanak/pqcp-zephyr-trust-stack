@@ -166,6 +166,7 @@ Current full release packs use ledger `schema_version=5`, which adds the PQC
 Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 
 - `pqc_cbom.cdx.json`
+- `pqc_environment_result.json`
 - `pqc_attestation.intoto.json`
 - `pqc_policy_result.json`
 - `pqc_assurance_digest.json`

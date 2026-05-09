@@ -81,6 +81,7 @@ ledger. It consists of:
 - `assurance_ledger.json` / `assurance_ledger.md`
 - `assurance_report.html`
 - `pqc_cbom.cdx.json`
+- `pqc_environment_result.json`
 - `pqc_attestation.intoto.json`
 - `pqc_policy_result.json`
 - `pqc_assurance_digest.json`
@@ -227,6 +228,11 @@ enforce those generated artifacts directly. This is the intentional split:
 ledger claims describe support; the Passport verifier prevents artifact drift.
 `pqc_claim_closure_result.json` is generated after policy replay and digest
 creation to close that split explicitly.
+
+The environment result is generated after the CBOM and before attestation. It
+keeps dependency metadata replayable by checking west.yml pins, workflow
+Zephyr/SDK settings, release manifest dependencies, and CBOM dependency
+components together.
 
 ## Assurance Profile / schema v5 replay checks
 

@@ -239,6 +239,7 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
                 "assurance_ledger.json",
                 "pqc_cbom.cdx.json",
                 "pqc_attestation.intoto.json",
+                "pqc_environment_result.json",
                 "pqc_assurance_profile_result.json",
                 "pqc_evidence_quality_result.json",
                 "pqc_migration_readiness.json",
