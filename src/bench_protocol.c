@@ -24,6 +24,11 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zephyr/version.h>
+
+#ifndef KERNEL_VERSION_STRING
+#define KERNEL_VERSION_STRING "unknown"
+#endif
 
 /* Protocol benchmarks can work in two modes:
  * 1. Always available: simulated handshake using PQCP primitives
@@ -40,8 +45,29 @@ typedef struct {
 } protocol_bench_ctx_t;
 
 static protocol_bench_ctx_t bench_ctx;
+static bool protocol_metadata_printed;
 
 static uint32_t percentile(uint32_t *samples, uint16_t count, uint8_t p);
+
+static void protocol_bench_print_metadata_once(void)
+{
+    if (protocol_metadata_printed) {
+        return;
+    }
+
+    protocol_metadata_printed = true;
+    printk("PQCP_METRIC,build,metadata,compiler,0,id,%s,\n", __VERSION__);
+    printk("PQCP_METRIC,build,metadata,zephyr,0,version,%s,\n",
+           KERNEL_VERSION_STRING);
+    printk("PQCP_METRIC,build,metadata,board,0,name,%s,\n", CONFIG_BOARD);
+#if defined(CONFIG_PQCP_BACKEND_FORCE_NATIVE)
+    PQCP_LOG_METRIC("build", "metadata", "backend", 0, "selector", 2, "id");
+#elif defined(CONFIG_PQCP_BACKEND_FORCE_C)
+    PQCP_LOG_METRIC("build", "metadata", "backend", 0, "selector", 1, "id");
+#else
+    PQCP_LOG_METRIC("build", "metadata", "backend", 0, "selector", 0, "id");
+#endif
+}
 
 #if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)
 #define PQCP_PROTOCOL_RTOS_LOAD_STACK_SIZE 1024
@@ -165,6 +191,8 @@ void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result
     const char *suite = (result->base.op == PQCP_BENCH_TLS_HANDSHAKE) ?
         "TLS13" : "DTLS13";
 
+    protocol_bench_print_metadata_once();
+
     PQCP_LOG_TIME_MS("protocol", "handshake", suite, 0,
                      result->handshake_time_ms);
     PQCP_LOG_TIME_US("protocol", "auth", "MLDSA",
@@ -204,11 +232,17 @@ void pqcp_bench_print_protocol_result(const pqcp_bench_protocol_result_t *result
 
     if (result->p50_latency > 0U) {
         PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "min", result->base.min_time, "us");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "max", result->base.max_time, "us");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
                         "p50", result->p50_latency, "ms");
         PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
                         "p90", result->p90_latency, "ms");
         PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
                         "p99", result->p99_latency, "ms");
+        PQCP_LOG_METRIC("protocol", "handshake", suite, 0,
+                        "sample_count", result->base.iterations, "count");
     }
 
     if (result->rtos_isr_count > 0U || result->rtos_yield_count > 0U ||

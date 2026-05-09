@@ -12,7 +12,9 @@
         "src/mlkem_zephyr.c",
         "src/mlkem_baseline.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
-        "tests/ztest_acvp_kat/src/main.c"
+        "tests/ztest_acvp_kat/src/main.c",
+        "tests/ztest_ct_smoke/src/main.c",
+        "scripts/verify_ct_instruction_policy.py"
       ],
       "kconfig_symbols": [
         "PQCP_MLKEM",
@@ -20,15 +22,20 @@
       ],
       "claim_ids": [
         "kat.mlkem_512",
-        "benchmark.mlkem_throughput"
+        "benchmark.mlkem_throughput",
+        "benchmark.distribution_quality",
+        "security.mlkem_decap_instruction_policy"
       ],
       "ztests": [
         "tests/ztest_acvp_kat",
-        "tests/ztest_primitive"
+        "tests/ztest_primitive",
+        "tests/ztest_ct_smoke"
       ],
       "transcript_markers": [
         "PASS - test_mlkem_512_keygen_vectors",
-        "PASS - test_mlkem_512_encaps_vectors"
+        "PASS - test_mlkem_512_encaps_vectors",
+        "PQCP_CT_SMOKE alg=MLKEM-512",
+        "PQCP_CT_TTEST alg=MLKEM-512"
       ]
     },
     {
@@ -43,7 +50,8 @@
         "src/psa_mlkem_driver.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
         "tests/ztest_ct_smoke/src/main.c",
-        "tests/ztest_primitive/src/main.c"
+        "tests/ztest_primitive/src/main.c",
+        "scripts/verify_ct_instruction_policy.py"
       ],
       "kconfig_symbols": [
         "PQCP_MLKEM",
@@ -53,7 +61,9 @@
       "claim_ids": [
         "kat.mlkem_768",
         "benchmark.mlkem_throughput",
-        "security.ct_smoke"
+        "security.ct_smoke",
+        "benchmark.distribution_quality",
+        "security.mlkem_decap_instruction_policy"
       ],
       "ztests": [
         "tests/ztest_acvp_kat",
@@ -63,7 +73,8 @@
       "transcript_markers": [
         "PASS - test_mlkem_768_keygen_vectors",
         "PASS - test_mlkem_768_encaps_vectors",
-        "PQCP_CT_SMOKE alg=MLKEM-768"
+        "PQCP_CT_SMOKE alg=MLKEM-768",
+        "PQCP_CT_TTEST alg=MLKEM-768"
       ]
     },
     {
@@ -76,7 +87,9 @@
         "src/mlkem_zephyr.c",
         "src/mlkem_baseline.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
-        "tests/ztest_acvp_kat/src/main.c"
+        "tests/ztest_acvp_kat/src/main.c",
+        "tests/ztest_ct_smoke/src/main.c",
+        "scripts/verify_ct_instruction_policy.py"
       ],
       "kconfig_symbols": [
         "PQCP_MLKEM",
@@ -84,15 +97,20 @@
       ],
       "claim_ids": [
         "kat.mlkem_1024",
-        "benchmark.mlkem_throughput"
+        "benchmark.mlkem_throughput",
+        "benchmark.distribution_quality",
+        "security.mlkem_decap_instruction_policy"
       ],
       "ztests": [
         "tests/ztest_acvp_kat",
-        "tests/ztest_primitive"
+        "tests/ztest_primitive",
+        "tests/ztest_ct_smoke"
       ],
       "transcript_markers": [
         "PASS - test_mlkem_1024_keygen_vectors",
-        "PASS - test_mlkem_1024_encaps_vectors"
+        "PASS - test_mlkem_1024_encaps_vectors",
+        "PQCP_CT_SMOKE alg=MLKEM-1024",
+        "PQCP_CT_TTEST alg=MLKEM-1024"
       ]
     },
     {
@@ -114,7 +132,8 @@
       ],
       "claim_ids": [
         "kat.mldsa_44",
-        "benchmark.mldsa_throughput"
+        "benchmark.mldsa_throughput",
+        "benchmark.distribution_quality"
       ],
       "ztests": [
         "tests/ztest_acvp_kat",
@@ -146,7 +165,8 @@
       ],
       "claim_ids": [
         "kat.mldsa_65",
-        "benchmark.mldsa_throughput"
+        "benchmark.mldsa_throughput",
+        "benchmark.distribution_quality"
       ],
       "ztests": [
         "tests/ztest_acvp_kat",
@@ -176,7 +196,8 @@
       ],
       "claim_ids": [
         "kat.mldsa_87",
-        "benchmark.mldsa_throughput"
+        "benchmark.mldsa_throughput",
+        "benchmark.distribution_quality"
       ],
       "ztests": [
         "tests/ztest_acvp_kat",
@@ -353,7 +374,8 @@
       "category": "security",
       "cbom_component": null,
       "source_files": [
-        "tests/ztest_ct_smoke/src/main.c"
+        "tests/ztest_ct_smoke/src/main.c",
+        "scripts/verify_ct_instruction_policy.py"
       ],
       "kconfig_symbols": [
         "PQCP_MLKEM_LEVEL_512",
@@ -361,7 +383,8 @@
         "PQCP_MLKEM_LEVEL_1024"
       ],
       "claim_ids": [
-        "security.ct_smoke"
+        "security.ct_smoke",
+        "security.mlkem_decap_instruction_policy"
       ],
       "ztests": [
         "tests/ztest_ct_smoke"
@@ -369,7 +392,10 @@
       "transcript_markers": [
         "PQCP_CT_SMOKE alg=MLKEM-512",
         "PQCP_CT_SMOKE alg=MLKEM-768",
-        "PQCP_CT_SMOKE alg=MLKEM-1024"
+        "PQCP_CT_SMOKE alg=MLKEM-1024",
+        "PQCP_CT_TTEST alg=MLKEM-512",
+        "PQCP_CT_TTEST alg=MLKEM-768",
+        "PQCP_CT_TTEST alg=MLKEM-1024"
       ]
     }
   ]

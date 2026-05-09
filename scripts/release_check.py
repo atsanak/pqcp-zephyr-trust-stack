@@ -44,6 +44,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP KAT ztest run",
     "boot KAT self-verify ztest run",
     "ct smoke ztest run",
+    "ct instruction policy",
     "benchmark_csv",
     "benchmark_csv_validate",
     "resource_budgets",
@@ -504,6 +505,7 @@ def main() -> int:
     pqc_evidence_quality_result_path = output_root / "pqc_evidence_quality_result.json"
     pqc_migration_readiness_json_path = output_root / "pqc_migration_readiness.json"
     pqc_migration_readiness_md_path = output_root / "pqc_migration_readiness.md"
+    ct_instruction_policy_result_path = output_root / "ct_instruction_policy_result.json"
     pqc_claim_closure_result_path = output_root / "pqc_claim_closure_result.json"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
@@ -553,6 +555,8 @@ def main() -> int:
         str(evidence_transcript_manifest),
         "--negative-scenario-floor-result",
         str(negative_floor_result_path),
+        "--ct-instruction-policy-result",
+        str(ct_instruction_policy_result_path),
         "--output-json",
         str(assurance_ledger_json),
         "--output-md",
@@ -613,6 +617,8 @@ def main() -> int:
         str(benchmark_provenance_path),
         "--cost-of-assurance-evidence",
         str(cost_evidence_path),
+        "--ct-instruction-policy-result",
+        str(ct_instruction_policy_result_path),
         "--evidence-graph",
         str(pqc_evidence_graph_json),
         "--asset-trace-result",
@@ -651,6 +657,8 @@ def main() -> int:
         str(pqc_evidence_graph_json),
         "--assurance-digest",
         str(pqc_assurance_digest_path),
+        "--ct-instruction-policy-result",
+        str(ct_instruction_policy_result_path),
         "--firmware-digest-header",
         str(firmware_digest_header_path),
         "--assurance-profile-result",
@@ -673,6 +681,8 @@ def main() -> int:
         str(pqc_attestation_path),
         "--assurance-digest",
         str(pqc_assurance_digest_path),
+        "--ct-instruction-policy-result",
+        str(ct_instruction_policy_result_path),
         "--policy-result",
         str(pqc_policy_result_path),
         "--assurance-profile-result",
@@ -739,6 +749,8 @@ def main() -> int:
         str(evidence_transcript_manifest),
         "--release-manifest",
         str(release_manifest_path),
+        "--ct-instruction-policy-result",
+        str(ct_instruction_policy_result_path),
         "--output-json",
         str(pqc_evidence_graph_json),
         "--output-md",
@@ -769,6 +781,14 @@ def main() -> int:
         str(pqc_evidence_graph_json),
         "--output",
         str(pqc_evidence_quality_result_path),
+    ]
+    ct_instruction_policy_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_ct_instruction_policy.py"),
+        "--elf",
+        str(ct_smoke_build_dir / "zephyr/zephyr.elf"),
+        "--output",
+        str(ct_instruction_policy_result_path),
     ]
     pqc_migration_readiness_cmd = [
         sys.executable,
@@ -1077,6 +1097,11 @@ def main() -> int:
                 "TESTSUITE pqcp_ct_smoke succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
+        ),
+        Step(
+            name="ct instruction policy",
+            cmd=ct_instruction_policy_cmd,
+            cwd=module_path,
         ),
         Step(
             name="benchmark_csv",

@@ -365,6 +365,22 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+        (output / "ct_instruction_policy_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "target_symbol_count": 1,
+                    "target_symbols": ["pqcp_mlkem_decapsulate"],
+                    "finding_count": 0,
+                    "findings": [],
+                    "failures": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         (output / "pqc_evidence_graph.json").write_text(
             json.dumps(
                 {
@@ -461,6 +477,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             benchmark_csv=output / "benchmark_results.csv",
             benchmark_provenance=output / "benchmark_provenance.json",
             cost_of_assurance_evidence=output / "cost_of_assurance_evidence.json",
+            ct_instruction_policy_result=output / "ct_instruction_policy_result.json",
             evidence_graph=output / "pqc_evidence_graph.json",
             asset_trace_result=output / "pqc_asset_trace_result.json",
             assurance_profile_result=output / "pqc_assurance_profile_result.json",
@@ -480,6 +497,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 cbom_path,
                 transcript_manifest,
                 output / "benchmark_provenance.json",
+                output / "ct_instruction_policy_result.json",
                 output / "pqc_evidence_graph.json",
                 output / "pqc_asset_trace_result.json",
                 output / "pqc_environment_result.json",
@@ -500,6 +518,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             attestation_path=attestation_path,
             release_manifest_path=manifest,
             asset_trace_result_path=output / "pqc_asset_trace_result.json",
+            ct_instruction_policy_result_path=output / "ct_instruction_policy_result.json",
             evidence_graph_path=output / "pqc_evidence_graph.json",
             assurance_digest_path=digest_path,
             firmware_digest_header_path=generated,
@@ -517,6 +536,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 ledger=ledger_path,
                 attestation=attestation_path,
                 assurance_digest=digest_path,
+                ct_instruction_policy_result=output / "ct_instruction_policy_result.json",
                 policy_result=output / "pqc_policy_result.json",
                 assurance_profile_result=output / "pqc_assurance_profile_result.json",
                 evidence_quality_result=output / "pqc_evidence_quality_result.json",

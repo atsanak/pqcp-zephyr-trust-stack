@@ -743,6 +743,56 @@ class AssuranceLedgerTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "pass", result.get("failure_reason"))
 
+    def test_per_primitive_benchmark_ignores_additive_distribution_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_path = self.make_benchmark_csv(root)
+            with csv_path.open("a", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=CSV_FIELDNAMES)
+                writer.writerow(
+                    {
+                        "suite": "KEM",
+                        "parameter_set": "ML-KEM-768",
+                        "implementation": "pqcp",
+                        "backend": "auto",
+                        "operation": "keygen_cycles_mad",
+                        "cycles": 0,
+                        "time_us": "",
+                        "rom_bytes": "",
+                        "ram_bytes": "",
+                        "platform": "qemu_x86_64",
+                        "timestamp": "2026-04-28T00:00:00+00:00",
+                    }
+                )
+                writer.writerow(
+                    {
+                        "suite": "KEM",
+                        "parameter_set": "ML-KEM-768",
+                        "implementation": "pqcp",
+                        "backend": "auto",
+                        "operation": "keygen_sample_count",
+                        "cycles": 1,
+                        "time_us": "",
+                        "rom_bytes": "",
+                        "ram_bytes": "",
+                        "platform": "qemu_x86_64",
+                        "timestamp": "2026-04-28T00:00:00+00:00",
+                    }
+                )
+            spec = {
+                "id": "benchmark.mlkem_throughput",
+                "category": "benchmark",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_benchmark_per_primitive(
+                spec,
+                csv_path=csv_path,
+                algorithm="ML-KEM",
+                parameter_levels=("ML-KEM-512", "ML-KEM-768", "ML-KEM-1024"),
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
     def test_per_primitive_benchmark_fails_when_level_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1079,6 +1129,12 @@ class AssuranceLedgerTests(unittest.TestCase):
                 "median_invalid=35500 delta=400 relative_pct=1 bound_pct=50\n"
                 "PQCP_CT_SMOKE alg=MLKEM-1024 iters=32 median_valid=55100 "
                 "median_invalid=55800 delta=700 relative_pct=1 bound_pct=50\n"
+                "PQCP_CT_TTEST alg=MLKEM-512 iters=32 mean_valid=25100 "
+                "mean_invalid=25300 t2_x1000=12\n"
+                "PQCP_CT_TTEST alg=MLKEM-768 iters=32 mean_valid=35100 "
+                "mean_invalid=35500 t2_x1000=18\n"
+                "PQCP_CT_TTEST alg=MLKEM-1024 iters=32 mean_valid=55100 "
+                "mean_invalid=55800 t2_x1000=21\n"
                 "TESTSUITE pqcp_ct_smoke succeeded\n"
                 "PROJECT EXECUTION SUCCESSFUL\n"
             )
@@ -1089,6 +1145,7 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["details"]["algorithms"], ["MLKEM-1024", "MLKEM-512", "MLKEM-768"])
             self.assertEqual(result["details"]["measurements"][1]["relative_variance_pct"], 1)
             self.assertEqual(result["details"]["measurements"][1]["smoke_bound_pct"], 50)
+            self.assertEqual(len(result["details"]["ttest_measurements"]), 3)
             self.assertTrue(result["details"]["is_smoke_test_only"])
 
     def test_ct_smoke_fails_when_variance_exceeds_bound(self) -> None:

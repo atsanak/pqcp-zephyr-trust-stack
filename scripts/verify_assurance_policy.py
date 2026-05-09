@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attestation", type=Path, required=True)
     parser.add_argument("--release-manifest", type=Path)
     parser.add_argument("--asset-trace-result", type=Path)
+    parser.add_argument("--ct-instruction-policy-result", type=Path)
     parser.add_argument("--evidence-graph", type=Path)
     parser.add_argument("--assurance-digest", type=Path)
     parser.add_argument("--firmware-digest-header", type=Path)
@@ -284,6 +285,7 @@ def check_attestation_subjects(
 def default_passport_v2_paths(base: Path) -> dict[str, Path]:
     return {
         "acvp_negative_scenario_floor_result.json": base / "acvp_negative_scenario_floor_result.json",
+        "ct_instruction_policy_result.json": base / "ct_instruction_policy_result.json",
         "pqc_asset_trace_result.json": base / "pqc_asset_trace_result.json",
         "pqc_evidence_graph.json": base / "pqc_evidence_graph.json",
         "pqc_evidence_graph.md": base / "pqc_evidence_graph.md",
@@ -306,6 +308,7 @@ def check_passport_v2_artifacts(
     policy: dict[str, Any],
     base: Path,
     asset_trace_result_path: Path | None,
+    ct_instruction_policy_result_path: Path | None,
     evidence_graph_path: Path | None,
     assurance_digest_path: Path | None,
     firmware_digest_header_path: Path | None,
@@ -314,6 +317,7 @@ def check_passport_v2_artifacts(
 ) -> None:
     defaults = default_passport_v2_paths(base)
     explicit = {
+        "ct_instruction_policy_result.json": ct_instruction_policy_result_path,
         "pqc_asset_trace_result.json": asset_trace_result_path,
         "pqc_evidence_graph.json": evidence_graph_path,
         "pqc_assurance_digest.json": assurance_digest_path,
@@ -340,6 +344,14 @@ def check_passport_v2_artifacts(
         checks.append({"check": "asset_trace_result", "passed": ok})
         if not ok:
             failures.append("PQC asset trace result did not pass")
+
+    ct_policy_path = ct_instruction_policy_result_path or defaults["ct_instruction_policy_result.json"]
+    ct_policy = load_json(ct_policy_path, "ML-KEM decapsulation instruction policy result", failures)
+    if ct_policy:
+        ok = ct_policy.get("passed") is True
+        checks.append({"check": "ct_instruction_policy_result", "passed": ok})
+        if not ok:
+            failures.append("ML-KEM decapsulation instruction policy result did not pass")
 
     graph_path = evidence_graph_path or defaults["pqc_evidence_graph.json"]
     graph = load_json(graph_path, "PQC evidence graph", failures)
@@ -444,6 +456,7 @@ def verify_policy(
     attestation_path: Path,
     release_manifest_path: Path | None = None,
     asset_trace_result_path: Path | None = None,
+    ct_instruction_policy_result_path: Path | None = None,
     evidence_graph_path: Path | None = None,
     assurance_digest_path: Path | None = None,
     firmware_digest_header_path: Path | None = None,
@@ -487,6 +500,8 @@ def verify_policy(
     for name in policy.get("required_attestation_subjects") or []:
         if name == "release-manifest.json" and release_manifest_path is not None:
             known_paths[name] = release_manifest_path
+        elif name == "ct_instruction_policy_result.json" and ct_instruction_policy_result_path is not None:
+            known_paths[name] = ct_instruction_policy_result_path
         elif name == "pqc_assurance_profile_result.json" and assurance_profile_result_path is not None:
             known_paths[name] = assurance_profile_result_path
         elif name == "pqc_evidence_quality_result.json" and evidence_quality_result_path is not None:
@@ -511,6 +526,7 @@ def verify_policy(
             policy=policy,
             base=ledger_path.parent,
             asset_trace_result_path=asset_trace_result_path,
+            ct_instruction_policy_result_path=ct_instruction_policy_result_path,
             evidence_graph_path=evidence_graph_path,
             assurance_digest_path=assurance_digest_path,
             firmware_digest_header_path=firmware_digest_header_path,
@@ -547,6 +563,7 @@ def main() -> int:
         attestation_path=args.attestation.resolve(),
         release_manifest_path=args.release_manifest.resolve() if args.release_manifest else None,
         asset_trace_result_path=args.asset_trace_result.resolve() if args.asset_trace_result else None,
+        ct_instruction_policy_result_path=args.ct_instruction_policy_result.resolve() if args.ct_instruction_policy_result else None,
         evidence_graph_path=args.evidence_graph.resolve() if args.evidence_graph else None,
         assurance_digest_path=args.assurance_digest.resolve() if args.assurance_digest else None,
         firmware_digest_header_path=args.firmware_digest_header.resolve() if args.firmware_digest_header else None,

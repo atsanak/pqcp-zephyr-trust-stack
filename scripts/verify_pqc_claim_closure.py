@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--attestation", type=Path, required=True)
     parser.add_argument("--assurance-digest", type=Path, required=True)
+    parser.add_argument("--ct-instruction-policy-result", type=Path)
     parser.add_argument("--policy-result", type=Path, required=True)
     parser.add_argument("--assurance-profile-result", type=Path, required=True)
     parser.add_argument("--evidence-quality-result", type=Path, required=True)
@@ -163,6 +164,9 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
     args.ledger = args.ledger.resolve()
     args.attestation = args.attestation.resolve()
     args.assurance_digest = args.assurance_digest.resolve()
+    args.ct_instruction_policy_result = getattr(args, "ct_instruction_policy_result", None)
+    if args.ct_instruction_policy_result is not None:
+        args.ct_instruction_policy_result = args.ct_instruction_policy_result.resolve()
     args.policy_result = args.policy_result.resolve()
     args.assurance_profile_result = args.assurance_profile_result.resolve()
     args.evidence_quality_result = args.evidence_quality_result.resolve()
@@ -180,6 +184,8 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
         "PQC migration readiness Markdown": args.migration_readiness_md,
         "firmware assurance digest header": args.firmware_digest_header,
     }
+    if args.ct_instruction_policy_result is not None:
+        artifacts["ML-KEM decapsulation instruction policy result"] = args.ct_instruction_policy_result
     for label, path in artifacts.items():
         require_file(path, label, checks, failures)
 
@@ -232,19 +238,22 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
                 failures.append(f"firmware assurance digest header missing {macro}")
 
     if digest:
+        required_digest_names = {
+            "assurance_ledger.json",
+            "pqc_cbom.cdx.json",
+            "pqc_attestation.intoto.json",
+            "pqc_environment_result.json",
+            "pqc_assurance_profile_result.json",
+            "pqc_evidence_quality_result.json",
+            "pqc_migration_readiness.json",
+            "pqc_migration_readiness.md",
+        }
+        if args.ct_instruction_policy_result is not None:
+            required_digest_names.add("ct_instruction_policy_result.json")
         check_digest(
             digest,
             digest_path=args.assurance_digest,
-            required_names={
-                "assurance_ledger.json",
-                "pqc_cbom.cdx.json",
-                "pqc_attestation.intoto.json",
-                "pqc_environment_result.json",
-                "pqc_assurance_profile_result.json",
-                "pqc_evidence_quality_result.json",
-                "pqc_migration_readiness.json",
-                "pqc_migration_readiness.md",
-            },
+            required_names=required_digest_names,
             checks=checks,
             failures=failures,
         )

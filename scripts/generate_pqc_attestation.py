@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark-csv", type=Path)
     parser.add_argument("--benchmark-provenance", type=Path)
     parser.add_argument("--cost-of-assurance-evidence", type=Path)
+    parser.add_argument("--ct-instruction-policy-result", type=Path)
     parser.add_argument("--evidence-graph", type=Path)
     parser.add_argument("--asset-trace-result", type=Path)
     parser.add_argument("--assurance-profile-result", type=Path)
@@ -129,6 +130,7 @@ def claim_summary(ledger: dict[str, Any]) -> dict[str, Any]:
 
 def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
     evidence_graph = getattr(args, "evidence_graph", None)
+    ct_instruction_policy_result = getattr(args, "ct_instruction_policy_result", None)
     asset_trace_result = getattr(args, "asset_trace_result", None)
     assurance_profile_result = getattr(args, "assurance_profile_result", None)
     evidence_quality_result = getattr(args, "evidence_quality_result", None)
@@ -143,6 +145,7 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
         (args.benchmark_csv or args.ledger.with_name("benchmark_results.csv"), "benchmark_results.csv", True),
         (args.benchmark_provenance or args.ledger.with_name("benchmark_provenance.json"), "benchmark_provenance.json", True),
         (args.cost_of_assurance_evidence or args.ledger.with_name("cost_of_assurance_evidence.json"), "cost_of_assurance_evidence.json", True),
+        (ct_instruction_policy_result or args.ledger.with_name("ct_instruction_policy_result.json"), "ct_instruction_policy_result.json", True),
         (evidence_graph or args.ledger.with_name("pqc_evidence_graph.json"), "pqc_evidence_graph.json", True),
         (asset_trace_result or args.ledger.with_name("pqc_asset_trace_result.json"), "pqc_asset_trace_result.json", True),
         (assurance_profile_result or args.ledger.with_name("pqc_assurance_profile_result.json"), "pqc_assurance_profile_result.json", False),
@@ -258,6 +261,7 @@ def main() -> int:
     print(f"  subjects: {len(attestation['subject'])}")
     if args.digest_output:
         evidence_graph = getattr(args, "evidence_graph", None)
+        ct_instruction_policy_result = getattr(args, "ct_instruction_policy_result", None)
         asset_trace_result = getattr(args, "asset_trace_result", None)
         assurance_profile_result = getattr(args, "assurance_profile_result", None)
         evidence_quality_result = getattr(args, "evidence_quality_result", None)
@@ -269,6 +273,7 @@ def main() -> int:
             args.cbom,
             args.transcript_manifest,
             args.benchmark_provenance or args.ledger.with_name("benchmark_provenance.json"),
+            ct_instruction_policy_result or args.ledger.with_name("ct_instruction_policy_result.json"),
             evidence_graph or args.ledger.with_name("pqc_evidence_graph.json"),
             asset_trace_result or args.ledger.with_name("pqc_asset_trace_result.json"),
             assurance_profile_result or args.ledger.with_name("pqc_assurance_profile_result.json"),

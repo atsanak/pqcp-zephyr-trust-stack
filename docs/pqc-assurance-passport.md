@@ -34,6 +34,9 @@ release review.
   every required claim to a validation class and execution environment.
 - `pqc_migration_readiness.json` / `pqc_migration_readiness.md` — generated
   profile summary for partner review and maintenance planning.
+- `ct_instruction_policy_result.json` — disassembly policy result checking
+  ML-KEM decapsulation-related symbols for variable-latency division
+  instructions.
 - `pqc_claim_closure_result.json` — post-policy closure result proving that
   generated profile, evidence-quality, migration, attestation, digest, and
   firmware-digest artifacts still agree after the full Passport is assembled.
@@ -85,6 +88,7 @@ python3 scripts/verify_assurance_policy.py \
   --evidence-quality-result /tmp/pqcp-passport/pqc_evidence_quality_result.json \
   --migration-readiness-json /tmp/pqcp-passport/pqc_migration_readiness.json \
   --migration-readiness-md /tmp/pqcp-passport/pqc_migration_readiness.md \
+  --ct-instruction-policy-result /tmp/pqcp-passport/ct_instruction_policy_result.json \
   --output /tmp/pqcp-passport/pqc_policy_result.json
 ```
 
@@ -101,6 +105,7 @@ python3 scripts/verify_pqc_claim_closure.py \
   --migration-readiness-json /tmp/pqcp-passport/pqc_migration_readiness.json \
   --migration-readiness-md /tmp/pqcp-passport/pqc_migration_readiness.md \
   --firmware-digest-header /tmp/pqcp-passport/generated/pqcp_assurance_digest_generated.h \
+  --ct-instruction-policy-result /tmp/pqcp-passport/ct_instruction_policy_result.json \
   --output /tmp/pqcp-passport/pqc_claim_closure_result.json
 ```
 
@@ -127,6 +132,10 @@ directory and wants deterministic answers to concrete questions:
   explicitly limited to validation, lab, smoke, or test use?
 - Does every required claim have a declared evidence class and execution
   environment?
+- Do benchmark artifacts include distribution rows and build metadata in
+  addition to the legacy single-value metrics?
+- Does the ML-KEM decapsulation instruction-policy scan pass for the built
+  CT-smoke ELF?
 - Do post-ledger artifacts still close cleanly after policy replay, attestation
   generation, digest creation, and firmware digest export?
 
@@ -143,6 +152,15 @@ and reports the exact file, claim, or artifact hash that failed.
   `samples/pqcp_assurance_status`; it does not add device-side remote
   attestation.
 - QEMU/local evidence does not prove side-channel behavior on physical silicon.
+- The instruction-policy scan is a regression check for a narrow class of
+  variable-latency arithmetic mistakes; it is not a substitute for
+  implementation review or physical leakage testing.
+
+## Performance And Side-Channel Evidence
+
+See [`performance-methodology.md`](performance-methodology.md) for the benchmark
+distribution rows, metadata rows, CT transcript markers, instruction-policy
+scan, and optional hardware/reference-capture workflow.
 
 ## Negative Scenario Compatibility Floor
 

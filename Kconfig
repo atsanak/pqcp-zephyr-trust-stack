@@ -392,6 +392,17 @@ config PQCP_BENCH_WARMUP
 	  Number of warmup iterations before starting measurements.
 	  This helps stabilize caches and branch predictors.
 
+config PQCP_BENCH_DISTRIBUTION_SAMPLES
+	int "Number of retained benchmark samples for distribution metrics"
+	default 128
+	range 8 1024
+	help
+	  Number of per-operation timing samples retained for additive
+	  distribution metrics such as median, p90, p99, and median absolute
+	  deviation. The benchmark still runs CONFIG_PQCP_BENCH_ITERATIONS
+	  iterations; this setting only caps the RAM used to retain raw timing
+	  samples for publication-quality summaries.
+
 config PQCP_BENCH_STACK_ANALYSIS
 	bool "Stack usage analysis"
 	depends on THREAD_STACK_INFO

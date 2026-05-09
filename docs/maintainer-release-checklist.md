@@ -133,9 +133,13 @@ must also report `pass` or an explicitly documented `not_applicable` for:
   transcript from `tests/ztest_ct_smoke`. Re-parses the stable
   `PQCP_CT_SMOKE alg=... median_valid=... median_invalid=... delta=...
   relative_pct=... bound_pct=...` line and stores the measurement in
-  the ledger details. Marked `is_smoke_test_only=true` and accompanied
-  by an explicit non-claim section in
+  the ledger details. The same transcript must include `PQCP_CT_TTEST`
+  lines for ML-KEM-512, ML-KEM-768, and ML-KEM-1024. Marked
+  `is_smoke_test_only=true` and accompanied by an explicit non-claim section in
   [`assurance-model.md`](assurance-model.md).
+- `security.mlkem_decap_instruction_policy` — backed by
+  `ct_instruction_policy_result.json`, generated from the built CT-smoke ELF by
+  `scripts/verify_ct_instruction_policy.py`.
 - `supply_chain.crypto_asset_traceability` — backed by
   `pqc_asset_trace_result.json` from
   `scripts/verify_pqc_asset_trace_map.py`.
@@ -179,6 +183,7 @@ Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 - `pqc_evidence_quality_result.json`
 - `pqc_migration_readiness.json`
 - `pqc_migration_readiness.md`
+- `ct_instruction_policy_result.json`
 - `pqc_claim_closure_result.json`
 
 `pqc_policy_result.json` must have `"passed": true`. The policy verifier checks
@@ -227,8 +232,12 @@ replays the PQC Assurance Passport policy and digest checks. For
 `schema_version >= 4` packs it additionally requires the negative scenario floor
 result, asset trace result, evidence graph, and generated firmware digest
 header. For `schema_version >= 5` packs it also requires the assurance profile,
-evidence quality, and migration-readiness artifacts and checks that the digest
-manifest includes them.
+evidence quality, migration-readiness, and CT instruction-policy artifacts and
+checks that the digest manifest includes them.
+
+For benchmark comparison and side-channel-smoke interpretation, read
+[`performance-methodology.md`](performance-methodology.md) before comparing
+generated figures across environments.
 
 ## 4. Run Focused Consumer And Harness Smokes
 

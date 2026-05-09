@@ -28,6 +28,7 @@ TOOL_TESTS = (
     "test_pqc_evidence_quality.py",
     "test_migration_readiness_report.py",
     "test_pqc_claim_closure.py",
+    "test_pqc_performance_hardening.py",
 )
 
 

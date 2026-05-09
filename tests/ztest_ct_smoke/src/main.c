@@ -93,6 +93,66 @@ static uint64_t median_u64(uint64_t *samples, size_t n)
 	return samples[n / 2U];
 }
 
+static uint64_t mean_u64(const uint64_t *samples, size_t n)
+{
+	uint64_t total = 0U;
+
+	for (size_t i = 0U; i < n; ++i) {
+		total += samples[i];
+	}
+
+	return n > 0U ? total / n : 0U;
+}
+
+static uint64_t sample_variance_u64(const uint64_t *samples,
+				    size_t n,
+				    uint64_t mean)
+{
+	uint64_t total = 0U;
+
+	if (n < 2U) {
+		return 0U;
+	}
+
+	for (size_t i = 0U; i < n; ++i) {
+		uint64_t delta = samples[i] > mean ? samples[i] - mean
+						   : mean - samples[i];
+
+		if (delta > 0xffffffffULL) {
+			delta = 0xffffffffULL;
+		}
+		total += delta * delta;
+	}
+
+	return total / (n - 1U);
+}
+
+static uint64_t welch_t2_x1000(const uint64_t *valid_samples,
+			       const uint64_t *invalid_samples,
+			       size_t n,
+			       uint64_t *mean_valid,
+			       uint64_t *mean_invalid)
+{
+	uint64_t variance_valid;
+	uint64_t variance_invalid;
+	uint64_t denominator;
+	uint64_t delta;
+
+	*mean_valid = mean_u64(valid_samples, n);
+	*mean_invalid = mean_u64(invalid_samples, n);
+	variance_valid = sample_variance_u64(valid_samples, n, *mean_valid);
+	variance_invalid = sample_variance_u64(invalid_samples, n, *mean_invalid);
+	denominator = (variance_valid / n) + (variance_invalid / n);
+	delta = *mean_valid > *mean_invalid ? *mean_valid - *mean_invalid
+					    : *mean_invalid - *mean_valid;
+
+	if (denominator == 0U) {
+		return delta == 0U ? 0U : UINT64_MAX;
+	}
+
+	return (delta * delta * 1000U) / denominator;
+}
+
 static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
 {
 	zassert_equal(pqcp_rng_init(), 0);
@@ -131,6 +191,11 @@ static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
 	uint64_t median_valid = median_u64(valid_samples, CT_SMOKE_ITERATIONS);
 	uint64_t median_invalid = median_u64(invalid_samples,
 					     CT_SMOKE_ITERATIONS);
+	uint64_t mean_valid;
+	uint64_t mean_invalid;
+	uint64_t t2_x1000 = welch_t2_x1000(valid_samples, invalid_samples,
+					   CT_SMOKE_ITERATIONS,
+					   &mean_valid, &mean_invalid);
 
 	uint64_t hi = median_valid > median_invalid ? median_valid
 						    : median_invalid;
@@ -155,6 +220,20 @@ static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
 	       (unsigned long long)delta,
 	       (unsigned long long)relative_pct,
 	       (unsigned int)CT_SMOKE_RELATIVE_BOUND_PERCENT);
+
+	/*
+	 * Additive transcript marker for offline replay. This Welch-style
+	 * statistic is intentionally not asserted in the ztest because QEMU's
+	 * timer granularity can collapse variance to zero. The release tooling
+	 * uses it as named evidence that the distribution was captured.
+	 */
+	printk("PQCP_CT_TTEST alg=%s iters=%u "
+	       "mean_valid=%llu mean_invalid=%llu t2_x1000=%llu\n",
+	       name,
+	       (unsigned int)CT_SMOKE_ITERATIONS,
+	       (unsigned long long)mean_valid,
+	       (unsigned long long)mean_invalid,
+	       (unsigned long long)t2_x1000);
 
 	zassert_true(relative_pct <= CT_SMOKE_RELATIVE_BOUND_PERCENT,
 		     "%s decap median timing variance %llu%% > smoke bound %u%%",

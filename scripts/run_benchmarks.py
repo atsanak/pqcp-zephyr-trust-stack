@@ -133,7 +133,7 @@ SAMPLES: Dict[str, Dict[str, Any]] = {
         ],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
-        "run_timeout": 45,
+        "run_timeout": 20,
     },
     "pqcp_basic_sig": {
         "path": "samples/pqcp_basic_sig",
@@ -146,7 +146,7 @@ SAMPLES: Dict[str, Dict[str, Any]] = {
         ],
         "boards": DEFAULT_BOARDS,
         "overlays": [],
-        "run_timeout": 45,
+        "run_timeout": 20,
     },
     "pqcp_streaming_hash_mldsa": {
         "path": "samples/pqcp_streaming_hash_mldsa",
@@ -316,8 +316,11 @@ def make_run_id(
     label: str,
     backend: Optional[str] = None,
     implementation: Optional[str] = None,
+    variant: Optional[str] = None,
 ) -> str:
     parts = [slugify(board), slugify(profile), slugify(label)]
+    if variant:
+        parts.append(slugify(variant))
     implementation_name = normalize_implementation_name(implementation)
     if implementation_name != "pqcp":
         parts.append(slugify(implementation_name))
@@ -325,6 +328,17 @@ def make_run_id(
     if backend_policy != "auto":
         parts.append(slugify(backend_policy))
     return "__".join(parts)
+
+
+def infer_level_variant(extra_kconfig: Iterable[str]) -> Optional[str]:
+    levels: List[str] = []
+    for line in extra_kconfig:
+        normalized = str(line).strip()
+        if normalized.startswith("CONFIG_PQCP_MLKEM_LEVEL_") and normalized.endswith("=y"):
+            levels.append("mlkem" + normalized.removeprefix("CONFIG_PQCP_MLKEM_LEVEL_").removesuffix("=y"))
+        elif normalized.startswith("CONFIG_PQCP_MLDSA_LEVEL_") and normalized.endswith("=y"):
+            levels.append("mldsa" + normalized.removeprefix("CONFIG_PQCP_MLDSA_LEVEL_").removesuffix("=y"))
+    return "_".join(levels).lower() if levels else None
 
 
 def normalize_overlays(value: Any) -> List[str]:
@@ -1098,6 +1112,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                                 label,
                                 backend_policy,
                                 implementation_name,
+                                infer_level_variant(item.get("extra_kconfig", [])),
                             ),
                         ),
                         board=item["board"],
@@ -1154,6 +1169,7 @@ def expand_runs_from_config(config: Dict[str, Any], cli_kconfig: List[str]) -> L
                     label,
                     backend_policy,
                     implementation_name,
+                    infer_level_variant(item.get("extra_kconfig", [])),
                 ),
             )
             specs.append(
