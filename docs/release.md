@@ -28,7 +28,11 @@ Step (1) writes `assurance_ledger.json`, `assurance_ledger.md`,
 `assurance_report.html`, `pqc_cbom.cdx.json`,
 `pqc_attestation.intoto.json`, `pqc_policy_result.json`,
 `pqc_assurance_digest.json`, and
-`transcripts/evidence_transcript_manifest.json` under the output root.
+`transcripts/evidence_transcript_manifest.json` under the output root. Passport
+v2 release roots also contain `acvp_negative_scenario_floor_result.json`,
+`pqc_asset_trace_result.json`, `pqc_evidence_graph.json`,
+`pqc_evidence_graph.md`, and
+`generated/pqcp_assurance_digest_generated.h`.
 Step (3) re-checks every recorded SHA-256, every required claim id, every
 Passport subject hash, and every transcript hash, and exits non-zero with the
 exact offending file/claim if anything has drifted. See
@@ -158,6 +162,14 @@ The full local release gate now emits the Passport artifacts described in
 - `pqc_policy_result.json`: partner-review policy result.
 - `pqc_assurance_digest.json`: stable SHA-256 digest manifest for future
   firmware attestation binding.
+- `acvp_negative_scenario_floor_result.json`: append-only ACVP negative
+  scenario compatibility-floor validation.
+- `pqc_asset_trace_result.json`: asset-to-source/Kconfig/claim/test/marker/CBOM
+  trace-map validation.
+- `pqc_evidence_graph.json` / `pqc_evidence_graph.md`: graph view of the same
+  traceability links.
+- `generated/pqcp_assurance_digest_generated.h`: firmware-embeddable assurance
+  digest header generated from `pqc_assurance_digest.json`.
 
 The CI fast gate intentionally skips the full Passport because it would require
 the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence
