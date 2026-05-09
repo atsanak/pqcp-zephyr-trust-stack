@@ -6,10 +6,13 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
 import consumer_smoke
 import prepare_release_bundle
+import run_local_tool_tests
+import verify_product_readiness
 
 
 class PrepareReleaseBundleTests(unittest.TestCase):
@@ -101,6 +104,31 @@ class ConsumerSmokeTests(unittest.TestCase):
         )
         self.assertIn("--", cmd)
         self.assertIn("-DZEPHYR_EXTRA_MODULES=/workspace/pqcp", cmd)
+
+
+class LocalToolingRegressionTests(unittest.TestCase):
+    def test_tool_test_runner_includes_passport_profile_and_closure_tests(self) -> None:
+        self.assertIn("test_pqc_assurance_profile.py", run_local_tool_tests.TOOL_TESTS)
+        self.assertIn("test_pqc_evidence_quality.py", run_local_tool_tests.TOOL_TESTS)
+        self.assertIn("test_migration_readiness_report.py", run_local_tool_tests.TOOL_TESTS)
+        self.assertIn("test_pqc_claim_closure.py", run_local_tool_tests.TOOL_TESTS)
+
+    def test_product_readiness_preflight_includes_tooling_tests(self) -> None:
+        args = Namespace(
+            module_path=Path(__file__).resolve().parent.parent,
+            west_root=Path("/tmp/west-root"),
+            tag="v1.0.0",
+            output_root=Path("/tmp/pqcp-product-readiness"),
+            consumer_module_mode="extra-module",
+            preflight_only=True,
+            skip_cost_smoke=True,
+            skip_tool_tests=False,
+            skip_consumer_smoke=True,
+            skip_release_bundle=True,
+            skip_release_check=True,
+        )
+        step_names = [step.name for step in verify_product_readiness.build_steps(args)]
+        self.assertIn("local tooling regression tests", step_names)
 
 
 if __name__ == "__main__":

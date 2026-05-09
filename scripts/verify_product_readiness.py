@@ -81,6 +81,11 @@ def parse_args() -> argparse.Namespace:
         help="Skip the explicit cost-of-assurance smoke step.",
     )
     parser.add_argument(
+        "--skip-tool-tests",
+        action="store_true",
+        help="Skip pure-Python local tooling regression tests.",
+    )
+    parser.add_argument(
         "--skip-consumer-smoke",
         action="store_true",
         help="Skip the west consumer smoke helper.",
@@ -135,6 +140,23 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
             ],
             module_path,
         ),
+    ]
+
+    if not args.skip_tool_tests:
+        steps.append(
+            Step(
+                "local tooling regression tests",
+                [
+                    sys.executable,
+                    str(module_path / "scripts/run_local_tool_tests.py"),
+                    "--module-path",
+                    str(module_path),
+                ],
+                module_path,
+            )
+        )
+
+    steps.append(
         Step(
             "strict extended checks",
             [
@@ -147,8 +169,8 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
                 "--strict",
             ],
             module_path,
-        ),
-    ]
+        )
+    )
 
     if not args.skip_cost_smoke:
         steps.append(
