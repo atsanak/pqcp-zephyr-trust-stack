@@ -90,6 +90,7 @@ ledger. It consists of:
 - `pqc_assurance_profile_result.json`
 - `pqc_evidence_quality_result.json`
 - `pqc_migration_readiness.json` / `pqc_migration_readiness.md`
+- `pqc_claim_closure_result.json`
 - `generated/pqcp_assurance_digest_generated.h`
 - transcript, benchmark, cost-of-assurance, MCU footprint, and release-bundle
   artifacts
@@ -224,6 +225,8 @@ attestation, policy result, and digest themselves consume the ledger. To avoid a
 circular hash dependency, the pack-level replay verifier and policy verifier
 enforce those generated artifacts directly. This is the intentional split:
 ledger claims describe support; the Passport verifier prevents artifact drift.
+`pqc_claim_closure_result.json` is generated after policy replay and digest
+creation to close that split explicitly.
 
 ## Assurance Profile / schema v5 replay checks
 
@@ -239,6 +242,9 @@ Schema v5 adds a profile layer above the Passport artifacts:
   are enforced by the same profile result and by the CBOM `pqcp:*` properties.
 - `release.migration_readiness` is backed by
   `pqc_migration_readiness.json` and `pqc_migration_readiness.md`.
+- `pqc_claim_closure_result.json` verifies the post-ledger artifacts after
+  policy replay, attestation generation, digest creation, and firmware digest
+  export.
 
 These artifacts do not change the C API or wire formats. They make the release
 pack clearer for local review by separating production-allowed crypto assets

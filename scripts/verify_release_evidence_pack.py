@@ -284,6 +284,7 @@ def verify_passport_artifacts(
     evidence_quality_result = output_root / "pqc_evidence_quality_result.json"
     migration_readiness_json = output_root / "pqc_migration_readiness.json"
     migration_readiness_md = output_root / "pqc_migration_readiness.md"
+    claim_closure_result = output_root / "pqc_claim_closure_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     if not policy_path.exists():
@@ -305,6 +306,7 @@ def verify_passport_artifacts(
         require_file(evidence_quality_result, "PQC evidence quality result", failures)
         require_file(migration_readiness_json, "PQC migration readiness JSON", failures)
         require_file(migration_readiness_md, "PQC migration readiness Markdown", failures)
+        require_file(claim_closure_result, "PQC claim closure result", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -396,6 +398,9 @@ def verify_passport_artifacts(
                     "PQC migration readiness Markdown missing asset(s): "
                     + ", ".join(sorted(missing_assets))
                 )
+        closure = load_json(claim_closure_result, "PQC claim closure result", failures)
+        if closure and closure.get("passed") is not True:
+            failures.append("PQC claim closure result did not pass")
 
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:

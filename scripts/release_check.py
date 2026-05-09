@@ -503,6 +503,7 @@ def main() -> int:
     pqc_evidence_quality_result_path = output_root / "pqc_evidence_quality_result.json"
     pqc_migration_readiness_json_path = output_root / "pqc_migration_readiness.json"
     pqc_migration_readiness_md_path = output_root / "pqc_migration_readiness.md"
+    pqc_claim_closure_result_path = output_root / "pqc_claim_closure_result.json"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
     assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
@@ -659,6 +660,30 @@ def main() -> int:
         str(pqc_migration_readiness_md_path),
         "--output",
         str(pqc_policy_result_path),
+    ]
+    pqc_claim_closure_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_claim_closure.py"),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--attestation",
+        str(pqc_attestation_path),
+        "--assurance-digest",
+        str(pqc_assurance_digest_path),
+        "--policy-result",
+        str(pqc_policy_result_path),
+        "--assurance-profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--evidence-quality-result",
+        str(pqc_evidence_quality_result_path),
+        "--migration-readiness-json",
+        str(pqc_migration_readiness_json_path),
+        "--migration-readiness-md",
+        str(pqc_migration_readiness_md_path),
+        "--firmware-digest-header",
+        str(firmware_digest_header_path),
+        "--output",
+        str(pqc_claim_closure_result_path),
     ]
     negative_floor_cmd = [
         sys.executable,
@@ -1173,6 +1198,11 @@ def main() -> int:
         Step(
             name="PQC assurance policy",
             cmd=pqc_policy_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC claim closure",
+            cmd=pqc_claim_closure_cmd,
             cwd=module_path,
         ),
         Step(

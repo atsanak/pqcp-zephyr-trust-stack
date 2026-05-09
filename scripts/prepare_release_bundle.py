@@ -290,6 +290,7 @@ def write_manifest(
         "pqc_evidence_quality_result.json",
         "pqc_migration_readiness.json",
         "pqc_migration_readiness.md",
+        "pqc_claim_closure_result.json",
     ):
         candidate = passport_root / name
         if candidate.exists() and candidate.is_file():

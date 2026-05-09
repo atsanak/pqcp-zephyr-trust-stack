@@ -153,6 +153,8 @@ must also report `pass` or an explicitly documented `not_applicable` for:
   backed by the assurance profile and the CBOM `pqcp:*` properties.
 - `release.migration_readiness` — backed by
   `pqc_migration_readiness.json` and `pqc_migration_readiness.md`.
+- The post-policy closure replay is backed by
+  `pqc_claim_closure_result.json` from `scripts/verify_pqc_claim_closure.py`.
 
 A failing required claim names the offending parameter set, primitive, or
 case directly in `failure_reason` rather than disappearing into the older
@@ -174,6 +176,7 @@ Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 - `pqc_evidence_quality_result.json`
 - `pqc_migration_readiness.json`
 - `pqc_migration_readiness.md`
+- `pqc_claim_closure_result.json`
 
 `pqc_policy_result.json` must have `"passed": true`. The policy verifier checks
 required claim statuses, required PQC crypto assets, deterministic RNG
