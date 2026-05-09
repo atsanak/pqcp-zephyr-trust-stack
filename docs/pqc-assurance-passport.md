@@ -31,6 +31,9 @@ release review.
   every required claim to a validation class and execution environment.
 - `pqc_migration_readiness.json` / `pqc_migration_readiness.md` — generated
   profile summary for partner review and maintenance planning.
+- `pqc_claim_closure_result.json` — post-policy closure result proving that
+  generated profile, evidence-quality, migration, attestation, digest, and
+  firmware-digest artifacts still agree after the full Passport is assembled.
 - `acvp_negative_scenario_floor_result.json` — proof that every compatibility
   floor ACVP negative scenario is still present, uniquely named, and still
   expects an `ERROR:*` or explicitly marked recovery response.
@@ -82,6 +85,22 @@ python3 scripts/verify_assurance_policy.py \
   --output /tmp/pqcp-passport/pqc_policy_result.json
 ```
 
+Run the post-policy closure verifier directly:
+
+```sh
+python3 scripts/verify_pqc_claim_closure.py \
+  --ledger /tmp/pqcp-passport/assurance_ledger.json \
+  --attestation /tmp/pqcp-passport/pqc_attestation.intoto.json \
+  --assurance-digest /tmp/pqcp-passport/pqc_assurance_digest.json \
+  --policy-result /tmp/pqcp-passport/pqc_policy_result.json \
+  --assurance-profile-result /tmp/pqcp-passport/pqc_assurance_profile_result.json \
+  --evidence-quality-result /tmp/pqcp-passport/pqc_evidence_quality_result.json \
+  --migration-readiness-json /tmp/pqcp-passport/pqc_migration_readiness.json \
+  --migration-readiness-md /tmp/pqcp-passport/pqc_migration_readiness.md \
+  --firmware-digest-header /tmp/pqcp-passport/generated/pqcp_assurance_digest_generated.h \
+  --output /tmp/pqcp-passport/pqc_claim_closure_result.json
+```
+
 ## Review Model
 
 The passport is designed for a collaborator who receives a generated release
@@ -103,6 +122,8 @@ directory and wants deterministic answers to concrete questions:
   explicitly limited to validation, lab, smoke, or test use?
 - Does every required claim have a declared evidence class and execution
   environment?
+- Do post-ledger artifacts still close cleanly after policy replay, attestation
+  generation, digest creation, and firmware digest export?
 
 If any answer is inconsistent, `verify_release_evidence_pack.py` exits non-zero
 and reports the exact file, claim, or artifact hash that failed.
@@ -166,3 +187,8 @@ Passport schema v5 adds two policy inputs and one generated report:
 The profile verifier rejects stale CBOM profile properties, missing trace-map
 assets, missing required claims, deterministic RNG in production-oriented
 profiles, and test-only assets represented as production-capable.
+
+`scripts/verify_pqc_claim_closure.py` is the final local replay check for the
+assembled pack. It verifies post-ledger claims, policy result status, profile
+and evidence-quality status, migration readiness Markdown coverage, firmware
+digest header macros, and SHA-256 hashes in `pqc_assurance_digest.json`.

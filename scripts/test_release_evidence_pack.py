@@ -17,6 +17,7 @@ import export_pqc_cbom
 import generate_pqc_attestation
 import export_firmware_assurance_digest
 import verify_assurance_policy
+import verify_pqc_claim_closure
 import verify_release_evidence_pack as pack_verify
 from export_results import CSV_FIELDNAMES, EXPECTED_PRIMITIVE_ROWS
 
@@ -493,6 +494,23 @@ class ReleaseEvidencePackTests(unittest.TestCase):
         )
         (output / "pqc_policy_result.json").write_text(
             json.dumps(policy, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        closure = verify_pqc_claim_closure.verify_closure(
+            Namespace(
+                ledger=ledger_path,
+                attestation=attestation_path,
+                assurance_digest=digest_path,
+                policy_result=output / "pqc_policy_result.json",
+                assurance_profile_result=output / "pqc_assurance_profile_result.json",
+                evidence_quality_result=output / "pqc_evidence_quality_result.json",
+                migration_readiness_json=output / "pqc_migration_readiness.json",
+                migration_readiness_md=output / "pqc_migration_readiness.md",
+                firmware_digest_header=generated,
+            )
+        )
+        (output / "pqc_claim_closure_result.json").write_text(
+            json.dumps(closure, indent=2) + "\n",
             encoding="utf-8",
         )
 
