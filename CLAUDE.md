@@ -936,20 +936,39 @@ Local Zephyr build note:
 
 - The workspace is Zephyr `v4.4.0` with Zephyr SDK `1.0.1` discovered under
   `/Users/angelostsanaktsidis/zephyr-sdk-1.0.1`.
-- `west build -p always -b qemu_x86_64 tests/ztest_acvp_serial` currently fails
-  in Zephyr `lib/os/printk.c` because the macOS SDK headers are being picked up
-  by the cross build and `_FDEV_SETUP_WRITE` / `FDEV_SETUP_STREAM` are missing.
-  This occurred even after unsetting `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
-  `LDFLAGS`, and `SDKROOT`; it appears to be a local host/toolchain include
-  issue rather than a Patch set 10 source change.
+- The macOS include contamination was traced to host include-path environment
+  leakage. Running Zephyr commands with `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
+  `LDFLAGS`, `SDKROOT`, `CPATH`, `C_INCLUDE_PATH`, `CPLUS_INCLUDE_PATH`, and
+  `OBJC_INCLUDE_PATH` unset allows the QEMU ACVP builds to complete.
+- `scripts/local_workflow.py` already strips the relevant host compiler
+  variables (`CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `CPATH`, `SDKROOT`)
+  for maintained release subprocesses.
+
+Additional validation after `8f58557`:
+
+- `west build -p always -b qemu_x86_64 tests/ztest_acvp_serial && west build -d build -t run`
+  reached `PROJECT EXECUTION SUCCESSFUL` with 12/12 tests passing; QEMU was
+  terminated manually after the success marker on macOS.
+- `west build -p always -b qemu_x86_64 tests/ztest_acvp_serial_negative -d build_acvp_negative && west build -d build_acvp_negative -t run`
+  reached `PROJECT EXECUTION SUCCESSFUL` with all replay-eligible negative
+  scenarios passing; QEMU was terminated manually after the success marker on
+  macOS.
+- `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-passport-v2`
+  ran through the full build/benchmark/profile path and exposed one Passport v2
+  integration drift: the ACVP floor result lacked `scenario_count`.
+- Commit `8f58557` adds `scenario_count` as the stable floor-result field and
+  keeps `case_count` as a compatibility alias.
+- Replaying the release evidence tail against `/tmp/pqcp-passport-v2` after
+  regenerating the local release manifest passed: assurance ledger, ledger
+  verification, HTML report, CBOM, asset trace map, evidence graph, attestation,
+  firmware digest header, `samples/pqcp_assurance_status` build, policy
+  verification, and `scripts/verify_release_evidence_pack.py`.
 
 Open follow-ups:
 
-- Re-run the ACVP serial and negative ztests on a clean Linux Zephyr SDK host or
-  after fixing the macOS cross-toolchain include contamination.
-- Run the full local release gate:
-  `python3 scripts/release_check.py --tag v1.0.0 --output-root /tmp/pqcp-passport-v2`
-  after the Zephyr build environment is clean.
+- Re-run the full local release gate from a fresh output root when time allows;
+  the targeted post-fix evidence-pack replay passed, but the complete command
+  is intentionally long on local QEMU.
 - Keep signing, hardware attestation, and device trust-root policy out of scope
   until key custody and device measurement semantics are defined.
 
