@@ -437,6 +437,39 @@ ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_oversize_payload)
         -ENOSPC);
 }
 
+ZTEST(pqcp_acvp_serial, test_hex_decoder_accepts_mixed_case_without_libc_parse)
+{
+    static const uint8_t expected[] = {
+        0x00U, 0x1aU, 0x2bU, 0x3cU, 0x4dU, 0x5eU, 0x6fU,
+        0x7aU, 0x8bU, 0x9cU, 0xadU, 0xbeU, 0xcfU, 0xd0U,
+        0xe1U, 0xf2U,
+    };
+    size_t out_len = 0U;
+
+    memset(work_buffer, 0, sizeof(expected));
+    zassert_equal(
+        pqcp_acvp_hex_to_bytes("001A2b3C4d5E6f7A8b9CadBEcFd0E1f2",
+                               work_buffer, &out_len, sizeof(work_buffer)),
+        0);
+    zassert_equal(out_len, sizeof(expected));
+    zassert_mem_equal(work_buffer, expected, sizeof(expected));
+}
+
+ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_invalid_nibbles_without_partial_success)
+{
+    size_t out_len = 1234U;
+
+    zassert_equal(pqcp_acvp_hex_to_bytes("001x", work_buffer, &out_len,
+                                         sizeof(work_buffer)),
+                  -EINVAL);
+    zassert_equal(out_len, 1234U);
+
+    zassert_equal(pqcp_acvp_hex_to_bytes("abc", work_buffer, &out_len,
+                                         sizeof(work_buffer)),
+                  -EINVAL);
+    zassert_equal(out_len, 1234U);
+}
+
 ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)
 {
     struct pqcp_acvp_response resp;

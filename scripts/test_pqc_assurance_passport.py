@@ -114,6 +114,22 @@ class PQCAssurancePassportTests(unittest.TestCase):
         (root / "benchmark_results.csv").write_text("suite,parameter_set\n", encoding="utf-8")
         (root / "benchmark_provenance.json").write_text("{}\n", encoding="utf-8")
         (root / "cost_of_assurance_evidence.json").write_text("{}\n", encoding="utf-8")
+        (root / "ct_instruction_policy_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "target_symbol_count": 1,
+                    "target_symbols": ["pqcp_mlkem_decapsulate"],
+                    "finding_count": 0,
+                    "findings": [],
+                    "failures": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         (root / "acvp_negative_scenario_floor_result.json").write_text(
             json.dumps(
                 {
@@ -242,6 +258,7 @@ class PQCAssurancePassportTests(unittest.TestCase):
             benchmark_csv=root / "benchmark_results.csv",
             benchmark_provenance=root / "benchmark_provenance.json",
             cost_of_assurance_evidence=root / "cost_of_assurance_evidence.json",
+            ct_instruction_policy_result=root / "ct_instruction_policy_result.json",
             evidence_graph=root / "pqc_evidence_graph.json",
             asset_trace_result=root / "pqc_asset_trace_result.json",
             assurance_profile_result=root / "pqc_assurance_profile_result.json",
@@ -260,6 +277,7 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 cbom_path,
                 root / "transcripts/evidence_transcript_manifest.json",
                 root / "benchmark_provenance.json",
+                root / "ct_instruction_policy_result.json",
                 root / "pqc_evidence_graph.json",
                 root / "pqc_asset_trace_result.json",
                 root / "pqc_assurance_profile_result.json",
@@ -296,6 +314,7 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 attestation_path=attestation,
                 release_manifest_path=manifest,
                 asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                ct_instruction_policy_result_path=root / "ct_instruction_policy_result.json",
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
@@ -322,6 +341,7 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 attestation_path=attestation,
                 release_manifest_path=manifest,
                 asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                ct_instruction_policy_result_path=root / "ct_instruction_policy_result.json",
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
@@ -345,6 +365,7 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 attestation_path=attestation,
                 release_manifest_path=manifest,
                 asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                ct_instruction_policy_result_path=root / "ct_instruction_policy_result.json",
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",
@@ -374,6 +395,7 @@ class PQCAssurancePassportTests(unittest.TestCase):
                 attestation_path=attestation,
                 release_manifest_path=manifest,
                 asset_trace_result_path=root / "pqc_asset_trace_result.json",
+                ct_instruction_policy_result_path=root / "ct_instruction_policy_result.json",
                 evidence_graph_path=root / "pqc_evidence_graph.json",
                 assurance_digest_path=root / "pqc_assurance_digest.json",
                 firmware_digest_header_path=root / "generated/pqcp_assurance_digest_generated.h",

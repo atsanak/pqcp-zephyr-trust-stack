@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transcript-manifest", type=Path)
     parser.add_argument("--release-manifest", type=Path)
     parser.add_argument("--policy-result", type=Path)
+    parser.add_argument("--ct-instruction-policy-result", type=Path)
     parser.add_argument("--module-path", type=Path, default=REPO_ROOT)
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
@@ -113,6 +114,7 @@ def build_graph(
     transcript_manifest_path: Path | None = None,
     release_manifest_path: Path | None = None,
     policy_result_path: Path | None = None,
+    ct_instruction_policy_result_path: Path | None = None,
 ) -> dict[str, Any]:
     trace_map = load_json(trace_map_path, "PQC asset trace map")
     ledger = load_json(ledger_path, "assurance ledger")
@@ -139,6 +141,7 @@ def build_graph(
         "transcript_manifest": transcript_manifest_path,
         "release_manifest": release_manifest_path,
         "policy_result": policy_result_path,
+        "ct_instruction_policy_result": ct_instruction_policy_result_path,
     }
     for name, path in artifact_paths.items():
         if path is None:
@@ -317,6 +320,7 @@ def main() -> int:
             transcript_manifest_path=args.transcript_manifest,
             release_manifest_path=args.release_manifest,
             policy_result_path=args.policy_result,
+            ct_instruction_policy_result_path=args.ct_instruction_policy_result,
         )
     except (OSError, RuntimeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

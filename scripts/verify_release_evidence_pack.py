@@ -278,6 +278,7 @@ def verify_passport_artifacts(
     policy_result_path = output_root / "pqc_policy_result.json"
     digest_path = output_root / "pqc_assurance_digest.json"
     floor_result_path = output_root / "acvp_negative_scenario_floor_result.json"
+    ct_instruction_policy_result_path = output_root / "ct_instruction_policy_result.json"
     asset_trace_result_path = output_root / "pqc_asset_trace_result.json"
     evidence_graph_json = output_root / "pqc_evidence_graph.json"
     evidence_graph_md = output_root / "pqc_evidence_graph.md"
@@ -298,6 +299,7 @@ def verify_passport_artifacts(
     require_file(digest_path, "PQC assurance digest manifest", failures)
     if (ledger.get("schema_version") or 0) >= 4:
         require_file(floor_result_path, "ACVP negative scenario floor result", failures)
+        require_file(ct_instruction_policy_result_path, "ML-KEM decapsulation instruction policy result", failures)
         require_file(asset_trace_result_path, "PQC asset trace result", failures)
         require_file(evidence_graph_json, "PQC evidence graph JSON", failures)
         require_file(evidence_graph_md, "PQC evidence graph Markdown", failures)
@@ -321,6 +323,7 @@ def verify_passport_artifacts(
         attestation_path=attestation_path,
         release_manifest_path=manifest_path,
         asset_trace_result_path=asset_trace_result_path if asset_trace_result_path.exists() else None,
+        ct_instruction_policy_result_path=ct_instruction_policy_result_path if ct_instruction_policy_result_path.exists() else None,
         evidence_graph_path=evidence_graph_json if evidence_graph_json.exists() else None,
         assurance_digest_path=digest_path,
         firmware_digest_header_path=firmware_digest_header if firmware_digest_header.exists() else None,
@@ -345,6 +348,10 @@ def verify_passport_artifacts(
         trace_result = load_json(asset_trace_result_path, "PQC asset trace result", failures)
         if trace_result and trace_result.get("passed") is not True:
             failures.append("PQC asset trace result did not pass")
+
+        ct_policy = load_json(ct_instruction_policy_result_path, "ML-KEM decapsulation instruction policy result", failures)
+        if ct_policy and ct_policy.get("passed") is not True:
+            failures.append("ML-KEM decapsulation instruction policy result did not pass")
 
         graph = load_json(evidence_graph_json, "PQC evidence graph", failures)
         if graph:
@@ -424,6 +431,7 @@ def verify_passport_artifacts(
                 for required_name in (
                     "pqc_evidence_graph.json",
                     "pqc_asset_trace_result.json",
+                    "ct_instruction_policy_result.json",
                 ):
                     if required_name not in seen_paths:
                         failures.append(f"PQC assurance digest missing artifact: {required_name}")

@@ -158,31 +158,60 @@ int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
 int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
                            size_t *out_len, size_t max_len)
 {
+    size_t hex_len;
+    size_t byte_len;
+
+    if (out_len == NULL) {
+        return -EINVAL;
+    }
+
     if (hex == NULL) {
         *out_len = 0;
         return 0;
     }
 
-    size_t hex_len = strlen(hex);
+    hex_len = strlen(hex);
     
     /* Must be even length */
     if (hex_len % 2 != 0) {
         return -EINVAL;
     }
     
-    size_t byte_len = hex_len / 2;
+    byte_len = hex_len / 2;
     if (byte_len > max_len) {
         return -ENOSPC;
     }
+    if (byte_len > 0U && out == NULL) {
+        return -EINVAL;
+    }
     
     for (size_t i = 0; i < byte_len; i++) {
-        const char byte_str[3] = { hex[i * 2], hex[i * 2 + 1], 0 };
-        char *endptr;
-        unsigned long val = strtoul(byte_str, &endptr, 16);
-        if (*endptr != '\0') {
+        int hi;
+        int lo;
+        unsigned char h = (unsigned char)hex[i * 2U];
+        unsigned char l = (unsigned char)hex[i * 2U + 1U];
+
+        if (h >= '0' && h <= '9') {
+            hi = h - '0';
+        } else if (h >= 'a' && h <= 'f') {
+            hi = h - 'a' + 10;
+        } else if (h >= 'A' && h <= 'F') {
+            hi = h - 'A' + 10;
+        } else {
             return -EINVAL;
         }
-        out[i] = (uint8_t)val;
+
+        if (l >= '0' && l <= '9') {
+            lo = l - '0';
+        } else if (l >= 'a' && l <= 'f') {
+            lo = l - 'a' + 10;
+        } else if (l >= 'A' && l <= 'F') {
+            lo = l - 'A' + 10;
+        } else {
+            return -EINVAL;
+        }
+
+        out[i] = (uint8_t)(((uint8_t)hi << 4) | (uint8_t)lo);
     }
     
     *out_len = byte_len;

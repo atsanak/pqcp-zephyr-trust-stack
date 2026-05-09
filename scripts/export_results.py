@@ -56,6 +56,20 @@ EXPECTED_PRIMITIVE_ROWS = {
     "ML-DSA-65": ("keygen", "sign", "verify"),
     "ML-DSA-87": ("keygen", "sign", "verify"),
 }
+EXPECTED_BASE_OPERATIONS = {
+    operation
+    for operations in EXPECTED_PRIMITIVE_ROWS.values()
+    for operation in operations
+}
+DISTRIBUTION_METRICS = (
+    "cycles_min",
+    "cycles_median",
+    "cycles_p90",
+    "cycles_p99",
+    "cycles_max",
+    "cycles_mad",
+    "sample_count",
+)
 # This is a sanity floor, not a regression budget.  QEMU/native timing can make
 # the PQCP path substantially faster than the clean baseline, so only reject
 # near-zero ratios that indicate broken timing extraction.
@@ -324,6 +338,8 @@ def export_rows(
 
         if unit == "cyc" or metric == "cycles":
             cycles = to_int(row.get("value"))
+        elif unit == "count" or metric == "sample_count":
+            cycles = to_int(row.get("value"))
         elif unit == "us":
             time_us = to_int(row.get("value"))
         elif unit == "ms":
@@ -375,8 +391,78 @@ def export_rows(
         if time_us is not None:
             record["time_us"] = time_us
 
-    return sorted(
+    rows = sorted(
         exported.values(),
+        key=lambda row: (
+            row["suite"],
+            row["parameter_set"],
+            row["operation"],
+            row["implementation"],
+            row["backend"],
+        ),
+    )
+    return add_single_observation_distribution_rows(rows)
+
+
+def add_single_observation_distribution_rows(
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Add distribution rows for legacy single-observation benchmark samples.
+
+    Older sample applications emit one timing row per operation. Distribution
+    aware samples can emit richer rows directly; for legacy rows we preserve the
+    old benchmark contract and add an explicit one-sample distribution so the
+    release evidence pack can still state what statistic was available.
+    """
+    existing = {
+        (
+            row.get("parameter_set"),
+            row.get("implementation"),
+            row.get("backend"),
+            row.get("operation"),
+            row.get("platform"),
+            row.get("timestamp"),
+        )
+        for row in rows
+    }
+    additions: List[Dict[str, Any]] = []
+    for row in rows:
+        parameter_set = str(row.get("parameter_set", ""))
+        operation = str(row.get("operation", ""))
+        if operation not in EXPECTED_PRIMITIVE_ROWS.get(parameter_set, ()):
+            continue
+        cycles = to_int(row.get("cycles"))
+        if cycles is None:
+            continue
+        values = {
+            "cycles_min": cycles,
+            "cycles_median": cycles,
+            "cycles_p90": cycles,
+            "cycles_p99": cycles,
+            "cycles_max": cycles,
+            "cycles_mad": 0,
+            "sample_count": 1,
+        }
+        for metric, value in values.items():
+            derived = dict(row)
+            derived["operation"] = f"{operation}_{metric}"
+            derived["cycles"] = value
+            derived["time_us"] = ""
+            key = (
+                derived.get("parameter_set"),
+                derived.get("implementation"),
+                derived.get("backend"),
+                derived.get("operation"),
+                derived.get("platform"),
+                derived.get("timestamp"),
+            )
+            if key in existing:
+                continue
+            existing.add(key)
+            additions.append(derived)
+
+    return sorted(
+        [*rows, *additions],
         key=lambda row: (
             row["suite"],
             row["parameter_set"],
@@ -670,6 +756,11 @@ def build_provenance(
         for row in rows
         if row.get("parameter_set") in EXPECTED_PRIMITIVE_ROWS
     ]
+    distribution_rows = [
+        row
+        for row in primitive_rows
+        if row.get("operation") not in EXPECTED_BASE_OPERATIONS
+    ]
     protocol_rows = [
         row
         for row in rows
@@ -700,6 +791,7 @@ def build_provenance(
             "row_count": len(rows),
             "primitive_row_count": len(primitive_rows),
             "protocol_row_count": len(protocol_rows),
+            "distribution_row_count": len(distribution_rows),
             "paired_primitive_rows": [
                 f"{pair[0]}/{pair[1]}" for pair in paired_primitive
             ],

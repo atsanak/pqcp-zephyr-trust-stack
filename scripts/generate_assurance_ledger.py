@@ -61,6 +61,10 @@ PER_PRIMITIVE_BENCH_CLAIMS = {
         ("ML-DSA-44", "ML-DSA-65", "ML-DSA-87"),
     ),
 }
+BENCHMARK_BASE_OPERATIONS = {
+    "ML-KEM": {"keygen", "encaps", "decaps"},
+    "ML-DSA": {"keygen", "sign", "verify"},
+}
 REQUIRED_TRANSCRIPT_STEPS = (
     "Extended Checks (strict cost-of-assurance smoke)",
     "ACVP serial ztest run",
@@ -109,6 +113,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--assurance-profile-result", type=Path, help="Optional PQC assurance profile result JSON.")
     parser.add_argument("--evidence-quality-result", type=Path, help="Optional PQC evidence quality result JSON.")
     parser.add_argument("--migration-readiness", type=Path, help="Optional PQC migration readiness JSON artifact.")
+    parser.add_argument(
+        "--ct-instruction-policy-result",
+        type=Path,
+        help="Optional ML-KEM decapsulation instruction-policy result JSON.",
+    )
     return parser.parse_args()
 
 
@@ -517,9 +526,13 @@ def evaluate_benchmark_per_primitive(
     rows_per_level: dict[str, int] = {}
     failures: list[str] = []
     matched_total = 0
+    base_operations = BENCHMARK_BASE_OPERATIONS.get(algorithm, set())
     for row in rows:
         parameter_set = str(row.get("parameter_set", "")).strip()
         if parameter_set not in expected_levels:
+            continue
+        operation = str(row.get("operation", "")).strip()
+        if base_operations and operation not in base_operations:
             continue
         matched_total += 1
         rows_per_level[parameter_set] = rows_per_level.get(parameter_set, 0) + 1
@@ -969,6 +982,11 @@ _CT_SMOKE_RE = __import__("re").compile(
     r"delta=(?P<delta>\d+)\s+relative_pct=(?P<relative_pct>\d+)\s+"
     r"bound_pct=(?P<bound_pct>\d+)"
 )
+_CT_TTEST_RE = __import__("re").compile(
+    r"PQCP_CT_TTEST\s+alg=(?P<alg>\S+)\s+iters=(?P<iters>\d+)\s+"
+    r"mean_valid=(?P<mean_valid>\d+)\s+mean_invalid=(?P<mean_invalid>\d+)\s+"
+    r"t2_x1000=(?P<t2_x1000>\d+)"
+)
 
 
 def evaluate_ct_smoke(
@@ -1012,6 +1030,7 @@ def evaluate_ct_smoke(
         )
 
     matches = list(_CT_SMOKE_RE.finditer(transcript_body))
+    ttest_matches = list(_CT_TTEST_RE.finditer(transcript_body))
     if not matches:
         return fail_claim(
             spec,
@@ -1025,8 +1044,11 @@ def evaluate_ct_smoke(
         )
     required_algs = {"MLKEM-512", "MLKEM-768", "MLKEM-1024"}
     observed_algs = {match.group("alg") for match in matches}
+    observed_ttest_algs = {match.group("alg") for match in ttest_matches}
     missing_algs = sorted(required_algs - observed_algs)
+    missing_ttest_algs = sorted(required_algs - observed_ttest_algs)
     measurements = []
+    ttest_measurements = []
     failures: list[str] = []
     for match in matches:
         relative_pct = int(match.group("relative_pct"))
@@ -1047,13 +1069,26 @@ def evaluate_ct_smoke(
                 "smoke_bound_pct": bound_pct,
             }
         )
+    for match in ttest_matches:
+        ttest_measurements.append(
+            {
+                "algorithm": match.group("alg"),
+                "iterations": int(match.group("iters")),
+                "mean_valid_cycles": int(match.group("mean_valid")),
+                "mean_invalid_cycles": int(match.group("mean_invalid")),
+                "welch_t2_x1000": int(match.group("t2_x1000")),
+            }
+        )
     if missing_algs:
         failures.append("missing PQCP_CT_SMOKE measurement(s): " + ", ".join(missing_algs))
+    if missing_ttest_algs:
+        failures.append("missing PQCP_CT_TTEST measurement(s): " + ", ".join(missing_ttest_algs))
     details = {
         "transcript_path": str(transcript_path),
         "transcript_sha256": transcript_sha,
         "algorithms": sorted(observed_algs),
         "measurements": measurements,
+        "ttest_measurements": ttest_measurements,
         "is_smoke_test_only": True,
     }
     if failures:
@@ -1186,6 +1221,119 @@ def evaluate_benchmark_csv(
         return fail_claim(
             spec,
             reason="; ".join(f"[{item['check']}] {item['message']}" for item in failures),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
+def evaluate_benchmark_distribution_quality(
+    spec: dict[str, Any],
+    *,
+    csv_path: Path,
+    provenance_path: Path,
+) -> dict[str, object]:
+    artifacts = [
+        artifact(csv_path, label="benchmark CSV"),
+        artifact(provenance_path, label="benchmark provenance"),
+    ]
+    validators = ["scripts/export_results.py distribution metric export"]
+    commands = [f"python3 scripts/export_results.py --validate-only {csv_path} --verify-provenance"]
+    if not csv_path.exists():
+        return fail_claim(
+            spec,
+            reason=f"benchmark CSV not found: {csv_path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    if not provenance_path.exists():
+        return fail_claim(
+            spec,
+            reason=f"benchmark provenance sidecar not found: {provenance_path}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    distribution_metrics = {
+        "cycles_min",
+        "cycles_median",
+        "cycles_p90",
+        "cycles_p99",
+        "cycles_max",
+        "cycles_mad",
+        "sample_count",
+    }
+    expected_parameters = {
+        str(row.get("parameter_set", ""))
+        for row in rows
+        if str(row.get("operation", "")) in {"keygen", "encaps", "decaps", "sign", "verify"}
+        and str(row.get("parameter_set", "")).startswith(("ML-KEM-", "ML-DSA-"))
+    }
+    observed: dict[str, set[str]] = {name: set() for name in expected_parameters}
+    failures: list[str] = []
+    if not expected_parameters:
+        failures.append("benchmark CSV has no primitive base rows to associate with distribution metrics")
+    for row in rows:
+        parameter_set = str(row.get("parameter_set", ""))
+        operation = str(row.get("operation", ""))
+        metric_name = next(
+            (
+                metric
+                for metric in distribution_metrics
+                if operation == metric or operation.endswith(f"_{metric}")
+            ),
+            None,
+        )
+        if parameter_set not in expected_parameters or metric_name is None:
+            continue
+        observed[parameter_set].add(metric_name)
+        raw_value = row.get("cycles") or row.get("time_us") or ""
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            failures.append(f"{parameter_set}/{operation} has non-numeric value {raw_value!r}")
+            continue
+        if value < 0:
+            failures.append(f"{parameter_set}/{operation} has negative value {value}")
+
+    missing: list[str] = []
+    for parameter_set, metrics in sorted(observed.items()):
+        absent = sorted(distribution_metrics - metrics)
+        if absent:
+            missing.append(f"{parameter_set}: {', '.join(absent)}")
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        failures.append(f"benchmark provenance is not valid JSON: {exc}")
+        provenance = {}
+    csv_meta = provenance.get("csv") if isinstance(provenance, dict) else {}
+    distribution_row_count = csv_meta.get("distribution_row_count") if isinstance(csv_meta, dict) else None
+    if not isinstance(distribution_row_count, int) or distribution_row_count <= 0:
+        failures.append("benchmark provenance csv.distribution_row_count is missing or zero")
+    if missing:
+        failures.append("missing distribution metrics: " + "; ".join(missing))
+    details = {
+        "expected_parameter_sets": sorted(expected_parameters),
+        "required_distribution_metrics": sorted(distribution_metrics),
+        "observed": {name: sorted(metrics) for name, metrics in sorted(observed.items())},
+        "provenance_distribution_row_count": distribution_row_count,
+    }
+    if failures:
+        return fail_claim(
+            spec,
+            reason="; ".join(failures),
             validators=validators,
             evidence_artifacts=artifacts,
             commands=commands,
@@ -1692,6 +1840,7 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     assurance_profile_result_arg = getattr(args, "assurance_profile_result", None)
     evidence_quality_result_arg = getattr(args, "evidence_quality_result", None)
     migration_readiness_arg = getattr(args, "migration_readiness", None)
+    ct_instruction_policy_result_arg = getattr(args, "ct_instruction_policy_result", None)
     cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
     attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
     policy_result = resolve_path(policy_result_arg, module_path) if policy_result_arg else None
@@ -1703,6 +1852,11 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     assurance_profile_result = resolve_path(assurance_profile_result_arg, module_path) if assurance_profile_result_arg else None
     evidence_quality_result = resolve_path(evidence_quality_result_arg, module_path) if evidence_quality_result_arg else None
     migration_readiness = resolve_path(migration_readiness_arg, module_path) if migration_readiness_arg else None
+    ct_instruction_policy_result = (
+        resolve_path(ct_instruction_policy_result_arg, module_path)
+        if ct_instruction_policy_result_arg
+        else None
+    )
     tag = args.tag
 
     evaluators: dict[str, Callable[[dict[str, Any]], dict[str, object]]] = {
@@ -1727,6 +1881,11 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             csv_path=benchmark_csv,
         ),
         "benchmark.provenance_binding": lambda spec: evaluate_benchmark_provenance(
+            spec,
+            csv_path=benchmark_csv,
+            provenance_path=benchmark_provenance,
+        ),
+        "benchmark.distribution_quality": lambda spec: evaluate_benchmark_distribution_quality(
             spec,
             csv_path=benchmark_csv,
             provenance_path=benchmark_provenance,
@@ -1792,6 +1951,13 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         ),
         "security.ct_smoke": lambda spec: evaluate_ct_smoke(
             spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.mlkem_decap_instruction_policy": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=ct_instruction_policy_result,
+            label="ML-KEM decapsulation instruction policy result",
+            required_keys=("schema_version", "passed", "target_symbol_count", "findings", "failures"),
+            success_field="passed",
         ),
         "supply_chain.cbom_crypto_inventory": lambda spec: evaluate_json_artifact_claim(
             spec,

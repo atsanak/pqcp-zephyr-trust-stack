@@ -117,7 +117,8 @@
         "release.version_consistency",
         "kat.offline_provenance",
         "acvp.negative_scenario_floor",
-        "supply_chain.crypto_asset_traceability"
+        "supply_chain.crypto_asset_traceability",
+        "security.mlkem_decap_instruction_policy"
       ],
       "allowed_asset_ids": [
         "crypto.mlkem_512",
@@ -146,12 +147,14 @@
         "release.transcript_binding",
         "benchmark.csv_validity",
         "benchmark.provenance_binding",
+        "benchmark.distribution_quality",
         "cost_of_assurance.guardrails",
         "supply_chain.cbom_crypto_inventory",
         "supply_chain.pqc_assurance_attestation",
         "supply_chain.crypto_asset_traceability",
         "supply_chain.evidence_graph_integrity",
-        "firmware.assurance_digest_manifest"
+        "firmware.assurance_digest_manifest",
+        "security.mlkem_decap_instruction_policy"
       ],
       "allowed_asset_ids": [
         "crypto.mlkem_512",
@@ -176,6 +179,7 @@
       "accepted_environments": ["nucleo_h743zi_build_only", "host_python"],
       "required_claim_ids": [
         "benchmark.csv_validity",
+        "benchmark.distribution_quality",
         "cost_of_assurance.guardrails",
         "firmware.assurance_digest_embeddable"
       ],
@@ -206,8 +210,10 @@
         "kat.mldsa_87",
         "benchmark.mlkem_throughput",
         "benchmark.mldsa_throughput",
+        "benchmark.distribution_quality",
         "supply_chain.cbom_crypto_inventory",
-        "supply_chain.crypto_asset_traceability"
+        "supply_chain.crypto_asset_traceability",
+        "security.mlkem_decap_instruction_policy"
       ],
       "allowed_asset_ids": [
         "crypto.mlkem_512",

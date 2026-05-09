@@ -80,6 +80,12 @@
       "required": true
     },
     {
+      "id": "benchmark.distribution_quality",
+      "category": "benchmark",
+      "claim": "The benchmark export includes additive min, median, p90, p99, max, MAD, and sample-count rows for every supported ML-KEM and ML-DSA parameter set without changing the legacy metric contract.",
+      "required": true
+    },
+    {
       "id": "cost_of_assurance.guardrails",
       "category": "cost_of_assurance",
       "claim": "Every configured cost-of-assurance guardrail metric was evaluated and passed.",
@@ -155,6 +161,12 @@
       "id": "security.ct_smoke",
       "category": "security",
       "claim": "ML-KEM-512/768/1024 decapsulation, each run 32 times against a valid and 32 times against a deliberately corrupted ciphertext, produces median cycle counts whose relative variance stays under a documented bound. This is a runtime smoke test, not a constant-time proof; the assurance documentation (docs/assurance-model.md, docs/publications.md) states the same caveats. Proven by tests/ztest_ct_smoke on qemu_x86_64.",
+      "required": true
+    },
+    {
+      "id": "security.mlkem_decap_instruction_policy",
+      "category": "security",
+      "claim": "The built ML-KEM decapsulation code path is scanned for variable-latency division instructions associated with KyberSlash-class regressions. This is static regression evidence, not a formal side-channel proof.",
       "required": true
     },
     {

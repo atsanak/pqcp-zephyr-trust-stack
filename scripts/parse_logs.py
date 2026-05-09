@@ -298,6 +298,24 @@ def run_self_test() -> None:
     assert metric["value"] == "67"
     assert metric["unit"] == "us"
 
+    distribution = parse_pqcp_metric_line(
+        "PQCP_METRIC,primitive,keygen,MLKEM,768,cycles_median,12345,cyc"
+    )
+    assert distribution is not None
+    assert distribution["metric"] == "cycles_median"
+    assert distribution["value"] == "12345"
+    assert distribution["unit"] == "cyc"
+
+    metadata = parse_pqcp_metric_line(
+        "PQCP_METRIC,build,metadata,compiler,0,id,clang-18,"
+    )
+    assert metadata is not None
+    assert metadata["component"] == "build"
+    assert metadata["operation"] == "metadata"
+    assert metadata["algorithm"] == "compiler"
+    assert metadata["metric"] == "id"
+    assert metadata["value"] == "clang-18"
+
     print("parse_logs.py self-test passed")
 
 

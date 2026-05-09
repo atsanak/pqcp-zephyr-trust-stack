@@ -218,7 +218,12 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             parameter_set="ML-KEM-512",
             standard="FIPS 203",
             production_status="supported",
-            claim_ids=["kat.mlkem_512", "benchmark.mlkem_throughput"],
+            claim_ids=[
+                "kat.mlkem_512",
+                "benchmark.mlkem_throughput",
+                "benchmark.distribution_quality",
+                "security.mlkem_decap_instruction_policy",
+            ],
             usage="key establishment",
         ),
         crypto_asset(
@@ -228,7 +233,13 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             parameter_set="ML-KEM-768",
             standard="FIPS 203",
             production_status="supported",
-            claim_ids=["kat.mlkem_768", "benchmark.mlkem_throughput", "security.ct_smoke"],
+            claim_ids=[
+                "kat.mlkem_768",
+                "benchmark.mlkem_throughput",
+                "benchmark.distribution_quality",
+                "security.ct_smoke",
+                "security.mlkem_decap_instruction_policy",
+            ],
             usage="key establishment and TLS self-test",
         ),
         crypto_asset(
@@ -238,7 +249,12 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             parameter_set="ML-KEM-1024",
             standard="FIPS 203",
             production_status="supported",
-            claim_ids=["kat.mlkem_1024", "benchmark.mlkem_throughput"],
+            claim_ids=[
+                "kat.mlkem_1024",
+                "benchmark.mlkem_throughput",
+                "benchmark.distribution_quality",
+                "security.mlkem_decap_instruction_policy",
+            ],
             usage="key establishment",
         ),
         crypto_asset(
@@ -248,7 +264,7 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             parameter_set="ML-DSA-44",
             standard="FIPS 204",
             production_status="supported",
-            claim_ids=["kat.mldsa_44", "benchmark.mldsa_throughput"],
+            claim_ids=["kat.mldsa_44", "benchmark.mldsa_throughput", "benchmark.distribution_quality"],
             usage="digital signature",
         ),
         crypto_asset(
@@ -258,7 +274,7 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             parameter_set="ML-DSA-65",
             standard="FIPS 204",
             production_status="supported",
-            claim_ids=["kat.mldsa_65", "benchmark.mldsa_throughput"],
+            claim_ids=["kat.mldsa_65", "benchmark.mldsa_throughput", "benchmark.distribution_quality"],
             usage="digital signature and TLS self-test",
         ),
         crypto_asset(
@@ -268,7 +284,7 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             parameter_set="ML-DSA-87",
             standard="FIPS 204",
             production_status="supported",
-            claim_ids=["kat.mldsa_87", "benchmark.mldsa_throughput"],
+            claim_ids=["kat.mldsa_87", "benchmark.mldsa_throughput", "benchmark.distribution_quality"],
             usage="digital signature",
         ),
         crypto_asset(

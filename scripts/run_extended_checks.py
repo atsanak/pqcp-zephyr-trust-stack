@@ -76,6 +76,7 @@ README_MANIFEST_REQUIRED_SNIPPETS = [
 DEFAULT_COST_OF_ASSURANCE_REGRESSION_FILE = Path(
     "scripts/qemu_cost_of_assurance_regression.json"
 )
+DEFAULT_COST_OF_ASSURANCE_MATRIX_FILE = Path("scripts/cost_of_assurance_matrix.json")
 
 
 def parse_args() -> argparse.Namespace:
@@ -479,6 +480,147 @@ def available_metric_columns(row: dict[str, str]) -> str:
     return ", ".join(sorted(row.keys()))
 
 
+def extra_kconfig_declares_level(
+    entry: dict[str, object],
+    *,
+    algorithm: object,
+    level: object,
+) -> bool:
+    algorithm_name = str(algorithm).upper()
+    level_name = str(level)
+    extra_kconfig = [str(item) for item in entry.get("extra_kconfig", [])]
+
+    if algorithm_name == "MLKEM":
+        prefix = "CONFIG_PQCP_MLKEM_LEVEL_"
+        default_level = "768"
+    elif algorithm_name == "MLDSA":
+        prefix = "CONFIG_PQCP_MLDSA_LEVEL_"
+        default_level = "65"
+    else:
+        return True
+
+    expected = f"{prefix}{level_name}=y"
+    if expected in extra_kconfig:
+        return True
+
+    explicit_level_selectors = [
+        item for item in extra_kconfig if item.startswith(prefix) and item.endswith("=y")
+    ]
+    if explicit_level_selectors:
+        return False
+
+    return level_name == default_level
+
+
+def matrix_entry_matches_selector(
+    entry: dict[str, object],
+    selector: dict[str, object],
+) -> bool:
+    for key in ("board", "profile", "sample", "implementation", "backend"):
+        if key in selector and str(entry.get(key, "")) != str(selector[key]):
+            return False
+
+    if "algorithm" in selector and "level" in selector:
+        if not extra_kconfig_declares_level(
+            entry,
+            algorithm=selector["algorithm"],
+            level=selector["level"],
+        ):
+            return False
+
+    if "key_exchange_algorithm" in selector and "key_exchange_level" in selector:
+        if not extra_kconfig_declares_level(
+            entry,
+            algorithm=selector["key_exchange_algorithm"],
+            level=selector["key_exchange_level"],
+        ):
+            return False
+
+    if "auth_algorithm" in selector and "auth_level" in selector:
+        if not extra_kconfig_declares_level(
+            entry,
+            algorithm=selector["auth_algorithm"],
+            level=selector["auth_level"],
+        ):
+            return False
+
+    return True
+
+
+def cost_comparison_selectors(item: dict[str, object], role: str) -> dict[str, object]:
+    selectors = dict(item.get(role, {}))
+    shared_selectors = dict(item.get("selectors", {}))
+    for key in ("board", "profile", "sample", "algorithm", "level"):
+        value = item.get(key)
+        if value is not None:
+            shared_selectors[key] = value
+    selectors.update(shared_selectors)
+    return selectors
+
+
+def write_cost_of_assurance_smoke_matrix(
+    *,
+    module_path: Path,
+    regression_file: Path,
+    output_root: Path,
+) -> Path:
+    regression_path = (
+        regression_file.resolve()
+        if regression_file.is_absolute()
+        else (module_path / regression_file).resolve()
+    )
+    matrix_path = (module_path / DEFAULT_COST_OF_ASSURANCE_MATRIX_FILE).resolve()
+    regression_config = load_json(regression_path)
+    matrix_config = load_json(matrix_path)
+
+    comparisons = regression_config.get("comparisons", [])
+    source_runs = matrix_config.get("runs", [])
+    if not isinstance(comparisons, list) or not comparisons:
+        raise RuntimeError(f"{regression_path} has no cost-of-assurance comparisons")
+    if not isinstance(source_runs, list) or not source_runs:
+        raise RuntimeError(f"{matrix_path} has no cost-of-assurance runs")
+
+    selected_runs: list[dict[str, object]] = []
+    seen: set[str] = set()
+    missing: list[str] = []
+
+    for item in comparisons:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "unnamed-comparison"))
+        for role in ("candidate", "baseline"):
+            selector = cost_comparison_selectors(item, role)
+            matches = [
+                entry
+                for entry in source_runs
+                if isinstance(entry, dict) and matrix_entry_matches_selector(entry, selector)
+            ]
+            if not matches:
+                missing.append(f"{name} {role}: {selector}")
+                continue
+            for entry in matches:
+                dedupe_key = json.dumps(entry, sort_keys=True)
+                if dedupe_key not in seen:
+                    seen.add(dedupe_key)
+                    selected_runs.append(entry)
+
+    if missing:
+        joined = "; ".join(missing)
+        raise RuntimeError(f"missing cost-of-assurance matrix rows: {joined}")
+
+    output_root.mkdir(parents=True, exist_ok=True)
+    smoke_matrix_path = output_root / "cost_of_assurance_smoke_matrix.json"
+    smoke_matrix_path.write_text(
+        json.dumps({"runs": selected_runs}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"[cost] Selected {len(selected_runs)} regression matrix rows: "
+        f"{smoke_matrix_path}"
+    )
+    return smoke_matrix_path
+
+
 def evaluate_cost_of_assurance_regressions(
     *,
     module_path: Path,
@@ -678,9 +820,6 @@ def evaluate_cost_of_assurance_regressions(
                     ]
                 )
                 if ratio > max_ratio:
-                    print(
-                        f"  - {metric_name}: " + ", ".join(status_bits)
-                    )
                     failures.append(
                         f"{name} metric {metric_name}: ratio "
                         f"{ratio:.2f} > {max_ratio:.2f}"
@@ -697,9 +836,6 @@ def evaluate_cost_of_assurance_regressions(
                     f"absolute_limit={max_candidate:.2f}"
                 )
                 if candidate_value > max_candidate:
-                    print(
-                        f"  - {metric_name}: " + ", ".join(status_bits)
-                    )
                     failures.append(
                         f"{name} metric {metric_name}: candidate "
                         f"{candidate_value:.2f} > absolute limit {max_candidate:.2f}"
@@ -781,21 +917,18 @@ def run_cost_of_assurance_smoke(
     print("[cost] Implementations/backends:")
     print("  - pqcp / auto")
     print("  - baseline / clean")
+    smoke_matrix = write_cost_of_assurance_smoke_matrix(
+        module_path=module_path,
+        regression_file=regression_file,
+        output_root=output_root,
+    )
 
     run_result = run_command(
         [
             sys.executable,
             str(benchmark_script),
-            "--cost-of-assurance-matrix",
-            "--board",
-            "qemu_x86_64",
-            "--samples",
-            "pqcp_basic_kem",
-            "pqcp_basic_sig",
-            "pqcp_bench_protocol",
-            "--backend-policies",
-            "auto",
-            "clean",
+            "--config",
+            str(smoke_matrix),
             "--output",
             str(output_root),
             "--west-root",

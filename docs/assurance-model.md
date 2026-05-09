@@ -69,6 +69,8 @@ pack later without rerunning Zephyr or QEMU.
 | `scripts/verify_pqc_asset_trace_map.py` | Verifies asset-to-source/Kconfig/claim/test/marker/CBOM traceability. |
 | `scripts/generate_pqc_evidence_graph.py` | Emits JSON and Markdown graph views of the trace map against the ledger and CBOM. |
 | `scripts/export_firmware_assurance_digest.py` | Converts `pqc_assurance_digest.json` into a generated C header for firmware binding. |
+| `scripts/verify_ct_instruction_policy.py` | Scans ML-KEM decapsulation-related disassembly for variable-latency division instructions. |
+| `scripts/run_hardware_benchmarks.py` | Optional local helper for QEMU, UART transcript, and external reference benchmark capture. |
 
 ## Ledger vs Passport
 
@@ -91,6 +93,7 @@ ledger. It consists of:
 - `pqc_assurance_profile_result.json`
 - `pqc_evidence_quality_result.json`
 - `pqc_migration_readiness.json` / `pqc_migration_readiness.md`
+- `ct_instruction_policy_result.json`
 - `pqc_claim_closure_result.json`
 - `generated/pqcp_assurance_digest_generated.h`
 - transcript, benchmark, cost-of-assurance, MCU footprint, and release-bundle
@@ -150,8 +153,15 @@ PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=<C> \
     median_invalid=<C> delta=<C> relative_pct=<P> bound_pct=<B>
 ```
 
+The same transcript also records a Welch-style smoke statistic:
+
+```
+PQCP_CT_TTEST alg=MLKEM-768 iters=32 mean_valid=<C> \
+    mean_invalid=<C> t2_x1000=<T>
+```
+
 The `security.ct_smoke` assurance evaluator re-parses that line and
-records the medians, delta, relative variance, and the bound in the
+records the medians, delta, relative variance, bound, and t-test summary in the
 ledger details + HTML report.
 
 **What this proves:** that the public ML-KEM decapsulation API has a
@@ -175,6 +185,25 @@ The claim is required because the stable marker line is a useful
 regression target; the smoke nature of the test is itself a stated
 assurance property — visibly admitting the limit is part of the
 credibility story.
+
+`security.mlkem_decap_instruction_policy` is a separate build-only smoke claim.
+It disassembles the CT-smoke ELF and scans ML-KEM decapsulation-related symbols
+for variable-latency division mnemonics (`div`, `idiv`, `udiv`, `sdiv`). The
+default policy excludes ztest/test-harness symbols because the measurement code
+itself may use division for reporting statistics.
+
+## Benchmark distribution evidence
+
+`benchmark.distribution_quality` requires exported benchmark evidence to include
+additive distribution rows such as `cycles_min`, `cycles_median`,
+`cycles_p90`, `cycles_p99`, `cycles_max`, `cycles_mad`, and `sample_count`.
+These rows do not replace the original throughput rows and do not change the
+`PQCP_METRIC` field order. They make release packs easier to compare because a
+reviewer can separate one-off timing spikes from the typical and tail behavior
+of a benchmark run.
+
+For local interpretation guidance, see
+[`performance-methodology.md`](performance-methodology.md).
 
 ## Schema versioning and the compatibility shim
 
