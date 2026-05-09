@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "description": "Compatibility floor for ACVP negative scenarios. Future patches may add scenarios, but must not remove, rename, or weaken these cases.",
+  "required_cases": [
+    {"name": "INVALID_SEED_HEX", "response": "ERROR:INVALID_HEX"},
+    {"name": "TRUNCATED_KEYGEN", "response": "ERROR:MISSING_ARGS"},
+    {"name": "UNSUPPORTED_MLKEM_LEVEL", "response": "ERROR:INVALID_LEVEL"},
+    {"name": "SERIAL_GARBAGE_PREFIX", "response": "ERROR:INVALID_CMD"},
+    {
+      "name": "timeout_partial_frame",
+      "response": "ERROR:TIMEOUT",
+      "append_newline": false
+    },
+    {"name": "INVALID_MLKEM_ENCAPS_HEX", "response": "ERROR:INVALID_HEX"},
+    {"name": "TRUNCATED_MLKEM_ENCAPS_PAYLOAD", "response": "ERROR:WRONG_SIZE"},
+    {"name": "OVERSIZE_MLKEM_ENCAPS_PAYLOAD", "response": "ERROR:WRONG_SIZE"},
+    {"name": "TRUNCATED_MLKEM_DECAPS_PAYLOAD", "response": "ERROR:WRONG_SIZE"},
+    {"name": "TOO_MANY_VERIFY_FIELDS", "response": "ERROR:INVALID_CMD"},
+    {"name": "STRICT_HELP_FORM", "response": "ERROR:INVALID_CMD"},
+    {"name": "WRONG_SIZE_SIGN", "response": "ERROR:WRONG_SIZE"},
+    {"name": "INVALID_SIGN_HEX", "response": "ERROR:INVALID_HEX"},
+    {"name": "TRUNCATED_VERIFY_PAYLOAD", "response": "ERROR:WRONG_SIZE"}
+  ],
+  "required_categories": {
+    "mlkem": [
+      "UNSUPPORTED_MLKEM_LEVEL",
+      "INVALID_MLKEM_ENCAPS_HEX",
+      "TRUNCATED_MLKEM_ENCAPS_PAYLOAD",
+      "OVERSIZE_MLKEM_ENCAPS_PAYLOAD",
+      "TRUNCATED_MLKEM_DECAPS_PAYLOAD"
+    ],
+    "mldsa": [
+      "TOO_MANY_VERIFY_FIELDS",
+      "WRONG_SIZE_SIGN",
+      "INVALID_SIGN_HEX",
+      "TRUNCATED_VERIFY_PAYLOAD"
+    ],
+    "serial": [
+      "SERIAL_GARBAGE_PREFIX",
+      "timeout_partial_frame"
+    ]
+  }
+}

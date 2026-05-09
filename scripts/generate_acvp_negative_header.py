@@ -70,7 +70,7 @@ def collect_cases(scenarios: dict) -> list[dict]:
         for case in scenario.get("expected_errors", []) or []:
             if not isinstance(case, dict):
                 continue
-            command = case.get("command")
+            command = expand_command(case)
             response = case.get("response")
             name = case.get("name")
             if not isinstance(command, str) or not isinstance(response, str):
@@ -90,6 +90,28 @@ def collect_cases(scenarios: dict) -> list[dict]:
                 "expected_response": response,
             })
     return cases
+
+
+def expand_command(case: dict) -> str | None:
+    command = case.get("command")
+    if not isinstance(command, str):
+        return None
+    repeat = case.get("repeat_hex")
+    if repeat is None:
+        return command
+    if not isinstance(repeat, dict):
+        return command
+    byte = repeat.get("byte", "00")
+    count = repeat.get("count", 0)
+    if not isinstance(byte, str) or len(byte) != 2:
+        return command
+    if not isinstance(count, int) or count < 0:
+        return command
+    try:
+        int(byte, 16)
+    except ValueError:
+        return command
+    return command + (byte.lower() * count)
 
 
 def render(cases: list[dict]) -> str:
