@@ -286,6 +286,10 @@ def write_manifest(
         "pqc_attestation.intoto.json",
         "pqc_policy_result.json",
         "pqc_assurance_digest.json",
+        "pqc_assurance_profile_result.json",
+        "pqc_evidence_quality_result.json",
+        "pqc_migration_readiness.json",
+        "pqc_migration_readiness.md",
     ):
         candidate = passport_root / name
         if candidate.exists() and candidate.is_file():

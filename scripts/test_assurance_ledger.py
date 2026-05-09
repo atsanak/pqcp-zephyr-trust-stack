@@ -1073,8 +1073,12 @@ class AssuranceLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             body = (
+                "PQCP_CT_SMOKE alg=MLKEM-512 iters=32 median_valid=25100 "
+                "median_invalid=25300 delta=200 relative_pct=0 bound_pct=50\n"
                 "PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=35100 "
                 "median_invalid=35500 delta=400 relative_pct=1 bound_pct=50\n"
+                "PQCP_CT_SMOKE alg=MLKEM-1024 iters=32 median_valid=55100 "
+                "median_invalid=55800 delta=700 relative_pct=1 bound_pct=50\n"
                 "TESTSUITE pqcp_ct_smoke succeeded\n"
                 "PROJECT EXECUTION SUCCESSFUL\n"
             )
@@ -1082,16 +1086,21 @@ class AssuranceLedgerTests(unittest.TestCase):
             spec = {"id": "security.ct_smoke", "category": "security", "claim": "x", "required": True}
             result = ledger.evaluate_ct_smoke(spec, transcript_manifest=manifest)
             self.assertEqual(result["status"], "pass", result.get("failure_reason"))
-            self.assertEqual(result["details"]["relative_variance_pct"], 1)
-            self.assertEqual(result["details"]["smoke_bound_pct"], 50)
+            self.assertEqual(result["details"]["algorithms"], ["MLKEM-1024", "MLKEM-512", "MLKEM-768"])
+            self.assertEqual(result["details"]["measurements"][1]["relative_variance_pct"], 1)
+            self.assertEqual(result["details"]["measurements"][1]["smoke_bound_pct"], 50)
             self.assertTrue(result["details"]["is_smoke_test_only"])
 
     def test_ct_smoke_fails_when_variance_exceeds_bound(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             body = (
+                "PQCP_CT_SMOKE alg=MLKEM-512 iters=32 median_valid=25100 "
+                "median_invalid=25300 delta=200 relative_pct=0 bound_pct=50\n"
                 "PQCP_CT_SMOKE alg=MLKEM-768 iters=32 median_valid=35100 "
                 "median_invalid=70200 delta=35100 relative_pct=100 bound_pct=50\n"
+                "PQCP_CT_SMOKE alg=MLKEM-1024 iters=32 median_valid=55100 "
+                "median_invalid=55800 delta=700 relative_pct=1 bound_pct=50\n"
                 "TESTSUITE pqcp_ct_smoke succeeded\n"
                 "PROJECT EXECUTION SUCCESSFUL\n"
             )

@@ -280,6 +280,10 @@ def verify_passport_artifacts(
     asset_trace_result_path = output_root / "pqc_asset_trace_result.json"
     evidence_graph_json = output_root / "pqc_evidence_graph.json"
     evidence_graph_md = output_root / "pqc_evidence_graph.md"
+    assurance_profile_result = output_root / "pqc_assurance_profile_result.json"
+    evidence_quality_result = output_root / "pqc_evidence_quality_result.json"
+    migration_readiness_json = output_root / "pqc_migration_readiness.json"
+    migration_readiness_md = output_root / "pqc_migration_readiness.md"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     if not policy_path.exists():
@@ -296,6 +300,11 @@ def verify_passport_artifacts(
         require_file(evidence_graph_json, "PQC evidence graph JSON", failures)
         require_file(evidence_graph_md, "PQC evidence graph Markdown", failures)
         require_file(firmware_digest_header, "firmware assurance digest header", failures)
+    if (ledger.get("schema_version") or 0) >= 5:
+        require_file(assurance_profile_result, "PQC assurance profile result", failures)
+        require_file(evidence_quality_result, "PQC evidence quality result", failures)
+        require_file(migration_readiness_json, "PQC migration readiness JSON", failures)
+        require_file(migration_readiness_md, "PQC migration readiness Markdown", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -311,6 +320,10 @@ def verify_passport_artifacts(
         evidence_graph_path=evidence_graph_json if evidence_graph_json.exists() else None,
         assurance_digest_path=digest_path,
         firmware_digest_header_path=firmware_digest_header if firmware_digest_header.exists() else None,
+        assurance_profile_result_path=assurance_profile_result if assurance_profile_result.exists() else None,
+        evidence_quality_result_path=evidence_quality_result if evidence_quality_result.exists() else None,
+        migration_readiness_json_path=migration_readiness_json if migration_readiness_json.exists() else None,
+        migration_readiness_md_path=migration_readiness_md if migration_readiness_md.exists() else None,
     )
     if not policy_replay.get("passed"):
         for failure in policy_replay.get("failures", []):
@@ -361,6 +374,29 @@ def verify_passport_artifacts(
                 if macro not in header:
                     failures.append(f"firmware assurance digest header missing {macro}")
 
+    if (ledger.get("schema_version") or 0) >= 5:
+        profile = load_json(assurance_profile_result, "PQC assurance profile result", failures)
+        if profile and profile.get("passed") is not True:
+            failures.append("PQC assurance profile result did not pass")
+        quality = load_json(evidence_quality_result, "PQC evidence quality result", failures)
+        if quality and quality.get("passed") is not True:
+            failures.append("PQC evidence quality result did not pass")
+        readiness = load_json(migration_readiness_json, "PQC migration readiness", failures)
+        if readiness and readiness.get("passed") is not True:
+            failures.append("PQC migration readiness result did not pass")
+        if readiness and migration_readiness_md.exists():
+            body = migration_readiness_md.read_text(encoding="utf-8", errors="replace")
+            missing_assets = [
+                str(asset.get("name"))
+                for asset in readiness.get("assets") or []
+                if isinstance(asset, dict) and str(asset.get("name")) not in body
+            ]
+            if missing_assets:
+                failures.append(
+                    "PQC migration readiness Markdown missing asset(s): "
+                    + ", ".join(sorted(missing_assets))
+                )
+
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:
         if digest.get("schema_version") != 1:
@@ -378,6 +414,15 @@ def verify_passport_artifacts(
                 for required_name in (
                     "pqc_evidence_graph.json",
                     "pqc_asset_trace_result.json",
+                ):
+                    if required_name not in seen_paths:
+                        failures.append(f"PQC assurance digest missing artifact: {required_name}")
+            if (ledger.get("schema_version") or 0) >= 5:
+                for required_name in (
+                    "pqc_assurance_profile_result.json",
+                    "pqc_evidence_quality_result.json",
+                    "pqc_migration_readiness.json",
+                    "pqc_migration_readiness.md",
                 ):
                     if required_name not in seen_paths:
                         failures.append(f"PQC assurance digest missing artifact: {required_name}")

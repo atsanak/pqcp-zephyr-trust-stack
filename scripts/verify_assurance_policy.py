@@ -34,6 +34,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence-graph", type=Path)
     parser.add_argument("--assurance-digest", type=Path)
     parser.add_argument("--firmware-digest-header", type=Path)
+    parser.add_argument("--assurance-profile-result", type=Path)
+    parser.add_argument("--evidence-quality-result", type=Path)
+    parser.add_argument("--migration-readiness-json", type=Path)
+    parser.add_argument("--migration-readiness-md", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -152,6 +156,28 @@ def check_cbom(
                 f"{name} must be marked pqcp:production_status=test_only, found {status!r}"
             )
 
+    required_profile_props = policy.get("required_cbom_profile_properties") or []
+    if required_profile_props:
+        for name in policy.get("required_cbom_components") or []:
+            component = by_name.get(name)
+            if component is None:
+                continue
+            if component.get("type") != "cryptographic-asset":
+                continue
+            props = properties_map(component)
+            for prop_name in required_profile_props:
+                ok = bool(props.get(prop_name))
+                checks.append(
+                    {
+                        "check": "cbom_profile_property",
+                        "name": name,
+                        "property": prop_name,
+                        "passed": ok,
+                    }
+                )
+                if not ok:
+                    failures.append(f"required CBOM component {name} missing {prop_name}")
+
 
 def check_consistency(
     *,
@@ -266,6 +292,15 @@ def default_passport_v2_paths(base: Path) -> dict[str, Path]:
     }
 
 
+def default_passport_v3_paths(base: Path) -> dict[str, Path]:
+    return {
+        "pqc_assurance_profile_result.json": base / "pqc_assurance_profile_result.json",
+        "pqc_evidence_quality_result.json": base / "pqc_evidence_quality_result.json",
+        "pqc_migration_readiness.json": base / "pqc_migration_readiness.json",
+        "pqc_migration_readiness.md": base / "pqc_migration_readiness.md",
+    }
+
+
 def check_passport_v2_artifacts(
     *,
     policy: dict[str, Any],
@@ -337,6 +372,70 @@ def check_passport_v2_artifacts(
             failures.append("generated firmware digest header is missing required macros")
 
 
+def check_passport_v3_artifacts(
+    *,
+    policy: dict[str, Any],
+    base: Path,
+    assurance_profile_result_path: Path | None,
+    evidence_quality_result_path: Path | None,
+    migration_readiness_json_path: Path | None,
+    migration_readiness_md_path: Path | None,
+    failures: list[str],
+    checks: list[dict[str, Any]],
+) -> None:
+    defaults = default_passport_v3_paths(base)
+    explicit = {
+        "pqc_assurance_profile_result.json": assurance_profile_result_path,
+        "pqc_evidence_quality_result.json": evidence_quality_result_path,
+        "pqc_migration_readiness.json": migration_readiness_json_path,
+        "pqc_migration_readiness.md": migration_readiness_md_path,
+    }
+    for rel_path in policy.get("required_passport_v3_artifacts") or []:
+        path = explicit.get(rel_path) or defaults.get(rel_path) or (base / rel_path)
+        ok = path.exists() and path.is_file() and path.stat().st_size > 0
+        checks.append({"check": "passport_v3_artifact", "path": rel_path, "passed": ok})
+        if not ok:
+            failures.append(f"required Passport v3 artifact missing or empty: {rel_path}")
+
+    profile_path = assurance_profile_result_path or defaults["pqc_assurance_profile_result.json"]
+    profile = load_json(profile_path, "PQC assurance profile result", failures)
+    if profile:
+        ok = profile.get("schema_version") == 1 and profile.get("passed") is True
+        checks.append({"check": "assurance_profile_result", "passed": ok})
+        if not ok:
+            failures.append("PQC assurance profile result did not pass")
+
+    quality_path = evidence_quality_result_path or defaults["pqc_evidence_quality_result.json"]
+    quality = load_json(quality_path, "PQC evidence quality result", failures)
+    if quality:
+        ok = quality.get("schema_version") == 1 and quality.get("passed") is True
+        checks.append({"check": "evidence_quality_result", "passed": ok})
+        if not ok:
+            failures.append("PQC evidence quality result did not pass")
+
+    readiness_path = migration_readiness_json_path or defaults["pqc_migration_readiness.json"]
+    readiness = load_json(readiness_path, "PQC migration readiness", failures)
+    if readiness:
+        ok = readiness.get("schema_version") == 1 and readiness.get("passed") is True
+        checks.append({"check": "migration_readiness", "passed": ok})
+        if not ok:
+            failures.append("PQC migration readiness report did not pass")
+
+    readiness_md = migration_readiness_md_path or defaults["pqc_migration_readiness.md"]
+    if readiness_md.exists() and readiness_md.is_file() and readiness:
+        body = readiness_md.read_text(encoding="utf-8", errors="replace")
+        missing_assets = [
+            str(asset.get("name"))
+            for asset in readiness.get("assets") or []
+            if isinstance(asset, dict) and str(asset.get("name")) not in body
+        ]
+        if missing_assets:
+            failures.append(
+                "PQC migration readiness Markdown missing asset(s): "
+                + ", ".join(sorted(missing_assets))
+            )
+
+
 def verify_policy(
     *,
     policy_path: Path,
@@ -348,6 +447,10 @@ def verify_policy(
     evidence_graph_path: Path | None = None,
     assurance_digest_path: Path | None = None,
     firmware_digest_header_path: Path | None = None,
+    assurance_profile_result_path: Path | None = None,
+    evidence_quality_result_path: Path | None = None,
+    migration_readiness_json_path: Path | None = None,
+    migration_readiness_md_path: Path | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     checks: list[dict[str, Any]] = []
@@ -363,7 +466,7 @@ def verify_policy(
     if not policy or not ledger or not cbom or not attestation:
         return {"schema_version": 1, "passed": False, "failures": failures, "checks": checks}
 
-    if policy.get("schema_version") not in (1, 2):
+    if policy.get("schema_version") not in (1, 2, 3):
         failures.append(f"unsupported policy schema_version={policy.get('schema_version')!r}")
     check_required_claims(policy=policy, ledger=ledger, failures=failures, checks=checks)
     check_cbom(policy=policy, cbom=cbom, failures=failures, checks=checks)
@@ -384,6 +487,14 @@ def verify_policy(
     for name in policy.get("required_attestation_subjects") or []:
         if name == "release-manifest.json" and release_manifest_path is not None:
             known_paths[name] = release_manifest_path
+        elif name == "pqc_assurance_profile_result.json" and assurance_profile_result_path is not None:
+            known_paths[name] = assurance_profile_result_path
+        elif name == "pqc_evidence_quality_result.json" and evidence_quality_result_path is not None:
+            known_paths[name] = evidence_quality_result_path
+        elif name == "pqc_migration_readiness.json" and migration_readiness_json_path is not None:
+            known_paths[name] = migration_readiness_json_path
+        elif name == "pqc_migration_readiness.md" and migration_readiness_md_path is not None:
+            known_paths[name] = migration_readiness_md_path
         else:
             candidate = base / name
             if candidate.exists():
@@ -395,7 +506,7 @@ def verify_policy(
         failures=failures,
         checks=checks,
     )
-    if policy.get("schema_version") == 2:
+    if policy.get("schema_version") in (2, 3):
         check_passport_v2_artifacts(
             policy=policy,
             base=ledger_path.parent,
@@ -406,8 +517,19 @@ def verify_policy(
             failures=failures,
             checks=checks,
         )
+    if policy.get("schema_version") == 3:
+        check_passport_v3_artifacts(
+            policy=policy,
+            base=ledger_path.parent,
+            assurance_profile_result_path=assurance_profile_result_path,
+            evidence_quality_result_path=evidence_quality_result_path,
+            migration_readiness_json_path=migration_readiness_json_path,
+            migration_readiness_md_path=migration_readiness_md_path,
+            failures=failures,
+            checks=checks,
+        )
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "policy": str(policy_path),
         "passed": not failures,
@@ -428,6 +550,10 @@ def main() -> int:
         evidence_graph_path=args.evidence_graph.resolve() if args.evidence_graph else None,
         assurance_digest_path=args.assurance_digest.resolve() if args.assurance_digest else None,
         firmware_digest_header_path=args.firmware_digest_header.resolve() if args.firmware_digest_header else None,
+        assurance_profile_result_path=args.assurance_profile_result.resolve() if args.assurance_profile_result else None,
+        evidence_quality_result_path=args.evidence_quality_result.resolve() if args.evidence_quality_result else None,
+        migration_readiness_json_path=args.migration_readiness_json.resolve() if args.migration_readiness_json else None,
+        migration_readiness_md_path=args.migration_readiness_md.resolve() if args.migration_readiness_md else None,
     )
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.output.resolve().write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

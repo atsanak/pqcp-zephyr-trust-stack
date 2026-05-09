@@ -389,6 +389,52 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             "# graph\n\n- `release.version_consistency`\n",
             encoding="utf-8",
         )
+        (output / "pqc_assurance_profile_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"profiles": 4, "assets": 13},
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_evidence_quality_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"ledger_claims": 38, "quality_entries": 38},
+                    "failures": [],
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_migration_readiness.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"asset_count": 1, "blocked_condition_count": 0},
+                    "blocked_conditions": [],
+                    "assets": [{"name": "ML-KEM-768"}],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_migration_readiness.md").write_text(
+            "# PQC Migration Readiness\n\nML-KEM-768\n",
+            encoding="utf-8",
+        )
         attestation_args = Namespace(
             module_path=module,
             ledger=ledger_path,
@@ -402,6 +448,10 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             cost_of_assurance_evidence=output / "cost_of_assurance_evidence.json",
             evidence_graph=output / "pqc_evidence_graph.json",
             asset_trace_result=output / "pqc_asset_trace_result.json",
+            assurance_profile_result=output / "pqc_assurance_profile_result.json",
+            evidence_quality_result=output / "pqc_evidence_quality_result.json",
+            migration_readiness_json=output / "pqc_migration_readiness.json",
+            migration_readiness_md=output / "pqc_migration_readiness.md",
             output=attestation_path,
             digest_output=digest_path,
         )
@@ -416,6 +466,10 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 output / "benchmark_provenance.json",
                 output / "pqc_evidence_graph.json",
                 output / "pqc_asset_trace_result.json",
+                output / "pqc_assurance_profile_result.json",
+                output / "pqc_evidence_quality_result.json",
+                output / "pqc_migration_readiness.json",
+                output / "pqc_migration_readiness.md",
                 manifest,
             ],
             attestation_path=attestation_path,
@@ -432,6 +486,10 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             evidence_graph_path=output / "pqc_evidence_graph.json",
             assurance_digest_path=digest_path,
             firmware_digest_header_path=generated,
+            assurance_profile_result_path=output / "pqc_assurance_profile_result.json",
+            evidence_quality_result_path=output / "pqc_evidence_quality_result.json",
+            migration_readiness_json_path=output / "pqc_migration_readiness.json",
+            migration_readiness_md_path=output / "pqc_migration_readiness.md",
         )
         (output / "pqc_policy_result.json").write_text(
             json.dumps(policy, indent=2) + "\n",

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "name": "PQCP partner-review default assurance policy",
   "required_claim_ids": [
     "release.version_consistency",
@@ -32,16 +32,28 @@
     "supply_chain.pqc_assurance_attestation",
     "supply_chain.crypto_asset_traceability",
     "supply_chain.evidence_graph_integrity",
+    "supply_chain.assurance_profile_policy",
+    "supply_chain.evidence_quality_index",
+    "crypto_agility.profile_separation",
+    "release.migration_readiness",
+    "security.production_rng_policy",
+    "release.policy_pass",
     "firmware.assurance_digest_manifest",
     "firmware.assurance_digest_embeddable"
   ],
   "allow_not_applicable_claim_ids": [
     "security.asan_clean",
     "security.ubsan_clean",
+    "release.policy_pass",
     "supply_chain.cbom_crypto_inventory",
     "supply_chain.pqc_assurance_attestation",
     "supply_chain.crypto_asset_traceability",
     "supply_chain.evidence_graph_integrity",
+    "supply_chain.assurance_profile_policy",
+    "supply_chain.evidence_quality_index",
+    "crypto_agility.profile_separation",
+    "release.migration_readiness",
+    "security.production_rng_policy",
     "firmware.assurance_digest_manifest",
     "firmware.assurance_digest_embeddable"
   ],
@@ -70,7 +82,11 @@
     "release-manifest.json",
     "west.yml",
     "CMakeLists.txt",
-    "pqc_evidence_graph.json"
+    "pqc_evidence_graph.json",
+    "pqc_assurance_profile_result.json",
+    "pqc_evidence_quality_result.json",
+    "pqc_migration_readiness.json",
+    "pqc_migration_readiness.md"
   ],
   "required_passport_v2_artifacts": [
     "acvp_negative_scenario_floor_result.json",
@@ -79,5 +95,18 @@
     "pqc_evidence_graph.md",
     "pqc_assurance_digest.json",
     "generated/pqcp_assurance_digest_generated.h"
+  ],
+  "required_passport_v3_artifacts": [
+    "pqc_assurance_profile_result.json",
+    "pqc_evidence_quality_result.json",
+    "pqc_migration_readiness.json",
+    "pqc_migration_readiness.md"
+  ],
+  "required_cbom_profile_properties": [
+    "pqcp:trace_asset_id",
+    "pqcp:lifecycle_status",
+    "pqcp:production_allowed",
+    "pqcp:profile_support",
+    "pqcp:validation_scope"
   ]
 }

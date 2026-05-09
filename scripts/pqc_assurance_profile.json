@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "name": "PQCP assurance profile policy",
+  "description": "Profile-specific policy for production allowance, test-only assets, and release evidence acceptance.",
+  "asset_lifecycle": [
+    {
+      "asset_id": "crypto.mlkem_512",
+      "cbom_component": "ML-KEM-512",
+      "lifecycle_status": "supported",
+      "production_allowed": true,
+      "profile_support": ["gateway", "native_lab", "qemu_release"],
+      "validation_scope": ["kat", "benchmark", "acvp"]
+    },
+    {
+      "asset_id": "crypto.mlkem_768",
+      "cbom_component": "ML-KEM-768",
+      "lifecycle_status": "default",
+      "production_allowed": true,
+      "profile_support": ["gateway", "mcu_minimal", "native_lab", "qemu_release"],
+      "validation_scope": ["kat", "benchmark", "acvp", "tls_selftest", "ct_smoke"]
+    },
+    {
+      "asset_id": "crypto.mlkem_1024",
+      "cbom_component": "ML-KEM-1024",
+      "lifecycle_status": "supported",
+      "production_allowed": true,
+      "profile_support": ["gateway", "native_lab", "qemu_release"],
+      "validation_scope": ["kat", "benchmark", "acvp"]
+    },
+    {
+      "asset_id": "crypto.mldsa_44",
+      "cbom_component": "ML-DSA-44",
+      "lifecycle_status": "supported",
+      "production_allowed": true,
+      "profile_support": ["gateway", "native_lab", "qemu_release"],
+      "validation_scope": ["kat", "benchmark", "acvp"]
+    },
+    {
+      "asset_id": "crypto.mldsa_65",
+      "cbom_component": "ML-DSA-65",
+      "lifecycle_status": "default",
+      "production_allowed": true,
+      "profile_support": ["gateway", "mcu_minimal", "native_lab", "qemu_release"],
+      "validation_scope": ["kat", "benchmark", "acvp", "tls_selftest"]
+    },
+    {
+      "asset_id": "crypto.mldsa_87",
+      "cbom_component": "ML-DSA-87",
+      "lifecycle_status": "supported",
+      "production_allowed": true,
+      "profile_support": ["gateway", "native_lab", "qemu_release"],
+      "validation_scope": ["kat", "benchmark", "acvp"]
+    },
+    {
+      "asset_id": "validation.acvp_serial",
+      "cbom_component": "ACVP serial validation harness",
+      "lifecycle_status": "lab_only",
+      "production_allowed": false,
+      "profile_support": ["native_lab", "qemu_release"],
+      "validation_scope": ["acvp", "negative_replay", "timeout"]
+    },
+    {
+      "asset_id": "validation.tls_selftest",
+      "cbom_component": "TLS/PSA PQC self-test path",
+      "lifecycle_status": "validation_only",
+      "production_allowed": false,
+      "profile_support": ["native_lab", "qemu_release"],
+      "validation_scope": ["tls_selftest", "sanitizer"]
+    },
+    {
+      "asset_id": "rng.zephyr_entropy",
+      "cbom_component": "Zephyr entropy RNG",
+      "lifecycle_status": "supported",
+      "production_allowed": true,
+      "profile_support": ["gateway", "mcu_minimal", "native_lab", "qemu_release"],
+      "validation_scope": ["ztest_rng"]
+    },
+    {
+      "asset_id": "rng.psa",
+      "cbom_component": "PSA RNG",
+      "lifecycle_status": "supported",
+      "production_allowed": true,
+      "profile_support": ["gateway", "native_lab", "qemu_release"],
+      "validation_scope": ["ztest_rng"]
+    },
+    {
+      "asset_id": "rng.deterministic_test",
+      "cbom_component": "Deterministic test RNG",
+      "lifecycle_status": "test_only",
+      "production_allowed": false,
+      "profile_support": ["native_lab"],
+      "validation_scope": ["kat", "deterministic_test"]
+    },
+    {
+      "asset_id": "boot.kat_self_verify",
+      "cbom_component": null,
+      "lifecycle_status": "validation_only",
+      "production_allowed": false,
+      "profile_support": ["gateway", "mcu_minimal", "native_lab", "qemu_release"],
+      "validation_scope": ["boot_self_verify"]
+    },
+    {
+      "asset_id": "security.ct_smoke",
+      "cbom_component": null,
+      "lifecycle_status": "smoke_only",
+      "production_allowed": false,
+      "profile_support": ["native_lab", "qemu_release"],
+      "validation_scope": ["ct_smoke"]
+    }
+  ],
+  "profiles": [
+    {
+      "id": "native_lab",
+      "description": "Local developer and partner-review profile that permits validation-only harnesses and deterministic test material.",
+      "accepted_environments": ["native_sim", "qemu_x86_64", "host_python"],
+      "required_claim_ids": [
+        "release.version_consistency",
+        "kat.offline_provenance",
+        "acvp.negative_scenario_floor",
+        "supply_chain.crypto_asset_traceability"
+      ],
+      "allowed_asset_ids": [
+        "crypto.mlkem_512",
+        "crypto.mlkem_768",
+        "crypto.mlkem_1024",
+        "crypto.mldsa_44",
+        "crypto.mldsa_65",
+        "crypto.mldsa_87",
+        "validation.acvp_serial",
+        "validation.tls_selftest",
+        "rng.zephyr_entropy",
+        "rng.psa",
+        "rng.deterministic_test",
+        "boot.kat_self_verify",
+        "security.ct_smoke"
+      ],
+      "forbidden_asset_ids": [],
+      "test_only_asset_ids": ["rng.deterministic_test"]
+    },
+    {
+      "id": "qemu_release",
+      "description": "Replay-verifiable release profile backed by QEMU, native_sim, transcripts, Passport artifacts, and local bundle metadata.",
+      "accepted_environments": ["qemu_x86_64", "native_sim", "host_python"],
+      "required_claim_ids": [
+        "release.version_consistency",
+        "release.transcript_binding",
+        "benchmark.csv_validity",
+        "benchmark.provenance_binding",
+        "cost_of_assurance.guardrails",
+        "supply_chain.cbom_crypto_inventory",
+        "supply_chain.pqc_assurance_attestation",
+        "supply_chain.crypto_asset_traceability",
+        "supply_chain.evidence_graph_integrity",
+        "firmware.assurance_digest_manifest"
+      ],
+      "allowed_asset_ids": [
+        "crypto.mlkem_512",
+        "crypto.mlkem_768",
+        "crypto.mlkem_1024",
+        "crypto.mldsa_44",
+        "crypto.mldsa_65",
+        "crypto.mldsa_87",
+        "validation.acvp_serial",
+        "validation.tls_selftest",
+        "rng.zephyr_entropy",
+        "rng.psa",
+        "boot.kat_self_verify",
+        "security.ct_smoke"
+      ],
+      "forbidden_asset_ids": ["rng.deterministic_test"],
+      "test_only_asset_ids": []
+    },
+    {
+      "id": "mcu_minimal",
+      "description": "Build-only constrained MCU profile centered on the default ML-KEM-768 and ML-DSA-65 protocol suite.",
+      "accepted_environments": ["nucleo_h743zi_build_only", "host_python"],
+      "required_claim_ids": [
+        "benchmark.csv_validity",
+        "cost_of_assurance.guardrails",
+        "firmware.assurance_digest_embeddable"
+      ],
+      "allowed_asset_ids": [
+        "crypto.mlkem_768",
+        "crypto.mldsa_65",
+        "rng.zephyr_entropy",
+        "boot.kat_self_verify"
+      ],
+      "forbidden_asset_ids": [
+        "rng.deterministic_test",
+        "validation.acvp_serial",
+        "validation.tls_selftest",
+        "security.ct_smoke"
+      ],
+      "test_only_asset_ids": []
+    },
+    {
+      "id": "gateway",
+      "description": "Higher-capacity embedded profile that permits all supported ML-KEM and ML-DSA parameter sets with production RNG backends.",
+      "accepted_environments": ["qemu_x86_64", "nucleo_h743zi_build_only", "host_python"],
+      "required_claim_ids": [
+        "kat.mlkem_512",
+        "kat.mlkem_768",
+        "kat.mlkem_1024",
+        "kat.mldsa_44",
+        "kat.mldsa_65",
+        "kat.mldsa_87",
+        "benchmark.mlkem_throughput",
+        "benchmark.mldsa_throughput",
+        "supply_chain.cbom_crypto_inventory",
+        "supply_chain.crypto_asset_traceability"
+      ],
+      "allowed_asset_ids": [
+        "crypto.mlkem_512",
+        "crypto.mlkem_768",
+        "crypto.mlkem_1024",
+        "crypto.mldsa_44",
+        "crypto.mldsa_65",
+        "crypto.mldsa_87",
+        "rng.zephyr_entropy",
+        "rng.psa",
+        "boot.kat_self_verify"
+      ],
+      "forbidden_asset_ids": [
+        "rng.deterministic_test",
+        "validation.acvp_serial",
+        "validation.tls_selftest",
+        "security.ct_smoke"
+      ],
+      "test_only_asset_ids": []
+    }
+  ]
+}

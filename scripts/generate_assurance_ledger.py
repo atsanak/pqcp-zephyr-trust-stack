@@ -37,8 +37,8 @@ from verify_kat_provenance import (  # noqa: E402
     verify_vectors,
 )
 
-LEDGER_SCHEMA_VERSION = 4
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4)
+LEDGER_SCHEMA_VERSION = 5
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -106,6 +106,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset-trace-result", type=Path, help="Optional PQC asset trace validation result JSON.")
     parser.add_argument("--evidence-graph", type=Path, help="Optional PQC evidence graph JSON artifact.")
     parser.add_argument("--firmware-digest-header", type=Path, help="Optional generated firmware digest header.")
+    parser.add_argument("--assurance-profile-result", type=Path, help="Optional PQC assurance profile result JSON.")
+    parser.add_argument("--evidence-quality-result", type=Path, help="Optional PQC evidence quality result JSON.")
+    parser.add_argument("--migration-readiness", type=Path, help="Optional PQC migration readiness JSON artifact.")
     return parser.parse_args()
 
 
@@ -1008,8 +1011,8 @@ def evaluate_ct_smoke(
             commands=commands,
         )
 
-    match = _CT_SMOKE_RE.search(transcript_body)
-    if not match:
+    matches = list(_CT_SMOKE_RE.finditer(transcript_body))
+    if not matches:
         return fail_claim(
             spec,
             reason=(
@@ -1020,27 +1023,43 @@ def evaluate_ct_smoke(
             evidence_artifacts=artifacts,
             commands=commands,
         )
-    relative_pct = int(match.group("relative_pct"))
-    bound_pct = int(match.group("bound_pct"))
+    required_algs = {"MLKEM-512", "MLKEM-768", "MLKEM-1024"}
+    observed_algs = {match.group("alg") for match in matches}
+    missing_algs = sorted(required_algs - observed_algs)
+    measurements = []
+    failures: list[str] = []
+    for match in matches:
+        relative_pct = int(match.group("relative_pct"))
+        bound_pct = int(match.group("bound_pct"))
+        if relative_pct > bound_pct:
+            failures.append(
+                f"{match.group('alg')} relative variance {relative_pct}% exceeds "
+                f"documented bound {bound_pct}%"
+            )
+        measurements.append(
+            {
+                "algorithm": match.group("alg"),
+                "iterations": int(match.group("iters")),
+                "median_valid_cycles": int(match.group("median_valid")),
+                "median_invalid_cycles": int(match.group("median_invalid")),
+                "delta_cycles": int(match.group("delta")),
+                "relative_variance_pct": relative_pct,
+                "smoke_bound_pct": bound_pct,
+            }
+        )
+    if missing_algs:
+        failures.append("missing PQCP_CT_SMOKE measurement(s): " + ", ".join(missing_algs))
     details = {
         "transcript_path": str(transcript_path),
         "transcript_sha256": transcript_sha,
-        "algorithm": match.group("alg"),
-        "iterations": int(match.group("iters")),
-        "median_valid_cycles": int(match.group("median_valid")),
-        "median_invalid_cycles": int(match.group("median_invalid")),
-        "delta_cycles": int(match.group("delta")),
-        "relative_variance_pct": relative_pct,
-        "smoke_bound_pct": bound_pct,
+        "algorithms": sorted(observed_algs),
+        "measurements": measurements,
         "is_smoke_test_only": True,
     }
-    if relative_pct > bound_pct:
+    if failures:
         return fail_claim(
             spec,
-            reason=(
-                f"ct smoke {match.group('alg')} relative variance "
-                f"{relative_pct}% exceeds documented bound {bound_pct}%"
-            ),
+            reason="; ".join(failures),
             validators=validators,
             evidence_artifacts=artifacts,
             commands=commands,
@@ -1670,6 +1689,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     asset_trace_result_arg = getattr(args, "asset_trace_result", None)
     evidence_graph_arg = getattr(args, "evidence_graph", None)
     firmware_digest_header_arg = getattr(args, "firmware_digest_header", None)
+    assurance_profile_result_arg = getattr(args, "assurance_profile_result", None)
+    evidence_quality_result_arg = getattr(args, "evidence_quality_result", None)
+    migration_readiness_arg = getattr(args, "migration_readiness", None)
     cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
     attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
     policy_result = resolve_path(policy_result_arg, module_path) if policy_result_arg else None
@@ -1678,6 +1700,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     asset_trace_result = resolve_path(asset_trace_result_arg, module_path) if asset_trace_result_arg else None
     evidence_graph = resolve_path(evidence_graph_arg, module_path) if evidence_graph_arg else None
     firmware_digest_header = resolve_path(firmware_digest_header_arg, module_path) if firmware_digest_header_arg else None
+    assurance_profile_result = resolve_path(assurance_profile_result_arg, module_path) if assurance_profile_result_arg else None
+    evidence_quality_result = resolve_path(evidence_quality_result_arg, module_path) if evidence_quality_result_arg else None
+    migration_readiness = resolve_path(migration_readiness_arg, module_path) if migration_readiness_arg else None
     tag = args.tag
 
     evaluators: dict[str, Callable[[dict[str, Any]], dict[str, object]]] = {
@@ -1815,6 +1840,41 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
                 "PQCP_ASSURANCE_DIGEST_ROOT_SHA256",
                 "PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT",
             ),
+        ),
+        "supply_chain.assurance_profile_policy": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=assurance_profile_result,
+            label="PQC assurance profile result",
+            required_keys=("schema_version", "passed", "summary", "checks"),
+            success_field="passed",
+        ),
+        "supply_chain.evidence_quality_index": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=evidence_quality_result,
+            label="PQC evidence quality result",
+            required_keys=("schema_version", "passed", "summary", "checks"),
+            success_field="passed",
+        ),
+        "crypto_agility.profile_separation": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=assurance_profile_result,
+            label="PQC assurance profile result",
+            required_keys=("schema_version", "passed", "summary", "checks"),
+            success_field="passed",
+        ),
+        "release.migration_readiness": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=migration_readiness,
+            label="PQC migration readiness report",
+            required_keys=("schema_version", "passed", "summary", "assets"),
+            success_field="passed",
+        ),
+        "security.production_rng_policy": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=assurance_profile_result,
+            label="PQC assurance profile result",
+            required_keys=("schema_version", "passed", "summary", "checks"),
+            success_field="passed",
         ),
     }
     for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():

@@ -37,6 +37,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cost-of-assurance-evidence", type=Path)
     parser.add_argument("--evidence-graph", type=Path)
     parser.add_argument("--asset-trace-result", type=Path)
+    parser.add_argument("--assurance-profile-result", type=Path)
+    parser.add_argument("--evidence-quality-result", type=Path)
+    parser.add_argument("--migration-readiness-json", type=Path)
+    parser.add_argument("--migration-readiness-md", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--digest-output", type=Path)
     return parser.parse_args()
@@ -125,6 +129,10 @@ def claim_summary(ledger: dict[str, Any]) -> dict[str, Any]:
 def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
     evidence_graph = getattr(args, "evidence_graph", None)
     asset_trace_result = getattr(args, "asset_trace_result", None)
+    assurance_profile_result = getattr(args, "assurance_profile_result", None)
+    evidence_quality_result = getattr(args, "evidence_quality_result", None)
+    migration_readiness_json = getattr(args, "migration_readiness_json", None)
+    migration_readiness_md = getattr(args, "migration_readiness_md", None)
     candidates: list[tuple[Path, str, bool]] = [
         (args.ledger, "assurance_ledger.json", True),
         (args.ledger_md or args.ledger.with_suffix(".md"), "assurance_ledger.md", True),
@@ -135,6 +143,10 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
         (args.cost_of_assurance_evidence or args.ledger.with_name("cost_of_assurance_evidence.json"), "cost_of_assurance_evidence.json", True),
         (evidence_graph or args.ledger.with_name("pqc_evidence_graph.json"), "pqc_evidence_graph.json", True),
         (asset_trace_result or args.ledger.with_name("pqc_asset_trace_result.json"), "pqc_asset_trace_result.json", True),
+        (assurance_profile_result or args.ledger.with_name("pqc_assurance_profile_result.json"), "pqc_assurance_profile_result.json", False),
+        (evidence_quality_result or args.ledger.with_name("pqc_evidence_quality_result.json"), "pqc_evidence_quality_result.json", False),
+        (migration_readiness_json or args.ledger.with_name("pqc_migration_readiness.json"), "pqc_migration_readiness.json", False),
+        (migration_readiness_md or args.ledger.with_name("pqc_migration_readiness.md"), "pqc_migration_readiness.md", False),
         (args.transcript_manifest, "transcripts/evidence_transcript_manifest.json", True),
         (args.release_manifest, "release-manifest.json", True),
         (args.module_path / "west.yml", "west.yml", True),
@@ -209,7 +221,7 @@ def build_attestation(args: argparse.Namespace) -> dict[str, Any]:
 
 def write_digest(output: Path, artifacts: list[Path], *, attestation_path: Path) -> None:
     entries = []
-    for path in [*artifacts, attestation_path]:
+    for path in [path for path in artifacts if path.exists()] + [attestation_path]:
         path = path.resolve()
         if not path.exists() or not path.is_file():
             raise FileNotFoundError(f"cannot digest missing artifact: {path}")
@@ -244,6 +256,10 @@ def main() -> int:
     if args.digest_output:
         evidence_graph = getattr(args, "evidence_graph", None)
         asset_trace_result = getattr(args, "asset_trace_result", None)
+        assurance_profile_result = getattr(args, "assurance_profile_result", None)
+        evidence_quality_result = getattr(args, "evidence_quality_result", None)
+        migration_readiness_json = getattr(args, "migration_readiness_json", None)
+        migration_readiness_md = getattr(args, "migration_readiness_md", None)
         digest_artifacts = [
             args.ledger,
             args.cbom,
@@ -251,6 +267,10 @@ def main() -> int:
             args.benchmark_provenance or args.ledger.with_name("benchmark_provenance.json"),
             evidence_graph or args.ledger.with_name("pqc_evidence_graph.json"),
             asset_trace_result or args.ledger.with_name("pqc_asset_trace_result.json"),
+            assurance_profile_result or args.ledger.with_name("pqc_assurance_profile_result.json"),
+            evidence_quality_result or args.ledger.with_name("pqc_evidence_quality_result.json"),
+            migration_readiness_json or args.ledger.with_name("pqc_migration_readiness.json"),
+            migration_readiness_md or args.ledger.with_name("pqc_migration_readiness.md"),
             args.release_manifest,
         ]
         write_digest(args.digest_output, digest_artifacts, attestation_path=output)

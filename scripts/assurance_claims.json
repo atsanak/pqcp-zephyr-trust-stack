@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -154,7 +154,7 @@
     {
       "id": "security.ct_smoke",
       "category": "security",
-      "claim": "ML-KEM-768 decapsulation, run 32 times against a valid and 32 times against a deliberately corrupted ciphertext, produces median cycle counts whose relative variance stays under a documented bound. This is a runtime smoke test, not a constant-time proof; the assurance documentation (docs/assurance-model.md, docs/publications.md) states the same caveats. Proven by tests/ztest_ct_smoke on qemu_x86_64.",
+      "claim": "ML-KEM-512/768/1024 decapsulation, each run 32 times against a valid and 32 times against a deliberately corrupted ciphertext, produces median cycle counts whose relative variance stays under a documented bound. This is a runtime smoke test, not a constant-time proof; the assurance documentation (docs/assurance-model.md, docs/publications.md) states the same caveats. Proven by tests/ztest_ct_smoke on qemu_x86_64.",
       "required": true
     },
     {
@@ -197,6 +197,36 @@
       "id": "firmware.assurance_digest_embeddable",
       "category": "firmware",
       "claim": "The release pack exports the assurance digest into a generated C header and verifies that samples/pqcp_assurance_status can compile it into firmware.",
+      "required": true
+    },
+    {
+      "id": "supply_chain.assurance_profile_policy",
+      "category": "supply_chain",
+      "claim": "The release pack includes a verified assurance profile result that classifies supported, validation-only, lab-only, smoke-only, and test-only assets across local release profiles.",
+      "required": true
+    },
+    {
+      "id": "supply_chain.evidence_quality_index",
+      "category": "supply_chain",
+      "claim": "The release pack includes an evidence quality result that assigns each required assurance claim to a concrete validation class and environment.",
+      "required": true
+    },
+    {
+      "id": "crypto_agility.profile_separation",
+      "category": "crypto_agility",
+      "claim": "The assurance profile separates native-lab, QEMU release, constrained MCU, and gateway profiles so validation-only and test-only assets are not represented as production-enabled assets.",
+      "required": true
+    },
+    {
+      "id": "release.migration_readiness",
+      "category": "release",
+      "claim": "The release pack includes a migration-readiness report derived from the assurance profile, evidence quality result, and CBOM profile properties.",
+      "required": true
+    },
+    {
+      "id": "security.production_rng_policy",
+      "category": "security",
+      "claim": "The assurance profile and CBOM mark deterministic RNG as test-only and forbid it from production-oriented profiles.",
       "required": true
     }
   ]

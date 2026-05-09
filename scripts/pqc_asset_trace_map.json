@@ -356,7 +356,9 @@
         "tests/ztest_ct_smoke/src/main.c"
       ],
       "kconfig_symbols": [
-        "PQCP_MLKEM_LEVEL_768"
+        "PQCP_MLKEM_LEVEL_512",
+        "PQCP_MLKEM_LEVEL_768",
+        "PQCP_MLKEM_LEVEL_1024"
       ],
       "claim_ids": [
         "security.ct_smoke"
@@ -365,7 +367,9 @@
         "tests/ztest_ct_smoke"
       ],
       "transcript_markers": [
-        "PQCP_CT_SMOKE alg=MLKEM-768"
+        "PQCP_CT_SMOKE alg=MLKEM-512",
+        "PQCP_CT_SMOKE alg=MLKEM-768",
+        "PQCP_CT_SMOKE alg=MLKEM-1024"
       ]
     }
   ]

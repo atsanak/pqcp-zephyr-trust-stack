@@ -499,6 +499,10 @@ def main() -> int:
     pqc_asset_trace_result_path = output_root / "pqc_asset_trace_result.json"
     pqc_evidence_graph_json = output_root / "pqc_evidence_graph.json"
     pqc_evidence_graph_md = output_root / "pqc_evidence_graph.md"
+    pqc_assurance_profile_result_path = output_root / "pqc_assurance_profile_result.json"
+    pqc_evidence_quality_result_path = output_root / "pqc_evidence_quality_result.json"
+    pqc_migration_readiness_json_path = output_root / "pqc_migration_readiness.json"
+    pqc_migration_readiness_md_path = output_root / "pqc_migration_readiness.md"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
     assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
@@ -611,6 +615,14 @@ def main() -> int:
         str(pqc_evidence_graph_json),
         "--asset-trace-result",
         str(pqc_asset_trace_result_path),
+        "--assurance-profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--evidence-quality-result",
+        str(pqc_evidence_quality_result_path),
+        "--migration-readiness-json",
+        str(pqc_migration_readiness_json_path),
+        "--migration-readiness-md",
+        str(pqc_migration_readiness_md_path),
         "--output",
         str(pqc_attestation_path),
         "--digest-output",
@@ -637,6 +649,14 @@ def main() -> int:
         str(pqc_assurance_digest_path),
         "--firmware-digest-header",
         str(firmware_digest_header_path),
+        "--assurance-profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--evidence-quality-result",
+        str(pqc_evidence_quality_result_path),
+        "--migration-readiness-json",
+        str(pqc_migration_readiness_json_path),
+        "--migration-readiness-md",
+        str(pqc_migration_readiness_md_path),
         "--output",
         str(pqc_policy_result_path),
     ]
@@ -683,6 +703,46 @@ def main() -> int:
         str(pqc_evidence_graph_json),
         "--output-md",
         str(pqc_evidence_graph_md),
+    ]
+    pqc_assurance_profile_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_assurance_profile.py"),
+        "--profile",
+        str(module_path / "scripts/pqc_assurance_profile.json"),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--trace-map",
+        str(module_path / "scripts/pqc_asset_trace_map.json"),
+        "--output",
+        str(pqc_assurance_profile_result_path),
+    ]
+    pqc_evidence_quality_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_evidence_quality.py"),
+        "--quality",
+        str(module_path / "scripts/pqc_evidence_quality.json"),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--graph",
+        str(pqc_evidence_graph_json),
+        "--output",
+        str(pqc_evidence_quality_result_path),
+    ]
+    pqc_migration_readiness_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_migration_readiness_report.py"),
+        "--profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--quality-result",
+        str(pqc_evidence_quality_result_path),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--output-json",
+        str(pqc_migration_readiness_json_path),
+        "--output-md",
+        str(pqc_migration_readiness_md_path),
     ]
     firmware_digest_header_cmd = [
         sys.executable,
@@ -1077,6 +1137,21 @@ def main() -> int:
         Step(
             name="PQC evidence graph",
             cmd=pqc_evidence_graph_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC assurance profile",
+            cmd=pqc_assurance_profile_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC evidence quality",
+            cmd=pqc_evidence_quality_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC migration readiness",
+            cmd=pqc_migration_readiness_cmd,
             cwd=module_path,
         ),
         Step(
