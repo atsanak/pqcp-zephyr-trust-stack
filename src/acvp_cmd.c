@@ -25,6 +25,16 @@ static struct k_timer acvp_serial_line_timer;
 static bool acvp_serial_line_timer_initialized;
 static bool acvp_serial_line_timer_armed;
 
+static const uint8_t acvp_hex_decode_table[256] = {
+    ['0'] = 1U, ['1'] = 2U, ['2'] = 3U, ['3'] = 4U,
+    ['4'] = 5U, ['5'] = 6U, ['6'] = 7U, ['7'] = 8U,
+    ['8'] = 9U, ['9'] = 10U,
+    ['a'] = 11U, ['b'] = 12U, ['c'] = 13U,
+    ['d'] = 14U, ['e'] = 15U, ['f'] = 16U,
+    ['A'] = 11U, ['B'] = 12U, ['C'] = 13U,
+    ['D'] = 14U, ['E'] = 15U, ['F'] = 16U,
+};
+
 static bool acvp_serial_line_has_partial(
     const struct pqcp_acvp_serial_line_state *state)
 {
@@ -71,6 +81,13 @@ static bool acvp_serial_line_timer_expired(void)
 
     acvp_serial_line_timer_stop();
     return true;
+}
+
+static int acvp_hex_nibble(unsigned char c)
+{
+    uint8_t encoded = acvp_hex_decode_table[c];
+
+    return encoded == 0U ? -1 : (int)encoded - 1;
 }
 
 const char *pqcp_acvp_result_str(enum pqcp_acvp_result result)
@@ -153,6 +170,10 @@ int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
         return 0;
     }
 
+    if (resp->data_len > (SIZE_MAX - sizeof("RESULT:")) / 2U) {
+        return -ENOSPC;
+    }
+
     if (resp->data == NULL || out_size < (sizeof("RESULT:") - 1U) +
                                        (resp->data_len * 2U) + 1U) {
         return -ENOSPC;
@@ -194,28 +215,10 @@ int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
     }
     
     for (size_t i = 0; i < byte_len; i++) {
-        int hi;
-        int lo;
-        unsigned char h = (unsigned char)hex[i * 2U];
-        unsigned char l = (unsigned char)hex[i * 2U + 1U];
+        int hi = acvp_hex_nibble((unsigned char)hex[i * 2U]);
+        int lo = acvp_hex_nibble((unsigned char)hex[i * 2U + 1U]);
 
-        if (h >= '0' && h <= '9') {
-            hi = h - '0';
-        } else if (h >= 'a' && h <= 'f') {
-            hi = h - 'a' + 10;
-        } else if (h >= 'A' && h <= 'F') {
-            hi = h - 'A' + 10;
-        } else {
-            return -EINVAL;
-        }
-
-        if (l >= '0' && l <= '9') {
-            lo = l - '0';
-        } else if (l >= 'a' && l <= 'f') {
-            lo = l - 'a' + 10;
-        } else if (l >= 'A' && l <= 'F') {
-            lo = l - 'A' + 10;
-        } else {
+        if (hi < 0 || lo < 0) {
             return -EINVAL;
         }
 
