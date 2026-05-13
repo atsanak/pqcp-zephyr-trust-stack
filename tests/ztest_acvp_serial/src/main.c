@@ -553,6 +553,10 @@ ZTEST(pqcp_acvp_serial, test_response_formatter_rejects_tiny_buffer)
 {
     struct pqcp_acvp_response resp;
     char tiny_buffer[4];
+    char exact_error_buffer[sizeof("ERROR:INVALID_CMD") - 1U];
+    char exact_ok_buffer[sizeof("RESULT:OK") - 1U];
+    char exact_payload_buffer[sizeof("RESULT:00") - 1U];
+    uint8_t payload[] = { 0x00U };
 
     pqcp_acvp_response_init(&resp, response_buffer, sizeof(response_buffer));
     resp.result = PQCP_ACVP_ERR_INVALID_CMD;
@@ -560,6 +564,61 @@ ZTEST(pqcp_acvp_serial, test_response_formatter_rejects_tiny_buffer)
     zassert_equal(
         pqcp_acvp_format_response_line(&resp, tiny_buffer, sizeof(tiny_buffer)),
         -ENOSPC);
+    zassert_equal(
+        pqcp_acvp_format_response_line(&resp, exact_error_buffer,
+                                       sizeof(exact_error_buffer)),
+        -ENOSPC);
+
+    resp.result = PQCP_ACVP_OK;
+    resp.data_len = 0U;
+    zassert_equal(
+        pqcp_acvp_format_response_line(&resp, exact_ok_buffer,
+                                       sizeof(exact_ok_buffer)),
+        -ENOSPC);
+
+    resp.data = payload;
+    resp.data_len = sizeof(payload);
+    zassert_equal(
+        pqcp_acvp_format_response_line(&resp, exact_payload_buffer,
+                                       sizeof(exact_payload_buffer)),
+        -ENOSPC);
+}
+
+ZTEST(pqcp_acvp_serial, test_response_formatter_accepts_exact_plus_nul_capacity)
+{
+    struct pqcp_acvp_response resp;
+    char error_buffer[sizeof("ERROR:INVALID_CMD")];
+    char invalid_buffer[sizeof("RESULT:INVALID")];
+    char ok_buffer[sizeof("RESULT:OK")];
+    char payload_buffer[sizeof("RESULT:00ff")];
+    uint8_t payload[] = { 0x00U, 0xffU };
+
+    pqcp_acvp_response_init(&resp, response_buffer, sizeof(response_buffer));
+    resp.result = PQCP_ACVP_ERR_INVALID_CMD;
+    zassert_equal(pqcp_acvp_format_response_line(&resp, error_buffer,
+                                                 sizeof(error_buffer)),
+                  0);
+    zassert_equal(strcmp(error_buffer, "ERROR:INVALID_CMD"), 0);
+
+    resp.result = PQCP_ACVP_VERIFY_INVALID;
+    zassert_equal(pqcp_acvp_format_response_line(&resp, invalid_buffer,
+                                                 sizeof(invalid_buffer)),
+                  0);
+    zassert_equal(strcmp(invalid_buffer, "RESULT:INVALID"), 0);
+
+    resp.result = PQCP_ACVP_OK;
+    resp.data_len = 0U;
+    zassert_equal(pqcp_acvp_format_response_line(&resp, ok_buffer,
+                                                 sizeof(ok_buffer)),
+                  0);
+    zassert_equal(strcmp(ok_buffer, "RESULT:OK"), 0);
+
+    resp.data = payload;
+    resp.data_len = sizeof(payload);
+    zassert_equal(pqcp_acvp_format_response_line(&resp, payload_buffer,
+                                                 sizeof(payload_buffer)),
+                  0);
+    zassert_equal(strcmp(payload_buffer, "RESULT:00ff"), 0);
 }
 
 /*

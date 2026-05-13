@@ -26,7 +26,11 @@ from check_version_consistency import (  # noqa: E402
     parse_header_version,
     validate_changelog,
 )
-from export_results import validate_benchmark_csv, verify_provenance  # noqa: E402
+from export_results import (  # noqa: E402
+    validate_benchmark_csv,
+    validate_benchmark_metadata_document,
+    verify_provenance,
+)
 from verify_kat_provenance import (  # noqa: E402
     DEFAULT_HEADER as DEFAULT_KAT_HEADER,
     DEFAULT_VECTORS_DIR,
@@ -1322,6 +1326,10 @@ def evaluate_benchmark_distribution_quality(
     distribution_row_count = csv_meta.get("distribution_row_count") if isinstance(csv_meta, dict) else None
     if not isinstance(distribution_row_count, int) or distribution_row_count <= 0:
         failures.append("benchmark provenance csv.distribution_row_count is missing or zero")
+    metadata_failures = validate_benchmark_metadata_document(
+        provenance.get("benchmark_metadata") if isinstance(provenance, dict) else None
+    )
+    failures.extend(failure["message"] for failure in metadata_failures)
     if missing:
         failures.append("missing distribution metrics: " + "; ".join(missing))
     details = {
@@ -1329,6 +1337,11 @@ def evaluate_benchmark_distribution_quality(
         "required_distribution_metrics": sorted(distribution_metrics),
         "observed": {name: sorted(metrics) for name, metrics in sorted(observed.items())},
         "provenance_distribution_row_count": distribution_row_count,
+        "required_benchmark_metadata_keys": (
+            provenance.get("benchmark_metadata", {}).get("required_keys", [])
+            if isinstance(provenance, dict) and isinstance(provenance.get("benchmark_metadata"), dict)
+            else []
+        ),
     }
     if failures:
         return fail_claim(

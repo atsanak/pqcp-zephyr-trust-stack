@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/version.h>
 
 #ifndef KERNEL_VERSION_STRING
@@ -49,6 +50,46 @@ static bool protocol_metadata_printed;
 
 static uint32_t percentile(uint32_t *samples, uint16_t count, uint8_t p);
 
+static uint32_t protocol_bench_profile_flags(void)
+{
+    uint32_t flags = 0U;
+
+#if defined(CONFIG_PQCP_PROFILE_MCU_MINIMAL)
+    flags |= BIT(0);
+#endif
+#if defined(CONFIG_PQCP_PROFILE_GATEWAY)
+    flags |= BIT(1);
+#endif
+#if defined(CONFIG_PQCP_PROFILE_NATIVE_LAB)
+    flags |= BIT(2);
+#endif
+#if defined(CONFIG_PQCP_MLKEM_MULTI_LEVEL)
+    flags |= BIT(8);
+#endif
+#if defined(CONFIG_PQCP_MLDSA_MULTI_LEVEL)
+    flags |= BIT(9);
+#endif
+#if defined(CONFIG_PQCP_BACKEND_FORCE_C)
+    flags |= BIT(16);
+#endif
+#if defined(CONFIG_PQCP_BACKEND_FORCE_NATIVE)
+    flags |= BIT(17);
+#endif
+
+    return flags;
+}
+
+static uint32_t protocol_bench_backend_selector(void)
+{
+#if defined(CONFIG_PQCP_BACKEND_FORCE_NATIVE)
+    return 2U;
+#elif defined(CONFIG_PQCP_BACKEND_FORCE_C)
+    return 1U;
+#else
+    return 0U;
+#endif
+}
+
 static void protocol_bench_print_metadata_once(void)
 {
     if (protocol_metadata_printed) {
@@ -60,13 +101,13 @@ static void protocol_bench_print_metadata_once(void)
     printk("PQCP_METRIC,build,metadata,zephyr,0,version,%s,\n",
            KERNEL_VERSION_STRING);
     printk("PQCP_METRIC,build,metadata,board,0,name,%s,\n", CONFIG_BOARD);
-#if defined(CONFIG_PQCP_BACKEND_FORCE_NATIVE)
-    PQCP_LOG_METRIC("build", "metadata", "backend", 0, "selector", 2, "id");
-#elif defined(CONFIG_PQCP_BACKEND_FORCE_C)
-    PQCP_LOG_METRIC("build", "metadata", "backend", 0, "selector", 1, "id");
-#else
-    PQCP_LOG_METRIC("build", "metadata", "backend", 0, "selector", 0, "id");
-#endif
+    PQCP_LOG_METRIC("build", "metadata", "profile", 0,
+                    "flags", protocol_bench_profile_flags(), "mask");
+    PQCP_LOG_METRIC("build", "metadata", "backend", 0,
+                    "selector", protocol_bench_backend_selector(), "id");
+    PQCP_LOG_METRIC("build", "metadata", "distribution", 0,
+                    "sample_cap", ARRAY_SIZE(bench_ctx.latency_samples),
+                    "count");
 }
 
 #if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)
