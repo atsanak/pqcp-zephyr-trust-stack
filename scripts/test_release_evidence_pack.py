@@ -15,6 +15,7 @@ from pathlib import Path
 import generate_assurance_ledger as ledger
 import export_pqc_cbom
 import generate_pqc_attestation
+import generate_pqc_reference_values
 import export_firmware_assurance_digest
 import verify_assurance_policy
 import verify_pqc_claim_closure
@@ -546,6 +547,77 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             json.dumps(policy, indent=2) + "\n",
             encoding="utf-8",
         )
+        reference_args = Namespace(
+            module_path=module,
+            ledger=ledger_path,
+            cbom=cbom_path,
+            attestation=attestation_path,
+            assurance_digest=digest_path,
+            release_manifest=manifest,
+            policy_result=output / "pqc_policy_result.json",
+            profile_result=output / "pqc_assurance_profile_result.json",
+            transcript_manifest=transcript_manifest,
+            output=output / "pqc_reference_values.json",
+        )
+        reference_values = generate_pqc_reference_values.build_reference(reference_args)
+        (output / "pqc_reference_values.json").write_text(
+            json.dumps(reference_values, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_reference_values_result.json").write_text(
+            json.dumps({"schema_version": 1, "passed": True, "checks": [], "failures": []}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (output / "firmware_assurance_status_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "status": {
+                        "version": "1.2.3",
+                        "digest": reference_values["expected_firmware_digest_root"],
+                        "artifact_count": reference_values["firmware_digest_artifact_count"],
+                        "schema": 1,
+                    },
+                    "checks": [],
+                    "failures": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "acvp_json_interop_result.json").write_text(
+            json.dumps({"schema_version": 1, "passed": True, "summary": {"test_cases": 1}, "results": [{"tcId": 1}], "failures": []}, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "acvp_json_transcript_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "transcripts": [{"tcId": 1, "sha256": "0" * 64}]}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_build_provenance.slsa.json").write_text(
+            json.dumps(
+                {
+                    "_type": "https://in-toto.io/Statement/v1",
+                    "predicateType": "https://slsa.dev/provenance/v1",
+                    "subject": [{"name": "pqc_reference_values.json", "digest": {"sha256": sha256(output / "pqc_reference_values.json")}}],
+                    "predicate": {"buildDefinition": {}, "runDetails": {"byproducts": []}},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "pqc_build_provenance_result.json").write_text(
+            json.dumps({"schema_version": 1, "passed": True, "checks": [], "failures": []}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (output / "ct_sample_analysis_result.json").write_text(
+            json.dumps({"schema_version": 1, "passed": True, "algorithms": [{"algorithm": "MLKEM-768", "passed": True}], "checks": [], "failures": []}, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
         closure = verify_pqc_claim_closure.verify_closure(
             Namespace(
                 ledger=ledger_path,
@@ -558,6 +630,11 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 migration_readiness_json=output / "pqc_migration_readiness.json",
                 migration_readiness_md=output / "pqc_migration_readiness.md",
                 firmware_digest_header=generated,
+                reference_values=output / "pqc_reference_values.json",
+                firmware_status_result=output / "firmware_assurance_status_result.json",
+                acvp_json_interop_result=output / "acvp_json_interop_result.json",
+                build_provenance_result=output / "pqc_build_provenance_result.json",
+                ct_sample_analysis_result=output / "ct_sample_analysis_result.json",
             )
         )
         (output / "pqc_claim_closure_result.json").write_text(

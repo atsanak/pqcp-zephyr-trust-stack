@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -239,6 +239,36 @@
       "id": "security.production_rng_policy",
       "category": "security",
       "claim": "The assurance profile and CBOM mark deterministic RNG as test-only and forbid it from production-oriented profiles.",
+      "required": true
+    },
+    {
+      "id": "release.reference_values",
+      "category": "release",
+      "claim": "The release pack includes replayable PQC reference values that bind release metadata, artifact hashes, required claims, CBOM component IDs, and the expected firmware assurance digest root.",
+      "required": true
+    },
+    {
+      "id": "firmware.assurance_status_report",
+      "category": "firmware",
+      "claim": "The assurance status firmware sample reports the expected digest, artifact count, and artifact hashes, and the transcript is verified against the release reference values.",
+      "required": true
+    },
+    {
+      "id": "acvp.json_interop",
+      "category": "acvp",
+      "claim": "NIST-style ACVP ML-KEM and ML-DSA JSON vector groups are translated into serial-command evidence with per-test transcript hashes and response classifications.",
+      "required": true
+    },
+    {
+      "id": "supply_chain.slsa_build_provenance",
+      "category": "supply_chain",
+      "claim": "The release pack includes a SLSA-shaped in-toto build provenance statement whose subjects, dependencies, external parameters, and byproducts replay-check against local artifacts.",
+      "required": true
+    },
+    {
+      "id": "security.ct_sample_analysis",
+      "category": "security",
+      "claim": "The constant-time smoke path can emit raw valid/invalid ML-KEM decapsulation timing samples, and local analysis checks sample counts, distribution deltas, and Welch-style statistics.",
       "required": true
     }
   ]

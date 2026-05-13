@@ -39,6 +39,11 @@
     "crypto_agility.profile_separation",
     "release.migration_readiness",
     "security.production_rng_policy",
+    "release.reference_values",
+    "firmware.assurance_status_report",
+    "acvp.json_interop",
+    "supply_chain.slsa_build_provenance",
+    "security.ct_sample_analysis",
     "release.policy_pass",
     "firmware.assurance_digest_manifest",
     "firmware.assurance_digest_embeddable"
@@ -56,6 +61,11 @@
     "crypto_agility.profile_separation",
     "release.migration_readiness",
     "security.production_rng_policy",
+    "release.reference_values",
+    "firmware.assurance_status_report",
+    "acvp.json_interop",
+    "supply_chain.slsa_build_provenance",
+    "security.ct_sample_analysis",
     "firmware.assurance_digest_manifest",
     "firmware.assurance_digest_embeddable"
   ],
@@ -105,6 +115,16 @@
     "pqc_evidence_quality_result.json",
     "pqc_migration_readiness.json",
     "pqc_migration_readiness.md"
+  ],
+  "required_passport_v4_artifacts": [
+    "pqc_reference_values.json",
+    "pqc_reference_values_result.json",
+    "firmware_assurance_status_result.json",
+    "acvp_json_interop_result.json",
+    "acvp_json_transcript_manifest.json",
+    "pqc_build_provenance.slsa.json",
+    "pqc_build_provenance_result.json",
+    "ct_sample_analysis_result.json"
   ],
   "required_cbom_profile_properties": [
     "pqcp:trace_asset_id",

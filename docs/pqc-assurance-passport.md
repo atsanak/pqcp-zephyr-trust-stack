@@ -52,6 +52,21 @@ release review.
 - `generated/pqcp_assurance_digest_generated.h` — a generated C header that
   carries the assurance digest root hash for future firmware attestation
   binding.
+- `pqc_reference_values.json` / `pqc_reference_values_result.json` — replayable
+  reference values and verifier output binding release metadata, artifact
+  hashes, required claim IDs, CBOM component IDs, and the expected firmware
+  digest root.
+- `firmware_assurance_status_result.json` — verifier output for the
+  `PQCP_ASSURANCE_STATUS` and `PQCP_ASSURANCE_ARTIFACT` lines emitted by
+  `samples/pqcp_assurance_status`.
+- `acvp_json_interop_result.json` /
+  `acvp_json_transcript_manifest.json` — ACVP JSON vector translation evidence
+  with per-test serial-command transcript hashes.
+- `pqc_build_provenance.slsa.json` /
+  `pqc_build_provenance_result.json` — unsigned in-toto Statement using a
+  SLSA provenance predicate shape for local release inputs and byproducts.
+- `ct_sample_analysis_result.json` — replay result for optional raw
+  `PQCP_CT_SAMPLE` timing-smoke transcript markers.
 
 ## Local Commands
 
@@ -138,6 +153,17 @@ directory and wants deterministic answers to concrete questions:
   CT-smoke ELF?
 - Do post-ledger artifacts still close cleanly after policy replay, attestation
   generation, digest creation, and firmware digest export?
+- Do the generated reference values match the ledger, CBOM, attestation,
+  release manifest, policy result, profile result, transcript manifest, and
+  firmware digest root?
+- Does the assurance-status firmware sample report the expected digest and
+  artifact count?
+- Can ACVP JSON vector groups be mapped to the existing serial-command evidence
+  vocabulary without changing the ACVP serial wire format?
+- Does the SLSA-shaped build provenance statement replay-check its subjects,
+  resolved dependencies, external parameters, and byproduct hashes?
+- If raw CT sample capture is enabled, do valid/invalid ML-KEM decapsulation
+  samples satisfy the configured smoke thresholds?
 
 If any answer is inconsistent, `verify_release_evidence_pack.py` exits non-zero
 and reports the exact file, claim, or artifact hash that failed.

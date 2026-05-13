@@ -587,6 +587,14 @@ def main() -> int:
     pqc_migration_readiness_md_path = output_root / "pqc_migration_readiness.md"
     ct_instruction_policy_result_path = output_root / "ct_instruction_policy_result.json"
     pqc_claim_closure_result_path = output_root / "pqc_claim_closure_result.json"
+    ct_sample_analysis_result_path = output_root / "ct_sample_analysis_result.json"
+    acvp_json_interop_result_path = output_root / "acvp_json_interop_result.json"
+    acvp_json_transcript_manifest_path = output_root / "acvp_json_transcript_manifest.json"
+    pqc_reference_values_path = output_root / "pqc_reference_values.json"
+    pqc_reference_values_result_path = output_root / "pqc_reference_values_result.json"
+    firmware_assurance_status_result_path = output_root / "firmware_assurance_status_result.json"
+    pqc_build_provenance_path = output_root / "pqc_build_provenance.slsa.json"
+    pqc_build_provenance_result_path = output_root / "pqc_build_provenance_result.json"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
     assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
@@ -637,6 +645,16 @@ def main() -> int:
         str(negative_floor_result_path),
         "--ct-instruction-policy-result",
         str(ct_instruction_policy_result_path),
+        "--acvp-json-interop-result",
+        str(acvp_json_interop_result_path),
+        "--ct-sample-analysis-result",
+        str(ct_sample_analysis_result_path),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--firmware-status-result",
+        str(firmware_assurance_status_result_path),
+        "--build-provenance-result",
+        str(pqc_build_provenance_result_path),
         "--output-json",
         str(assurance_ledger_json),
         "--output-md",
@@ -749,6 +767,22 @@ def main() -> int:
         str(pqc_migration_readiness_json_path),
         "--migration-readiness-md",
         str(pqc_migration_readiness_md_path),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--reference-values-result",
+        str(pqc_reference_values_result_path),
+        "--firmware-status-result",
+        str(firmware_assurance_status_result_path),
+        "--acvp-json-interop-result",
+        str(acvp_json_interop_result_path),
+        "--acvp-json-transcript-manifest",
+        str(acvp_json_transcript_manifest_path),
+        "--build-provenance",
+        str(pqc_build_provenance_path),
+        "--build-provenance-result",
+        str(pqc_build_provenance_result_path),
+        "--ct-sample-analysis-result",
+        str(ct_sample_analysis_result_path),
         "--output",
         str(pqc_policy_result_path),
     ]
@@ -775,6 +809,16 @@ def main() -> int:
         str(pqc_migration_readiness_md_path),
         "--firmware-digest-header",
         str(firmware_digest_header_path),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--firmware-status-result",
+        str(firmware_assurance_status_result_path),
+        "--acvp-json-interop-result",
+        str(acvp_json_interop_result_path),
+        "--build-provenance-result",
+        str(pqc_build_provenance_result_path),
+        "--ct-sample-analysis-result",
+        str(ct_sample_analysis_result_path),
         "--output",
         str(pqc_claim_closure_result_path),
     ]
@@ -870,6 +914,27 @@ def main() -> int:
         "--output",
         str(ct_instruction_policy_result_path),
     ]
+    ct_sample_analysis_cmd = [
+        sys.executable,
+        str(module_path / "scripts/analyze_ct_samples.py"),
+        "--transcript-dir",
+        str(transcript_dir),
+        "--output",
+        str(ct_sample_analysis_result_path),
+    ]
+    acvp_json_interop_cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_acvp_json_vectors.py"),
+        str(module_path / "scripts/testdata/acvp_json/mlkem_valid.json"),
+        str(module_path / "scripts/testdata/acvp_json/mldsa_valid.json"),
+        str(module_path / "scripts/testdata/acvp_json/negative_cases.json"),
+        "--mode",
+        "auto",
+        "--output",
+        str(acvp_json_interop_result_path),
+        "--transcript-manifest",
+        str(acvp_json_transcript_manifest_path),
+    ]
     pqc_migration_readiness_cmd = [
         sys.executable,
         str(module_path / "scripts/generate_migration_readiness_report.py"),
@@ -891,6 +956,8 @@ def main() -> int:
         str(pqc_assurance_digest_path),
         "--output",
         str(firmware_digest_header_path),
+        "--version",
+        read_version_string(module_path),
     ]
     assurance_status_build_cmd = [
         *west_cmd,
@@ -905,6 +972,116 @@ def main() -> int:
         "--",
         f"-DZEPHYR_EXTRA_MODULES={module_path}",
         f"-DPQCP_ASSURANCE_DIGEST_INCLUDE_DIR={generated_include_dir}",
+    ]
+    assurance_status_run_cmd = [
+        *west_cmd,
+        "build",
+        "-d",
+        str(assurance_status_build_dir),
+        "-t",
+        "run",
+    ]
+    pqc_reference_values_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_pqc_reference_values.py"),
+        "--module-path",
+        str(module_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--attestation",
+        str(pqc_attestation_path),
+        "--assurance-digest",
+        str(pqc_assurance_digest_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--policy-result",
+        str(pqc_policy_result_path),
+        "--profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--transcript-manifest",
+        str(evidence_transcript_manifest),
+        "--output",
+        str(pqc_reference_values_path),
+    ]
+    pqc_reference_values_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_reference_values.py"),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--attestation",
+        str(pqc_attestation_path),
+        "--assurance-digest",
+        str(pqc_assurance_digest_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--policy-result",
+        str(pqc_policy_result_path),
+        "--profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--transcript-manifest",
+        str(evidence_transcript_manifest),
+        "--output",
+        str(pqc_reference_values_result_path),
+    ]
+    firmware_assurance_status_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_firmware_assurance_status.py"),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--transcript-dir",
+        str(transcript_dir),
+        "--output",
+        str(firmware_assurance_status_result_path),
+    ]
+    pqc_build_provenance_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_pqc_build_provenance.py"),
+        "--module-path",
+        str(module_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--subject",
+        str(assurance_ledger_json),
+        "--subject",
+        str(pqc_reference_values_path),
+        "--subject",
+        str(pqc_cbom_path),
+        "--subject",
+        str(pqc_attestation_path),
+        "--byproduct",
+        str(benchmark_csv_path),
+        "--byproduct",
+        str(cost_evidence_path),
+        "--byproduct",
+        str(acvp_json_interop_result_path),
+        "--byproduct",
+        str(ct_sample_analysis_result_path),
+        "--output",
+        str(pqc_build_provenance_path),
+    ]
+    pqc_build_provenance_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_build_provenance.py"),
+        "--provenance",
+        str(pqc_build_provenance_path),
+        "--subject",
+        str(assurance_ledger_json),
+        "--subject",
+        str(pqc_reference_values_path),
+        "--subject",
+        str(pqc_cbom_path),
+        "--subject",
+        str(pqc_attestation_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--output",
+        str(pqc_build_provenance_result_path),
     ]
     evidence_pack_verify_cmd = [
         sys.executable,
@@ -1067,6 +1244,11 @@ def main() -> int:
             ),
         ),
         Step(
+            name="ACVP JSON interop",
+            cmd=acvp_json_interop_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="kat_provenance",
             cmd=[
                 sys.executable,
@@ -1158,6 +1340,7 @@ def main() -> int:
                 str(ct_smoke_build_dir),
                 "--",
                 f"-DZEPHYR_EXTRA_MODULES={module_path}",
+                "-DCONFIG_PQCP_CT_SAMPLE_TRANSCRIPT=y",
             ],
             cwd=west_root,
         ),
@@ -1177,6 +1360,11 @@ def main() -> int:
                 "TESTSUITE pqcp_ct_smoke succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
+        ),
+        Step(
+            name="ct sample analysis",
+            cmd=ct_sample_analysis_cmd,
+            cwd=module_path,
         ),
         Step(
             name="ct instruction policy",
@@ -1321,8 +1509,43 @@ def main() -> int:
             timeout=240,
         ),
         Step(
+            name="firmware assurance status run",
+            cmd=assurance_status_run_cmd,
+            cwd=west_root,
+            timeout=120,
+            success_markers=(
+                "PQCP_ASSURANCE_STATUS",
+                "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
             name="PQC assurance policy",
             cmd=pqc_policy_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC reference values",
+            cmd=pqc_reference_values_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC reference values verification",
+            cmd=pqc_reference_values_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="firmware assurance status verification",
+            cmd=firmware_assurance_status_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC build provenance",
+            cmd=pqc_build_provenance_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC build provenance verification",
+            cmd=pqc_build_provenance_verify_cmd,
             cwd=module_path,
         ),
         Step(

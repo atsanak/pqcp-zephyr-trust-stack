@@ -41,8 +41,8 @@ from verify_kat_provenance import (  # noqa: E402
     verify_vectors,
 )
 
-LEDGER_SCHEMA_VERSION = 5
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5)
+LEDGER_SCHEMA_VERSION = 6
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -117,6 +117,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--assurance-profile-result", type=Path, help="Optional PQC assurance profile result JSON.")
     parser.add_argument("--evidence-quality-result", type=Path, help="Optional PQC evidence quality result JSON.")
     parser.add_argument("--migration-readiness", type=Path, help="Optional PQC migration readiness JSON artifact.")
+    parser.add_argument("--reference-values", type=Path, help="Optional PQC reference values JSON artifact.")
+    parser.add_argument("--firmware-status-result", type=Path, help="Optional firmware assurance status result JSON.")
+    parser.add_argument("--acvp-json-interop-result", type=Path, help="Optional ACVP JSON interop result JSON.")
+    parser.add_argument("--build-provenance-result", type=Path, help="Optional SLSA build provenance verification result JSON.")
+    parser.add_argument("--ct-sample-analysis-result", type=Path, help="Optional CT sample analysis result JSON.")
     parser.add_argument(
         "--ct-instruction-policy-result",
         type=Path,
@@ -1853,6 +1858,11 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     assurance_profile_result_arg = getattr(args, "assurance_profile_result", None)
     evidence_quality_result_arg = getattr(args, "evidence_quality_result", None)
     migration_readiness_arg = getattr(args, "migration_readiness", None)
+    reference_values_arg = getattr(args, "reference_values", None)
+    firmware_status_result_arg = getattr(args, "firmware_status_result", None)
+    acvp_json_interop_result_arg = getattr(args, "acvp_json_interop_result", None)
+    build_provenance_result_arg = getattr(args, "build_provenance_result", None)
+    ct_sample_analysis_result_arg = getattr(args, "ct_sample_analysis_result", None)
     ct_instruction_policy_result_arg = getattr(args, "ct_instruction_policy_result", None)
     cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
     attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
@@ -1865,6 +1875,11 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     assurance_profile_result = resolve_path(assurance_profile_result_arg, module_path) if assurance_profile_result_arg else None
     evidence_quality_result = resolve_path(evidence_quality_result_arg, module_path) if evidence_quality_result_arg else None
     migration_readiness = resolve_path(migration_readiness_arg, module_path) if migration_readiness_arg else None
+    reference_values = resolve_path(reference_values_arg, module_path) if reference_values_arg else None
+    firmware_status_result = resolve_path(firmware_status_result_arg, module_path) if firmware_status_result_arg else None
+    acvp_json_interop_result = resolve_path(acvp_json_interop_result_arg, module_path) if acvp_json_interop_result_arg else None
+    build_provenance_result = resolve_path(build_provenance_result_arg, module_path) if build_provenance_result_arg else None
+    ct_sample_analysis_result = resolve_path(ct_sample_analysis_result_arg, module_path) if ct_sample_analysis_result_arg else None
     ct_instruction_policy_result = (
         resolve_path(ct_instruction_policy_result_arg, module_path)
         if ct_instruction_policy_result_arg
@@ -2001,7 +2016,7 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec,
             path=policy_result,
             label="PQC assurance policy result",
-            expected_schema_version=2,
+            expected_schema_version=None,
             required_keys=("schema_version", "passed", "checks"),
             success_field="passed",
         ),
@@ -2053,6 +2068,47 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             path=assurance_profile_result,
             label="PQC assurance profile result",
             required_keys=("schema_version", "passed", "summary", "checks"),
+            success_field="passed",
+        ),
+        "release.reference_values": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=reference_values,
+            label="PQC reference values",
+            required_keys=(
+                "schema_version",
+                "version",
+                "tag",
+                "head_sha",
+                "artifact_hashes",
+                "expected_firmware_digest_root",
+            ),
+        ),
+        "firmware.assurance_status_report": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=firmware_status_result,
+            label="firmware assurance status verification result",
+            required_keys=("schema_version", "passed", "status", "checks"),
+            success_field="passed",
+        ),
+        "acvp.json_interop": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=acvp_json_interop_result,
+            label="ACVP JSON interop result",
+            required_keys=("schema_version", "passed", "summary", "results"),
+            success_field="passed",
+        ),
+        "supply_chain.slsa_build_provenance": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=build_provenance_result,
+            label="PQC build provenance verification result",
+            required_keys=("schema_version", "passed", "checks"),
+            success_field="passed",
+        ),
+        "security.ct_sample_analysis": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=ct_sample_analysis_result,
+            label="CT sample analysis result",
+            required_keys=("schema_version", "passed", "algorithms", "checks"),
             success_field="passed",
         ),
     }

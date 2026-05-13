@@ -187,6 +187,19 @@ The full local release gate now emits the Passport artifacts described in
 - `pqc_claim_closure_result.json`: final post-policy replay result that checks
   the assembled profile, quality, migration, attestation, digest, and firmware
   digest artifacts still agree.
+- `pqc_reference_values.json` / `pqc_reference_values_result.json`: compact
+  reference values and replay result for release metadata, artifact hashes,
+  CBOM IDs, required claims, and the expected firmware digest root.
+- `firmware_assurance_status_result.json`: replay result for firmware-reported
+  `PQCP_ASSURANCE_STATUS` and `PQCP_ASSURANCE_ARTIFACT` markers.
+- `acvp_json_interop_result.json` /
+  `acvp_json_transcript_manifest.json`: ACVP JSON vector translation evidence
+  and transcript hashes.
+- `pqc_build_provenance.slsa.json` /
+  `pqc_build_provenance_result.json`: SLSA-shaped in-toto build provenance and
+  replay result.
+- `ct_sample_analysis_result.json`: replay result for optional raw CT smoke
+  sample markers.
 
 The CI fast gate intentionally skips the full Passport because it would require
 the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence

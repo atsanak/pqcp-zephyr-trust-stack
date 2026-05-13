@@ -184,6 +184,14 @@ Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 - `pqc_migration_readiness.json`
 - `pqc_migration_readiness.md`
 - `ct_instruction_policy_result.json`
+- `pqc_reference_values.json`
+- `pqc_reference_values_result.json`
+- `firmware_assurance_status_result.json`
+- `acvp_json_interop_result.json`
+- `acvp_json_transcript_manifest.json`
+- `pqc_build_provenance.slsa.json`
+- `pqc_build_provenance_result.json`
+- `ct_sample_analysis_result.json`
 - `pqc_claim_closure_result.json`
 
 `pqc_policy_result.json` must have `"passed": true`. The policy verifier checks
@@ -233,7 +241,10 @@ replays the PQC Assurance Passport policy and digest checks. For
 result, asset trace result, evidence graph, and generated firmware digest
 header. For `schema_version >= 5` packs it also requires the assurance profile,
 evidence quality, migration-readiness, and CT instruction-policy artifacts and
-checks that the digest manifest includes them.
+checks that the digest manifest includes them. For `schema_version >= 6` packs
+it additionally requires reference values, firmware status verification, ACVP
+JSON interop evidence, SLSA-shaped build provenance, and CT sample analysis
+results.
 
 For benchmark comparison and side-channel-smoke interpretation, read
 [`performance-methodology.md`](performance-methodology.md) before comparing

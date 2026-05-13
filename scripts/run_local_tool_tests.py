@@ -29,6 +29,11 @@ TOOL_TESTS = (
     "test_migration_readiness_report.py",
     "test_pqc_claim_closure.py",
     "test_pqc_performance_hardening.py",
+    "test_pqc_reference_values.py",
+    "test_firmware_assurance_status.py",
+    "test_acvp_json_interop.py",
+    "test_pqc_build_provenance.py",
+    "test_ct_sample_analysis.py",
 )
 
 

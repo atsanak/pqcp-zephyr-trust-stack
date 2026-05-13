@@ -51,6 +51,11 @@
     {"id": "supply_chain.evidence_quality_index", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
     {"id": "crypto_agility.profile_separation", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
     {"id": "release.migration_readiness", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
-    {"id": "security.production_rng_policy", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true}
+    {"id": "security.production_rng_policy", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "release.reference_values", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "firmware.assurance_status_report", "evidence_class": "qemu_smoke", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "acvp.json_interop", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "supply_chain.slsa_build_provenance", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "security.ct_sample_analysis", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true}
   ]
 }

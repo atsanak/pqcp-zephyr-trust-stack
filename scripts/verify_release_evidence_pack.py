@@ -287,6 +287,14 @@ def verify_passport_artifacts(
     migration_readiness_json = output_root / "pqc_migration_readiness.json"
     migration_readiness_md = output_root / "pqc_migration_readiness.md"
     claim_closure_result = output_root / "pqc_claim_closure_result.json"
+    reference_values = output_root / "pqc_reference_values.json"
+    reference_values_result = output_root / "pqc_reference_values_result.json"
+    firmware_status_result = output_root / "firmware_assurance_status_result.json"
+    acvp_json_interop_result = output_root / "acvp_json_interop_result.json"
+    acvp_json_transcript_manifest = output_root / "acvp_json_transcript_manifest.json"
+    build_provenance = output_root / "pqc_build_provenance.slsa.json"
+    build_provenance_result = output_root / "pqc_build_provenance_result.json"
+    ct_sample_analysis_result = output_root / "ct_sample_analysis_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     if not policy_path.exists():
@@ -311,6 +319,15 @@ def verify_passport_artifacts(
         require_file(migration_readiness_json, "PQC migration readiness JSON", failures)
         require_file(migration_readiness_md, "PQC migration readiness Markdown", failures)
         require_file(claim_closure_result, "PQC claim closure result", failures)
+    if (ledger.get("schema_version") or 0) >= 6:
+        require_file(reference_values, "PQC reference values", failures)
+        require_file(reference_values_result, "PQC reference values result", failures)
+        require_file(firmware_status_result, "firmware assurance status result", failures)
+        require_file(acvp_json_interop_result, "ACVP JSON interop result", failures)
+        require_file(acvp_json_transcript_manifest, "ACVP JSON transcript manifest", failures)
+        require_file(build_provenance, "PQC build provenance", failures)
+        require_file(build_provenance_result, "PQC build provenance result", failures)
+        require_file(ct_sample_analysis_result, "CT sample analysis result", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -331,6 +348,14 @@ def verify_passport_artifacts(
         evidence_quality_result_path=evidence_quality_result if evidence_quality_result.exists() else None,
         migration_readiness_json_path=migration_readiness_json if migration_readiness_json.exists() else None,
         migration_readiness_md_path=migration_readiness_md if migration_readiness_md.exists() else None,
+        reference_values_path=reference_values if reference_values.exists() else None,
+        reference_values_result_path=reference_values_result if reference_values_result.exists() else None,
+        firmware_status_result_path=firmware_status_result if firmware_status_result.exists() else None,
+        acvp_json_interop_result_path=acvp_json_interop_result if acvp_json_interop_result.exists() else None,
+        acvp_json_transcript_manifest_path=acvp_json_transcript_manifest if acvp_json_transcript_manifest.exists() else None,
+        build_provenance_path=build_provenance if build_provenance.exists() else None,
+        build_provenance_result_path=build_provenance_result if build_provenance_result.exists() else None,
+        ct_sample_analysis_result_path=ct_sample_analysis_result if ct_sample_analysis_result.exists() else None,
     )
     if not policy_replay.get("passed"):
         for failure in policy_replay.get("failures", []):
@@ -413,6 +438,39 @@ def verify_passport_artifacts(
         closure = load_json(claim_closure_result, "PQC claim closure result", failures)
         if closure and closure.get("passed") is not True:
             failures.append("PQC claim closure result did not pass")
+
+    if (ledger.get("schema_version") or 0) >= 6:
+        for path, label in (
+            (reference_values_result, "PQC reference values result"),
+            (firmware_status_result, "firmware assurance status result"),
+            (acvp_json_interop_result, "ACVP JSON interop result"),
+            (build_provenance_result, "PQC build provenance result"),
+            (ct_sample_analysis_result, "CT sample analysis result"),
+        ):
+            payload = load_json(path, label, failures)
+            if payload and payload.get("passed") is not True:
+                failures.append(f"{label} did not pass")
+        ref = load_json(reference_values, "PQC reference values", failures)
+        if ref:
+            manifest_for_ref = load_json(manifest_path, "release manifest", failures) if manifest_path else {}
+            if ref.get("schema_version") != 1:
+                failures.append(f"PQC reference values schema_version={ref.get('schema_version')!r}, expected 1")
+            if ref.get("version") != ledger.get("version"):
+                failures.append("PQC reference values version does not match ledger")
+            if ref.get("tag") != ledger.get("tag"):
+                failures.append("PQC reference values tag does not match ledger")
+            expected_head = ledger.get("head_sha") or manifest_for_ref.get("source_commit") or ""
+            if ref.get("head_sha") != expected_head:
+                failures.append("PQC reference values head_sha does not match ledger")
+        acvp_manifest = load_json(acvp_json_transcript_manifest, "ACVP JSON transcript manifest", failures)
+        if acvp_manifest and not acvp_manifest.get("transcripts"):
+            failures.append("ACVP JSON transcript manifest has no transcripts")
+        provenance = load_json(build_provenance, "PQC build provenance", failures)
+        if provenance:
+            if provenance.get("_type") != "https://in-toto.io/Statement/v1":
+                failures.append("PQC build provenance is not an in-toto Statement")
+            if provenance.get("predicateType") != "https://slsa.dev/provenance/v1":
+                failures.append("PQC build provenance predicateType is not SLSA provenance v1")
 
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:

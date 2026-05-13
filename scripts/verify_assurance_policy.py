@@ -39,6 +39,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence-quality-result", type=Path)
     parser.add_argument("--migration-readiness-json", type=Path)
     parser.add_argument("--migration-readiness-md", type=Path)
+    parser.add_argument("--reference-values", type=Path)
+    parser.add_argument("--reference-values-result", type=Path)
+    parser.add_argument("--firmware-status-result", type=Path)
+    parser.add_argument("--acvp-json-interop-result", type=Path)
+    parser.add_argument("--acvp-json-transcript-manifest", type=Path)
+    parser.add_argument("--build-provenance", type=Path)
+    parser.add_argument("--build-provenance-result", type=Path)
+    parser.add_argument("--ct-sample-analysis-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -303,6 +311,19 @@ def default_passport_v3_paths(base: Path) -> dict[str, Path]:
     }
 
 
+def default_passport_v4_paths(base: Path) -> dict[str, Path]:
+    return {
+        "pqc_reference_values.json": base / "pqc_reference_values.json",
+        "pqc_reference_values_result.json": base / "pqc_reference_values_result.json",
+        "firmware_assurance_status_result.json": base / "firmware_assurance_status_result.json",
+        "acvp_json_interop_result.json": base / "acvp_json_interop_result.json",
+        "acvp_json_transcript_manifest.json": base / "acvp_json_transcript_manifest.json",
+        "pqc_build_provenance.slsa.json": base / "pqc_build_provenance.slsa.json",
+        "pqc_build_provenance_result.json": base / "pqc_build_provenance_result.json",
+        "ct_sample_analysis_result.json": base / "ct_sample_analysis_result.json",
+    }
+
+
 def check_passport_v2_artifacts(
     *,
     policy: dict[str, Any],
@@ -448,6 +469,31 @@ def check_passport_v3_artifacts(
             )
 
 
+def check_passport_v4_artifacts(
+    *,
+    policy: dict[str, Any],
+    base: Path,
+    explicit_paths: dict[str, Path | None],
+    failures: list[str],
+    checks: list[dict[str, Any]],
+) -> None:
+    defaults = default_passport_v4_paths(base)
+    for rel_path in policy.get("required_passport_v4_artifacts") or []:
+        path = explicit_paths.get(rel_path) or defaults.get(rel_path) or (base / rel_path)
+        ok = path.exists() and path.is_file() and path.stat().st_size > 0
+        checks.append({"check": "passport_v4_artifact", "path": rel_path, "passed": ok})
+        if not ok:
+            failures.append(f"required Passport v4 artifact missing or empty: {rel_path}")
+            continue
+        if rel_path.endswith("_result.json"):
+            payload = load_json(path, rel_path, failures)
+            if payload:
+                passed = payload.get("passed") is True
+                checks.append({"check": "passport_v4_result_passed", "path": rel_path, "passed": passed})
+                if not passed:
+                    failures.append(f"Passport v4 result did not pass: {rel_path}")
+
+
 def verify_policy(
     *,
     policy_path: Path,
@@ -464,6 +510,14 @@ def verify_policy(
     evidence_quality_result_path: Path | None = None,
     migration_readiness_json_path: Path | None = None,
     migration_readiness_md_path: Path | None = None,
+    reference_values_path: Path | None = None,
+    reference_values_result_path: Path | None = None,
+    firmware_status_result_path: Path | None = None,
+    acvp_json_interop_result_path: Path | None = None,
+    acvp_json_transcript_manifest_path: Path | None = None,
+    build_provenance_path: Path | None = None,
+    build_provenance_result_path: Path | None = None,
+    ct_sample_analysis_result_path: Path | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     checks: list[dict[str, Any]] = []
@@ -479,7 +533,7 @@ def verify_policy(
     if not policy or not ledger or not cbom or not attestation:
         return {"schema_version": 1, "passed": False, "failures": failures, "checks": checks}
 
-    if policy.get("schema_version") not in (1, 2, 3):
+    if policy.get("schema_version") not in (1, 2, 3, 4):
         failures.append(f"unsupported policy schema_version={policy.get('schema_version')!r}")
     check_required_claims(policy=policy, ledger=ledger, failures=failures, checks=checks)
     check_cbom(policy=policy, cbom=cbom, failures=failures, checks=checks)
@@ -510,6 +564,10 @@ def verify_policy(
             known_paths[name] = migration_readiness_json_path
         elif name == "pqc_migration_readiness.md" and migration_readiness_md_path is not None:
             known_paths[name] = migration_readiness_md_path
+        elif name == "pqc_reference_values.json" and reference_values_path is not None:
+            known_paths[name] = reference_values_path
+        elif name == "pqc_build_provenance.slsa.json" and build_provenance_path is not None:
+            known_paths[name] = build_provenance_path
         else:
             candidate = base / name
             if candidate.exists():
@@ -521,7 +579,7 @@ def verify_policy(
         failures=failures,
         checks=checks,
     )
-    if policy.get("schema_version") in (2, 3):
+    if policy.get("schema_version") in (2, 3, 4):
         check_passport_v2_artifacts(
             policy=policy,
             base=ledger_path.parent,
@@ -533,7 +591,7 @@ def verify_policy(
             failures=failures,
             checks=checks,
         )
-    if policy.get("schema_version") == 3:
+    if policy.get("schema_version") in (3, 4):
         check_passport_v3_artifacts(
             policy=policy,
             base=ledger_path.parent,
@@ -544,8 +602,25 @@ def verify_policy(
             failures=failures,
             checks=checks,
         )
+    if policy.get("schema_version") == 4:
+        check_passport_v4_artifacts(
+            policy=policy,
+            base=ledger_path.parent,
+            explicit_paths={
+                "pqc_reference_values.json": reference_values_path,
+                "pqc_reference_values_result.json": reference_values_result_path,
+                "firmware_assurance_status_result.json": firmware_status_result_path,
+                "acvp_json_interop_result.json": acvp_json_interop_result_path,
+                "acvp_json_transcript_manifest.json": acvp_json_transcript_manifest_path,
+                "pqc_build_provenance.slsa.json": build_provenance_path,
+                "pqc_build_provenance_result.json": build_provenance_result_path,
+                "ct_sample_analysis_result.json": ct_sample_analysis_result_path,
+            },
+            failures=failures,
+            checks=checks,
+        )
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "policy": str(policy_path),
         "passed": not failures,
@@ -571,6 +646,14 @@ def main() -> int:
         evidence_quality_result_path=args.evidence_quality_result.resolve() if args.evidence_quality_result else None,
         migration_readiness_json_path=args.migration_readiness_json.resolve() if args.migration_readiness_json else None,
         migration_readiness_md_path=args.migration_readiness_md.resolve() if args.migration_readiness_md else None,
+        reference_values_path=args.reference_values.resolve() if args.reference_values else None,
+        reference_values_result_path=args.reference_values_result.resolve() if args.reference_values_result else None,
+        firmware_status_result_path=args.firmware_status_result.resolve() if args.firmware_status_result else None,
+        acvp_json_interop_result_path=args.acvp_json_interop_result.resolve() if args.acvp_json_interop_result else None,
+        acvp_json_transcript_manifest_path=args.acvp_json_transcript_manifest.resolve() if args.acvp_json_transcript_manifest else None,
+        build_provenance_path=args.build_provenance.resolve() if args.build_provenance else None,
+        build_provenance_result_path=args.build_provenance_result.resolve() if args.build_provenance_result else None,
+        ct_sample_analysis_result_path=args.ct_sample_analysis_result.resolve() if args.ct_sample_analysis_result else None,
     )
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.output.resolve().write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

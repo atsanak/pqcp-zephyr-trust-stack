@@ -1,0 +1,30 @@
+{
+  "algorithm": "ML-DSA",
+  "testGroups": [
+    {
+      "tgId": 1,
+      "parameterSet": "ML-DSA-65",
+      "function": "sigGen",
+      "tests": [
+        {
+          "tcId": 1,
+          "sk": "AA",
+          "message": "ABCD"
+        }
+      ]
+    },
+    {
+      "tgId": 2,
+      "parameterSet": "ML-DSA-65",
+      "function": "sigVer",
+      "tests": [
+        {
+          "tcId": 2,
+          "pk": "AA",
+          "message": "ABCD",
+          "signature": "AA"
+        }
+      ]
+    }
+  ]
+}

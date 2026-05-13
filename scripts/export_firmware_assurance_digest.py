@@ -20,6 +20,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--digest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--version",
+        default="unknown",
+        help="Release version string to embed in PQCP_ASSURANCE_STATUS.",
+    )
     return parser.parse_args()
 
 
@@ -53,10 +58,16 @@ def canonical_digest_root(digest: dict[str, Any]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
-def render_header(digest: dict[str, Any], *, source_name: str) -> str:
+def c_string(value: str) -> str:
+    return json.dumps(value)
+
+
+def render_header(digest: dict[str, Any], *, source_name: str, version: str) -> str:
     root_hash = canonical_digest_root(digest)
     artifact_count = len(digest["artifacts"])
     generated_at = datetime.now(timezone.utc).isoformat()
+    artifact_names = ", ".join(c_string(str(item["path"])) for item in digest["artifacts"])
+    artifact_hashes = ", ".join(c_string(str(item["sha256"])) for item in digest["artifacts"])
     return "\n".join(
         [
             "/*",
@@ -70,11 +81,19 @@ def render_header(digest: dict[str, Any], *, source_name: str) -> str:
             "#define PQCP_ASSURANCE_DIGEST_GENERATED_H_",
             "",
             f'#define PQCP_ASSURANCE_DIGEST_SOURCE "{source_name}"',
+            f"#define PQCP_ASSURANCE_DIGEST_VERSION {c_string(version)}",
             '#define PQCP_ASSURANCE_DIGEST_ALGORITHM "sha256"',
             "#define PQCP_ASSURANCE_DIGEST_SCHEMA_VERSION 1",
             f"#define PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT {artifact_count}",
             f'#define PQCP_ASSURANCE_DIGEST_ROOT_SHA256 "{root_hash}"',
             f'#define PQCP_ASSURANCE_DIGEST_GENERATED_AT "{generated_at}"',
+            "",
+            "static const char * const pqcp_assurance_digest_artifact_names[] = {",
+            f"\t{artifact_names}",
+            "};",
+            "static const char * const pqcp_assurance_digest_artifact_sha256[] = {",
+            f"\t{artifact_hashes}",
+            "};",
             "",
             "#endif /* PQCP_ASSURANCE_DIGEST_GENERATED_H_ */",
             "",
@@ -82,9 +101,9 @@ def render_header(digest: dict[str, Any], *, source_name: str) -> str:
     )
 
 
-def export_header(digest_path: Path, output_path: Path) -> dict[str, Any]:
+def export_header(digest_path: Path, output_path: Path, *, version: str = "unknown") -> dict[str, Any]:
     digest = load_digest(digest_path)
-    header = render_header(digest, source_name=digest_path.name)
+    header = render_header(digest, source_name=digest_path.name, version=version)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(header, encoding="utf-8")
     return {
@@ -99,7 +118,7 @@ def export_header(digest_path: Path, output_path: Path) -> dict[str, Any]:
 def main() -> int:
     args = parse_args()
     try:
-        result = export_header(args.digest, args.output)
+        result = export_header(args.digest, args.output, version=args.version)
     except (OSError, RuntimeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
