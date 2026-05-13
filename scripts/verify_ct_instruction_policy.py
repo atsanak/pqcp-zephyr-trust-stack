@@ -31,6 +31,12 @@ DEFAULT_EXCLUDE_PATTERNS = (
     "run_mlkem_decap_ct_smoke",
 )
 DIVISION_RE = re.compile(r"\b(?:idiv|div|udiv|sdiv)[a-z0-9_.]*\b", re.IGNORECASE)
+DIVISION_HELPER_RE = re.compile(
+    r"\b(?:__aeabi_(?:uidiv|idiv|uldiv|ldiv)(?:mod)?|"
+    r"__udiv(?:si|di)3|__div(?:si|di)3|"
+    r"__umod(?:si|di)3|__mod(?:si|di)3)\b",
+    re.IGNORECASE,
+)
 SYMBOL_RE = re.compile(r"^\s*[0-9a-fA-F]+\s+<([^>]+)>:\s*$")
 
 
@@ -121,12 +127,13 @@ def scan_disassembly(
             continue
 
         mnemonic = DIVISION_RE.search(line)
-        if mnemonic:
+        helper = DIVISION_HELPER_RE.search(line)
+        if mnemonic or helper:
             findings.append(
                 {
                     "symbol": current_symbol,
                     "line_number": line_number,
-                    "mnemonic": mnemonic.group(0),
+                    "mnemonic": (mnemonic or helper).group(0),
                     "line": line.strip(),
                 }
             )
@@ -167,7 +174,16 @@ def build_result(
             "name": "mlkem_decap_no_variable_latency_division",
             "target_patterns": list(patterns),
             "exclude_patterns": list(exclude_patterns),
-            "disallowed_mnemonics": ["div", "idiv", "udiv", "sdiv"],
+            "disallowed_mnemonics": [
+                "div",
+                "idiv",
+                "udiv",
+                "sdiv",
+                "__aeabi_uidiv",
+                "__aeabi_idiv",
+                "__udivsi3",
+                "__divsi3",
+            ],
             "allow_missing_targets": allow_missing_targets,
         },
         "passed": not failures,

@@ -205,6 +205,21 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("variable-latency division", result["failures"][0])
 
+    def test_instruction_policy_fails_on_compiler_division_helper_call(self) -> None:
+        text = """
+00000000 <pqcp_mlkem_decapsulate>:
+   0:  f000 f800   bl 0 <__aeabi_uidiv>
+   4:  4770        bx lr
+"""
+        result = verify_ct_instruction_policy.build_result(
+            source=Path("synthetic.S"),
+            disassembly=text,
+            patterns=("decapsulate",),
+            allow_missing_targets=False,
+        )
+        self.assertFalse(result["passed"])
+        self.assertIn("__aeabi_uidiv", result["failures"][0])
+
     def test_hardware_reference_import_normalizes_common_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             csv_path = Path(tmp) / "reference.csv"
@@ -216,9 +231,17 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
                 writer.writeheader()
                 writer.writerow(
                     {
-                        "scheme": "ML-KEM-768",
-                        "op": "decaps",
+                        "scheme": "Kyber768",
+                        "op": "decapsulation",
                         "median_cycles": "12345",
+                        "board": "cortex-m4-reference",
+                    }
+                )
+                writer.writerow(
+                    {
+                        "scheme": "Dilithium3",
+                        "op": "signature",
+                        "median_cycles": "67890",
                         "board": "cortex-m4-reference",
                     }
                 )
@@ -229,6 +252,8 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         self.assertEqual(rows[0]["algorithm"], "ML-KEM-768")
         self.assertEqual(rows[0]["operation"], "decaps")
         self.assertEqual(rows[0]["cycles"], "12345")
+        self.assertEqual(rows[1]["algorithm"], "ML-DSA-65")
+        self.assertEqual(rows[1]["operation"], "sign")
 
     def test_hardware_reference_comparison_pairs_candidate_rows(self) -> None:
         candidate = [
@@ -252,6 +277,30 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         )
         self.assertTrue(comparison[0]["passed"])
         self.assertEqual(comparison[0]["ratio"], 2.0)
+
+    def test_hardware_reference_comparison_summary_reports_geomean(self) -> None:
+        comparisons = [
+            {
+                "algorithm": "ML-KEM-768",
+                "operation": "encaps",
+                "ratio": 2.0,
+            },
+            {
+                "algorithm": "ML-KEM-768",
+                "operation": "decaps",
+                "ratio": 8.0,
+            },
+            {
+                "algorithm": "ML-DSA-65",
+                "operation": "verify",
+                "ratio": None,
+            },
+        ]
+        summary = run_hardware_benchmarks.summarize_comparisons(comparisons)
+        self.assertEqual(summary["comparison_count"], 3)
+        self.assertEqual(summary["matched_count"], 2)
+        self.assertEqual(summary["missing_count"], 1)
+        self.assertAlmostEqual(summary["geomean_ratio"], 4.0)
 
     def test_benchmark_runner_stops_after_success_marker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

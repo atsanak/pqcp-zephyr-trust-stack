@@ -8,8 +8,10 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import platform
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -23,6 +25,27 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from local_workflow import clean_env, detect_west_root, discover_west  # noqa: E402
 from parse_logs import parse_log_file  # noqa: E402
 
+OPERATION_ALIASES = {
+    "keygen": "keygen",
+    "keypair": "keygen",
+    "key_pair": "keygen",
+    "crypto_kem_keypair": "keygen",
+    "encaps": "encaps",
+    "encapsulation": "encaps",
+    "encap": "encaps",
+    "crypto_kem_enc": "encaps",
+    "decaps": "decaps",
+    "decapsulation": "decaps",
+    "decap": "decaps",
+    "crypto_kem_dec": "decaps",
+    "sign": "sign",
+    "signature": "sign",
+    "crypto_sign": "sign",
+    "verify": "verify",
+    "verification": "verify",
+    "crypto_sign_verify": "verify",
+}
+
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -30,6 +53,35 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def canonical_algorithm_name(value: Any) -> str:
+    text = str(value or "").strip()
+    compact = re.sub(r"[^a-z0-9]", "", text.lower())
+    if not compact:
+        return ""
+
+    for prefix in ("mlkem", "kyber"):
+        if compact.startswith(prefix):
+            level = compact[len(prefix):]
+            if level in {"512", "768", "1024"}:
+                return f"ML-KEM-{level}"
+
+    for prefix in ("mldsa", "dilithium"):
+        if compact.startswith(prefix):
+            level = compact[len(prefix):]
+            if level in {"44", "65", "87"}:
+                return f"ML-DSA-{level}"
+            if level in {"2", "3", "5"}:
+                return {"2": "ML-DSA-44", "3": "ML-DSA-65", "5": "ML-DSA-87"}[level]
+
+    return text
+
+
+def canonical_operation_name(value: Any) -> str:
+    text = str(value or "").strip()
+    normalized = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    return OPERATION_ALIASES.get(normalized, normalized or text)
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,8 +121,10 @@ def normalize_reference_csv(path: Path, source_name: str) -> list[dict[str, Any]
                 {
                     "source": source_name,
                     "row_index": index,
-                    "algorithm": row.get("algorithm") or row.get("parameter_set") or row.get("scheme") or "",
-                    "operation": row.get("operation") or row.get("op") or "",
+                    "algorithm": canonical_algorithm_name(
+                        row.get("algorithm") or row.get("parameter_set") or row.get("scheme") or ""
+                    ),
+                    "operation": canonical_operation_name(row.get("operation") or row.get("op") or ""),
                     "cycles": row.get("cycles") or row.get("median_cycles") or "",
                     "time_us": row.get("time_us") or row.get("us") or "",
                     "rom_bytes": row.get("rom_bytes") or row.get("text") or "",
@@ -96,8 +150,8 @@ def normalize_candidate_csv(path: Path, source_name: str = "candidate") -> list[
                 {
                     "source": source_name,
                     "row_index": index,
-                    "algorithm": row.get("parameter_set") or row.get("suite") or "",
-                    "operation": operation,
+                    "algorithm": canonical_algorithm_name(row.get("parameter_set") or row.get("suite") or ""),
+                    "operation": canonical_operation_name(operation),
                     "implementation": row.get("implementation") or "",
                     "backend": row.get("backend") or "",
                     "cycles": row.get("cycles") or "",
@@ -159,6 +213,24 @@ def compare_candidate_to_reference(
             }
         )
     return comparisons
+
+
+def summarize_comparisons(comparisons: list[dict[str, Any]]) -> dict[str, Any]:
+    ratios = [
+        float(item["ratio"])
+        for item in comparisons
+        if isinstance(item.get("ratio"), (int, float)) and item["ratio"] > 0
+    ]
+    if ratios:
+        geomean_ratio = math.exp(sum(math.log(ratio) for ratio in ratios) / len(ratios))
+    else:
+        geomean_ratio = None
+    return {
+        "comparison_count": len(comparisons),
+        "matched_count": len(ratios),
+        "missing_count": len(comparisons) - len(ratios),
+        "geomean_ratio": geomean_ratio,
+    }
 
 
 def summarize_metrics(metrics: list[dict[str, Any]]) -> dict[str, Any]:
@@ -238,6 +310,17 @@ def write_markdown(report: dict[str, Any], output_path: Path) -> None:
     ]
     comparisons = report.get("comparisons") or []
     if comparisons:
+        comparison_summary = report.get("comparison_summary") or {}
+        geomean = comparison_summary.get("geomean_ratio")
+        if isinstance(geomean, (int, float)):
+            lines.extend(
+                [
+                    f"- Matched comparisons: `{comparison_summary.get('matched_count', 0)}`",
+                    f"- Missing comparisons: `{comparison_summary.get('missing_count', 0)}`",
+                    f"- Geomean candidate/reference ratio: `{geomean:.3f}`",
+                    "",
+                ]
+            )
         lines.extend(
             [
                 "| Algorithm | Operation | Candidate cycles | Reference cycles | Ratio |",
@@ -298,6 +381,7 @@ def main() -> int:
             candidate_rows = normalize_candidate_csv(candidate)
             reference_rows = normalize_reference_csv(reference, args.reference_name)
             comparisons = compare_candidate_to_reference(candidate_rows, reference_rows)
+            comparison_summary = summarize_comparisons(comparisons)
             metrics = [*candidate_rows, *reference_rows]
             execution = {
                 "mode": "compare-reference",
@@ -309,6 +393,8 @@ def main() -> int:
                 "comparison_count": len(comparisons),
                 "passed": bool(comparisons) and all(item["passed"] for item in comparisons),
             }
+    if args.mode != "compare-reference":
+        comparison_summary = {}
 
     report = {
         "schema_version": 1,
@@ -325,6 +411,7 @@ def main() -> int:
         "execution": execution,
         "summary": summarize_metrics(metrics),
         "metrics": metrics,
+        "comparison_summary": comparison_summary,
         "comparisons": comparisons if args.mode == "compare-reference" else [],
         "passed": bool(execution.get("passed")),
     }

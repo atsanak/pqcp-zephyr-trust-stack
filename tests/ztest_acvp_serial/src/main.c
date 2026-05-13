@@ -14,6 +14,7 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 
 #define TEST_BUFFER_SIZE 16384
@@ -619,6 +620,40 @@ ZTEST(pqcp_acvp_serial, test_response_formatter_accepts_exact_plus_nul_capacity)
                                                  sizeof(payload_buffer)),
                   0);
     zassert_equal(strcmp(payload_buffer, "RESULT:00ff"), 0);
+}
+
+ZTEST(pqcp_acvp_serial, test_response_formatter_rejects_size_wraparound)
+{
+    struct pqcp_acvp_response resp;
+    uint8_t payload[] = { 0x00U };
+
+    pqcp_acvp_response_init(&resp, response_buffer, sizeof(response_buffer));
+    resp.result = PQCP_ACVP_OK;
+    resp.data = payload;
+    resp.data_len = (SIZE_MAX / 2U) + 1U;
+
+    zassert_equal(pqcp_acvp_format_response_line(&resp, response_line,
+                                                 sizeof(response_line)),
+                  -ENOSPC);
+}
+
+ZTEST(pqcp_acvp_serial, test_hex_codec_roundtrips_all_byte_values)
+{
+    uint8_t input[256];
+    uint8_t output[256];
+    size_t output_len = 0U;
+
+    for (size_t i = 0U; i < ARRAY_SIZE(input); ++i) {
+        input[i] = (uint8_t)i;
+    }
+
+    pqcp_acvp_bytes_to_hex(input, sizeof(input), hex_buffer);
+    zassert_equal(strlen(hex_buffer), sizeof(input) * 2U);
+    zassert_equal(pqcp_acvp_hex_to_bytes(hex_buffer, output, &output_len,
+                                         sizeof(output)),
+                  0);
+    zassert_equal(output_len, sizeof(input));
+    zassert_mem_equal(output, input, sizeof(input));
 }
 
 /*
