@@ -69,6 +69,13 @@ pack later without rerunning Zephyr or QEMU.
 | `scripts/verify_pqc_asset_trace_map.py` | Verifies asset-to-source/Kconfig/claim/test/marker/CBOM traceability. |
 | `scripts/generate_pqc_evidence_graph.py` | Emits JSON and Markdown graph views of the trace map against the ledger and CBOM. |
 | `scripts/export_firmware_assurance_digest.py` | Converts `pqc_assurance_digest.json` into a generated C header for firmware binding. |
+| `scripts/generate_pqc_reference_values.py` | Emits `pqc_reference_values.json`, the compact reference-value set for release metadata, artifact hashes, CBOM IDs, required claims, and firmware digest root. |
+| `scripts/verify_pqc_reference_values.py` | Replay-checks reference values against the ledger, CBOM, attestation, digest, release manifest, policy result, profile result, and transcript manifest. |
+| `scripts/verify_firmware_assurance_status.py` | Verifies `PQCP_ASSURANCE_STATUS` and `PQCP_ASSURANCE_ARTIFACT` transcript lines against reference values. |
+| `scripts/run_acvp_json_vectors.py` | Translates NIST-style ML-KEM/ML-DSA ACVP JSON vector groups into serial-command evidence and transcript hashes. |
+| `scripts/generate_pqc_build_provenance.py` | Emits an unsigned in-toto Statement with a SLSA provenance predicate shape for local release inputs and byproducts. |
+| `scripts/verify_pqc_build_provenance.py` | Replay-checks provenance statement shape, subjects, dependencies, external parameters, and byproduct metadata. |
+| `scripts/analyze_ct_samples.py` | Analyzes optional raw `PQCP_CT_SAMPLE` transcript markers for sample count, median/p90/p99 deltas, and Welch-style smoke statistics. |
 | `scripts/verify_ct_instruction_policy.py` | Scans ML-KEM decapsulation-related disassembly for variable-latency division instructions. |
 | `scripts/run_hardware_benchmarks.py` | Optional local helper for QEMU, UART transcript, and external reference benchmark capture. |
 
@@ -96,6 +103,13 @@ ledger. It consists of:
 - `ct_instruction_policy_result.json`
 - `pqc_claim_closure_result.json`
 - `generated/pqcp_assurance_digest_generated.h`
+- `pqc_reference_values.json` / `pqc_reference_values_result.json`
+- `firmware_assurance_status_result.json`
+- `acvp_json_interop_result.json` /
+  `acvp_json_transcript_manifest.json`
+- `pqc_build_provenance.slsa.json` /
+  `pqc_build_provenance_result.json`
+- `ct_sample_analysis_result.json`
 - transcript, benchmark, cost-of-assurance, MCU footprint, and release-bundle
   artifacts
 

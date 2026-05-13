@@ -1,0 +1,24 @@
+{
+  "algorithm": "ML-KEM",
+  "testGroups": [
+    {
+      "tgId": 1,
+      "parameterSet": "ML-KEM-768",
+      "function": "keyGen",
+      "tests": [
+        {"tcId": 1}
+      ]
+    },
+    {
+      "tgId": 2,
+      "parameterSet": "ML-KEM-768",
+      "function": "encapDecap",
+      "tests": [
+        {
+          "tcId": 2,
+          "pk": "AA"
+        }
+      ]
+    }
+  ]
+}

@@ -538,6 +538,15 @@ config PQCP_FUZZ_TESTS
 	  and TLS self-test harness. These tests are intended for local runs
 	  and extended CI workflows and are disabled in the default smoke CI.
 
+config PQCP_CT_SAMPLE_TRANSCRIPT
+	bool "Emit raw constant-time smoke sample transcript markers"
+	default n
+	help
+	  Emit additive PQCP_CT_SAMPLE lines from the constant-time smoke ztest.
+	  This is intended for full local release evidence capture only. It does
+	  not change cryptographic behavior and does not claim formal constant-time
+	  verification.
+
 endmenu
 
 # =============================================================================

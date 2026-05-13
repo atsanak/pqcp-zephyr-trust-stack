@@ -43,6 +43,7 @@
 #include <string.h>
 
 #include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/ztest.h>
 
@@ -180,12 +181,24 @@ static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
 		(void)pqcp_mlkem_decapsulate(level, kem_ct_valid,
 					     kem_sk, kem_ss_throwaway);
 		valid_samples[i] = k_cycle_get_64() - t0;
+		if (IS_ENABLED(CONFIG_PQCP_CT_SAMPLE_TRANSCRIPT)) {
+			printk("PQCP_CT_SAMPLE alg=%s class=valid idx=%u cycles=%llu\n",
+			       name,
+			       (unsigned int)i,
+			       (unsigned long long)valid_samples[i]);
+		}
 	}
 	for (size_t i = 0; i < CT_SMOKE_ITERATIONS; ++i) {
 		uint64_t t0 = k_cycle_get_64();
 		(void)pqcp_mlkem_decapsulate(level, kem_ct_invalid,
 					     kem_sk, kem_ss_throwaway);
 		invalid_samples[i] = k_cycle_get_64() - t0;
+		if (IS_ENABLED(CONFIG_PQCP_CT_SAMPLE_TRANSCRIPT)) {
+			printk("PQCP_CT_SAMPLE alg=%s class=invalid idx=%u cycles=%llu\n",
+			       name,
+			       (unsigned int)i,
+			       (unsigned long long)invalid_samples[i]);
+		}
 	}
 
 	uint64_t median_valid = median_u64(valid_samples, CT_SMOKE_ITERATIONS);

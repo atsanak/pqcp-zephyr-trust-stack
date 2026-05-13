@@ -22,6 +22,11 @@ POST_LEDGER_CLAIMS = {
     "crypto_agility.profile_separation": "PQC assurance profile result",
     "release.migration_readiness": "PQC migration readiness report",
     "security.production_rng_policy": "PQC assurance profile result",
+    "release.reference_values": "PQC reference values",
+    "firmware.assurance_status_report": "firmware assurance status result",
+    "acvp.json_interop": "ACVP JSON interop result",
+    "supply_chain.slsa_build_provenance": "PQC build provenance result",
+    "security.ct_sample_analysis": "CT sample analysis result",
 }
 
 
@@ -39,6 +44,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--migration-readiness-json", type=Path, required=True)
     parser.add_argument("--migration-readiness-md", type=Path, required=True)
     parser.add_argument("--firmware-digest-header", type=Path, required=True)
+    parser.add_argument("--reference-values", type=Path)
+    parser.add_argument("--firmware-status-result", type=Path)
+    parser.add_argument("--acvp-json-interop-result", type=Path)
+    parser.add_argument("--build-provenance-result", type=Path)
+    parser.add_argument("--ct-sample-analysis-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -173,6 +183,16 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
     args.migration_readiness_json = args.migration_readiness_json.resolve()
     args.migration_readiness_md = args.migration_readiness_md.resolve()
     args.firmware_digest_header = args.firmware_digest_header.resolve()
+    for optional_name in (
+        "reference_values",
+        "firmware_status_result",
+        "acvp_json_interop_result",
+        "build_provenance_result",
+        "ct_sample_analysis_result",
+    ):
+        optional = getattr(args, optional_name, None)
+        if optional is not None:
+            setattr(args, optional_name, optional.resolve())
 
     artifacts = {
         "PQC assurance attestation": args.attestation,
@@ -184,6 +204,14 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
         "PQC migration readiness Markdown": args.migration_readiness_md,
         "firmware assurance digest header": args.firmware_digest_header,
     }
+    optional_artifacts = {
+        "PQC reference values": getattr(args, "reference_values", None),
+        "firmware assurance status result": getattr(args, "firmware_status_result", None),
+        "ACVP JSON interop result": getattr(args, "acvp_json_interop_result", None),
+        "PQC build provenance result": getattr(args, "build_provenance_result", None),
+        "CT sample analysis result": getattr(args, "ct_sample_analysis_result", None),
+    }
+    artifacts.update({label: path for label, path in optional_artifacts.items() if path is not None})
     if args.ct_instruction_policy_result is not None:
         artifacts["ML-KEM decapsulation instruction policy result"] = args.ct_instruction_policy_result
     for label, path in artifacts.items():
@@ -196,6 +224,18 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
     profile = load_json(args.assurance_profile_result, "PQC assurance profile result", failures)
     quality = load_json(args.evidence_quality_result, "PQC evidence quality result", failures)
     readiness = load_json(args.migration_readiness_json, "PQC migration readiness", failures)
+    optional_results = {
+        "PQC reference values": load_json(args.reference_values, "PQC reference values", failures)
+        if getattr(args, "reference_values", None) is not None else {},
+        "firmware assurance status result": load_json(args.firmware_status_result, "firmware assurance status result", failures)
+        if getattr(args, "firmware_status_result", None) is not None else {},
+        "ACVP JSON interop result": load_json(args.acvp_json_interop_result, "ACVP JSON interop result", failures)
+        if getattr(args, "acvp_json_interop_result", None) is not None else {},
+        "PQC build provenance result": load_json(args.build_provenance_result, "PQC build provenance result", failures)
+        if getattr(args, "build_provenance_result", None) is not None else {},
+        "CT sample analysis result": load_json(args.ct_sample_analysis_result, "CT sample analysis result", failures)
+        if getattr(args, "ct_sample_analysis_result", None) is not None else {},
+    }
 
     claims = ledger_claims(ledger)
     closed_claims: list[dict[str, Any]] = []
@@ -228,6 +268,10 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
             checks.append({"check": "migration_markdown_assets", "missing": missing_assets, "passed": not missing_assets})
             if missing_assets:
                 failures.append("migration readiness Markdown missing asset(s): " + ", ".join(sorted(missing_assets)))
+
+    for label, payload in optional_results.items():
+        if payload and "result" in label.lower():
+            check_json_passed(payload, label=label, checks=checks, failures=failures)
 
     if args.firmware_digest_header.exists():
         header = args.firmware_digest_header.read_text(encoding="utf-8", errors="replace")

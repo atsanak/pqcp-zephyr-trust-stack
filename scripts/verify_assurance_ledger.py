@@ -15,8 +15,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
 VALID_STATUSES = {"pass", "fail", "not_applicable"}
-SUPPORTED_LEDGER_SCHEMA_VERSIONS = (1, 2, 3, 4, 5)
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5)
+SUPPORTED_LEDGER_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
 
 
 def parse_args() -> argparse.Namespace:

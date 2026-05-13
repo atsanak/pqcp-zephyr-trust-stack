@@ -1,0 +1,22 @@
+{
+  "algorithm": "ML-KEM",
+  "testGroups": [
+    {
+      "tgId": 1,
+      "parameterSet": "ML-KEM-999",
+      "function": "encapDecap",
+      "tests": [
+        {"tcId": 1, "pk": "AA"}
+      ]
+    },
+    {
+      "tgId": 2,
+      "parameterSet": "ML-KEM-768",
+      "function": "encapDecap",
+      "tests": [
+        {"tcId": 2, "pk": "ABC"},
+        {"tcId": 3, "pk": ""}
+      ]
+    }
+  ]
+}
