@@ -101,6 +101,29 @@ class AcvpJsonInteropVerifierTests(unittest.TestCase):
             self.assertFalse(check["passed"])
             self.assertTrue(any("non-error response" in item for item in check["failures"]))
 
+    def test_extra_manifest_row_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, manifest = self.make_artifacts(Path(tmp))
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            extra = dict(payload["transcripts"][0])
+            extra["tcId"] = 99
+            payload["transcripts"].append(extra)
+            manifest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            check = self.verify(result, manifest)
+            self.assertFalse(check["passed"])
+            self.assertTrue(any("unreferenced" in item for item in check["failures"]))
+
+    def test_duplicate_result_row_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, manifest = self.make_artifacts(Path(tmp))
+            payload = json.loads(result.read_text(encoding="utf-8"))
+            payload["results"].append(dict(payload["results"][0]))
+            payload["summary"]["test_cases"] = 2
+            result.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            check = self.verify(result, manifest)
+            self.assertFalse(check["passed"])
+            self.assertTrue(any("duplicates" in item for item in check["failures"]))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -80,15 +80,24 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         failures.append("ACVP JSON transcript manifest must contain non-empty transcripts")
         transcripts = []
 
-    manifest_by_key = {
-        stable_case_key(row): row
-        for row in transcripts
-        if isinstance(row, dict)
-    }
+    result_keys: set[tuple[str, str, str, str, str, str]] = set()
+    manifest_by_key: dict[tuple[str, str, str, str, str, str], dict[str, Any]] = {}
+    for index, row in enumerate(transcripts, start=1):
+        if not isinstance(row, dict):
+            failures.append(f"ACVP JSON transcript row {index} must be an object")
+            continue
+        key = stable_case_key(row)
+        if key in manifest_by_key:
+            failures.append(f"ACVP JSON transcript row {index} duplicates an earlier test case")
+        manifest_by_key[key] = row
     for index, row in enumerate(rows, start=1):
         if not isinstance(row, dict):
             failures.append(f"ACVP JSON result row {index} must be an object")
             continue
+        key = stable_case_key(row)
+        if key in result_keys:
+            failures.append(f"ACVP JSON result row {index} duplicates an earlier test case")
+        result_keys.add(key)
         command = row.get("command")
         response = row.get("response")
         if not isinstance(command, str) or not command:
@@ -114,13 +123,21 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         ):
             failures.append(f"ACVP JSON result row {index} negative class has non-error response")
 
-        manifest_row = manifest_by_key.get(stable_case_key(row))
+        manifest_row = manifest_by_key.get(key)
         ok = isinstance(manifest_row, dict)
         checks.append({"check": "manifest_row_present", "index": index, "passed": ok})
         if not ok:
             failures.append(f"ACVP JSON result row {index} missing from transcript manifest")
         elif manifest_row.get("sha256") != expected_hash:
             failures.append(f"ACVP JSON transcript row {index} hash mismatch")
+
+    extra_manifest = sorted(
+        f"{key[0]}:{key[1]}:{key[2]}:{key[3]}"
+        for key in set(manifest_by_key) - result_keys
+    )
+    checks.append({"check": "no_extra_manifest_rows", "extras": extra_manifest, "passed": not extra_manifest})
+    if extra_manifest:
+        failures.append("ACVP JSON transcript manifest has unreferenced row(s): " + ", ".join(extra_manifest))
 
     summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
     expected_negative = sum(
