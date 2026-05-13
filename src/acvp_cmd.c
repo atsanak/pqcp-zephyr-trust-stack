@@ -16,7 +16,6 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <stdio.h>
 
 #ifndef CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS
 #define CONFIG_PQCP_ACVP_READLINE_TIMEOUT_MS 2000
@@ -110,7 +109,7 @@ void pqcp_acvp_response_init(struct pqcp_acvp_response *resp,
 int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
                                    char *out, size_t out_size)
 {
-    int written;
+    size_t line_len;
 
     if (resp == NULL || out == NULL || out_size == 0U) {
         return -EINVAL;
@@ -118,30 +117,39 @@ int pqcp_acvp_format_response_line(const struct pqcp_acvp_response *resp,
 
     if (resp->result != PQCP_ACVP_OK &&
         resp->result != PQCP_ACVP_VERIFY_INVALID) {
-        written = snprintf(out, out_size, "ERROR:%s",
-                           pqcp_acvp_result_str(resp->result));
-        if (written < 0 || (size_t)written >= out_size) {
+        const char *prefix = "ERROR:";
+        const char *suffix = pqcp_acvp_result_str(resp->result);
+        const size_t prefix_len = sizeof("ERROR:") - 1U;
+        const size_t suffix_len = strlen(suffix);
+
+        line_len = prefix_len + suffix_len;
+        if (line_len >= out_size) {
             return -ENOSPC;
         }
 
+        memcpy(out, prefix, prefix_len);
+        memcpy(out + prefix_len, suffix, suffix_len);
+        out[line_len] = '\0';
         return 0;
     }
 
     if (resp->result == PQCP_ACVP_VERIFY_INVALID) {
-        written = snprintf(out, out_size, "RESULT:INVALID");
-        if (written < 0 || (size_t)written >= out_size) {
+        line_len = sizeof("RESULT:INVALID") - 1U;
+        if (line_len >= out_size) {
             return -ENOSPC;
         }
 
+        memcpy(out, "RESULT:INVALID", sizeof("RESULT:INVALID"));
         return 0;
     }
 
     if (resp->data_len == 0U) {
-        written = snprintf(out, out_size, "RESULT:OK");
-        if (written < 0 || (size_t)written >= out_size) {
+        line_len = sizeof("RESULT:OK") - 1U;
+        if (line_len >= out_size) {
             return -ENOSPC;
         }
 
+        memcpy(out, "RESULT:OK", sizeof("RESULT:OK"));
         return 0;
     }
 

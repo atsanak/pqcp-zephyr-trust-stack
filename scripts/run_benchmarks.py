@@ -15,11 +15,13 @@ import importlib.util
 import json
 import os
 import re
+import selectors
 import shlex
 import shutil
 import signal
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -643,6 +645,7 @@ class BenchmarkRunner:
         *,
         cwd: Path,
         timeout: Optional[int] = None,
+        success_markers: tuple[str, ...] = (),
     ) -> CommandResult:
         if self.verbose:
             print(" ".join(cmd))
@@ -659,6 +662,12 @@ class BenchmarkRunner:
                 text=True,
                 start_new_session=True,
             )
+            if success_markers:
+                return self._communicate_until_marker(
+                    proc,
+                    timeout=timeout,
+                    success_markers=success_markers,
+                )
             stdout, _ = proc.communicate(timeout=timeout)
             return CommandResult(proc.returncode, stdout or "", False)
         except subprocess.TimeoutExpired:
@@ -681,6 +690,75 @@ class BenchmarkRunner:
                         pass
                     stdout, _ = proc.communicate()
             return CommandResult(124, stdout or "", True)
+
+    def _terminate_process_group(self, proc: subprocess.Popen[str], sig: int) -> None:
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            pass
+
+    def _communicate_until_marker(
+        self,
+        proc: subprocess.Popen[str],
+        *,
+        timeout: Optional[int],
+        success_markers: tuple[str, ...],
+    ) -> CommandResult:
+        chunks: list[bytes] = []
+        deadline = time.monotonic() + timeout if timeout else None
+        marker_bytes = tuple(marker.encode("utf-8") for marker in success_markers)
+        selector = selectors.DefaultSelector()
+
+        if proc.stdout is not None:
+            selector.register(proc.stdout, selectors.EVENT_READ)
+
+        try:
+            while True:
+                for key, _event in selector.select(timeout=0.1):
+                    try:
+                        chunk = os.read(key.fileobj.fileno(), 4096)
+                    except OSError:
+                        chunk = b""
+                    if not chunk:
+                        try:
+                            selector.unregister(key.fileobj)
+                        except (KeyError, ValueError):
+                            pass
+                        continue
+                    chunks.append(chunk)
+                    stdout_bytes = b"".join(chunks)
+                    if all(marker in stdout_bytes for marker in marker_bytes):
+                        self._terminate_process_group(proc, signal.SIGTERM)
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            self._terminate_process_group(proc, signal.SIGKILL)
+                            proc.wait()
+                        return CommandResult(
+                            0,
+                            stdout_bytes.decode("utf-8", errors="replace"),
+                            False,
+                        )
+
+                if proc.poll() is not None:
+                    stdout = b"".join(chunks).decode("utf-8", errors="replace")
+                    return CommandResult(proc.returncode, stdout, False)
+
+                if deadline is not None and time.monotonic() >= deadline:
+                    self._terminate_process_group(proc, signal.SIGTERM)
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self._terminate_process_group(proc, signal.SIGKILL)
+                        proc.wait()
+                    stdout = b"".join(chunks).decode("utf-8", errors="replace")
+                    return CommandResult(124, stdout, True)
+        finally:
+            selector.close()
+            if proc.stdout is not None:
+                proc.stdout.close()
 
     def _write_extra_conf(self, run_dir: Path, spec: RunSpec) -> Optional[Path]:
         lines = [PROFILES[spec.profile]["kconfig"], *spec.extra_kconfig]
@@ -741,12 +819,14 @@ class BenchmarkRunner:
                 [str(binary)],
                 cwd=self.west_root,
                 timeout=run_timeout,
+                success_markers=("PROJECT EXECUTION SUCCESSFUL",),
             )
 
         result = self._run_command(
             [*self.west_cmd, "build", "-d", str(build_dir), "-t", "run"],
             cwd=self.west_root,
             timeout=run_timeout,
+            success_markers=("PROJECT EXECUTION SUCCESSFUL",),
         )
         self._cleanup_qemu(build_dir)
         return result

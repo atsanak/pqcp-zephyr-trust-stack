@@ -14,7 +14,12 @@ from pathlib import Path
 
 import generate_assurance_ledger as ledger
 import verify_assurance_ledger as ledger_verify
-from export_results import CSV_FIELDNAMES, EXPECTED_PRIMITIVE_ROWS
+from export_results import (
+    CSV_FIELDNAMES,
+    EXPECTED_PRIMITIVE_ROWS,
+    REQUIRED_BENCHMARK_METADATA_KEYS,
+    add_single_observation_distribution_rows,
+)
 
 
 def sha256(path: Path) -> str:
@@ -77,6 +82,15 @@ class AssuranceLedgerTests(unittest.TestCase):
 
     def make_provenance(self, csv_path: Path) -> Path:
         path = csv_path.with_name("benchmark_provenance.json")
+        metadata = {
+            "row_count": len(REQUIRED_BENCHMARK_METADATA_KEYS),
+            "keys": list(REQUIRED_BENCHMARK_METADATA_KEYS),
+            "required_keys": list(REQUIRED_BENCHMARK_METADATA_KEYS),
+            "by_key": {
+                key: ["synthetic"] for key in REQUIRED_BENCHMARK_METADATA_KEYS
+            },
+            "run_ids": ["synthetic-run"],
+        }
         path.write_text(
             json.dumps(
                 {
@@ -84,7 +98,9 @@ class AssuranceLedgerTests(unittest.TestCase):
                     "csv": {
                         "path": csv_path.name,
                         "sha256": sha256(csv_path),
+                        "distribution_row_count": 1,
                     },
+                    "benchmark_metadata": metadata,
                 },
                 indent=2,
             )
@@ -792,6 +808,48 @@ class AssuranceLedgerTests(unittest.TestCase):
                 parameter_levels=("ML-KEM-512", "ML-KEM-768", "ML-KEM-1024"),
             )
             self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_distribution_quality_requires_build_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_path = self.make_benchmark_csv(root)
+            with csv_path.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            rows = add_single_observation_distribution_rows(rows)
+            with csv_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=CSV_FIELDNAMES)
+                writer.writeheader()
+                writer.writerows(rows)
+
+            provenance = csv_path.with_name("benchmark_provenance.json")
+            provenance.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "csv": {
+                            "path": csv_path.name,
+                            "sha256": sha256(csv_path),
+                            "distribution_row_count": 1,
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            spec = {
+                "id": "benchmark.distribution_quality",
+                "category": "benchmark",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_benchmark_distribution_quality(
+                spec,
+                csv_path=csv_path,
+                provenance_path=provenance,
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("benchmark_metadata", result["failure_reason"])
 
     def test_per_primitive_benchmark_fails_when_level_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

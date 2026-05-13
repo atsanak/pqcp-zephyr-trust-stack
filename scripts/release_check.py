@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import selectors
 import shlex
 import shutil
 import signal
@@ -387,6 +388,77 @@ def write_junit_report(results: List[StepResult], output_path: Path) -> None:
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
 
 
+def terminate_process_group(proc: subprocess.Popen[str], sig: int) -> None:
+    try:
+        os.killpg(proc.pid, sig)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        pass
+
+
+def communicate_until_markers(
+    proc: subprocess.Popen[str],
+    *,
+    timeout: Optional[int],
+    success_markers: tuple[str, ...],
+) -> tuple[int, str, bool]:
+    chunks: list[bytes] = []
+    deadline = time.monotonic() + timeout if timeout else None
+    marker_bytes = tuple(marker.encode("utf-8") for marker in success_markers)
+    selector = selectors.DefaultSelector()
+
+    if proc.stdout is not None:
+        selector.register(proc.stdout, selectors.EVENT_READ)
+
+    try:
+        while True:
+            for key, _event in selector.select(timeout=0.1):
+                try:
+                    chunk = os.read(key.fileobj.fileno(), 4096)
+                except OSError:
+                    chunk = b""
+                if not chunk:
+                    try:
+                        selector.unregister(key.fileobj)
+                    except (KeyError, ValueError):
+                        pass
+                    continue
+
+                chunks.append(chunk)
+                stdout_bytes = b"".join(chunks)
+                if all(marker in stdout_bytes for marker in marker_bytes):
+                    terminate_process_group(proc, signal.SIGTERM)
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        terminate_process_group(proc, signal.SIGKILL)
+                        proc.wait()
+                    return (
+                        0,
+                        stdout_bytes.decode("utf-8", errors="replace"),
+                        True,
+                    )
+
+            if proc.poll() is not None:
+                stdout = b"".join(chunks).decode("utf-8", errors="replace")
+                return proc.returncode, stdout, False
+
+            if deadline is not None and time.monotonic() >= deadline:
+                terminate_process_group(proc, signal.SIGTERM)
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    terminate_process_group(proc, signal.SIGKILL)
+                    proc.wait()
+                stdout = b"".join(chunks).decode("utf-8", errors="replace")
+                return 124, stdout, False
+    finally:
+        selector.close()
+        if proc.stdout is not None:
+            proc.stdout.close()
+
+
 def run_step(step: Step, env: dict[str, str], verbose: bool) -> StepResult:
     print(f"[RUN ] {step.name}")
     if verbose:
@@ -405,34 +477,42 @@ def run_step(step: Step, env: dict[str, str], verbose: bool) -> StepResult:
             text=True,
             start_new_session=True,
         )
-        stdout, _ = proc.communicate(timeout=step.timeout)
-        stdout = stdout or ""
-        returncode = proc.returncode
+        if step.success_markers:
+            returncode, stdout, marker_terminated = communicate_until_markers(
+                proc,
+                timeout=step.timeout,
+                success_markers=step.success_markers,
+            )
+        else:
+            stdout, _ = proc.communicate(timeout=step.timeout)
+            stdout = stdout or ""
+            returncode = proc.returncode
+            marker_terminated = False
     except subprocess.TimeoutExpired:
         stdout = ""
         if proc is not None:
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                pass
+            terminate_process_group(proc, signal.SIGTERM)
             try:
                 stdout, _ = proc.communicate(timeout=5)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                except PermissionError:
-                    pass
+                terminate_process_group(proc, signal.SIGKILL)
                 stdout, _ = proc.communicate()
         returncode = 124
+        marker_terminated = False
 
     duration_seconds = time.perf_counter() - started
 
     if stdout:
         print(stdout, end="" if stdout.endswith("\n") else "\n")
+
+    if marker_terminated:
+        print(f"[PASS] {step.name} (success marker reached; stopped runner)")
+        return StepResult(
+            name=step.name,
+            returncode=0,
+            output=stdout,
+            duration_seconds=duration_seconds,
+        )
 
     if returncode == 124 and step.success_markers:
         if all(marker in stdout for marker in step.success_markers):

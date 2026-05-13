@@ -36,12 +36,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("qemu", "transcript", "import-reference"),
+        choices=("qemu", "transcript", "import-reference", "compare-reference"),
         required=True,
         help=(
             "qemu runs the existing benchmark matrix locally; transcript "
             "normalizes a captured UART/QEMU log; import-reference normalizes "
-            "a paper/reference CSV without executing code."
+            "a paper/reference CSV without executing code; compare-reference "
+            "compares a local benchmark CSV against an imported reference CSV."
         ),
     )
     parser.add_argument("--module-path", type=Path, default=REPO_ROOT)
@@ -49,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--west", help="Explicit west command.")
     parser.add_argument("--board", default="qemu_x86_64")
     parser.add_argument("--transcript", type=Path, help="Captured UART/QEMU stdout log.")
+    parser.add_argument("--candidate-csv", type=Path, help="Local benchmark CSV to compare.")
     parser.add_argument("--reference-csv", type=Path, help="Reference benchmark CSV to import.")
     parser.add_argument("--reference-name", default="external-reference")
     parser.add_argument("--output-root", type=Path, required=True)
@@ -78,6 +80,85 @@ def normalize_reference_csv(path: Path, source_name: str) -> list[dict[str, Any]
                 }
             )
     return rows
+
+
+def normalize_candidate_csv(path: Path, source_name: str = "candidate") -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for index, row in enumerate(reader, start=1):
+            operation = str(row.get("operation") or "")
+            if operation.endswith(("_cycles_min", "_cycles_median", "_cycles_p90",
+                                   "_cycles_p99", "_cycles_max", "_cycles_mad",
+                                   "_sample_count")):
+                continue
+            rows.append(
+                {
+                    "source": source_name,
+                    "row_index": index,
+                    "algorithm": row.get("parameter_set") or row.get("suite") or "",
+                    "operation": operation,
+                    "implementation": row.get("implementation") or "",
+                    "backend": row.get("backend") or "",
+                    "cycles": row.get("cycles") or "",
+                    "time_us": row.get("time_us") or "",
+                    "rom_bytes": row.get("rom_bytes") or "",
+                    "ram_bytes": row.get("ram_bytes") or "",
+                    "platform": row.get("platform") or "",
+                    "raw": row,
+                }
+            )
+    return rows
+
+
+def _numeric(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return number
+
+
+def compare_candidate_to_reference(
+    candidate_rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    reference_index: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in reference_rows:
+        key = (str(row.get("algorithm", "")), str(row.get("operation", "")))
+        if not key[0] or not key[1] or key in reference_index:
+            continue
+        reference_index[key] = row
+
+    comparisons: list[dict[str, Any]] = []
+    for row in candidate_rows:
+        key = (str(row.get("algorithm", "")), str(row.get("operation", "")))
+        if not key[0] or not key[1]:
+            continue
+        reference = reference_index.get(key)
+        candidate_cycles = _numeric(row.get("cycles"))
+        reference_cycles = _numeric(reference.get("cycles")) if reference else None
+        ratio = (
+            candidate_cycles / reference_cycles
+            if candidate_cycles is not None and reference_cycles is not None
+            else None
+        )
+        comparisons.append(
+            {
+                "algorithm": key[0],
+                "operation": key[1],
+                "candidate_cycles": candidate_cycles,
+                "reference_cycles": reference_cycles,
+                "candidate_source": row.get("source", "candidate"),
+                "reference_source": reference.get("source") if reference else None,
+                "ratio": ratio,
+                "passed": ratio is not None,
+                "failure_reason": None if ratio is not None else "missing numeric reference pair",
+            }
+        )
+    return comparisons
 
 
 def summarize_metrics(metrics: list[dict[str, Any]]) -> dict[str, Any]:
@@ -155,6 +236,23 @@ def write_markdown(report: dict[str, Any], output_path: Path) -> None:
         "hardware transcript is supplied by the caller.",
         "",
     ]
+    comparisons = report.get("comparisons") or []
+    if comparisons:
+        lines.extend(
+            [
+                "| Algorithm | Operation | Candidate cycles | Reference cycles | Ratio |",
+                "|---|---|---:|---:|---:|",
+            ]
+        )
+        for item in comparisons:
+            ratio = item.get("ratio")
+            ratio_text = f"{ratio:.3f}" if isinstance(ratio, (int, float)) else "n/a"
+            lines.append(
+                f"| {item.get('algorithm', '')} | {item.get('operation', '')} | "
+                f"{item.get('candidate_cycles') or 'n/a'} | "
+                f"{item.get('reference_cycles') or 'n/a'} | {ratio_text} |"
+            )
+        lines.append("")
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -183,14 +281,34 @@ def main() -> int:
         if args.reference_csv is None:
             raise SystemExit("--reference-csv is required in import-reference mode")
         reference = args.reference_csv.resolve()
-        metrics = normalize_reference_csv(reference, args.reference_name)
-        execution = {
-            "mode": "import-reference",
-            "board": args.board,
-            "reference_csv": str(reference),
-            "reference_sha256": sha256_file(reference),
-            "passed": True,
-        }
+        if args.mode == "import-reference":
+            metrics = normalize_reference_csv(reference, args.reference_name)
+            execution = {
+                "mode": "import-reference",
+                "board": args.board,
+                "reference_csv": str(reference),
+                "reference_sha256": sha256_file(reference),
+                "passed": True,
+            }
+            comparisons: list[dict[str, Any]] = []
+        else:
+            if args.candidate_csv is None:
+                raise SystemExit("--candidate-csv is required in compare-reference mode")
+            candidate = args.candidate_csv.resolve()
+            candidate_rows = normalize_candidate_csv(candidate)
+            reference_rows = normalize_reference_csv(reference, args.reference_name)
+            comparisons = compare_candidate_to_reference(candidate_rows, reference_rows)
+            metrics = [*candidate_rows, *reference_rows]
+            execution = {
+                "mode": "compare-reference",
+                "board": args.board,
+                "candidate_csv": str(candidate),
+                "candidate_sha256": sha256_file(candidate),
+                "reference_csv": str(reference),
+                "reference_sha256": sha256_file(reference),
+                "comparison_count": len(comparisons),
+                "passed": bool(comparisons) and all(item["passed"] for item in comparisons),
+            }
 
     report = {
         "schema_version": 1,
@@ -207,6 +325,7 @@ def main() -> int:
         "execution": execution,
         "summary": summarize_metrics(metrics),
         "metrics": metrics,
+        "comparisons": comparisons if args.mode == "compare-reference" else [],
         "passed": bool(execution.get("passed")),
     }
     json_path = output_root / "hardware_benchmark_report.json"

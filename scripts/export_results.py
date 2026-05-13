@@ -70,6 +70,14 @@ DISTRIBUTION_METRICS = (
     "cycles_mad",
     "sample_count",
 )
+REQUIRED_BENCHMARK_METADATA_KEYS = (
+    "backend.selector",
+    "board.name",
+    "compiler.id",
+    "distribution.sample_cap",
+    "profile.flags",
+    "zephyr.version",
+)
 # This is a sanity floor, not a regression budget.  QEMU/native timing can make
 # the PQCP path substantially faster than the clean baseline, so only reject
 # near-zero ratios that indicate broken timing extraction.
@@ -473,6 +481,88 @@ def add_single_observation_distribution_rows(
     )
 
 
+def collect_benchmark_metadata(metric_rows: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    """Collect build metadata rows emitted beside benchmark timing rows.
+
+    The benchmark CSV intentionally remains numeric and stable.  This sidecar
+    metadata binds those numbers to the compiler, Zephyr tree, board, profile
+    mask, backend selector, and distribution sample cap that produced them.
+    """
+    by_key: Dict[str, set[str]] = defaultdict(set)
+    run_ids: set[str] = set()
+    row_count = 0
+
+    for row in metric_rows:
+        if row.get("component") != "build" or row.get("operation") != "metadata":
+            continue
+
+        algorithm = str(row.get("algorithm", "")).strip()
+        metric = str(row.get("metric", "")).strip()
+        if not algorithm or not metric:
+            continue
+
+        value = str(row.get("value", "")).strip()
+        unit = str(row.get("unit", "")).strip()
+        key = f"{algorithm}.{metric}"
+        by_key[key].add(f"{value} {unit}".strip())
+        row_count += 1
+        if row.get("run_id"):
+            run_ids.add(str(row["run_id"]))
+
+    return {
+        "row_count": row_count,
+        "keys": sorted(by_key),
+        "required_keys": list(REQUIRED_BENCHMARK_METADATA_KEYS),
+        "by_key": {key: sorted(values) for key, values in sorted(by_key.items())},
+        "run_ids": sorted(run_ids),
+    }
+
+
+def validate_benchmark_metadata_document(
+    metadata: Any,
+) -> List[Dict[str, str]]:
+    failures: List[Dict[str, str]] = []
+    if not isinstance(metadata, dict):
+        return [
+            {
+                "check": "provenance_metadata",
+                "message": "benchmark_metadata is missing or not an object",
+            }
+        ]
+
+    row_count = metadata.get("row_count")
+    if not isinstance(row_count, int) or row_count <= 0:
+        failures.append(
+            {
+                "check": "provenance_metadata",
+                "message": "benchmark_metadata.row_count is missing or zero",
+            }
+        )
+
+    by_key = metadata.get("by_key")
+    if not isinstance(by_key, dict):
+        by_key = {}
+        failures.append(
+            {
+                "check": "provenance_metadata",
+                "message": "benchmark_metadata.by_key is missing or not an object",
+            }
+        )
+
+    keys = set(metadata.get("keys") or by_key.keys())
+    for key in REQUIRED_BENCHMARK_METADATA_KEYS:
+        values = by_key.get(key)
+        if key not in keys or not isinstance(values, list) or not values:
+            failures.append(
+                {
+                    "check": "provenance_metadata",
+                    "message": f"benchmark metadata key {key!r} is missing",
+                }
+            )
+
+    return failures
+
+
 def write_csv(rows: List[Dict[str, Any]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="") as handle:
@@ -743,6 +833,7 @@ def build_provenance(
     module_path: Path,
     west_root: Path,
     west_cmd: Optional[List[str]],
+    metric_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Collect provenance metadata for a generated benchmark CSV.
 
@@ -818,6 +909,7 @@ def build_provenance(
             "zephyr_toolchain_variant": os.environ.get("ZEPHYR_TOOLCHAIN_VARIANT"),
             "ci": bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")),
         },
+        "benchmark_metadata": collect_benchmark_metadata(metric_rows or []),
     }
     return provenance
 
@@ -959,6 +1051,7 @@ def main() -> int:
         csv_path=output_path,
         matrix_path=matrix_path,
         rows=exported,
+        metric_rows=metric_rows,
         platform=args.platform,
         smoke=args.smoke,
         module_path=module_path,

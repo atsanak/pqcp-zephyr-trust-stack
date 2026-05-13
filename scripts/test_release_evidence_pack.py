@@ -19,7 +19,11 @@ import export_firmware_assurance_digest
 import verify_assurance_policy
 import verify_pqc_claim_closure
 import verify_release_evidence_pack as pack_verify
-from export_results import CSV_FIELDNAMES, EXPECTED_PRIMITIVE_ROWS
+from export_results import (
+    CSV_FIELDNAMES,
+    EXPECTED_PRIMITIVE_ROWS,
+    REQUIRED_BENCHMARK_METADATA_KEYS,
+)
 
 
 def sha256(path: Path) -> str:
@@ -107,6 +111,15 @@ class ReleaseEvidencePackTests(unittest.TestCase):
 
     def make_provenance(self, csv_path: Path) -> Path:
         path = csv_path.with_name("benchmark_provenance.json")
+        metadata = {
+            "row_count": len(REQUIRED_BENCHMARK_METADATA_KEYS),
+            "keys": list(REQUIRED_BENCHMARK_METADATA_KEYS),
+            "required_keys": list(REQUIRED_BENCHMARK_METADATA_KEYS),
+            "by_key": {
+                key: ["synthetic"] for key in REQUIRED_BENCHMARK_METADATA_KEYS
+            },
+            "run_ids": ["synthetic-run"],
+        }
         path.write_text(
             json.dumps(
                 {
@@ -114,7 +127,9 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                     "csv": {
                         "path": csv_path.name,
                         "sha256": sha256(csv_path),
+                        "distribution_row_count": 1,
                     },
+                    "benchmark_metadata": metadata,
                 },
                 indent=2,
             )
