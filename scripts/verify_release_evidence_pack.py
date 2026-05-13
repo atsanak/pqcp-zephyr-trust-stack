@@ -19,8 +19,12 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from export_results import validate_benchmark_csv, verify_provenance  # noqa: E402
+from verify_acvp_json_interop import verify as verify_acvp_json_interop  # noqa: E402
 from verify_assurance_ledger import verify_ledger  # noqa: E402
 from verify_assurance_policy import verify_policy  # noqa: E402
+from verify_firmware_assurance_status import verify_status as verify_firmware_status  # noqa: E402
+from verify_pqc_build_provenance import verify as verify_build_provenance  # noqa: E402
+from verify_pqc_reference_values import verify_reference  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -471,6 +475,86 @@ def verify_passport_artifacts(
                 failures.append("PQC build provenance is not an in-toto Statement")
             if provenance.get("predicateType") != "https://slsa.dev/provenance/v1":
                 failures.append("PQC build provenance predicateType is not SLSA provenance v1")
+        required_v6_paths = (
+            reference_values,
+            output_root / "assurance_ledger.json",
+            cbom_path,
+            attestation_path,
+            digest_path,
+            manifest_path,
+            policy_result_path,
+            assurance_profile_result,
+            output_root / "transcripts/evidence_transcript_manifest.json",
+            build_provenance,
+            output_root / "benchmark_results.csv",
+            output_root / "cost_of_assurance_evidence.json",
+            acvp_json_interop_result,
+            ct_sample_analysis_result,
+        )
+        if all(path.exists() and path.is_file() for path in required_v6_paths):
+            reference_replay = verify_reference(
+                argparse.Namespace(
+                    reference_values=reference_values,
+                    ledger=output_root / "assurance_ledger.json",
+                    cbom=cbom_path,
+                    attestation=attestation_path,
+                    assurance_digest=digest_path,
+                    release_manifest=manifest_path,
+                    policy_result=policy_result_path,
+                    profile_result=assurance_profile_result,
+                    transcript_manifest=output_root / "transcripts/evidence_transcript_manifest.json",
+                    output=output_root / "__reference_replay_result.json",
+                )
+            )
+            if reference_replay.get("passed") is not True:
+                for failure in reference_replay.get("failures", []):
+                    failures.append(f"PQC reference values replay: {failure}")
+
+            firmware_replay = verify_firmware_status(
+                argparse.Namespace(
+                    reference_values=reference_values,
+                    transcript=None,
+                    transcript_dir=output_root / "transcripts",
+                    output=output_root / "__firmware_status_replay_result.json",
+                )
+            )
+            if firmware_replay.get("passed") is not True:
+                for failure in firmware_replay.get("failures", []):
+                    failures.append(f"firmware assurance status replay: {failure}")
+
+            acvp_json_replay = verify_acvp_json_interop(
+                argparse.Namespace(
+                    result=acvp_json_interop_result,
+                    transcript_manifest=acvp_json_transcript_manifest,
+                    output=output_root / "__acvp_json_interop_replay_result.json",
+                )
+            )
+            if acvp_json_replay.get("passed") is not True:
+                for failure in acvp_json_replay.get("failures", []):
+                    failures.append(f"ACVP JSON interop replay: {failure}")
+
+            provenance_replay = verify_build_provenance(
+                argparse.Namespace(
+                    provenance=build_provenance,
+                    subject=[
+                        output_root / "assurance_ledger.json",
+                        reference_values,
+                        cbom_path,
+                        attestation_path,
+                    ],
+                    byproduct=[
+                        output_root / "benchmark_results.csv",
+                        output_root / "cost_of_assurance_evidence.json",
+                        acvp_json_interop_result,
+                        ct_sample_analysis_result,
+                    ],
+                    release_manifest=manifest_path,
+                    output=output_root / "__build_provenance_replay_result.json",
+                )
+            )
+            if provenance_replay.get("passed") is not True:
+                for failure in provenance_replay.get("failures", []):
+                    failures.append(f"PQC build provenance replay: {failure}")
 
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:

@@ -220,6 +220,21 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("__aeabi_uidiv", result["failures"][0])
 
+    def test_instruction_policy_fails_when_target_symbol_is_missing(self) -> None:
+        text = """
+00000000 <unrelated_symbol>:
+   0:  48 31 c0    xor %rax,%rax
+   3:  c3          ret
+"""
+        result = verify_ct_instruction_policy.build_result(
+            source=Path("synthetic.S"),
+            disassembly=text,
+            patterns=("decapsulate",),
+            allow_missing_targets=False,
+        )
+        self.assertFalse(result["passed"])
+        self.assertIn("no ML-KEM decapsulation-related symbols", result["failures"][0])
+
     def test_hardware_reference_import_normalizes_common_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             csv_path = Path(tmp) / "reference.csv"

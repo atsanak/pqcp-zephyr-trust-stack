@@ -43,6 +43,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--migration-readiness-json", type=Path)
     parser.add_argument("--migration-readiness-md", type=Path)
     parser.add_argument("--environment-result", type=Path)
+    parser.add_argument("--acvp-json-interop-result", type=Path)
+    parser.add_argument("--acvp-json-transcript-manifest", type=Path)
+    parser.add_argument("--ct-sample-analysis-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--digest-output", type=Path)
     return parser.parse_args()
@@ -137,6 +140,9 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
     migration_readiness_json = getattr(args, "migration_readiness_json", None)
     migration_readiness_md = getattr(args, "migration_readiness_md", None)
     environment_result = getattr(args, "environment_result", None)
+    acvp_json_interop_result = getattr(args, "acvp_json_interop_result", None)
+    acvp_json_transcript_manifest = getattr(args, "acvp_json_transcript_manifest", None)
+    ct_sample_analysis_result = getattr(args, "ct_sample_analysis_result", None)
     candidates: list[tuple[Path, str, bool]] = [
         (args.ledger, "assurance_ledger.json", True),
         (args.ledger_md or args.ledger.with_suffix(".md"), "assurance_ledger.md", True),
@@ -153,6 +159,9 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
         (migration_readiness_json or args.ledger.with_name("pqc_migration_readiness.json"), "pqc_migration_readiness.json", False),
         (migration_readiness_md or args.ledger.with_name("pqc_migration_readiness.md"), "pqc_migration_readiness.md", False),
         (environment_result or args.ledger.with_name("pqc_environment_result.json"), "pqc_environment_result.json", False),
+        (acvp_json_interop_result or args.ledger.with_name("acvp_json_interop_result.json"), "acvp_json_interop_result.json", False),
+        (acvp_json_transcript_manifest or args.ledger.with_name("acvp_json_transcript_manifest.json"), "acvp_json_transcript_manifest.json", False),
+        (ct_sample_analysis_result or args.ledger.with_name("ct_sample_analysis_result.json"), "ct_sample_analysis_result.json", False),
         (args.transcript_manifest, "transcripts/evidence_transcript_manifest.json", True),
         (args.release_manifest, "release-manifest.json", True),
         (args.module_path / "west.yml", "west.yml", True),
@@ -268,6 +277,9 @@ def main() -> int:
         migration_readiness_json = getattr(args, "migration_readiness_json", None)
         migration_readiness_md = getattr(args, "migration_readiness_md", None)
         environment_result = getattr(args, "environment_result", None)
+        acvp_json_interop_result = getattr(args, "acvp_json_interop_result", None)
+        acvp_json_transcript_manifest = getattr(args, "acvp_json_transcript_manifest", None)
+        ct_sample_analysis_result = getattr(args, "ct_sample_analysis_result", None)
         digest_artifacts = [
             args.ledger,
             args.cbom,
@@ -281,6 +293,9 @@ def main() -> int:
             migration_readiness_json or args.ledger.with_name("pqc_migration_readiness.json"),
             migration_readiness_md or args.ledger.with_name("pqc_migration_readiness.md"),
             environment_result or args.ledger.with_name("pqc_environment_result.json"),
+            acvp_json_interop_result or args.ledger.with_name("acvp_json_interop_result.json"),
+            acvp_json_transcript_manifest or args.ledger.with_name("acvp_json_transcript_manifest.json"),
+            ct_sample_analysis_result or args.ledger.with_name("ct_sample_analysis_result.json"),
             args.release_manifest,
         ]
         write_digest(args.digest_output, digest_artifacts, attestation_path=output)

@@ -21,6 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provenance", type=Path, required=True)
     parser.add_argument("--subject", type=Path, action="append", default=[])
+    parser.add_argument("--byproduct", type=Path, action="append", default=[])
     parser.add_argument("--release-manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
@@ -56,6 +57,20 @@ def subject_map(statement: dict[str, Any]) -> dict[str, str]:
             continue
         digest = subject.get("digest")
         name = subject.get("name")
+        if isinstance(name, str) and isinstance(digest, dict) and isinstance(digest.get("sha256"), str):
+            result[Path(name).name] = digest["sha256"]
+    return result
+
+
+def digest_map(entries: object) -> dict[str, str]:
+    result: dict[str, str] = {}
+    if not isinstance(entries, list):
+        return result
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        digest = entry.get("digest")
+        name = entry.get("name")
         if isinstance(name, str) and isinstance(digest, dict) and isinstance(digest.get("sha256"), str):
             result[Path(name).name] = digest["sha256"]
     return result
@@ -100,13 +115,25 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         failures.append("resolvedDependencies is missing or empty")
     else:
         names = {str(item.get("name") or item.get("uri")) for item in dependencies if isinstance(item, dict)}
-        for required in ("west.yml", "CMakeLists.txt", "assurance_claims.json", "pqc_assurance_policy.json"):
+        required_dependencies = [
+            "west.yml",
+            "CMakeLists.txt",
+            "assurance_claims.json",
+            "pqc_assurance_policy.json",
+        ]
+        if isinstance(manifest.get("dependencies"), dict):
+            required_dependencies.extend(str(name) for name in manifest["dependencies"])
+        for required in required_dependencies:
             ok = any(required in name for name in names)
             checks.append({"check": "resolved_dependency", "name": required, "passed": ok})
             if not ok:
                 failures.append(f"resolved dependency missing: {required}")
-    if not isinstance(run_details.get("byproducts"), list):
+    byproducts = run_details.get("byproducts")
+    if not isinstance(byproducts, list):
         failures.append("runDetails.byproducts must be a list")
+        byproduct_hashes: dict[str, str] = {}
+    else:
+        byproduct_hashes = digest_map(byproducts)
     subjects = subject_map(statement)
     for path in args.subject:
         expected = sha256_file(path)
@@ -115,6 +142,13 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         checks.append({"check": "subject_hash", "name": path.name, "passed": ok})
         if not ok:
             failures.append(f"subject hash mismatch or missing: {path.name}")
+    for path in args.byproduct:
+        expected = sha256_file(path)
+        observed = byproduct_hashes.get(path.name)
+        ok = observed == expected
+        checks.append({"check": "byproduct_hash", "name": path.name, "passed": ok})
+        if not ok:
+            failures.append(f"byproduct hash mismatch or missing: {path.name}")
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -17,6 +17,14 @@
         {"tcId": 2, "pk": "ABC"},
         {"tcId": 3, "pk": ""}
       ]
+    },
+    {
+      "tgId": 3,
+      "parameterSet": "ML-KEM-768",
+      "function": "keyGen",
+      "tests": [
+        {"tcId": 4}
+      ]
     }
   ]
 }
