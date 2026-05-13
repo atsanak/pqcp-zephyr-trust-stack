@@ -30,6 +30,8 @@ class BuildProvenanceTests(unittest.TestCase):
         )
         subject = root / "pqc_reference_values.json"
         subject.write_text('{"schema_version":1}\n', encoding="utf-8")
+        byproduct = root / "ct_sample_analysis_result.json"
+        byproduct.write_text('{"schema_version":1,"passed":true}\n', encoding="utf-8")
         return Namespace(
             module_path=root,
             release_manifest=manifest,
@@ -37,7 +39,7 @@ class BuildProvenanceTests(unittest.TestCase):
             policy=policy,
             profile=profile,
             subject=[subject],
-            byproduct=[],
+            byproduct=[byproduct],
             output=root / "pqc_build_provenance.slsa.json",
         )
 
@@ -50,6 +52,7 @@ class BuildProvenanceTests(unittest.TestCase):
                 Namespace(
                     provenance=args.output,
                     subject=args.subject,
+                    byproduct=args.byproduct,
                     release_manifest=args.release_manifest,
                     output=Path(tmp) / "result.json",
                 )
@@ -63,7 +66,7 @@ class BuildProvenanceTests(unittest.TestCase):
             statement["predicate"]["buildDefinition"]["externalParameters"]["surprise"] = "nope"
             args.output.write_text(json.dumps(statement, indent=2) + "\n", encoding="utf-8")
             result = verify_pqc_build_provenance.verify(
-                Namespace(provenance=args.output, subject=args.subject, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
+                Namespace(provenance=args.output, subject=args.subject, byproduct=args.byproduct, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
             )
             self.assertFalse(result["passed"])
 
@@ -74,7 +77,7 @@ class BuildProvenanceTests(unittest.TestCase):
             statement["predicateType"] = "wrong"
             args.output.write_text(json.dumps(statement, indent=2) + "\n", encoding="utf-8")
             result = verify_pqc_build_provenance.verify(
-                Namespace(provenance=args.output, subject=args.subject, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
+                Namespace(provenance=args.output, subject=args.subject, byproduct=args.byproduct, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
             )
             self.assertFalse(result["passed"])
 
@@ -85,7 +88,7 @@ class BuildProvenanceTests(unittest.TestCase):
             statement["subject"] = []
             args.output.write_text(json.dumps(statement, indent=2) + "\n", encoding="utf-8")
             result = verify_pqc_build_provenance.verify(
-                Namespace(provenance=args.output, subject=args.subject, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
+                Namespace(provenance=args.output, subject=args.subject, byproduct=args.byproduct, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
             )
             self.assertFalse(result["passed"])
 
@@ -96,7 +99,18 @@ class BuildProvenanceTests(unittest.TestCase):
             statement["predicate"]["buildDefinition"]["resolvedDependencies"] = []
             args.output.write_text(json.dumps(statement, indent=2) + "\n", encoding="utf-8")
             result = verify_pqc_build_provenance.verify(
-                Namespace(provenance=args.output, subject=args.subject, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
+                Namespace(provenance=args.output, subject=args.subject, byproduct=args.byproduct, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
+            )
+            self.assertFalse(result["passed"])
+
+    def test_stale_byproduct_digest_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self.fixtures(Path(tmp))
+            statement = generate_pqc_build_provenance.build_statement(args)
+            args.output.write_text(json.dumps(statement, indent=2) + "\n", encoding="utf-8")
+            args.byproduct[0].write_text("tampered\n", encoding="utf-8")
+            result = verify_pqc_build_provenance.verify(
+                Namespace(provenance=args.output, subject=args.subject, byproduct=args.byproduct, release_manifest=args.release_manifest, output=Path(tmp) / "result.json")
             )
             self.assertFalse(result["passed"])
 

@@ -124,6 +124,15 @@ python3 scripts/verify_pqc_claim_closure.py \
   --output /tmp/pqcp-passport/pqc_claim_closure_result.json
 ```
 
+Replay-check ACVP JSON interop artifacts directly:
+
+```sh
+python3 scripts/verify_acvp_json_interop.py \
+  --result /tmp/pqcp-passport/acvp_json_interop_result.json \
+  --transcript-manifest /tmp/pqcp-passport/acvp_json_transcript_manifest.json \
+  --output /tmp/pqcp-passport/acvp_json_interop_verify_result.json
+```
+
 ## Review Model
 
 The passport is designed for a collaborator who receives a generated release

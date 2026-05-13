@@ -78,9 +78,9 @@ def verify_reference(args: argparse.Namespace) -> dict[str, Any]:
         failures.append(f"unsupported reference schema_version={reference.get('schema_version')!r}")
 
     expected_fields = {
-        "version": ledger.get("version") or manifest.get("version"),
-        "tag": ledger.get("tag") or manifest.get("tag"),
-        "head_sha": ledger.get("head_sha") or manifest.get("source_commit"),
+        "version": str(ledger.get("version") or manifest.get("version") or ""),
+        "tag": str(ledger.get("tag") or manifest.get("tag") or ""),
+        "head_sha": str(ledger.get("head_sha") or manifest.get("source_commit") or ""),
         "dirty": bool(ledger.get("dirty")),
         "zephyr_revision": manifest.get("zephyr_revision")
         or (manifest.get("dependencies") or {}).get("zephyr"),

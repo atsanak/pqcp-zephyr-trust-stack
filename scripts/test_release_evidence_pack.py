@@ -15,11 +15,14 @@ from pathlib import Path
 import generate_assurance_ledger as ledger
 import export_pqc_cbom
 import generate_pqc_attestation
+import generate_pqc_build_provenance
 import generate_pqc_reference_values
 import export_firmware_assurance_digest
 import verify_assurance_policy
+import verify_pqc_build_provenance
 import verify_pqc_claim_closure
 import verify_release_evidence_pack as pack_verify
+import run_acvp_json_vectors
 from export_results import (
     CSV_FIELDNAMES,
     EXPECTED_PRIMITIVE_ROWS,
@@ -72,7 +75,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
         path.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 6,
                     "claims": [claim for claim in all_claims if claim["id"] in keep],
                 },
                 indent=2,
@@ -568,6 +571,23 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             json.dumps({"schema_version": 1, "passed": True, "checks": [], "failures": []}, indent=2) + "\n",
             encoding="utf-8",
         )
+        digest_payload = json.loads(digest_path.read_text(encoding="utf-8"))
+        status_lines = [
+            "PQCP_ASSURANCE_STATUS "
+            f"version=1.2.3 "
+            f"digest={reference_values['expected_firmware_digest_root']} "
+            f"artifact_count={reference_values['firmware_digest_artifact_count']} "
+            "schema=1"
+        ]
+        for item in digest_payload.get("artifacts") or []:
+            status_lines.append(
+                f"PQCP_ASSURANCE_ARTIFACT name={Path(str(item['path'])).name} "
+                f"sha256={item['sha256']}"
+            )
+        (output / "transcripts" / "99-firmware-assurance-status.log").write_text(
+            "\n".join(status_lines) + "\n",
+            encoding="utf-8",
+        )
         (output / "firmware_assurance_status_result.json").write_text(
             json.dumps(
                 {
@@ -587,35 +607,79 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+        acvp_command = "KEYGEN:MLKEM:768"
+        acvp_response = "RESULT:OK"
+        acvp_hash = run_acvp_json_vectors.transcript_hash(acvp_command, acvp_response)
+        acvp_result_row = {
+            "source": "synthetic-acvp.json",
+            "mode": "mlkem",
+            "tgId": 1,
+            "tcId": 1,
+            "command": acvp_command,
+            "response": acvp_response,
+            "expected_result_class": "success",
+            "transcript_sha256": acvp_hash,
+        }
         (output / "acvp_json_interop_result.json").write_text(
-            json.dumps({"schema_version": 1, "passed": True, "summary": {"test_cases": 1}, "results": [{"tcId": 1}], "failures": []}, indent=2)
-            + "\n",
-            encoding="utf-8",
-        )
-        (output / "acvp_json_transcript_manifest.json").write_text(
-            json.dumps({"schema_version": 1, "transcripts": [{"tcId": 1, "sha256": "0" * 64}]}, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        (output / "pqc_build_provenance.slsa.json").write_text(
             json.dumps(
                 {
-                    "_type": "https://in-toto.io/Statement/v1",
-                    "predicateType": "https://slsa.dev/provenance/v1",
-                    "subject": [{"name": "pqc_reference_values.json", "digest": {"sha256": sha256(output / "pqc_reference_values.json")}}],
-                    "predicate": {"buildDefinition": {}, "runDetails": {"byproducts": []}},
+                    "schema_version": 1,
+                    "passed": True,
+                    "summary": {"test_cases": 1, "negative_cases": 0, "failures": 0},
+                    "results": [acvp_result_row],
+                    "failures": [],
                 },
                 indent=2,
             )
             + "\n",
             encoding="utf-8",
         )
-        (output / "pqc_build_provenance_result.json").write_text(
-            json.dumps({"schema_version": 1, "passed": True, "checks": [], "failures": []}, indent=2) + "\n",
+        (output / "acvp_json_transcript_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "transcripts": [{**acvp_result_row, "sha256": acvp_hash}]}, indent=2) + "\n",
             encoding="utf-8",
         )
         (output / "ct_sample_analysis_result.json").write_text(
             json.dumps({"schema_version": 1, "passed": True, "algorithms": [{"algorithm": "MLKEM-768", "passed": True}], "checks": [], "failures": []}, indent=2)
             + "\n",
+            encoding="utf-8",
+        )
+        provenance_path = output / "pqc_build_provenance.slsa.json"
+        provenance_subjects = [
+            ledger_path,
+            output / "pqc_reference_values.json",
+            cbom_path,
+            attestation_path,
+        ]
+        provenance_byproducts = [
+            output / "benchmark_results.csv",
+            output / "cost_of_assurance_evidence.json",
+            output / "acvp_json_interop_result.json",
+            output / "ct_sample_analysis_result.json",
+        ]
+        provenance = generate_pqc_build_provenance.build_statement(
+            Namespace(
+                module_path=module,
+                release_manifest=manifest,
+                claims=Path(__file__).resolve().parent / "assurance_claims.json",
+                policy=Path(__file__).resolve().parent / "pqc_assurance_policy.json",
+                profile=Path(__file__).resolve().parent / "pqc_assurance_profile.json",
+                subject=provenance_subjects,
+                byproduct=provenance_byproducts,
+                output=provenance_path,
+            )
+        )
+        provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+        provenance_result = verify_pqc_build_provenance.verify(
+            Namespace(
+                provenance=provenance_path,
+                subject=provenance_subjects,
+                byproduct=provenance_byproducts,
+                release_manifest=manifest,
+                output=output / "pqc_build_provenance_result.json",
+            )
+        )
+        (output / "pqc_build_provenance_result.json").write_text(
+            json.dumps(provenance_result, indent=2) + "\n",
             encoding="utf-8",
         )
         closure = verify_pqc_claim_closure.verify_closure(
@@ -745,6 +809,79 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             )
             self.assertTrue(
                 any("PQC asset trace result not found" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
+
+    def test_stale_reference_values_fail_even_when_result_file_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            reference = output / "pqc_reference_values.json"
+            payload = json.loads(reference.read_text(encoding="utf-8"))
+            payload["expected_firmware_digest_root"] = "0" * 64
+            reference.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("PQC reference values replay" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
+
+    def test_firmware_status_transcript_is_replayed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            transcript = output / "transcripts" / "99-firmware-assurance-status.log"
+            body = transcript.read_text(encoding="utf-8")
+            transcript.write_text(body.replace("digest=", "digest=" + "0" * 64 + "\nBROKEN="), encoding="utf-8")
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("firmware assurance status replay" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
+
+    def test_build_provenance_byproduct_hash_is_replayed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            provenance = output / "pqc_build_provenance.slsa.json"
+            payload = json.loads(provenance.read_text(encoding="utf-8"))
+            byproducts = payload["predicate"]["runDetails"]["byproducts"]
+            self.assertTrue(byproducts)
+            byproducts[-1]["digest"]["sha256"] = "0" * 64
+            provenance.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("PQC build provenance replay" in item for item in failures),
+                f"unexpected failures: {failures}",
+            )
+
+    def test_acvp_json_transcript_hash_is_replayed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            module, output, claims = self.make_pack(Path(tmp))
+            manifest = output / "acvp_json_transcript_manifest.json"
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            payload["transcripts"][0]["sha256"] = "0" * 64
+            manifest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            failures = pack_verify.verify_pack(
+                output,
+                module_path=module,
+                tag="v1.2.3",
+                claims_path=claims,
+            )
+            self.assertTrue(
+                any("ACVP JSON interop replay" in item for item in failures),
                 f"unexpected failures: {failures}",
             )
 

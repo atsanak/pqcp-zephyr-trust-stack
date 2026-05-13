@@ -74,6 +74,32 @@ class AcvpJsonInteropTests(unittest.TestCase):
             results, _ = run_acvp_json_vectors.process_file(path, "mldsa")
             self.assertIn(results[0]["response"], {"ERROR:INVALID_HEX", "ERROR:WRONG_SIZE"})
 
+    def test_valid_case_after_malformed_case_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(
+                Path(tmp),
+                {
+                    "testGroups": [
+                        {
+                            "tgId": 1,
+                            "parameterSet": "ML-KEM-768",
+                            "function": "encapDecap",
+                            "tests": [{"tcId": 1, "pk": "ABC"}],
+                        },
+                        {
+                            "tgId": 2,
+                            "parameterSet": "ML-KEM-768",
+                            "function": "keyGen",
+                            "tests": [{"tcId": 2}],
+                        },
+                    ]
+                },
+            )
+            results, _ = run_acvp_json_vectors.process_file(path, "mlkem")
+            self.assertEqual(results[0]["response"], "ERROR:INVALID_HEX")
+            self.assertEqual(results[1]["response"], "RESULT:OK")
+            self.assertEqual(results[1]["expected_result_class"], "success")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

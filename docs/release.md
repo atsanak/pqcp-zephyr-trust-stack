@@ -38,8 +38,9 @@ contain `pqc_assurance_profile_result.json`,
 `pqc_migration_readiness.md`, `ct_instruction_policy_result.json`, and
 `pqc_claim_closure_result.json`.
 Step (3) re-checks every recorded SHA-256, every required claim id, every
-Passport subject hash, and every transcript hash, and exits non-zero with the
-exact offending file/claim if anything has drifted. See
+Passport subject hash, every SLSA byproduct hash, every firmware status marker,
+and every ACVP JSON command/response transcript hash, and exits non-zero with
+the exact offending file/claim if anything has drifted. See
 [`assurance-model.md`](assurance-model.md) for the architecture.
 
 ## What This Produces
