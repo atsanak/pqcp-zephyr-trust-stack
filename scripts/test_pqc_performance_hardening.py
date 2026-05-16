@@ -423,6 +423,66 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         self.assertFalse(result.timed_out)
         self.assertIn("PROJECT EXECUTION SUCCESSFUL", result.stdout)
 
+    def test_benchmark_runner_accepts_sample_completion_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runner = run_benchmarks.BenchmarkRunner(
+                west_root=root,
+                module_path=root,
+                output_dir=root / "out",
+                west_cmd=["west"],
+                build_only=False,
+                default_timeout=5,
+                verbose=False,
+            )
+            result = runner._run_command(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import time; "
+                        "print('Sample completed successfully!', flush=True); "
+                        "time.sleep(30)"
+                    ),
+                ],
+                cwd=root,
+                timeout=5,
+                success_markers=run_benchmarks.SAMPLE_SUCCESS_MARKERS,
+            )
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(result.timed_out)
+        self.assertIn("Sample completed successfully!", result.stdout)
+
+    def test_benchmark_runner_treats_success_markers_as_alternatives(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runner = run_benchmarks.BenchmarkRunner(
+                west_root=root,
+                module_path=root,
+                output_dir=root / "out",
+                west_cmd=["west"],
+                build_only=False,
+                default_timeout=5,
+                verbose=False,
+            )
+            result = runner._run_command(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import time; "
+                        "print('Protocol benchmark completed!', flush=True); "
+                        "time.sleep(30)"
+                    ),
+                ],
+                cwd=root,
+                timeout=5,
+                success_markers=run_benchmarks.SAMPLE_SUCCESS_MARKERS,
+            )
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(result.timed_out)
+        self.assertIn("Protocol benchmark completed!", result.stdout)
+
     def test_release_step_runner_stops_after_success_marker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -51,6 +51,12 @@ DEFAULT_MATRIX_SAMPLES = [
     "pqcp_bench_protocol",
 ]
 
+SAMPLE_SUCCESS_MARKERS = (
+    "PROJECT EXECUTION SUCCESSFUL",
+    "Sample completed successfully!",
+    "Protocol benchmark completed!",
+)
+
 PROFILES: Dict[str, Dict[str, str]] = {
     "MCU_MINIMAL": {
         "kconfig": "CONFIG_PQCP_PROFILE_MCU_MINIMAL=y",
@@ -729,7 +735,7 @@ class BenchmarkRunner:
                         continue
                     chunks.append(chunk)
                     stdout_bytes = b"".join(chunks)
-                    if all(marker in stdout_bytes for marker in marker_bytes):
+                    if any(marker in stdout_bytes for marker in marker_bytes):
                         self._terminate_process_group(proc, signal.SIGTERM)
                         try:
                             proc.wait(timeout=5)
@@ -807,7 +813,7 @@ class BenchmarkRunner:
 
         build_dir = self.output_dir / "build" / spec.run_id
         self._cleanup_qemu(build_dir)
-        run_timeout = spec.run_timeout or self.default_timeout
+        run_timeout = spec.run_timeout if spec.run_timeout and spec.run_timeout > 0 else self.default_timeout
         if self.default_timeout:
             run_timeout = min(run_timeout, self.default_timeout) if run_timeout else self.default_timeout
 
@@ -819,14 +825,14 @@ class BenchmarkRunner:
                 [str(binary)],
                 cwd=self.west_root,
                 timeout=run_timeout,
-                success_markers=("PROJECT EXECUTION SUCCESSFUL",),
+                success_markers=SAMPLE_SUCCESS_MARKERS,
             )
 
         result = self._run_command(
             [*self.west_cmd, "build", "-d", str(build_dir), "-t", "run"],
             cwd=self.west_root,
             timeout=run_timeout,
-            success_markers=("PROJECT EXECUTION SUCCESSFUL",),
+            success_markers=SAMPLE_SUCCESS_MARKERS,
         )
         self._cleanup_qemu(build_dir)
         return result
