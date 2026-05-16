@@ -101,6 +101,14 @@ class AssuranceLedgerTests(unittest.TestCase):
                         "distribution_row_count": 1,
                     },
                     "benchmark_metadata": metadata,
+                    "comparison_context": {
+                        "source_dataset": "synthetic",
+                        "board_class": "qemu",
+                        "clock_assumption": "synthetic test values",
+                        "backend_family": "synthetic",
+                        "statistic_type": "single",
+                        "environment_type": "qemu",
+                    },
                 },
                 indent=2,
             )

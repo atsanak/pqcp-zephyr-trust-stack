@@ -49,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--acvp-json-interop-result", type=Path)
     parser.add_argument("--build-provenance-result", type=Path)
     parser.add_argument("--ct-sample-analysis-result", type=Path)
+    parser.add_argument("--backend-currency-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -189,6 +190,7 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
         "acvp_json_interop_result",
         "build_provenance_result",
         "ct_sample_analysis_result",
+        "backend_currency_result",
     ):
         optional = getattr(args, optional_name, None)
         if optional is not None:
@@ -210,6 +212,7 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
         "ACVP JSON interop result": getattr(args, "acvp_json_interop_result", None),
         "PQC build provenance result": getattr(args, "build_provenance_result", None),
         "CT sample analysis result": getattr(args, "ct_sample_analysis_result", None),
+        "backend currency result": getattr(args, "backend_currency_result", None),
     }
     artifacts.update({label: path for label, path in optional_artifacts.items() if path is not None})
     if args.ct_instruction_policy_result is not None:
@@ -235,6 +238,8 @@ def verify_closure(args: argparse.Namespace) -> dict[str, Any]:
         if getattr(args, "build_provenance_result", None) is not None else {},
         "CT sample analysis result": load_json(args.ct_sample_analysis_result, "CT sample analysis result", failures)
         if getattr(args, "ct_sample_analysis_result", None) is not None else {},
+        "backend currency result": load_json(args.backend_currency_result, "backend currency result", failures)
+        if getattr(args, "backend_currency_result", None) is not None else {},
     }
 
     claims = ledger_claims(ledger)

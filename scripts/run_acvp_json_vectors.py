@@ -101,46 +101,66 @@ def group_tests(payload: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str,
     return out
 
 
-def classify_mlkem(group: dict[str, Any], test: dict[str, Any]) -> tuple[str, str, str]:
-    level = normalize_level(group.get("parameterSet") or group.get("paramSet"), "mlkem")
-    if level is None:
-        return "MLKEM", "ERROR:INVALID_LEVEL", "unsupported_parameter_set"
-    operation = str(group.get("function") or group.get("testType") or test.get("operation") or "").lower()
-    sizes = MLKEM_SIZES[level]
-    if "key" in operation:
-        return f"KEYGEN:MLKEM:{level}", "RESULT:OK", "success"
+def mlkem_operation_class(operation: str, test: dict[str, Any]) -> str:
+    normalized = operation.lower().replace("-", "").replace("_", "")
     has_decap_fields = any(key in test for key in ("ct", "ciphertext", "c", "sk", "dk"))
     has_encap_fields = any(key in test for key in ("pk", "ek"))
-    if "decap" in operation and has_decap_fields and not has_encap_fields:
+    if "key" in normalized:
+        return "keyGen"
+    if "decap" in normalized or (normalized == "encapdecap" and has_decap_fields and not has_encap_fields):
+        return "decap"
+    if "encap" in normalized or has_encap_fields:
+        return "encap"
+    return "encap"
+
+
+def mldsa_operation_class(operation: str) -> str:
+    normalized = operation.lower().replace("-", "").replace("_", "")
+    return "sigVer" if "ver" in normalized else "sigGen"
+
+
+def classify_mlkem(group: dict[str, Any], test: dict[str, Any]) -> tuple[str, str, str, str]:
+    level = normalize_level(group.get("parameterSet") or group.get("paramSet"), "mlkem")
+    if level is None:
+        return "MLKEM", "ERROR:INVALID_LEVEL", "unsupported_parameter_set", "unsupported"
+    operation = str(group.get("function") or group.get("testType") or test.get("operation") or "").lower()
+    operation_class = mlkem_operation_class(operation, test)
+    sizes = MLKEM_SIZES[level]
+    if operation_class == "keyGen":
+        return f"KEYGEN:MLKEM:{level}", "RESULT:OK", "success", operation_class
+    has_decap_fields = any(key in test for key in ("ct", "ciphertext", "c", "sk", "dk"))
+    has_encap_fields = any(key in test for key in ("pk", "ek"))
+    if operation_class == "decap" and has_decap_fields and not has_encap_fields:
         ct = test.get("ct") or test.get("ciphertext") or test.get("c")
         sk = test.get("sk") or test.get("dk")
         error = hex_error(ct, expected_bytes=sizes["ct"]) or hex_error(sk, expected_bytes=sizes["sk"])
         command = f"DECAPS:MLKEM:{level}:{ct or ''}:{sk or ''}"
-        return command, error or "RESULT:OK", "negative" if error else "success"
+        return command, error or "RESULT:OK", "negative" if error else "success", operation_class
     pk = test.get("pk") or test.get("ek")
     error = hex_error(pk, expected_bytes=sizes["pk"])
     command = f"ENCAPS:MLKEM:{level}:{pk or ''}"
-    return command, error or "RESULT:OK", "negative" if error else "success"
+    return command, error or "RESULT:OK", "negative" if error else "success", "encap"
 
 
-def classify_mldsa(group: dict[str, Any], test: dict[str, Any]) -> tuple[str, str, str]:
+def classify_mldsa(group: dict[str, Any], test: dict[str, Any]) -> tuple[str, str, str, str]:
     level = normalize_level(group.get("parameterSet") or group.get("paramSet"), "mldsa")
     if level is None:
-        return "MLDSA", "ERROR:INVALID_LEVEL", "unsupported_parameter_set"
+        return "MLDSA", "ERROR:INVALID_LEVEL", "unsupported_parameter_set", "unsupported"
     operation = str(group.get("function") or group.get("testType") or test.get("operation") or "").lower()
+    operation_class = mldsa_operation_class(operation)
     sizes = MLDSA_SIZES[level]
     message = test.get("message") or test.get("msg") or ""
     message_error = hex_error(message)
-    if "ver" in operation:
+    if operation_class == "sigVer":
         pk = test.get("pk")
         sig = test.get("signature") or test.get("sig")
         error = hex_error(pk, expected_bytes=sizes["pk"]) or message_error or hex_error(sig, expected_bytes=sizes["sig"])
         command = f"VERIFY:MLDSA:{level}:{pk or ''}:{message}:{sig or ''}"
-        return command, error or "RESULT:OK", "negative" if error else "success"
+        return command, error or "RESULT:OK", "negative" if error else "success", operation_class
     sk = test.get("sk")
     error = hex_error(sk, expected_bytes=sizes["sk"]) or message_error
     command = f"SIGN:MLDSA:{level}:{sk or ''}:{message}"
-    return command, error or "RESULT:OK", "negative" if error else "success"
+    return command, error or "RESULT:OK", "negative" if error else "success", operation_class
 
 
 def process_file(path: Path, explicit_mode: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -150,9 +170,9 @@ def process_file(path: Path, explicit_mode: str) -> tuple[list[dict[str, Any]], 
     transcripts: list[dict[str, Any]] = []
     for group, test in group_tests(payload):
         if mode == "mlkem":
-            command, response, result_class = classify_mlkem(group, test)
+            command, response, result_class, operation_class = classify_mlkem(group, test)
         else:
-            command, response, result_class = classify_mldsa(group, test)
+            command, response, result_class, operation_class = classify_mldsa(group, test)
         tc_id = test.get("tcId", test.get("id", len(results) + 1))
         tg_id = group.get("tgId", group.get("id", "unknown"))
         digest = transcript_hash(command, response)
@@ -160,6 +180,7 @@ def process_file(path: Path, explicit_mode: str) -> tuple[list[dict[str, Any]], 
             {
                 "source": str(path),
                 "mode": mode,
+                "operation_class": operation_class,
                 "tgId": tg_id,
                 "tcId": tc_id,
                 "command": command,
@@ -172,6 +193,7 @@ def process_file(path: Path, explicit_mode: str) -> tuple[list[dict[str, Any]], 
             {
                 "source": str(path),
                 "mode": mode,
+                "operation_class": operation_class,
                 "tgId": tg_id,
                 "tcId": tc_id,
                 "command": command,

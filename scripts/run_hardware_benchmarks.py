@@ -105,6 +105,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-csv", type=Path, help="Local benchmark CSV to compare.")
     parser.add_argument("--reference-csv", type=Path, help="Reference benchmark CSV to import.")
     parser.add_argument("--reference-name", default="external-reference")
+    parser.add_argument("--source-ecosystem", choices=("pqm4", "supercop", "liboqs", "paper", "other"))
+    parser.add_argument("--board-class")
+    parser.add_argument("--clock-mhz", type=float)
+    parser.add_argument("--clock-assumption")
+    parser.add_argument("--compiler")
+    parser.add_argument("--toolchain")
+    parser.add_argument("--optimization-flags")
+    parser.add_argument("--statistic-type")
+    parser.add_argument(
+        "--environment-type",
+        choices=("qemu", "native_host", "physical_hardware", "external_reference"),
+    )
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--matrix", type=Path, default=SCRIPT_DIR / "cost_of_assurance_matrix.json")
     parser.add_argument("--timeout", type=int, default=1800)
@@ -130,6 +142,18 @@ def normalize_reference_csv(path: Path, source_name: str) -> list[dict[str, Any]
                     "rom_bytes": row.get("rom_bytes") or row.get("text") or "",
                     "ram_bytes": row.get("ram_bytes") or row.get("ram") or "",
                     "platform": row.get("platform") or row.get("board") or "",
+                    "comparison_context": {
+                        "source_dataset": row.get("source_dataset") or row.get("source") or source_name,
+                        "source_ecosystem": row.get("source_ecosystem") or row.get("ecosystem") or "",
+                        "board_class": row.get("board_class") or row.get("platform_class") or "",
+                        "clock_mhz": row.get("clock_mhz") or row.get("mhz") or "",
+                        "clock_assumption": row.get("clock_assumption") or "",
+                        "compiler": row.get("compiler") or "",
+                        "toolchain": row.get("toolchain") or "",
+                        "optimization_flags": row.get("optimization_flags") or row.get("cflags") or "",
+                        "statistic_type": row.get("statistic_type") or row.get("statistic") or "",
+                        "environment_type": row.get("environment_type") or row.get("environment") or "",
+                    },
                     "raw": row,
                 }
             )
@@ -233,6 +257,55 @@ def summarize_comparisons(comparisons: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_comparison_context(
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    row_contexts = [
+        row.get("comparison_context")
+        for row in rows
+        if isinstance(row.get("comparison_context"), dict)
+    ]
+
+    def first_value(key: str) -> Any:
+        for context in row_contexts:
+            value = context.get(key)
+            if value not in (None, ""):
+                return value
+        return None
+
+    return {
+        "source_dataset": args.reference_name,
+        "source_ecosystem": args.source_ecosystem or first_value("source_ecosystem"),
+        "board_class": args.board_class or first_value("board_class"),
+        "clock_mhz": args.clock_mhz if args.clock_mhz is not None else first_value("clock_mhz"),
+        "clock_assumption": args.clock_assumption or first_value("clock_assumption"),
+        "compiler": args.compiler or first_value("compiler"),
+        "toolchain": args.toolchain or first_value("toolchain"),
+        "optimization_flags": args.optimization_flags or first_value("optimization_flags"),
+        "backend_family": "PQ Code Package reference comparison",
+        "statistic_type": args.statistic_type or first_value("statistic_type"),
+        "environment_type": args.environment_type or first_value("environment_type"),
+    }
+
+
+def validate_comparison_context(context: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    required = (
+        "source_dataset",
+        "source_ecosystem",
+        "board_class",
+        "statistic_type",
+        "environment_type",
+    )
+    for key in required:
+        if context.get(key) in (None, ""):
+            failures.append(f"comparison_context.{key} is required")
+    if context.get("clock_mhz") in (None, "") and not context.get("clock_assumption"):
+        failures.append("comparison_context requires clock_mhz or clock_assumption")
+    return failures
+
+
 def summarize_metrics(metrics: list[dict[str, Any]]) -> dict[str, Any]:
     by_component: dict[str, int] = {}
     by_metric: dict[str, int] = {}
@@ -308,6 +381,20 @@ def write_markdown(report: dict[str, Any], output_path: Path) -> None:
         "hardware transcript is supplied by the caller.",
         "",
     ]
+    context = report.get("comparison_context") or {}
+    if context:
+        lines.extend(
+            [
+                "## Comparison Context",
+                "",
+                f"- Source dataset: `{context.get('source_dataset', 'n/a')}`",
+                f"- Source ecosystem: `{context.get('source_ecosystem', 'n/a')}`",
+                f"- Board class: `{context.get('board_class', 'n/a')}`",
+                f"- Environment type: `{context.get('environment_type', 'n/a')}`",
+                f"- Statistic type: `{context.get('statistic_type', 'n/a')}`",
+                "",
+            ]
+        )
     comparisons = report.get("comparisons") or []
     if comparisons:
         comparison_summary = report.get("comparison_summary") or {}
@@ -364,14 +451,18 @@ def main() -> int:
         if args.reference_csv is None:
             raise SystemExit("--reference-csv is required in import-reference mode")
         reference = args.reference_csv.resolve()
+        context_failures: list[str]
         if args.mode == "import-reference":
             metrics = normalize_reference_csv(reference, args.reference_name)
+            comparison_context = build_comparison_context(args, metrics)
+            context_failures = validate_comparison_context(comparison_context)
             execution = {
                 "mode": "import-reference",
                 "board": args.board,
                 "reference_csv": str(reference),
                 "reference_sha256": sha256_file(reference),
-                "passed": True,
+                "passed": not context_failures,
+                "failures": context_failures,
             }
             comparisons: list[dict[str, Any]] = []
         else:
@@ -380,6 +471,8 @@ def main() -> int:
             candidate = args.candidate_csv.resolve()
             candidate_rows = normalize_candidate_csv(candidate)
             reference_rows = normalize_reference_csv(reference, args.reference_name)
+            comparison_context = build_comparison_context(args, reference_rows)
+            context_failures = validate_comparison_context(comparison_context)
             comparisons = compare_candidate_to_reference(candidate_rows, reference_rows)
             comparison_summary = summarize_comparisons(comparisons)
             metrics = [*candidate_rows, *reference_rows]
@@ -391,10 +484,25 @@ def main() -> int:
                 "reference_csv": str(reference),
                 "reference_sha256": sha256_file(reference),
                 "comparison_count": len(comparisons),
-                "passed": bool(comparisons) and all(item["passed"] for item in comparisons),
+                "passed": bool(comparisons) and all(item["passed"] for item in comparisons) and not context_failures,
+                "failures": context_failures,
             }
     if args.mode != "compare-reference":
         comparison_summary = {}
+    if args.mode in {"qemu", "transcript"}:
+        comparison_context = {
+            "source_dataset": args.mode,
+            "source_ecosystem": "pqcp-local",
+            "board_class": "qemu" if "qemu" in args.board else args.board,
+            "clock_mhz": None,
+            "clock_assumption": "local runner reported by Zephyr/QEMU when available",
+            "compiler": args.compiler,
+            "toolchain": args.toolchain,
+            "optimization_flags": args.optimization_flags,
+            "backend_family": "PQ Code Package local backend",
+            "statistic_type": args.statistic_type or "single_or_distribution",
+            "environment_type": args.environment_type or ("qemu" if "qemu" in args.board else "physical_hardware"),
+        }
 
     report = {
         "schema_version": 1,
@@ -409,6 +517,7 @@ def main() -> int:
         },
         "module_path": str(args.module_path.resolve()),
         "execution": execution,
+        "comparison_context": comparison_context,
         "summary": summarize_metrics(metrics),
         "metrics": metrics,
         "comparison_summary": comparison_summary,

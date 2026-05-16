@@ -137,6 +137,14 @@ def parse_args() -> argparse.Namespace:
         help="Run only the first three runnable matrix entries for pipeline smoke checks",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Echo commands")
+    parser.add_argument("--source-dataset", default="local-benchmark-matrix")
+    parser.add_argument("--environment-type", choices=("qemu", "native_host", "physical_hardware"), default=None)
+    parser.add_argument("--board-class", default=None)
+    parser.add_argument("--clock-assumption", default=None)
+    parser.add_argument("--statistic-type", default="single_or_distribution")
+    parser.add_argument("--compiler", default=None)
+    parser.add_argument("--toolchain", default=None)
+    parser.add_argument("--optimization-flags", default=None)
     return parser.parse_args()
 
 
@@ -563,6 +571,62 @@ def validate_benchmark_metadata_document(
     return failures
 
 
+def build_comparison_context(
+    *,
+    platform: str,
+    source_dataset: str = "local-benchmark-matrix",
+    environment_type: str | None = None,
+    board_class: str | None = None,
+    clock_assumption: str | None = None,
+    statistic_type: str = "single_or_distribution",
+    compiler: str | None = None,
+    toolchain: str | None = None,
+    optimization_flags: str | None = None,
+) -> Dict[str, Any]:
+    inferred_environment = environment_type
+    if inferred_environment is None:
+        inferred_environment = "qemu" if platform.startswith("qemu") else "native_host" if platform == "native_sim" else "physical_hardware"
+    inferred_board_class = board_class
+    if inferred_board_class is None:
+        inferred_board_class = "qemu" if platform.startswith("qemu") else "native_sim" if platform == "native_sim" else "mcu"
+    return {
+        "source_dataset": source_dataset,
+        "board_class": inferred_board_class,
+        "clock_assumption": clock_assumption or "runner/platform clock as reported by Zephyr build environment",
+        "compiler": compiler or "recorded in benchmark_metadata.compiler.id when emitted",
+        "toolchain": toolchain or "Zephyr SDK/toolchain recorded in provenance.tooling",
+        "optimization_flags": optimization_flags or "recorded in benchmark_metadata.profile.flags when emitted",
+        "backend_family": "PQ Code Package native backends",
+        "statistic_type": statistic_type,
+        "environment_type": inferred_environment,
+        "is_physical_measurement": inferred_environment == "physical_hardware",
+    }
+
+
+def validate_comparison_context(context: Any) -> List[Dict[str, str]]:
+    if not isinstance(context, dict):
+        return [{"check": "comparison_context", "message": "comparison_context is missing or not an object"}]
+    failures: List[Dict[str, str]] = []
+    for key in (
+        "source_dataset",
+        "board_class",
+        "clock_assumption",
+        "backend_family",
+        "statistic_type",
+        "environment_type",
+    ):
+        if context.get(key) in (None, ""):
+            failures.append({"check": "comparison_context", "message": f"{key} is required"})
+    if context.get("environment_type") not in {"qemu", "native_host", "physical_hardware"}:
+        failures.append(
+            {
+                "check": "comparison_context",
+                "message": f"invalid environment_type {context.get('environment_type')!r}",
+            }
+        )
+    return failures
+
+
 def write_csv(rows: List[Dict[str, Any]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="") as handle:
@@ -834,6 +898,7 @@ def build_provenance(
     west_root: Path,
     west_cmd: Optional[List[str]],
     metric_rows: Optional[List[Dict[str, Any]]] = None,
+    comparison_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Collect provenance metadata for a generated benchmark CSV.
 
@@ -910,6 +975,8 @@ def build_provenance(
             "ci": bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")),
         },
         "benchmark_metadata": collect_benchmark_metadata(metric_rows or []),
+        "comparison_context": comparison_context
+        or build_comparison_context(platform=platform),
     }
     return provenance
 
@@ -957,6 +1024,7 @@ def verify_provenance(csv_path: Path, provenance_path: Path) -> List[Dict[str, s
                 ),
             }
         )
+    failures.extend(validate_comparison_context(document.get("comparison_context")))
     return failures
 
 
@@ -1057,6 +1125,17 @@ def main() -> int:
         module_path=module_path,
         west_root=west_root,
         west_cmd=west_cmd,
+        comparison_context=build_comparison_context(
+            platform=args.platform,
+            source_dataset=args.source_dataset,
+            environment_type=args.environment_type,
+            board_class=args.board_class,
+            clock_assumption=args.clock_assumption,
+            statistic_type=args.statistic_type,
+            compiler=args.compiler,
+            toolchain=args.toolchain,
+            optimization_flags=args.optimization_flags,
+        ),
     )
     write_provenance(provenance, provenance_path)
 

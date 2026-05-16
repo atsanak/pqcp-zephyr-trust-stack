@@ -27,7 +27,44 @@ class AcvpJsonInteropTests(unittest.TestCase):
             results, transcripts = run_acvp_json_vectors.process_file(path, "mlkem")
             self.assertEqual(results[0]["response"], "RESULT:OK")
             self.assertEqual(results[0]["expected_result_class"], "success")
+            self.assertEqual(results[0]["operation_class"], "keyGen")
             self.assertEqual(results[0]["transcript_sha256"], transcripts[0]["sha256"])
+
+    def test_explicit_mlkem_encap_and_decap_operation_classes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            encap = self.write(
+                root,
+                {
+                    "testGroups": [
+                        {
+                            "tgId": 1,
+                            "parameterSet": "ML-KEM-512",
+                            "function": "encap",
+                            "tests": [{"tcId": 1, "pk": "AA" * 800}],
+                        }
+                    ]
+                },
+            )
+            results, _ = run_acvp_json_vectors.process_file(encap, "mlkem")
+            self.assertEqual(results[0]["operation_class"], "encap")
+            self.assertEqual(results[0]["response"], "RESULT:OK")
+
+            decap_payload = {
+                "testGroups": [
+                    {
+                        "tgId": 1,
+                        "parameterSet": "ML-KEM-512",
+                        "function": "decap",
+                        "tests": [{"tcId": 1, "ct": "BB" * 768, "sk": "CC" * 1632}],
+                    }
+                ]
+            }
+            decap = root / "decap.json"
+            decap.write_text(json.dumps(decap_payload), encoding="utf-8")
+            results, _ = run_acvp_json_vectors.process_file(decap, "mlkem")
+            self.assertEqual(results[0]["operation_class"], "decap")
+            self.assertEqual(results[0]["response"], "RESULT:OK")
 
     def test_odd_length_hex_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -73,6 +110,26 @@ class AcvpJsonInteropTests(unittest.TestCase):
             )
             results, _ = run_acvp_json_vectors.process_file(path, "mldsa")
             self.assertIn(results[0]["response"], {"ERROR:INVALID_HEX", "ERROR:WRONG_SIZE"})
+            self.assertEqual(results[0]["operation_class"], "sigVer")
+
+    def test_explicit_mldsa_siggen_operation_class(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(
+                Path(tmp),
+                {
+                    "testGroups": [
+                        {
+                            "tgId": 1,
+                            "parameterSet": "ML-DSA-44",
+                            "function": "sigGen",
+                            "tests": [{"tcId": 1, "sk": "AA" * 2560, "message": "ABCD"}],
+                        }
+                    ]
+                },
+            )
+            results, _ = run_acvp_json_vectors.process_file(path, "mldsa")
+            self.assertEqual(results[0]["operation_class"], "sigGen")
+            self.assertEqual(results[0]["response"], "RESULT:OK")
 
     def test_valid_case_after_malformed_case_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

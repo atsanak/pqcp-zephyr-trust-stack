@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
 import export_results
@@ -163,6 +164,12 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
             [],
         )
 
+    def test_benchmark_provenance_comparison_context_is_required(self) -> None:
+        failures = export_results.validate_comparison_context({})
+        self.assertTrue(any(failure["check"] == "comparison_context" for failure in failures))
+        context = export_results.build_comparison_context(platform="qemu_x86_64")
+        self.assertEqual(export_results.validate_comparison_context(context), [])
+
     def test_metadata_validation_fails_without_required_build_keys(self) -> None:
         failures = export_results.validate_benchmark_metadata_document(
             {
@@ -234,6 +241,36 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         )
         self.assertFalse(result["passed"])
         self.assertIn("no ML-KEM decapsulation-related symbols", result["failures"][0])
+
+    def test_instruction_policy_fails_when_only_harness_symbol_matches(self) -> None:
+        text = """
+00000000 <test_mlkem_decapsulate_wrapper>:
+   0:  48 31 c0    xor %rax,%rax
+   3:  c3          ret
+"""
+        result = verify_ct_instruction_policy.build_result(
+            source=Path("synthetic.S"),
+            disassembly=text,
+            patterns=("decapsulate",),
+            allow_missing_targets=False,
+        )
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("only harness/test symbols" in failure for failure in result["failures"]))
+
+    def test_instruction_policy_reports_required_symbol_group_coverage(self) -> None:
+        text = """
+00000000 <pqcp_mlkem_keypair>:
+   0:  48 31 c0    xor %rax,%rax
+   3:  c3          ret
+"""
+        result = verify_ct_instruction_policy.build_result(
+            source=Path("synthetic.S"),
+            disassembly=text,
+            patterns=("mlkem",),
+            allow_missing_targets=False,
+        )
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("required symbol group" in failure for failure in result["failures"]))
 
     def test_hardware_reference_import_normalizes_common_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -316,6 +353,45 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         self.assertEqual(summary["matched_count"], 2)
         self.assertEqual(summary["missing_count"], 1)
         self.assertAlmostEqual(summary["geomean_ratio"], 4.0)
+
+    def test_reference_import_context_requires_source_and_statistic_metadata(self) -> None:
+        context = run_hardware_benchmarks.build_comparison_context(
+            Namespace(
+                reference_name="paper-reference",
+                source_ecosystem=None,
+                board_class=None,
+                clock_mhz=None,
+                clock_assumption=None,
+                compiler=None,
+                toolchain=None,
+                optimization_flags=None,
+                statistic_type=None,
+                environment_type=None,
+            ),
+            [{"comparison_context": {}}],
+        )
+        failures = run_hardware_benchmarks.validate_comparison_context(context)
+        self.assertTrue(any("source_ecosystem" in failure for failure in failures))
+        self.assertTrue(any("statistic_type" in failure for failure in failures))
+
+    def test_reference_import_context_accepts_cli_overrides(self) -> None:
+        context = run_hardware_benchmarks.build_comparison_context(
+            Namespace(
+                reference_name="pqm4-reference",
+                source_ecosystem="pqm4",
+                board_class="cortex-m4",
+                clock_mhz=168.0,
+                clock_assumption=None,
+                compiler="arm-none-eabi-gcc",
+                toolchain="pqm4",
+                optimization_flags="-O3",
+                statistic_type="median_cycles",
+                environment_type="external_reference",
+            ),
+            [],
+        )
+        self.assertEqual(run_hardware_benchmarks.validate_comparison_context(context), [])
+        self.assertEqual(context["source_ecosystem"], "pqm4")
 
     def test_benchmark_runner_stops_after_success_marker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
