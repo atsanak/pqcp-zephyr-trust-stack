@@ -56,6 +56,14 @@
     {"id": "firmware.assurance_status_report", "evidence_class": "qemu_smoke", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
     {"id": "acvp.json_interop", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
     {"id": "supply_chain.slsa_build_provenance", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
-    {"id": "security.ct_sample_analysis", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true}
+    {"id": "security.ct_sample_analysis", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "release.evidence_appraisal_profile", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "supply_chain.backend_update_evaluation", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "benchmark.campaign_reproducibility", "evidence_class": "qemu_smoke", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "benchmark.external_reference_context", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "security.ct_campaign_analysis", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "acvp.json_schema_coverage", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "firmware.device_evidence_token", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "release.strict_partner_policy", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true}
   ]
 }

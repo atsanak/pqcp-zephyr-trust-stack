@@ -11,5 +11,6 @@ project(pqcp_assurance_status)
 if(DEFINED PQCP_ASSURANCE_DIGEST_INCLUDE_DIR)
   target_include_directories(app BEFORE PRIVATE ${PQCP_ASSURANCE_DIGEST_INCLUDE_DIR})
 endif()
+target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_sources(app PRIVATE src/main.c)

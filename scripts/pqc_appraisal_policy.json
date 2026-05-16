@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "name": "PQCP evidence appraisal policy",
+  "default_mode": "partner_review",
+  "modes": {
+    "ci_fast": {
+      "description": "Fast deterministic CI gate; full Passport appraisal is optional.",
+      "required_artifacts": [],
+      "required_claim_evidence": [],
+      "allow_not_applicable_claim_ids": [
+        "release.evidence_appraisal_profile",
+        "supply_chain.backend_update_evaluation",
+        "benchmark.campaign_reproducibility",
+        "benchmark.external_reference_context",
+        "security.ct_campaign_analysis",
+        "acvp.json_schema_coverage",
+        "firmware.device_evidence_token",
+        "release.strict_partner_policy"
+      ]
+    },
+    "local_release": {
+      "description": "Full local release gate with generated Passport evidence.",
+      "required_artifacts": [
+        "backend_update_evaluation.json",
+        "benchmark_campaign_result.json",
+        "ct_campaign_result.json",
+        "acvp_json_schema_result.json",
+        "device_evidence_token_result.json"
+      ],
+      "required_claim_evidence": [
+        "supply_chain.backend_update_evaluation",
+        "benchmark.campaign_reproducibility",
+        "benchmark.external_reference_context",
+        "security.ct_campaign_analysis",
+        "acvp.json_schema_coverage",
+        "firmware.device_evidence_token"
+      ],
+      "allow_not_applicable_claim_ids": [
+        "release.evidence_appraisal_profile",
+        "release.strict_partner_policy"
+      ]
+    },
+    "partner_review": {
+      "description": "Partner-review mode requires every v7 appraisal artifact to pass.",
+      "required_artifacts": [
+        "pqc_appraisal_evidence.json",
+        "backend_update_evaluation.json",
+        "benchmark_campaign_result.json",
+        "ct_campaign_result.json",
+        "acvp_json_schema_result.json",
+        "device_evidence_token_result.json"
+      ],
+      "required_claim_evidence": [
+        "release.evidence_appraisal_profile",
+        "supply_chain.backend_update_evaluation",
+        "benchmark.campaign_reproducibility",
+        "benchmark.external_reference_context",
+        "security.ct_campaign_analysis",
+        "acvp.json_schema_coverage",
+        "firmware.device_evidence_token",
+        "release.strict_partner_policy"
+      ],
+      "allow_not_applicable_claim_ids": []
+    },
+    "hardware_review": {
+      "description": "Partner-review plus optional physical-hardware benchmark evidence.",
+      "required_artifacts": [
+        "pqc_appraisal_evidence.json",
+        "backend_update_evaluation.json",
+        "benchmark_campaign_result.json",
+        "ct_campaign_result.json",
+        "acvp_json_schema_result.json",
+        "device_evidence_token_result.json"
+      ],
+      "required_claim_evidence": [
+        "release.evidence_appraisal_profile",
+        "supply_chain.backend_update_evaluation",
+        "benchmark.campaign_reproducibility",
+        "benchmark.external_reference_context",
+        "security.ct_campaign_analysis",
+        "acvp.json_schema_coverage",
+        "firmware.device_evidence_token",
+        "release.strict_partner_policy"
+      ],
+      "allow_not_applicable_claim_ids": [],
+      "requires_physical_hardware_context": true
+    }
+  }
+}

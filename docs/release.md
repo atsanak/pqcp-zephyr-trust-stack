@@ -153,6 +153,12 @@ python3 scripts/verify_release_evidence_pack.py \
   --tag v1.0.0
 ```
 
+For schema v7 packs, replay also checks `backend_update_evaluation.json`,
+`benchmark_campaign_result.json`, `benchmark_campaign_verify_result.json`,
+`ct_campaign_result.json`, `acvp_json_schema_result.json`,
+`device_evidence_token.json`, `device_evidence_token_result.json`,
+`pqc_appraisal_evidence.json`, and `pqc_appraisal_result.json`.
+
 If GitHub Actions is later restored, rerun the normal release workflow and
 compare the generated release notes with `output/release/v1.0.0/release-notes-v1.0.0.md`.
 

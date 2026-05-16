@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "name": "qemu-local benchmark campaign",
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "required_statistics": [
+    "min",
+    "median",
+    "p90",
+    "p99",
+    "mad"
+  ],
+  "required_context_fields": [
+    "source_dataset",
+    "source_ecosystem",
+    "board_class",
+    "statistic_type",
+    "environment_type"
+  ],
+  "default_environment_type": "qemu"
+}

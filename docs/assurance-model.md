@@ -234,9 +234,15 @@ The catalog and the ledger carry a `schema_version`.
 - **schema_version = 4** strengthens Passport replay with the ACVP
   negative scenario compatibility floor, crypto asset traceability, evidence
   graph integrity, and firmware digest embeddability.
-- **schema_version = 5** (current) adds profile policy, evidence quality, asset
+- **schema_version = 5** adds profile policy, evidence quality, asset
   profile separation, migration-readiness reporting, and production RNG policy
   checks.
+- **schema_version = 6** adds reference values, firmware status replay, ACVP JSON
+  interop, SLSA-shaped provenance, backend currency, external-reference import,
+  and CT sample analysis.
+- **schema_version = 7** adds evidence appraisal, backend update evaluation,
+  benchmark campaign replay, CT campaign replay, ACVP JSON schema coverage, and
+  device-evidence token replay.
 
 `generate_assurance_ledger.py` and `verify_assurance_ledger.py` both
 accept supported historical versions. Loading a v1 catalog or replaying a v1 ledger

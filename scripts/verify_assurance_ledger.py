@@ -15,8 +15,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
 VALID_STATUSES = {"pass", "fail", "not_applicable"}
-SUPPORTED_LEDGER_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
+SUPPORTED_LEDGER_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
+POST_LEDGER_CLAIMS = {
+    "release.reference_values",
+    "firmware.assurance_status_report",
+    "supply_chain.slsa_build_provenance",
+    "release.evidence_appraisal_profile",
+    "firmware.device_evidence_token",
+    "release.strict_partner_policy",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,7 +92,12 @@ def resolve_artifact_path(raw_path: object, *, ledger_path: Path, module_path: P
     return (module_path / candidate).resolve()
 
 
-def load_required_claim_ids(path: Path, failures: list[str]) -> set[str]:
+def load_required_claim_ids(
+    path: Path,
+    failures: list[str],
+    *,
+    max_schema_version: int | None = None,
+) -> set[str]:
     catalog = load_json(path, "claim catalog", failures)
     if not catalog:
         return set()
@@ -114,6 +127,13 @@ def load_required_claim_ids(path: Path, failures: list[str]) -> set[str]:
         claim_id = claim.get("id")
         if not isinstance(claim_id, str) or not claim_id:
             failures.append(f"claim catalog entry {index} is missing a string id")
+            continue
+        added_in = claim.get("schema_version_added", 1)
+        if (
+            max_schema_version is not None
+            and isinstance(added_in, int)
+            and added_in > max_schema_version
+        ):
             continue
         if claim.get("required", True):
             required.add(claim_id)
@@ -157,6 +177,7 @@ def verify_artifacts(
     ledger_path: Path,
     module_path: Path,
     failures: list[str],
+    allow_post_ledger_artifact_drift: bool = False,
 ) -> None:
     for claim in claims:
         claim_id = claim.get("id", "<unknown>")
@@ -182,6 +203,13 @@ def verify_artifacts(
             recorded_exists = item.get("exists")
             actual_exists = path.exists()
             if recorded_exists is not actual_exists:
+                if (
+                    allow_post_ledger_artifact_drift
+                    and claim_id in POST_LEDGER_CLAIMS
+                    and recorded_exists is False
+                    and actual_exists is True
+                ):
+                    continue
                 failures.append(
                     f"{claim_id}: artifact {path} recorded exists={recorded_exists!r} "
                     f"but actual exists={actual_exists}"
@@ -209,12 +237,12 @@ def verify_ledger(
     markdown: Path | None = None,
     claims_path: Path = SCRIPT_DIR / "assurance_claims.json",
     module_path: Path = REPO_ROOT,
+    allow_post_ledger_artifact_drift: bool = False,
 ) -> list[str]:
     failures: list[str] = []
     ledger_json = ledger_json.resolve()
     markdown_path = markdown.resolve() if markdown else ledger_json.with_suffix(".md")
     module_path = module_path.resolve()
-    required_claim_ids = load_required_claim_ids(claims_path.resolve(), failures)
     ledger = load_json(ledger_json, "assurance ledger", failures)
     if not ledger:
         return failures
@@ -232,6 +260,11 @@ def verify_ledger(
             "generate_assurance_ledger.py to capture per-primitive and ACVP claims.",
             file=sys.stderr,
         )
+    required_claim_ids = load_required_claim_ids(
+        claims_path.resolve(),
+        failures,
+        max_schema_version=ledger_schema if isinstance(ledger_schema, int) else None,
+    )
     claims = ledger.get("claims")
     if not isinstance(claims, list) or not claims:
         failures.append("ledger claims must be a non-empty list")
@@ -274,6 +307,7 @@ def verify_ledger(
         ledger_path=ledger_json,
         module_path=module_path,
         failures=failures,
+        allow_post_ledger_artifact_drift=allow_post_ledger_artifact_drift,
     )
     return failures
 

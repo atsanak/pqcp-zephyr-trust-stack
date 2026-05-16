@@ -38,6 +38,8 @@ class FirmwareAssuranceDigestTests(unittest.TestCase):
             header = output.read_text(encoding="utf-8")
             self.assertIn("PQCP_ASSURANCE_DIGEST_ROOT_SHA256", header)
             self.assertIn("PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT 2", header)
+            self.assertIn("PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE", header)
+            self.assertIn("PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256", header)
             self.assertIn(result["root_sha256"], header)
 
     def test_invalid_artifact_hash_fails(self) -> None:
