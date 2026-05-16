@@ -354,6 +354,38 @@ class PQCPerformanceHardeningTests(unittest.TestCase):
         self.assertEqual(summary["missing_count"], 1)
         self.assertAlmostEqual(summary["geomean_ratio"], 4.0)
 
+    def test_reference_comparison_can_allow_partial_coverage(self) -> None:
+        comparisons = [
+            {"algorithm": "ML-KEM-768", "operation": "decaps", "passed": True},
+            {"algorithm": "ML-DSA-65", "operation": "verify", "passed": False},
+        ]
+        self.assertTrue(
+            run_hardware_benchmarks.comparison_passed(
+                comparisons,
+                [],
+                allow_partial_reference=True,
+            )
+        )
+        self.assertFalse(
+            run_hardware_benchmarks.comparison_passed(
+                comparisons,
+                [],
+                allow_partial_reference=False,
+            )
+        )
+
+    def test_reference_comparison_partial_mode_still_requires_context(self) -> None:
+        comparisons = [
+            {"algorithm": "ML-KEM-768", "operation": "decaps", "passed": True},
+        ]
+        self.assertFalse(
+            run_hardware_benchmarks.comparison_passed(
+                comparisons,
+                ["comparison_context.source_ecosystem is required"],
+                allow_partial_reference=True,
+            )
+        )
+
     def test_reference_import_context_requires_source_and_statistic_metadata(self) -> None:
         context = run_hardware_benchmarks.build_comparison_context(
             Namespace(
