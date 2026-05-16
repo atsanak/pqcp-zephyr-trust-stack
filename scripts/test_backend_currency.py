@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 import verify_backend_currency
 
@@ -98,6 +99,26 @@ class BackendCurrencyTests(unittest.TestCase):
             )
         self.assertFalse(result["passed"])
         self.assertTrue(any("missing from .gitmodules" in failure for failure in result["failures"]))
+
+    def test_upstream_drift_is_warned_but_not_failed(self) -> None:
+        upstream_sha = "1111111111111111111111111111111111111111"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_repo(root)
+            with patch.object(verify_backend_currency, "upstream_head", return_value=upstream_sha):
+                result = verify_backend_currency.verify(
+                    Namespace(
+                        module_path=root,
+                        west_manifest=root / "west.yml",
+                        output=root / "result.json",
+                        check_upstream=True,
+                        require_initialized_submodules=False,
+                    )
+                )
+        self.assertTrue(result["passed"])
+        self.assertTrue(any("differs from pinned revision" in warning for warning in result["warnings"]))
+        self.assertTrue(all(row["upstream_checked"] for row in result["backends"]))
+        self.assertTrue(all(not row["upstream_matches_pin"] for row in result["backends"]))
 
 
 if __name__ == "__main__":
