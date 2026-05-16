@@ -50,6 +50,25 @@ def verify(campaign_path: Path) -> dict[str, Any]:
                 checks.append({"check": "statistic_row", "row": index, "field": key, "passed": ok})
                 if not ok:
                     failures.append(f"benchmark campaign row {index} missing numeric {key}")
+    pairwise = campaign.get("pairwise_ratios")
+    if pairwise is not None:
+        if not isinstance(pairwise, list):
+            failures.append("benchmark campaign pairwise_ratios must be a list")
+        else:
+            for index, row in enumerate(pairwise, start=1):
+                ratio = row.get("ratio") if isinstance(row, dict) else None
+                ok = ratio is None or isinstance(ratio, (int, float))
+                checks.append({"check": "pairwise_ratio", "row": index, "passed": ok})
+                if not ok:
+                    failures.append(f"benchmark campaign pairwise row {index} has non-numeric ratio")
+    comparison_summary = (campaign.get("summary") or {}).get("pairwise_comparisons")
+    if pairwise:
+        ok = isinstance(comparison_summary, dict) and isinstance(
+            comparison_summary.get("geomean_ratio"), (int, float)
+        )
+        checks.append({"check": "pairwise_summary", "passed": ok})
+        if not ok:
+            failures.append("benchmark campaign pairwise summary geomean_ratio is required")
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),

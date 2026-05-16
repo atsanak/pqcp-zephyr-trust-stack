@@ -12,8 +12,6 @@
 #include <zephyr/kernel.h>
 
 #include <string.h>
-#include <stdlib.h>
-#include <errno.h>
 #include <stdbool.h>
 #include <limits.h>
 
@@ -88,6 +86,62 @@ static int acvp_hex_nibble(unsigned char c)
     uint8_t encoded = acvp_hex_decode_table[c];
 
     return encoded == 0U ? -1 : (int)encoded - 1;
+}
+
+static int acvp_hex_measure(const char *hex, size_t *hex_len, size_t *byte_len)
+{
+    size_t len = 0U;
+
+    if (hex_len == NULL || byte_len == NULL) {
+        return -EINVAL;
+    }
+
+    if (hex == NULL) {
+        *hex_len = 0U;
+        *byte_len = 0U;
+        return 0;
+    }
+
+    while (hex[len] != '\0') {
+        if (acvp_hex_nibble((unsigned char)hex[len]) < 0) {
+            return -EINVAL;
+        }
+        len++;
+    }
+
+    if ((len & 1U) != 0U) {
+        return -EINVAL;
+    }
+
+    *hex_len = len;
+    *byte_len = len / 2U;
+    return 0;
+}
+
+static void acvp_hex_decode_known_len(const char *hex, uint8_t *out,
+                                      size_t byte_len)
+{
+    for (size_t i = 0U; i < byte_len; i++) {
+        int hi = acvp_hex_nibble((unsigned char)hex[i * 2U]);
+        int lo = acvp_hex_nibble((unsigned char)hex[i * 2U + 1U]);
+
+        out[i] = (uint8_t)(((uint8_t)hi << 4) | (uint8_t)lo);
+    }
+}
+
+static int acvp_decode_payload_checked(const char *hex,
+                                       uint8_t *out, size_t out_cap,
+                                       size_t byte_len)
+{
+    if (byte_len > out_cap) {
+        return -ENOSPC;
+    }
+    if (byte_len > 0U && out == NULL) {
+        return -EINVAL;
+    }
+
+    acvp_hex_decode_known_len(hex, out, byte_len);
+    return 0;
 }
 
 const char *pqcp_acvp_result_str(enum pqcp_acvp_result result)
@@ -189,42 +243,23 @@ int pqcp_acvp_hex_to_bytes(const char *hex, uint8_t *out,
 {
     size_t hex_len;
     size_t byte_len;
+    int ret;
 
     if (out_len == NULL) {
         return -EINVAL;
     }
 
-    if (hex == NULL) {
-        *out_len = 0;
-        return 0;
+    ret = acvp_hex_measure(hex, &hex_len, &byte_len);
+    if (ret != 0) {
+        return ret;
     }
 
-    hex_len = strlen(hex);
-    
-    /* Must be even length */
-    if (hex_len % 2 != 0) {
-        return -EINVAL;
+    ret = acvp_decode_payload_checked(hex, out, max_len, byte_len);
+    if (ret != 0) {
+        return ret;
     }
-    
-    byte_len = hex_len / 2;
-    if (byte_len > max_len) {
-        return -ENOSPC;
-    }
-    if (byte_len > 0U && out == NULL) {
-        return -EINVAL;
-    }
-    
-    for (size_t i = 0; i < byte_len; i++) {
-        int hi = acvp_hex_nibble((unsigned char)hex[i * 2U]);
-        int lo = acvp_hex_nibble((unsigned char)hex[i * 2U + 1U]);
 
-        if (hi < 0 || lo < 0) {
-            return -EINVAL;
-        }
-
-        out[i] = (uint8_t)(((uint8_t)hi << 4) | (uint8_t)lo);
-    }
-    
+    (void)hex_len;
     *out_len = byte_len;
     return 0;
 }
@@ -291,21 +326,29 @@ static size_t split_fields(char *line, char **fields, size_t max_fields,
 
 static int parse_level_token(const char *level_str, int *level)
 {
-    char *endptr;
-    long parsed;
+    int parsed = 0;
 
-    if (level_str == NULL || level_str[0] == '\0') {
+    if (level_str == NULL || level_str[0] == '\0' || level == NULL) {
         return -EINVAL;
     }
 
-    errno = 0;
-    parsed = strtol(level_str, &endptr, 10);
-    if (errno != 0 || endptr == level_str || *endptr != '\0' ||
-        parsed <= 0 || parsed > INT_MAX) {
+    for (size_t i = 0U; level_str[i] != '\0'; i++) {
+        unsigned char ch = (unsigned char)level_str[i];
+
+        if (ch < '0' || ch > '9') {
+            return -EINVAL;
+        }
+        if (parsed > (INT_MAX - (int)(ch - '0')) / 10) {
+            return -EINVAL;
+        }
+        parsed = (parsed * 10) + (int)(ch - '0');
+    }
+
+    if (parsed <= 0) {
         return -EINVAL;
     }
 
-    *level = (int)parsed;
+    *level = parsed;
     return 0;
 }
 
@@ -873,6 +916,7 @@ int pqcp_acvp_process_command(char *line,
     /* SEED command */
     if (strcmp(cmd, "SEED") == 0) {
         size_t seed_len;
+        size_t seed_hex_len;
         int ret;
 
         if (alg == NULL || strcmp(alg, "DRBG") != 0) {
@@ -888,12 +932,18 @@ int pqcp_acvp_process_command(char *line,
             return -EINVAL;
         }
 
-        ret = pqcp_acvp_hex_to_bytes(data, work_buf, &seed_len, work_buf_size);
+        ret = acvp_hex_measure(data, &seed_hex_len, &seed_len);
+        if (ret != 0) {
+            resp->result = PQCP_ACVP_ERR_INVALID_HEX;
+            return ret;
+        }
+        ret = acvp_decode_payload_checked(data, work_buf, work_buf_size, seed_len);
         if (ret != 0) {
             resp->result = (ret == -ENOSPC) ?
                 PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
             return ret;
         }
+        (void)seed_hex_len;
         return pqcp_acvp_cmd_seed(work_buf, seed_len, resp);
     }
     
@@ -940,17 +990,32 @@ int pqcp_acvp_process_command(char *line,
         return -EINVAL;
     }
 
-    size_t data_len = 0;
-    int ret = pqcp_acvp_hex_to_bytes(data, work_buf, &data_len, work_buf_size);
+    size_t data_hex_len = 0U;
+    size_t data_len = 0U;
+    int ret = acvp_hex_measure(data, &data_hex_len, &data_len);
     if (ret != 0) {
-        resp->result = (ret == -ENOSPC) ?
-            PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
+        resp->result = PQCP_ACVP_ERR_INVALID_HEX;
         return ret;
     }
-    
+
     /* ML-KEM commands */
     if (strcmp(alg, "MLKEM") == 0) {
         if (strcmp(cmd, "ENCAPS") == 0) {
+            pqcp_mlkem_level_t mlkem_level = get_mlkem_level(level);
+            if ((int)mlkem_level < 0) {
+                resp->result = PQCP_ACVP_ERR_INVALID_LEVEL;
+                return -EINVAL;
+            }
+            if (validate_mlkem_encaps_payload_len(mlkem_level, data_len) != 0) {
+                resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
+                return -EINVAL;
+            }
+            ret = acvp_decode_payload_checked(data, work_buf, work_buf_size, data_len);
+            if (ret != 0) {
+                resp->result = (ret == -ENOSPC) ?
+                    PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
+                return ret;
+            }
             return pqcp_acvp_cmd_mlkem_encaps(level, work_buf, data_len, resp);
         } else if (strcmp(cmd, "DECAPS") == 0) {
             pqcp_mlkem_level_t mlkem_level = get_mlkem_level(level);
@@ -964,6 +1029,12 @@ int pqcp_acvp_process_command(char *line,
                                                   &ct_size, &sk_size) != 0) {
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
+            }
+            ret = acvp_decode_payload_checked(data, work_buf, work_buf_size, data_len);
+            if (ret != 0) {
+                resp->result = (ret == -ENOSPC) ?
+                    PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
+                return ret;
             }
             return pqcp_acvp_cmd_mlkem_decaps(level,
                                               work_buf, ct_size,
@@ -989,6 +1060,12 @@ int pqcp_acvp_process_command(char *line,
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }
+            ret = acvp_decode_payload_checked(data, work_buf, work_buf_size, data_len);
+            if (ret != 0) {
+                resp->result = (ret == -ENOSPC) ?
+                    PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
+                return ret;
+            }
             return pqcp_acvp_cmd_mldsa_sign(level,
                                             work_buf, sk_size,
                                             work_buf + sk_size, msg_len,
@@ -1010,6 +1087,12 @@ int pqcp_acvp_process_command(char *line,
                 resp->result = PQCP_ACVP_ERR_WRONG_SIZE;
                 return -EINVAL;
             }
+            ret = acvp_decode_payload_checked(data, work_buf, work_buf_size, data_len);
+            if (ret != 0) {
+                resp->result = (ret == -ENOSPC) ?
+                    PQCP_ACVP_ERR_BUFFER_TOO_SMALL : PQCP_ACVP_ERR_INVALID_HEX;
+                return ret;
+            }
             return pqcp_acvp_cmd_mldsa_verify(level,
                                               work_buf, pk_size,
                                               work_buf + pk_size, msg_len,
@@ -1017,7 +1100,8 @@ int pqcp_acvp_process_command(char *line,
                                               resp);
         }
     }
-    
+
+    (void)data_hex_len;
     resp->result = PQCP_ACVP_ERR_INVALID_CMD;
     return -EINVAL;
 }

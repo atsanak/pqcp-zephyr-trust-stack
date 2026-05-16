@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 import verify_benchmark_campaign
+import run_benchmark_campaign
 
 
 class BenchmarkCampaignTests(unittest.TestCase):
@@ -37,6 +38,24 @@ class BenchmarkCampaignTests(unittest.TestCase):
                     "mad": 0,
                 }
             ],
+            "pairwise_ratios": [
+                {
+                    "parameter_set": "ML-KEM-768",
+                    "operation": "decaps",
+                    "candidate_implementation": "pqcp",
+                    "baseline_implementation": "baseline",
+                    "candidate_median_cycles": 10,
+                    "baseline_median_cycles": 20,
+                    "ratio": 0.5,
+                }
+            ],
+            "summary": {
+                "pairwise_comparisons": {
+                    "comparison_count": 1,
+                    "numeric_ratio_count": 1,
+                    "geomean_ratio": 0.5,
+                }
+            },
         }
         path = root / "campaign.json"
         path.write_text(json.dumps(payload), encoding="utf-8")
@@ -52,6 +71,43 @@ class BenchmarkCampaignTests(unittest.TestCase):
             result = verify_benchmark_campaign.verify(self.write_campaign(Path(tmp), context=False))
         self.assertFalse(result["passed"])
         self.assertTrue(any("comparison_context" in failure for failure in result["failures"]))
+
+    def test_pairwise_ratio_summary_prefers_median_cycles(self) -> None:
+        summaries = [
+            {
+                "parameter_set": "ML-KEM-768",
+                "implementation": "pqcp",
+                "operation": "decaps",
+                "sample_count": 3,
+                "median": 100.0,
+            },
+            {
+                "parameter_set": "ML-KEM-768",
+                "implementation": "baseline",
+                "operation": "decaps",
+                "sample_count": 3,
+                "median": 200.0,
+            },
+            {
+                "parameter_set": "ML-DSA-65",
+                "implementation": "pqcp",
+                "operation": "verify",
+                "sample_count": 3,
+                "median": 80.0,
+            },
+            {
+                "parameter_set": "ML-DSA-65",
+                "implementation": "baseline",
+                "operation": "verify",
+                "sample_count": 3,
+                "median": 320.0,
+            },
+        ]
+        ratios = run_benchmark_campaign.build_pairwise_ratios(summaries)
+        summary = run_benchmark_campaign.comparison_summary(ratios)
+        self.assertEqual(len(ratios), 2)
+        self.assertAlmostEqual(summary["geomean_ratio"], (0.5 * 0.25) ** 0.5)
+        self.assertEqual(summary["pqcp_faster_count"], 2)
 
 
 if __name__ == "__main__":

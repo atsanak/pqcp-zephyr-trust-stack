@@ -471,6 +471,20 @@ ZTEST(pqcp_acvp_serial, test_hex_decoder_rejects_invalid_nibbles_without_partial
     zassert_equal(out_len, 1234U);
 }
 
+ZTEST(pqcp_acvp_serial, test_wrong_size_payload_rejected_before_decode_write)
+{
+    struct pqcp_acvp_response resp;
+
+    memset(work_buffer, 0xa5, 16U);
+    zassert_equal(run_command("ENCAPS:MLKEM:768:001122", &resp), -EINVAL);
+    zassert_equal(resp.result, PQCP_ACVP_ERR_WRONG_SIZE);
+    for (size_t i = 0U; i < 16U; ++i) {
+        zassert_equal(work_buffer[i], 0xa5,
+                      "wrong-size preflight should not decode byte %zu", i);
+    }
+    assert_response_line(&resp, "ERROR:WRONG_SIZE");
+}
+
 ZTEST(pqcp_acvp_serial, test_help_and_selftest_commands)
 {
     struct pqcp_acvp_response resp;
