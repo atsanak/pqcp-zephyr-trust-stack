@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,6 +94,67 @@ def summarize_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
     return summaries
 
 
+def geomean(values: list[float]) -> float | None:
+    positive = [value for value in values if value > 0.0 and math.isfinite(value)]
+    if not positive:
+        return None
+    return math.exp(sum(math.log(value) for value in positive) / len(positive))
+
+
+def build_pairwise_ratios(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_key = {
+        (
+            str(row.get("parameter_set") or ""),
+            str(row.get("operation") or ""),
+            str(row.get("implementation") or ""),
+        ): row
+        for row in summaries
+    }
+    ratios: list[dict[str, Any]] = []
+    keys = sorted({(key[0], key[1]) for key in by_key})
+    for parameter_set, operation in keys:
+        candidate = by_key.get((parameter_set, operation, "pqcp"))
+        baseline = by_key.get((parameter_set, operation, "baseline"))
+        if candidate is None or baseline is None:
+            continue
+        candidate_median = float(candidate.get("median") or 0.0)
+        baseline_median = float(baseline.get("median") or 0.0)
+        ratio = candidate_median / baseline_median if baseline_median > 0.0 else None
+        ratios.append(
+            {
+                "parameter_set": parameter_set,
+                "operation": operation,
+                "candidate_implementation": "pqcp",
+                "baseline_implementation": "baseline",
+                "candidate_median_cycles": candidate_median,
+                "baseline_median_cycles": baseline_median,
+                "ratio": ratio,
+                "candidate_sample_count": candidate.get("sample_count", 0),
+                "baseline_sample_count": baseline.get("sample_count", 0),
+            }
+        )
+    return ratios
+
+
+def comparison_summary(ratios: list[dict[str, Any]]) -> dict[str, Any]:
+    numeric_ratios = [
+        float(row["ratio"])
+        for row in ratios
+        if isinstance(row.get("ratio"), (int, float))
+    ]
+    better = sum(1 for value in numeric_ratios if value < 1.0)
+    same_or_slower = sum(1 for value in numeric_ratios if value >= 1.0)
+    return {
+        "comparison_count": len(ratios),
+        "numeric_ratio_count": len(numeric_ratios),
+        "pqcp_faster_count": better,
+        "pqcp_same_or_slower_count": same_or_slower,
+        "geomean_ratio": geomean(numeric_ratios),
+        "best_ratio": min(numeric_ratios) if numeric_ratios else None,
+        "worst_ratio": max(numeric_ratios) if numeric_ratios else None,
+    }
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     failures: list[str] = []
     checks: list[dict[str, Any]] = []
@@ -109,6 +171,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     ]
     failures.extend(context_failures)
     summaries = summarize_rows(rows)
+    ratios = build_pairwise_ratios(summaries)
+    ratio_summary = comparison_summary(ratios)
     if not summaries:
         failures.append("benchmark campaign found no numeric base-operation rows")
     for stat in config.get("required_statistics") or []:
@@ -133,8 +197,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "csv_rows": len(rows),
             "failures": len(failures),
             "comparison_context": provenance.get("comparison_context"),
+            "pairwise_comparisons": ratio_summary,
         },
         "statistics": summaries,
+        "pairwise_ratios": ratios,
         "external_reference": external_reference,
         "checks": checks,
         "failures": failures,
