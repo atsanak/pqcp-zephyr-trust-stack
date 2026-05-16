@@ -19,6 +19,18 @@
           "pk": "AA"
         }
       ]
+    },
+    {
+      "tgId": 3,
+      "parameterSet": "ML-KEM-768",
+      "function": "decap",
+      "tests": [
+        {
+          "tcId": 3,
+          "ct": "AA",
+          "sk": "BB"
+        }
+      ]
     }
   ]
 }

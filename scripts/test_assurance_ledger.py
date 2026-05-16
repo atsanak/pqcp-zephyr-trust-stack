@@ -103,6 +103,7 @@ class AssuranceLedgerTests(unittest.TestCase):
                     "benchmark_metadata": metadata,
                     "comparison_context": {
                         "source_dataset": "synthetic",
+                        "source_ecosystem": "pqcp-zephyr-trust-stack",
                         "board_class": "qemu",
                         "clock_assumption": "synthetic test values",
                         "backend_family": "synthetic",

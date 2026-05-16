@@ -22,6 +22,8 @@ from export_results import validate_benchmark_csv, validate_comparison_context, 
 from verify_acvp_json_interop import verify as verify_acvp_json_interop  # noqa: E402
 from verify_assurance_ledger import verify_ledger  # noqa: E402
 from verify_assurance_policy import verify_policy  # noqa: E402
+from verify_benchmark_campaign import verify as verify_benchmark_campaign  # noqa: E402
+from verify_pqc_appraisal_evidence import verify as verify_appraisal_evidence  # noqa: E402
 from verify_firmware_assurance_status import verify_status as verify_firmware_status  # noqa: E402
 from verify_pqc_build_provenance import verify as verify_build_provenance  # noqa: E402
 from verify_pqc_reference_values import verify_reference  # noqa: E402
@@ -302,8 +304,18 @@ def verify_passport_artifacts(
     ct_sample_manifest = output_root / "ct_sample_manifest.json"
     backend_currency_result = output_root / "backend_currency_result.json"
     external_reference_result = output_root / "external_reference_import" / "hardware_benchmark_report.json"
+    backend_update_evaluation = output_root / "backend_update_evaluation.json"
+    benchmark_campaign_result = output_root / "benchmark_campaign_result.json"
+    benchmark_campaign_verify_result = output_root / "benchmark_campaign_verify_result.json"
+    ct_campaign_result = output_root / "ct_campaign_result.json"
+    acvp_json_schema_result = output_root / "acvp_json_schema_result.json"
+    device_evidence_token = output_root / "device_evidence_token.json"
+    device_evidence_token_result = output_root / "device_evidence_token_result.json"
+    appraisal_evidence = output_root / "pqc_appraisal_evidence.json"
+    appraisal_result = output_root / "pqc_appraisal_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
+    appraisal_policy_path = claims_path.parent / "pqc_appraisal_policy.json"
     if not policy_path.exists():
         policy_path = SCRIPT_DIR / "pqc_assurance_policy.json"
     manifest_path = find_release_manifest(output_root, tag, failures)
@@ -338,6 +350,16 @@ def verify_passport_artifacts(
         require_file(ct_sample_manifest, "CT sample manifest", failures)
         require_file(backend_currency_result, "backend currency result", failures)
         require_file(external_reference_result, "external reference import result", failures)
+    if (ledger.get("schema_version") or 0) >= 7:
+        require_file(backend_update_evaluation, "backend update evaluation", failures)
+        require_file(benchmark_campaign_result, "benchmark campaign result", failures)
+        require_file(benchmark_campaign_verify_result, "benchmark campaign verification result", failures)
+        require_file(ct_campaign_result, "CT campaign result", failures)
+        require_file(acvp_json_schema_result, "ACVP JSON schema coverage result", failures)
+        require_file(device_evidence_token, "device evidence token", failures)
+        require_file(device_evidence_token_result, "device evidence token result", failures)
+        require_file(appraisal_evidence, "PQC appraisal evidence", failures)
+        require_file(appraisal_result, "PQC appraisal verification result", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -577,6 +599,27 @@ def verify_passport_artifacts(
                 for failure in acvp_json_replay.get("failures", []):
                     failures.append(f"ACVP JSON interop replay: {failure}")
 
+            provenance_byproducts = [
+                output_root / "benchmark_results.csv",
+                output_root / "cost_of_assurance_evidence.json",
+                acvp_json_interop_result,
+                ct_sample_analysis_result,
+                ct_sample_manifest,
+                backend_currency_result,
+                external_reference_result,
+            ]
+            if (ledger.get("schema_version") or 0) >= 7:
+                provenance_byproducts.extend(
+                    [
+                        acvp_json_schema_result,
+                        ct_campaign_result,
+                        backend_update_evaluation,
+                        benchmark_campaign_result,
+                        device_evidence_token,
+                        device_evidence_token_result,
+                    ]
+                )
+
             provenance_replay = verify_build_provenance(
                 argparse.Namespace(
                     provenance=build_provenance,
@@ -586,15 +629,7 @@ def verify_passport_artifacts(
                         cbom_path,
                         attestation_path,
                     ],
-                    byproduct=[
-                        output_root / "benchmark_results.csv",
-                        output_root / "cost_of_assurance_evidence.json",
-                        acvp_json_interop_result,
-                        ct_sample_analysis_result,
-                        ct_sample_manifest,
-                        backend_currency_result,
-                        external_reference_result,
-                    ],
+                    byproduct=provenance_byproducts,
                     release_manifest=manifest_path,
                     output=output_root / "__build_provenance_replay_result.json",
                 )
@@ -602,6 +637,38 @@ def verify_passport_artifacts(
             if provenance_replay.get("passed") is not True:
                 for failure in provenance_replay.get("failures", []):
                     failures.append(f"PQC build provenance replay: {failure}")
+
+    if (ledger.get("schema_version") or 0) >= 7:
+        for path, label in (
+            (backend_update_evaluation, "backend update evaluation"),
+            (benchmark_campaign_result, "benchmark campaign result"),
+            (benchmark_campaign_verify_result, "benchmark campaign verification result"),
+            (ct_campaign_result, "CT campaign result"),
+            (acvp_json_schema_result, "ACVP JSON schema coverage result"),
+            (device_evidence_token_result, "device evidence token result"),
+            (appraisal_result, "PQC appraisal verification result"),
+        ):
+            payload = load_json(path, label, failures)
+            if payload and payload.get("passed") is not True:
+                failures.append(f"{label} did not pass")
+        if benchmark_campaign_result.exists():
+            campaign_replay = verify_benchmark_campaign(benchmark_campaign_result)
+            if campaign_replay.get("passed") is not True:
+                for failure in campaign_replay.get("failures", []):
+                    failures.append(f"benchmark campaign replay: {failure}")
+        if appraisal_policy_path.exists() and appraisal_evidence.exists():
+            appraisal_replay = verify_appraisal_evidence(
+                argparse.Namespace(
+                    policy=appraisal_policy_path,
+                    appraisal_evidence=appraisal_evidence,
+                    ledger=output_root / "assurance_ledger.json",
+                    mode="partner_review",
+                    output=output_root / "__appraisal_replay_result.json",
+                )
+            )
+            if appraisal_replay.get("passed") is not True:
+                for failure in appraisal_replay.get("failures", []):
+                    failures.append(f"PQC appraisal replay: {failure}")
 
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:
@@ -682,6 +749,7 @@ def verify_pack(
             markdown=ledger_md,
             claims_path=claims_path.resolve(),
             module_path=module_path,
+            allow_post_ledger_artifact_drift=True,
         )
     )
     ledger = load_json(ledger_json, "assurance ledger", failures)

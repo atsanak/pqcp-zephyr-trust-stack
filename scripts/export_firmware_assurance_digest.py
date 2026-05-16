@@ -86,6 +86,8 @@ def render_header(digest: dict[str, Any], *, source_name: str, version: str) -> 
             "#define PQCP_ASSURANCE_DIGEST_SCHEMA_VERSION 1",
             f"#define PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT {artifact_count}",
             f'#define PQCP_ASSURANCE_DIGEST_ROOT_SHA256 "{root_hash}"',
+            f'#define PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE "{root_hash[:32]}"',
+            f'#define PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256 "{root_hash}"',
             f'#define PQCP_ASSURANCE_DIGEST_GENERATED_AT "{generated_at}"',
             "",
             "static const char * const pqcp_assurance_digest_artifact_names[] = {",

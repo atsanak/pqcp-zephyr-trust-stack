@@ -300,6 +300,15 @@ def write_manifest(
         "pqc_build_provenance.slsa.json",
         "pqc_build_provenance_result.json",
         "ct_sample_analysis_result.json",
+        "backend_update_evaluation.json",
+        "benchmark_campaign_result.json",
+        "benchmark_campaign_verify_result.json",
+        "ct_campaign_result.json",
+        "acvp_json_schema_result.json",
+        "device_evidence_token.json",
+        "device_evidence_token_result.json",
+        "pqc_appraisal_evidence.json",
+        "pqc_appraisal_result.json",
     ):
         candidate = passport_root / name
         if candidate.exists() and candidate.is_file():

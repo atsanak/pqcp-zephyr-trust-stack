@@ -611,6 +611,43 @@ class BenchmarkRunner:
             env.pop(key, None)
         return env
 
+    def _zephyr_version(self) -> str:
+        version_file = self.west_root / "zephyr" / "VERSION"
+        if not version_file.exists():
+            return "unknown"
+        values: Dict[str, str] = {}
+        for raw_line in version_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" not in raw_line:
+                continue
+            key, value = raw_line.split("=", 1)
+            values[key.strip()] = value.strip()
+        major = values.get("VERSION_MAJOR")
+        minor = values.get("VERSION_MINOR")
+        patch = values.get("PATCHLEVEL")
+        if major and minor and patch:
+            return f"{major}.{minor}.{patch}"
+        return "unknown"
+
+    @staticmethod
+    def _compiler_id(build_stdout: str) -> str:
+        match = re.search(r"-- The C compiler identification is (?P<compiler>.+)", build_stdout)
+        if match:
+            return match.group("compiler").strip()
+        return "unknown"
+
+    @staticmethod
+    def _distribution_sample_cap(spec: RunSpec) -> str:
+        config_lines = [
+            PROFILES.get(spec.profile, {}).get("kconfig", ""),
+            *spec.extra_kconfig,
+        ]
+        for raw_line in config_lines:
+            for line in str(raw_line).splitlines():
+                line = line.strip()
+                if line.startswith("CONFIG_PQCP_BENCH_DISTRIBUTION_SAMPLES="):
+                    return line.split("=", 1)[1].strip()
+        return "128"
+
     def _cleanup_qemu(self, build_dir: Path) -> None:
         pid_path = build_dir / "qemu.pid"
         if not pid_path.exists():
@@ -908,6 +945,7 @@ class BenchmarkRunner:
         log_path: Path,
         parsed: List[Dict[str, Any]],
         sizes: Dict[str, int],
+        build_stdout: str,
     ) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         metadata = {
@@ -925,6 +963,27 @@ class BenchmarkRunner:
             "build_only": spec.build_only,
             "log_path": str(log_path),
         }
+
+        def add_metadata(algorithm: str, metric: str, value: str) -> None:
+            rows.append(
+                {
+                    **metadata,
+                    "component": "build",
+                    "operation": "metadata",
+                    "algorithm": algorithm,
+                    "level": 0,
+                    "metric": metric,
+                    "value": value,
+                    "unit": "",
+                }
+            )
+
+        add_metadata("compiler", "id", self._compiler_id(build_stdout))
+        add_metadata("zephyr", "version", self._zephyr_version())
+        add_metadata("board", "name", spec.board)
+        add_metadata("profile", "flags", ";".join([PROFILES.get(spec.profile, {}).get("kconfig", ""), *spec.extra_kconfig]).strip(";"))
+        add_metadata("backend", "selector", spec.backend)
+        add_metadata("distribution", "sample_cap", self._distribution_sample_cap(spec))
 
         for item in parsed:
             enriched = {**metadata, **item}
@@ -1017,7 +1076,7 @@ class BenchmarkRunner:
         write_protocol_csv(parsed, run_dir / "run_protocols.csv")
         write_summary(parsed, run_dir / "run_summary.txt")
 
-        enriched_rows = self._enrich_metric_rows(spec, log_path, parsed, sizes)
+        enriched_rows = self._enrich_metric_rows(spec, log_path, parsed, sizes, build_result.stdout)
         self.metric_rows.extend(enriched_rows)
         pqcp_metric_count = self._count_pqcp_metric_rows(enriched_rows)
         build_metric_count = self._count_build_metric_rows(enriched_rows)

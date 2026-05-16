@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -270,6 +270,62 @@
       "category": "security",
       "claim": "The constant-time smoke path can emit raw valid/invalid ML-KEM decapsulation timing samples, and local analysis checks sample counts, distribution deltas, and Welch-style statistics.",
       "required": true
+    },
+    {
+      "id": "release.evidence_appraisal_profile",
+      "category": "release",
+      "claim": "The release pack includes a mode-specific evidence appraisal result that replay-checks post-Passport artifacts without relying on GitHub Actions.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "supply_chain.backend_update_evaluation",
+      "category": "supply_chain",
+      "claim": "The release pack records a comparison-only backend update evaluation for mlkem-native and mldsa-native, including pinned revisions, license metadata, META.yml metadata, and optional upstream drift information.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "benchmark.campaign_reproducibility",
+      "category": "benchmark",
+      "claim": "The release pack includes benchmark-campaign evidence with reproducible statistics and validated comparison context derived from the generated benchmark CSV and provenance sidecar.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "benchmark.external_reference_context",
+      "category": "benchmark",
+      "claim": "Imported external reference benchmark rows are normalized with source ecosystem, platform class, clock assumptions, statistic type, and environment metadata before comparison.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "security.ct_campaign_analysis",
+      "category": "security",
+      "claim": "The release pack includes CT campaign evidence that replay-checks raw CT sample manifests for balanced valid/invalid counts and contiguous per-class sample indexes.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "acvp.json_schema_coverage",
+      "category": "acvp",
+      "claim": "The ACVP JSON interop evidence covers keyGen, encap, decap, sigGen, sigVer, transcript hashing, and malformed-then-valid recovery cases.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "firmware.device_evidence_token",
+      "category": "firmware",
+      "claim": "The assurance status firmware sample emits an additive device-evidence marker that binds a nonce, digest, artifact count, schema, and transcript-binding hint to the release reference values.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "release.strict_partner_policy",
+      "category": "release",
+      "claim": "The partner-review appraisal policy rejects missing or silently not-applicable v7 evidence unless a less strict mode explicitly permits it.",
+      "required": true,
+      "schema_version_added": 7
     }
   ]
 }

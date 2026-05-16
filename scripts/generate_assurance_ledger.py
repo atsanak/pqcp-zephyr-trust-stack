@@ -41,8 +41,8 @@ from verify_kat_provenance import (  # noqa: E402
     verify_vectors,
 )
 
-LEDGER_SCHEMA_VERSION = 6
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6)
+LEDGER_SCHEMA_VERSION = 7
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -122,6 +122,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--acvp-json-interop-result", type=Path, help="Optional ACVP JSON interop result JSON.")
     parser.add_argument("--build-provenance-result", type=Path, help="Optional SLSA build provenance verification result JSON.")
     parser.add_argument("--ct-sample-analysis-result", type=Path, help="Optional CT sample analysis result JSON.")
+    parser.add_argument("--backend-update-evaluation", type=Path, help="Optional backend update evaluation result JSON.")
+    parser.add_argument("--benchmark-campaign-result", type=Path, help="Optional benchmark campaign result JSON.")
+    parser.add_argument("--ct-campaign-result", type=Path, help="Optional CT campaign result JSON.")
+    parser.add_argument("--acvp-json-schema-result", type=Path, help="Optional ACVP JSON schema coverage result JSON.")
+    parser.add_argument("--device-evidence-result", type=Path, help="Optional device evidence token result JSON.")
+    parser.add_argument("--appraisal-result", type=Path, help="Optional PQC appraisal verification result JSON.")
     parser.add_argument(
         "--ct-instruction-policy-result",
         type=Path,
@@ -266,6 +272,14 @@ def load_claim_specs(path: Path) -> list[dict[str, Any]]:
             if not isinstance(claim.get(key), str) or not claim[key]:
                 raise RuntimeError(f"{path} claim {claim_id} is missing {key}")
     return claims
+
+
+def ledger_schema_for_claims(path: Path) -> int:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    schema_version = raw.get("schema_version")
+    if not isinstance(schema_version, int):
+        return LEDGER_SCHEMA_VERSION
+    return min(schema_version, LEDGER_SCHEMA_VERSION)
 
 
 def find_release_manifest(bundle_root: Path, tag: str | None) -> Path | None:
@@ -1863,6 +1877,12 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     acvp_json_interop_result_arg = getattr(args, "acvp_json_interop_result", None)
     build_provenance_result_arg = getattr(args, "build_provenance_result", None)
     ct_sample_analysis_result_arg = getattr(args, "ct_sample_analysis_result", None)
+    backend_update_evaluation_arg = getattr(args, "backend_update_evaluation", None)
+    benchmark_campaign_result_arg = getattr(args, "benchmark_campaign_result", None)
+    ct_campaign_result_arg = getattr(args, "ct_campaign_result", None)
+    acvp_json_schema_result_arg = getattr(args, "acvp_json_schema_result", None)
+    device_evidence_result_arg = getattr(args, "device_evidence_result", None)
+    appraisal_result_arg = getattr(args, "appraisal_result", None)
     ct_instruction_policy_result_arg = getattr(args, "ct_instruction_policy_result", None)
     cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
     attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
@@ -1880,6 +1900,12 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     acvp_json_interop_result = resolve_path(acvp_json_interop_result_arg, module_path) if acvp_json_interop_result_arg else None
     build_provenance_result = resolve_path(build_provenance_result_arg, module_path) if build_provenance_result_arg else None
     ct_sample_analysis_result = resolve_path(ct_sample_analysis_result_arg, module_path) if ct_sample_analysis_result_arg else None
+    backend_update_evaluation = resolve_path(backend_update_evaluation_arg, module_path) if backend_update_evaluation_arg else None
+    benchmark_campaign_result = resolve_path(benchmark_campaign_result_arg, module_path) if benchmark_campaign_result_arg else None
+    ct_campaign_result = resolve_path(ct_campaign_result_arg, module_path) if ct_campaign_result_arg else None
+    acvp_json_schema_result = resolve_path(acvp_json_schema_result_arg, module_path) if acvp_json_schema_result_arg else None
+    device_evidence_result = resolve_path(device_evidence_result_arg, module_path) if device_evidence_result_arg else None
+    appraisal_result = resolve_path(appraisal_result_arg, module_path) if appraisal_result_arg else None
     ct_instruction_policy_result = (
         resolve_path(ct_instruction_policy_result_arg, module_path)
         if ct_instruction_policy_result_arg
@@ -2111,6 +2137,62 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             required_keys=("schema_version", "passed", "algorithms", "checks"),
             success_field="passed",
         ),
+        "release.evidence_appraisal_profile": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=appraisal_result,
+            label="PQC appraisal verification result",
+            required_keys=("schema_version", "passed", "checks"),
+            success_field="passed",
+        ),
+        "supply_chain.backend_update_evaluation": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=backend_update_evaluation,
+            label="backend update evaluation",
+            required_keys=("schema_version", "passed", "backends", "checks", "failures"),
+            success_field="passed",
+        ),
+        "benchmark.campaign_reproducibility": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=benchmark_campaign_result,
+            label="benchmark campaign result",
+            required_keys=("schema_version", "passed", "statistics", "comparison_context"),
+            success_field="passed",
+        ),
+        "benchmark.external_reference_context": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=benchmark_campaign_result,
+            label="benchmark campaign result",
+            required_keys=("schema_version", "passed", "external_reference", "comparison_context"),
+            success_field="passed",
+        ),
+        "security.ct_campaign_analysis": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=ct_campaign_result,
+            label="CT campaign result",
+            required_keys=("schema_version", "passed", "algorithms", "checks"),
+            success_field="passed",
+        ),
+        "acvp.json_schema_coverage": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=acvp_json_schema_result,
+            label="ACVP JSON schema coverage result",
+            required_keys=("schema_version", "passed", "summary", "checks"),
+            success_field="passed",
+        ),
+        "firmware.device_evidence_token": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=device_evidence_result,
+            label="device evidence token result",
+            required_keys=("schema_version", "passed", "checks"),
+            success_field="passed",
+        ),
+        "release.strict_partner_policy": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=appraisal_result,
+            label="PQC appraisal verification result",
+            required_keys=("schema_version", "passed", "mode", "checks"),
+            success_field="passed",
+        ),
     }
     for claim_id, parameter_set in PER_PRIMITIVE_KAT_CLAIMS.items():
         evaluators[claim_id] = (
@@ -2191,6 +2273,7 @@ def build_ledger(args: argparse.Namespace) -> dict[str, object]:
     version = args.version or parse_header_version(module_path)
     claims_path = resolve_path(args.claims, module_path)
     claim_specs = load_claim_specs(claims_path)
+    ledger_schema_version = ledger_schema_for_claims(claims_path)
     evaluators = build_claim_evaluators(args, version)
     claims: list[dict[str, object]] = []
     for spec in claim_specs:
@@ -2214,7 +2297,7 @@ def build_ledger(args: argparse.Namespace) -> dict[str, object]:
         "not_applicable": sum(1 for claim in claims if claim["status"] == "not_applicable"),
     }
     return {
-        "schema_version": LEDGER_SCHEMA_VERSION,
+        "schema_version": ledger_schema_version,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "project": "pqcp-zephyr-trust-stack",
         "version": version,

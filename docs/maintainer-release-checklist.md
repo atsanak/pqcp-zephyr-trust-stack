@@ -192,6 +192,15 @@ Assurance Passport layer. In addition to the ledger and HTML report, inspect:
 - `pqc_build_provenance.slsa.json`
 - `pqc_build_provenance_result.json`
 - `ct_sample_analysis_result.json`
+- `backend_update_evaluation.json`
+- `benchmark_campaign_result.json`
+- `benchmark_campaign_verify_result.json`
+- `ct_campaign_result.json`
+- `acvp_json_schema_result.json`
+- `device_evidence_token.json`
+- `device_evidence_token_result.json`
+- `pqc_appraisal_evidence.json`
+- `pqc_appraisal_result.json`
 - `pqc_claim_closure_result.json`
 
 `pqc_policy_result.json` must have `"passed": true`. The policy verifier checks
@@ -245,6 +254,9 @@ checks that the digest manifest includes them. For `schema_version >= 6` packs
 it additionally requires reference values, firmware status verification, ACVP
 JSON interop evidence, SLSA-shaped build provenance, and CT sample analysis
 results.
+For `schema_version >= 7` packs it also requires backend update evaluation,
+benchmark campaign replay, CT campaign replay, ACVP JSON schema coverage,
+device-evidence token replay, and the evidence appraisal result.
 
 For benchmark comparison and side-channel-smoke interpretation, read
 [`performance-methodology.md`](performance-methodology.md) before comparing

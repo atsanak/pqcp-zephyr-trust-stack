@@ -548,6 +548,23 @@ def select_steps_for_mode(steps: list[Step], *, ci: bool) -> list[Step]:
     return selected
 
 
+def remove_stale_release_artifacts(output_root: Path, paths: list[Path]) -> None:
+    """Remove known generated artifacts so reruns cannot bind stale evidence."""
+    root = output_root.resolve()
+    for path in paths:
+        candidate = path.resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            raise RuntimeError(f"refusing to clean path outside output root: {candidate}") from None
+        if not candidate.exists():
+            continue
+        if candidate.is_dir():
+            shutil.rmtree(candidate)
+        else:
+            candidate.unlink()
+
+
 def main() -> int:
     args = parse_args()
     module_path = args.module_path.resolve() if args.module_path else Path(__file__).resolve().parent.parent
@@ -599,6 +616,15 @@ def main() -> int:
     firmware_assurance_status_result_path = output_root / "firmware_assurance_status_result.json"
     pqc_build_provenance_path = output_root / "pqc_build_provenance.slsa.json"
     pqc_build_provenance_result_path = output_root / "pqc_build_provenance_result.json"
+    backend_update_evaluation_path = output_root / "backend_update_evaluation.json"
+    benchmark_campaign_result_path = output_root / "benchmark_campaign_result.json"
+    benchmark_campaign_verify_result_path = output_root / "benchmark_campaign_verify_result.json"
+    ct_campaign_result_path = output_root / "ct_campaign_result.json"
+    acvp_json_schema_result_path = output_root / "acvp_json_schema_result.json"
+    device_evidence_token_path = output_root / "device_evidence_token.json"
+    device_evidence_token_result_path = output_root / "device_evidence_token_result.json"
+    pqc_appraisal_evidence_path = output_root / "pqc_appraisal_evidence.json"
+    pqc_appraisal_result_path = output_root / "pqc_appraisal_result.json"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
     assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
@@ -607,6 +633,55 @@ def main() -> int:
     junit_output = output_root / "release_check_results.xml"
     release_tag = args.tag or f"v{read_version_string(module_path)}"
     release_manifest_path = release_bundle_root / release_tag / f"release-manifest-{release_tag}.json"
+    remove_stale_release_artifacts(
+        output_root,
+        [
+            transcript_dir,
+            generated_include_dir,
+            external_reference_output_dir,
+            benchmark_csv_path,
+            benchmark_provenance_path,
+            cost_evidence_path,
+            assurance_ledger_json,
+            assurance_ledger_md,
+            assurance_report_html,
+            pqc_cbom_path,
+            pqc_environment_result_path,
+            pqc_attestation_path,
+            pqc_policy_result_path,
+            pqc_assurance_digest_path,
+            negative_floor_result_path,
+            pqc_asset_trace_result_path,
+            pqc_evidence_graph_json,
+            pqc_evidence_graph_md,
+            pqc_assurance_profile_result_path,
+            pqc_evidence_quality_result_path,
+            pqc_migration_readiness_json_path,
+            pqc_migration_readiness_md_path,
+            ct_instruction_policy_result_path,
+            pqc_claim_closure_result_path,
+            ct_sample_analysis_result_path,
+            ct_sample_manifest_path,
+            acvp_json_interop_result_path,
+            acvp_json_transcript_manifest_path,
+            backend_currency_result_path,
+            pqc_reference_values_path,
+            pqc_reference_values_result_path,
+            firmware_assurance_status_result_path,
+            pqc_build_provenance_path,
+            pqc_build_provenance_result_path,
+            backend_update_evaluation_path,
+            benchmark_campaign_result_path,
+            benchmark_campaign_verify_result_path,
+            ct_campaign_result_path,
+            acvp_json_schema_result_path,
+            device_evidence_token_path,
+            device_evidence_token_result_path,
+            pqc_appraisal_evidence_path,
+            pqc_appraisal_result_path,
+            junit_output,
+        ],
+    )
     version_check_cmd = [
         sys.executable,
         str(module_path / "scripts/check_version_consistency.py"),
@@ -659,6 +734,18 @@ def main() -> int:
         str(firmware_assurance_status_result_path),
         "--build-provenance-result",
         str(pqc_build_provenance_result_path),
+        "--backend-update-evaluation",
+        str(backend_update_evaluation_path),
+        "--benchmark-campaign-result",
+        str(benchmark_campaign_result_path),
+        "--ct-campaign-result",
+        str(ct_campaign_result_path),
+        "--acvp-json-schema-result",
+        str(acvp_json_schema_result_path),
+        "--device-evidence-result",
+        str(device_evidence_token_result_path),
+        "--appraisal-result",
+        str(pqc_appraisal_result_path),
         "--output-json",
         str(assurance_ledger_json),
         "--output-md",
@@ -956,6 +1043,14 @@ def main() -> int:
         "--output",
         str(backend_currency_result_path),
     ]
+    backend_update_cmd = [
+        sys.executable,
+        str(module_path / "scripts/evaluate_backend_update.py"),
+        "--module-path",
+        str(module_path),
+        "--output",
+        str(backend_update_evaluation_path),
+    ]
     external_reference_import_cmd = [
         sys.executable,
         str(module_path / "scripts/run_hardware_benchmarks.py"),
@@ -995,6 +1090,16 @@ def main() -> int:
         str(acvp_json_interop_result_path),
         "--transcript-manifest",
         str(acvp_json_transcript_manifest_path),
+    ]
+    acvp_json_schema_cmd = [
+        sys.executable,
+        str(module_path / "scripts/validate_acvp_json_schema.py"),
+        "--result",
+        str(acvp_json_interop_result_path),
+        "--transcript-manifest",
+        str(acvp_json_transcript_manifest_path),
+        "--output",
+        str(acvp_json_schema_result_path),
     ]
     pqc_migration_readiness_cmd = [
         sys.executable,
@@ -1122,13 +1227,25 @@ def main() -> int:
         "--byproduct",
         str(acvp_json_interop_result_path),
         "--byproduct",
+        str(acvp_json_schema_result_path),
+        "--byproduct",
         str(ct_sample_analysis_result_path),
         "--byproduct",
         str(ct_sample_manifest_path),
         "--byproduct",
+        str(ct_campaign_result_path),
+        "--byproduct",
         str(backend_currency_result_path),
         "--byproduct",
+        str(backend_update_evaluation_path),
+        "--byproduct",
         str(external_reference_result_path),
+        "--byproduct",
+        str(benchmark_campaign_result_path),
+        "--byproduct",
+        str(device_evidence_token_path),
+        "--byproduct",
+        str(device_evidence_token_result_path),
         "--output",
         str(pqc_build_provenance_path),
     ]
@@ -1152,17 +1269,109 @@ def main() -> int:
         "--byproduct",
         str(acvp_json_interop_result_path),
         "--byproduct",
+        str(acvp_json_schema_result_path),
+        "--byproduct",
         str(ct_sample_analysis_result_path),
         "--byproduct",
         str(ct_sample_manifest_path),
         "--byproduct",
+        str(ct_campaign_result_path),
+        "--byproduct",
         str(backend_currency_result_path),
         "--byproduct",
+        str(backend_update_evaluation_path),
+        "--byproduct",
         str(external_reference_result_path),
+        "--byproduct",
+        str(benchmark_campaign_result_path),
+        "--byproduct",
+        str(device_evidence_token_path),
+        "--byproduct",
+        str(device_evidence_token_result_path),
         "--release-manifest",
         str(release_manifest_path),
         "--output",
         str(pqc_build_provenance_result_path),
+    ]
+    benchmark_campaign_cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_benchmark_campaign.py"),
+        "--benchmark-csv",
+        str(benchmark_csv_path),
+        "--benchmark-provenance",
+        str(benchmark_provenance_path),
+        "--external-reference-result",
+        str(external_reference_result_path),
+        "--output",
+        str(benchmark_campaign_result_path),
+    ]
+    benchmark_campaign_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_benchmark_campaign.py"),
+        "--campaign",
+        str(benchmark_campaign_result_path),
+        "--output",
+        str(benchmark_campaign_verify_result_path),
+    ]
+    ct_campaign_cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_ct_campaign.py"),
+        "--analysis",
+        str(ct_sample_analysis_result_path),
+        "--manifest",
+        str(ct_sample_manifest_path),
+        "--output",
+        str(ct_campaign_result_path),
+    ]
+    device_evidence_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_device_evidence_token.py"),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--transcript-dir",
+        str(transcript_dir),
+        "--token-output",
+        str(device_evidence_token_path),
+        "--output",
+        str(device_evidence_token_result_path),
+    ]
+    appraisal_evidence_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_pqc_appraisal_evidence.py"),
+        "--output-root",
+        str(output_root),
+        "--policy",
+        str(module_path / "scripts/pqc_appraisal_policy.json"),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--policy-result",
+        str(pqc_policy_result_path),
+        "--backend-update",
+        str(backend_update_evaluation_path),
+        "--benchmark-campaign",
+        str(benchmark_campaign_result_path),
+        "--ct-campaign",
+        str(ct_campaign_result_path),
+        "--acvp-schema-result",
+        str(acvp_json_schema_result_path),
+        "--device-evidence-result",
+        str(device_evidence_token_result_path),
+        "--output",
+        str(pqc_appraisal_evidence_path),
+    ]
+    appraisal_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_pqc_appraisal_evidence.py"),
+        "--policy",
+        str(module_path / "scripts/pqc_appraisal_policy.json"),
+        "--appraisal-evidence",
+        str(pqc_appraisal_evidence_path),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--mode",
+        "partner_review",
+        "--output",
+        str(pqc_appraisal_result_path),
     ]
     evidence_pack_verify_cmd = [
         sys.executable,
@@ -1330,6 +1539,11 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="ACVP JSON schema coverage",
+            cmd=acvp_json_schema_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="kat_provenance",
             cmd=[
                 sys.executable,
@@ -1448,6 +1662,11 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="ct campaign analysis",
+            cmd=ct_campaign_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="ct instruction policy",
             cmd=ct_instruction_policy_cmd,
             cwd=module_path,
@@ -1488,6 +1707,26 @@ def main() -> int:
         Step(
             name="external reference import",
             cmd=external_reference_import_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="benchmark campaign",
+            cmd=benchmark_campaign_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="benchmark campaign verification",
+            cmd=benchmark_campaign_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="backend currency",
+            cmd=backend_currency_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="backend update evaluation",
+            cmd=backend_update_cmd,
             cwd=module_path,
         ),
         Step(
@@ -1551,11 +1790,6 @@ def main() -> int:
         Step(
             name="PQC release environment",
             cmd=pqc_environment_cmd,
-            cwd=module_path,
-        ),
-        Step(
-            name="backend currency",
-            cmd=backend_currency_cmd,
             cwd=module_path,
         ),
         Step(
@@ -1630,6 +1864,11 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="device evidence token verification",
+            cmd=device_evidence_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="PQC build provenance",
             cmd=pqc_build_provenance_cmd,
             cwd=module_path,
@@ -1637,6 +1876,16 @@ def main() -> int:
         Step(
             name="PQC build provenance verification",
             cmd=pqc_build_provenance_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC appraisal evidence",
+            cmd=appraisal_evidence_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="PQC appraisal verification",
+            cmd=appraisal_verify_cmd,
             cwd=module_path,
         ),
         Step(

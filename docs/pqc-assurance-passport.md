@@ -67,6 +67,19 @@ release review.
   SLSA provenance predicate shape for local release inputs and byproducts.
 - `ct_sample_analysis_result.json` — replay result for optional raw
   `PQCP_CT_SAMPLE` timing-smoke transcript markers.
+- `backend_update_evaluation.json` — comparison-only review of pinned native
+  backend metadata and optional upstream drift.
+- `benchmark_campaign_result.json` /
+  `benchmark_campaign_verify_result.json` — benchmark campaign statistics and
+  replay result.
+- `ct_campaign_result.json` — replay result over the CT sample manifest.
+- `acvp_json_schema_result.json` — ACVP JSON operation-coverage replay result.
+- `device_evidence_token.json` /
+  `device_evidence_token_result.json` — firmware device-evidence marker and
+  replay result.
+- `pqc_appraisal_evidence.json` /
+  `pqc_appraisal_result.json` — mode-specific evidence appraisal inputs and
+  replay result.
 
 ## Local Commands
 
@@ -196,6 +209,18 @@ and reports the exact file, claim, or artifact hash that failed.
 See [`performance-methodology.md`](performance-methodology.md) for the benchmark
 distribution rows, metadata rows, CT transcript markers, instruction-policy
 scan, and optional hardware/reference-capture workflow.
+
+## Evidence Appraisal Layer
+
+Passport schema v7 adds `pqc_appraisal_evidence.json` and
+`pqc_appraisal_result.json`. They replay-check the post-Passport artifacts using
+`scripts/pqc_appraisal_policy.json` in one of four modes: `ci_fast`,
+`local_release`, `partner_review`, or `hardware_review`.
+
+The full local release path uses `partner_review`. It requires backend update
+evaluation, benchmark campaign replay, CT campaign replay, ACVP JSON schema
+coverage, and device-evidence token replay to pass. The CI fast gate does not
+generate these artifacts.
 
 ## Negative Scenario Compatibility Floor
 

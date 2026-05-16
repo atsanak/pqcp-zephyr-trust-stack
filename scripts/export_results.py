@@ -591,6 +591,7 @@ def build_comparison_context(
         inferred_board_class = "qemu" if platform.startswith("qemu") else "native_sim" if platform == "native_sim" else "mcu"
     return {
         "source_dataset": source_dataset,
+        "source_ecosystem": "pqcp-zephyr-trust-stack",
         "board_class": inferred_board_class,
         "clock_assumption": clock_assumption or "runner/platform clock as reported by Zephyr build environment",
         "compiler": compiler or "recorded in benchmark_metadata.compiler.id when emitted",
@@ -609,6 +610,7 @@ def validate_comparison_context(context: Any) -> List[Dict[str, str]]:
     failures: List[Dict[str, str]] = []
     for key in (
         "source_dataset",
+        "source_ecosystem",
         "board_class",
         "clock_assumption",
         "backend_family",
