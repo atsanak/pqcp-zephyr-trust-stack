@@ -117,6 +117,15 @@ def parse_args() -> argparse.Namespace:
         "--environment-type",
         choices=("qemu", "native_host", "physical_hardware", "external_reference"),
     )
+    parser.add_argument(
+        "--allow-partial-reference",
+        action="store_true",
+        help=(
+            "In compare-reference mode, pass when at least one candidate/reference "
+            "pair matches and all context metadata is valid. Missing pairs remain "
+            "reported as coverage gaps."
+        ),
+    )
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--matrix", type=Path, default=SCRIPT_DIR / "cost_of_assurance_matrix.json")
     parser.add_argument("--timeout", type=int, default=1800)
@@ -255,6 +264,19 @@ def summarize_comparisons(comparisons: list[dict[str, Any]]) -> dict[str, Any]:
         "missing_count": len(comparisons) - len(ratios),
         "geomean_ratio": geomean_ratio,
     }
+
+
+def comparison_passed(
+    comparisons: list[dict[str, Any]],
+    context_failures: list[str],
+    *,
+    allow_partial_reference: bool,
+) -> bool:
+    if context_failures or not comparisons:
+        return False
+    if allow_partial_reference:
+        return any(item.get("passed") for item in comparisons)
+    return all(item.get("passed") for item in comparisons)
 
 
 def build_comparison_context(
@@ -484,7 +506,12 @@ def main() -> int:
                 "reference_csv": str(reference),
                 "reference_sha256": sha256_file(reference),
                 "comparison_count": len(comparisons),
-                "passed": bool(comparisons) and all(item["passed"] for item in comparisons) and not context_failures,
+                "allow_partial_reference": bool(args.allow_partial_reference),
+                "passed": comparison_passed(
+                    comparisons,
+                    context_failures,
+                    allow_partial_reference=bool(args.allow_partial_reference),
+                ),
                 "failures": context_failures,
             }
     if args.mode != "compare-reference":
