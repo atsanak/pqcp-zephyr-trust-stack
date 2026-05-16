@@ -619,6 +619,8 @@ def main() -> int:
     backend_update_evaluation_path = output_root / "backend_update_evaluation.json"
     benchmark_campaign_result_path = output_root / "benchmark_campaign_result.json"
     benchmark_campaign_verify_result_path = output_root / "benchmark_campaign_verify_result.json"
+    metric_optimization_result_path = output_root / "metric_optimization_campaign.json"
+    metric_optimization_overlay_dir = output_root / "metric_optimization_overlays"
     ct_campaign_result_path = output_root / "ct_campaign_result.json"
     acvp_json_schema_result_path = output_root / "acvp_json_schema_result.json"
     device_evidence_token_path = output_root / "device_evidence_token.json"
@@ -673,6 +675,8 @@ def main() -> int:
             backend_update_evaluation_path,
             benchmark_campaign_result_path,
             benchmark_campaign_verify_result_path,
+            metric_optimization_result_path,
+            metric_optimization_overlay_dir,
             ct_campaign_result_path,
             acvp_json_schema_result_path,
             device_evidence_token_path,
@@ -1313,6 +1317,18 @@ def main() -> int:
         "--output",
         str(benchmark_campaign_verify_result_path),
     ]
+    metric_optimization_cmd = [
+        sys.executable,
+        str(module_path / "scripts/optimize_metric_campaign.py"),
+        "--baseline-campaign",
+        str(benchmark_campaign_result_path),
+        "--cost-evidence",
+        str(cost_evidence_path),
+        "--emit-overlays",
+        str(metric_optimization_overlay_dir),
+        "--output",
+        str(metric_optimization_result_path),
+    ]
     ct_campaign_cmd = [
         sys.executable,
         str(module_path / "scripts/run_ct_campaign.py"),
@@ -1717,6 +1733,11 @@ def main() -> int:
         Step(
             name="benchmark campaign verification",
             cmd=benchmark_campaign_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="metric optimization campaign",
+            cmd=metric_optimization_cmd,
             cwd=module_path,
         ),
         Step(

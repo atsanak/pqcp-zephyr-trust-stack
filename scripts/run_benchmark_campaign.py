@@ -62,7 +62,8 @@ def percentile(values: list[float], pct: float) -> float:
 
 
 def summarize_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
-    groups: dict[tuple[str, str, str], list[float]] = {}
+    groups: dict[tuple[str, str, str, str], list[float]] = {}
+    resources: dict[tuple[str, str, str, str], dict[str, list[float]]] = {}
     for row in rows:
         operation = str(row.get("operation") or "")
         if operation.endswith(("_cycles_min", "_cycles_median", "_cycles_p90", "_cycles_p99", "_cycles_max", "_cycles_mad", "_sample_count")):
@@ -73,24 +74,32 @@ def summarize_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
         key = (
             str(row.get("parameter_set") or row.get("suite") or ""),
             str(row.get("implementation") or ""),
+            str(row.get("backend") or ""),
             operation,
         )
         groups.setdefault(key, []).append(cycles)
+        for field in ("rom_bytes", "ram_bytes"):
+            value = numeric(row.get(field))
+            if value is not None:
+                resources.setdefault(key, {}).setdefault(field, []).append(value)
     summaries = []
-    for (parameter_set, implementation, operation), values in sorted(groups.items()):
-        summaries.append(
-            {
-                "parameter_set": parameter_set,
-                "implementation": implementation,
-                "operation": operation,
-                "sample_count": len(values),
-                "min": min(values),
-                "median": statistics.median(values),
-                "p90": percentile(values, 90),
-                "p99": percentile(values, 99),
-                "mad": mad(values),
-            }
-        )
+    for (parameter_set, implementation, backend, operation), values in sorted(groups.items()):
+        row: dict[str, Any] = {
+            "parameter_set": parameter_set,
+            "implementation": implementation,
+            "backend": backend,
+            "operation": operation,
+            "sample_count": len(values),
+            "min": min(values),
+            "median": statistics.median(values),
+            "p90": percentile(values, 90),
+            "p99": percentile(values, 99),
+            "mad": mad(values),
+        }
+        for field, field_values in resources.get((parameter_set, implementation, backend, operation), {}).items():
+            if field_values:
+                row[field] = max(field_values)
+        summaries.append(row)
     return summaries
 
 
@@ -102,19 +111,19 @@ def geomean(values: list[float]) -> float | None:
 
 
 def build_pairwise_ratios(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_key = {
-        (
+    by_group: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in summaries:
+        key = (
             str(row.get("parameter_set") or ""),
             str(row.get("operation") or ""),
             str(row.get("implementation") or ""),
-        ): row
-        for row in summaries
-    }
+        )
+        by_group.setdefault(key, []).append(row)
     ratios: list[dict[str, Any]] = []
-    keys = sorted({(key[0], key[1]) for key in by_key})
+    keys = sorted({(key[0], key[1]) for key in by_group})
     for parameter_set, operation in keys:
-        candidate = by_key.get((parameter_set, operation, "pqcp"))
-        baseline = by_key.get((parameter_set, operation, "baseline"))
+        candidate = select_backend_row(by_group.get((parameter_set, operation, "pqcp"), []), preferred_backend="auto")
+        baseline = select_backend_row(by_group.get((parameter_set, operation, "baseline"), []), preferred_backend="clean")
         if candidate is None or baseline is None:
             continue
         candidate_median = float(candidate.get("median") or 0.0)
@@ -126,6 +135,8 @@ def build_pairwise_ratios(summaries: list[dict[str, Any]]) -> list[dict[str, Any
                 "operation": operation,
                 "candidate_implementation": "pqcp",
                 "baseline_implementation": "baseline",
+                "candidate_backend": candidate.get("backend") or "",
+                "baseline_backend": baseline.get("backend") or "",
                 "candidate_median_cycles": candidate_median,
                 "baseline_median_cycles": baseline_median,
                 "ratio": ratio,
@@ -134,6 +145,66 @@ def build_pairwise_ratios(summaries: list[dict[str, Any]]) -> list[dict[str, Any
             }
         )
     return ratios
+
+
+def select_backend_row(rows: list[dict[str, Any]], *, preferred_backend: str) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    for row in rows:
+        if str(row.get("backend") or "") == preferred_backend:
+            return row
+    for row in rows:
+        if str(row.get("backend") or "") in ("", "auto", "clean"):
+            return row
+    return sorted(rows, key=lambda row: str(row.get("backend") or ""))[0]
+
+
+def build_backend_rankings(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_target: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in summaries:
+        if str(row.get("implementation") or "") != "pqcp":
+            continue
+        backend = str(row.get("backend") or "")
+        if not backend:
+            continue
+        key = (str(row.get("parameter_set") or ""), str(row.get("operation") or ""))
+        by_target.setdefault(key, []).append(row)
+    rankings: list[dict[str, Any]] = []
+    for (parameter_set, operation), rows in sorted(by_target.items()):
+        unique: dict[str, dict[str, Any]] = {
+            str(row.get("backend") or ""): row
+            for row in rows
+        }
+        if len(unique) < 2:
+            continue
+        ordered = sorted(
+            unique.values(),
+            key=lambda row: (
+                float(row.get("median") or math.inf),
+                str(row.get("backend") or ""),
+            ),
+        )
+        fastest = ordered[0]
+        auto = unique.get("auto")
+        rankings.append(
+            {
+                "parameter_set": parameter_set,
+                "operation": operation,
+                "fastest_backend": fastest.get("backend"),
+                "fastest_median_cycles": fastest.get("median"),
+                "auto_median_cycles": auto.get("median") if auto else None,
+                "auto_is_fastest": bool(auto and auto.get("backend") == fastest.get("backend")),
+                "candidates": [
+                    {
+                        "backend": row.get("backend"),
+                        "median_cycles": row.get("median"),
+                        "sample_count": row.get("sample_count"),
+                    }
+                    for row in ordered
+                ],
+            }
+        )
+    return rankings
 
 
 def comparison_summary(ratios: list[dict[str, Any]]) -> dict[str, Any]:
@@ -173,6 +244,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     summaries = summarize_rows(rows)
     ratios = build_pairwise_ratios(summaries)
     ratio_summary = comparison_summary(ratios)
+    backend_rankings = build_backend_rankings(summaries)
     if not summaries:
         failures.append("benchmark campaign found no numeric base-operation rows")
     for stat in config.get("required_statistics") or []:
@@ -198,9 +270,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "failures": len(failures),
             "comparison_context": provenance.get("comparison_context"),
             "pairwise_comparisons": ratio_summary,
+            "backend_selection": {
+                "ranking_count": len(backend_rankings),
+                "auto_not_fastest_count": sum(1 for row in backend_rankings if not row.get("auto_is_fastest")),
+            },
         },
         "statistics": summaries,
         "pairwise_ratios": ratios,
+        "backend_rankings": backend_rankings,
         "external_reference": external_reference,
         "checks": checks,
         "failures": failures,

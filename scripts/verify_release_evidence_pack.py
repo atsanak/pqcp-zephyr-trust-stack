@@ -307,6 +307,7 @@ def verify_passport_artifacts(
     backend_update_evaluation = output_root / "backend_update_evaluation.json"
     benchmark_campaign_result = output_root / "benchmark_campaign_result.json"
     benchmark_campaign_verify_result = output_root / "benchmark_campaign_verify_result.json"
+    metric_optimization_result = output_root / "metric_optimization_campaign.json"
     ct_campaign_result = output_root / "ct_campaign_result.json"
     acvp_json_schema_result = output_root / "acvp_json_schema_result.json"
     device_evidence_token = output_root / "device_evidence_token.json"
@@ -656,6 +657,10 @@ def verify_passport_artifacts(
             if campaign_replay.get("passed") is not True:
                 for failure in campaign_replay.get("failures", []):
                     failures.append(f"benchmark campaign replay: {failure}")
+        if metric_optimization_result.exists():
+            payload = load_json(metric_optimization_result, "metric optimization campaign result", failures)
+            if payload and payload.get("passed") is not True:
+                failures.append("metric optimization campaign result did not pass")
         if appraisal_policy_path.exists() and appraisal_evidence.exists():
             appraisal_replay = verify_appraisal_evidence(
                 argparse.Namespace(
