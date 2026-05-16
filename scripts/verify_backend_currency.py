@@ -214,6 +214,11 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
             row_failures.append(f"checked-out HEAD {checked_out_head} != west.yml revision {revision}")
         if args.check_upstream and upstream is None:
             row_warnings.append("upstream HEAD could not be resolved")
+        if args.check_upstream and upstream and revision and upstream != revision:
+            row_warnings.append(
+                f"upstream HEAD {upstream} differs from pinned revision {revision}; "
+                "review backend release notes before updating"
+            )
 
         failures.extend(f"{name}: {failure}" for failure in row_failures)
         warnings.extend(f"{name}: {warning}" for warning in row_warnings)
@@ -229,6 +234,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
                 "checked_out_head": checked_out_head,
                 "upstream_head": upstream,
                 "upstream_checked": bool(args.check_upstream),
+                "upstream_matches_pin": bool(upstream and revision and upstream == revision),
                 "release_or_tag_metadata": "not queried",
                 "passed": not row_failures,
                 "warnings": row_warnings,
