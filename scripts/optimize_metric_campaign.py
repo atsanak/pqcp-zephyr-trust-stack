@@ -10,13 +10,17 @@ records keep/reject decisions without mutating source or Kconfig files.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import run_benchmark_campaign
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -132,9 +136,69 @@ SAFE_CANDIDATES: tuple[dict[str, Any], ...] = (
 )
 
 
+RUN_TARGETS: dict[str, dict[str, Any]] = {
+    "mldsa87-sign": {
+        "target_id": "mldsa.sign",
+        "sample": "pqcp_basic_sig",
+        "parameter_set": "ML-DSA-87",
+        "operation": "sign",
+        "extra_kconfig": (
+            "CONFIG_PQCP_MLKEM_LEVEL_512=n",
+            "CONFIG_PQCP_MLKEM_LEVEL_768=y",
+            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_44=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_65=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_87=y",
+        ),
+    },
+    "mldsa44-sign": {
+        "target_id": "mldsa.sign",
+        "sample": "pqcp_basic_sig",
+        "parameter_set": "ML-DSA-44",
+        "operation": "sign",
+        "extra_kconfig": (
+            "CONFIG_PQCP_MLKEM_LEVEL_512=n",
+            "CONFIG_PQCP_MLKEM_LEVEL_768=y",
+            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_44=y",
+            "CONFIG_PQCP_MLDSA_LEVEL_65=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_87=n",
+        ),
+    },
+    "mlkem512-encaps": {
+        "target_id": "mlkem.encaps",
+        "sample": "pqcp_basic_kem",
+        "parameter_set": "ML-KEM-512",
+        "operation": "encaps",
+        "extra_kconfig": (
+            "CONFIG_PQCP_MLKEM_LEVEL_512=y",
+            "CONFIG_PQCP_MLKEM_LEVEL_768=n",
+            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_44=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_65=y",
+            "CONFIG_PQCP_MLDSA_LEVEL_87=n",
+        ),
+    },
+    "mlkem512-decaps": {
+        "target_id": "mlkem.decaps",
+        "sample": "pqcp_basic_kem",
+        "parameter_set": "ML-KEM-512",
+        "operation": "decaps",
+        "extra_kconfig": (
+            "CONFIG_PQCP_MLKEM_LEVEL_512=y",
+            "CONFIG_PQCP_MLKEM_LEVEL_768=n",
+            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_44=n",
+            "CONFIG_PQCP_MLDSA_LEVEL_65=y",
+            "CONFIG_PQCP_MLDSA_LEVEL_87=n",
+        ),
+    },
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--baseline-campaign", type=Path, required=True)
+    parser.add_argument("--baseline-campaign", type=Path)
     parser.add_argument(
         "--candidate-campaign",
         action="append",
@@ -159,6 +223,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail if no candidate is accepted. Useful only after candidate data is available.",
     )
+    parser.add_argument(
+        "--run-target",
+        choices=sorted(RUN_TARGETS),
+        help="Run a focused qemu_x86_64 target benchmark before evaluating candidates.",
+    )
+    parser.add_argument(
+        "--run-candidate",
+        action="append",
+        choices=sorted(candidate["id"] for candidate in SAFE_CANDIDATES if candidate.get("overlay_lines")),
+        help="Safe candidate id to run for --run-target. Repeatable.",
+    )
+    parser.add_argument("--run-output-root", type=Path, default=Path("/tmp/pqcp-metric-candidates"))
+    parser.add_argument("--west-root", type=Path, default=REPO_ROOT.parent)
+    parser.add_argument("--module-path", type=Path, default=REPO_ROOT)
+    parser.add_argument("--west", default=None)
+    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--run-repetitions", type=int, default=1)
     return parser.parse_args()
 
 
@@ -186,6 +267,13 @@ def parse_candidate(value: str) -> tuple[str, Path]:
     return name.strip(), Path(path).expanduser()
 
 
+def candidate_by_id(candidate_id: str) -> dict[str, Any]:
+    for candidate in SAFE_CANDIDATES:
+        if candidate["id"] == candidate_id:
+            return candidate
+    raise RuntimeError(f"unknown candidate id: {candidate_id}")
+
+
 def selected_targets(ids: list[str] | None) -> list[dict[str, Any]]:
     targets = list(DEFAULT_TARGETS)
     if not ids:
@@ -207,6 +295,304 @@ def as_float(value: Any) -> float | None:
     if not math.isfinite(parsed):
         return None
     return parsed
+
+
+def parameter_set_name(algorithm: str, level: str) -> str:
+    normalized = str(algorithm or "").upper()
+    if normalized == "MLDSA":
+        return f"ML-DSA-{level}"
+    if normalized == "MLKEM":
+        return f"ML-KEM-{level}"
+    return f"{algorithm}-{level}"
+
+
+def rows_from_consolidated_metrics(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def campaign_from_metric_rows(source_rows: list[dict[str, str]], *, label: str, paths: list[Path]) -> dict[str, Any]:
+    groups: dict[tuple[str, str, str, str], list[float]] = {}
+    resources_by_run: dict[str, dict[str, float]] = {}
+    for row in source_rows:
+        if row.get("component") == "build" and row.get("operation") == "artifact":
+            value = as_float(row.get("value"))
+            if value is not None and row.get("metric") in ("rom_bytes", "ram_bytes"):
+                resources_by_run.setdefault(str(row.get("run_id") or ""), {})[str(row.get("metric"))] = value
+            continue
+        if row.get("metric") != "cycles":
+            continue
+        cycles = as_float(row.get("value"))
+        if cycles is None:
+            continue
+        key = (
+            parameter_set_name(str(row.get("algorithm") or ""), str(row.get("level") or "")),
+            str(row.get("implementation") or ""),
+            str(row.get("backend") or ""),
+            str(row.get("operation") or ""),
+        )
+        groups.setdefault(key, []).append(cycles)
+    summaries: list[dict[str, Any]] = []
+    for (parameter_set, implementation, backend, operation), values in sorted(groups.items()):
+        run_resources: dict[str, float] = {}
+        for row in source_rows:
+            if (
+                row.get("implementation") == implementation
+                and row.get("backend") == backend
+                and row.get("operation") == operation
+                and row.get("metric") == "cycles"
+            ):
+                run_resources = resources_by_run.get(str(row.get("run_id") or ""), {})
+                break
+        summary: dict[str, Any] = {
+            "parameter_set": parameter_set,
+            "implementation": implementation,
+            "backend": backend,
+            "operation": operation,
+            "sample_count": len(values),
+            "min": min(values),
+            "median": run_benchmark_campaign.statistics.median(values),
+            "p90": run_benchmark_campaign.percentile(values, 90),
+            "p99": run_benchmark_campaign.percentile(values, 99),
+            "mad": run_benchmark_campaign.mad(values),
+        }
+        summary.update(run_resources)
+        summaries.append(summary)
+    ratios = run_benchmark_campaign.build_pairwise_ratios(summaries)
+    rankings = run_benchmark_campaign.build_backend_rankings(summaries)
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generator": "scripts/optimize_metric_campaign.py",
+        "passed": bool(summaries),
+        "source": {
+            "label": label,
+            "consolidated_metrics": [str(path.resolve()) for path in paths],
+            "file_count": len(paths),
+        },
+        "comparison_context": {
+            "source_dataset": "qemu",
+            "source_ecosystem": "pqcp-local",
+            "board_class": "qemu",
+            "statistic_type": "single_or_distribution",
+            "environment_type": "qemu",
+        },
+        "statistics": summaries,
+        "pairwise_ratios": ratios,
+        "backend_rankings": rankings,
+        "summary": {
+            "groups": len(summaries),
+            "pairwise_comparisons": run_benchmark_campaign.comparison_summary(ratios),
+            "backend_selection": {
+                "ranking_count": len(rankings),
+                "auto_not_fastest_count": sum(1 for row in rankings if not row.get("auto_is_fastest")),
+            },
+        },
+        "failures": [] if summaries else [f"{label} contained no cycle metrics"],
+    }
+
+
+def campaign_from_consolidated_metrics(path: Path, *, label: str) -> dict[str, Any]:
+    return campaign_from_metric_rows(rows_from_consolidated_metrics(path), label=label, paths=[path])
+
+
+def campaign_from_consolidated_metric_files(paths: list[Path], *, label: str) -> dict[str, Any]:
+    rows: list[dict[str, str]] = []
+    for path in paths:
+        rows.extend(rows_from_consolidated_metrics(path))
+    return campaign_from_metric_rows(rows, label=label, paths=paths)
+
+
+def backend_policy_for_candidate(candidate_id: str) -> str:
+    if candidate_id == "force_native":
+        return "force_native"
+    if candidate_id == "force_c":
+        return "force_c"
+    return "auto"
+
+
+def kconfig_for_candidate(candidate_id: str) -> list[str]:
+    candidate = candidate_by_id(candidate_id)
+    return [
+        str(line)
+        for line in candidate.get("overlay_lines") or ()
+        if not str(line).startswith("CONFIG_PQCP_BACKEND_")
+    ]
+
+
+def benchmark_command(
+    *,
+    module_path: Path,
+    west_root: Path,
+    west: str | None,
+    target: dict[str, Any],
+    output_dir: Path,
+    backend_policy: str,
+    extra_kconfig: list[str],
+    timeout: int,
+) -> list[str]:
+    cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_benchmarks.py"),
+        "--board",
+        "qemu_x86_64",
+        "--profile",
+        "COA_QEMU_SINGLE_LEVEL",
+        "--sample",
+        str(target["sample"]),
+        "--implementation",
+        "pqcp",
+        "--backend-policy",
+        backend_policy,
+        "--west-root",
+        str(west_root),
+        "--module-path",
+        str(module_path),
+        "--output",
+        str(output_dir),
+        "--timeout",
+        str(timeout),
+    ]
+    if west:
+        cmd.extend(["--west", west])
+    for line in extra_kconfig:
+        cmd.extend(["--kconfig", line])
+    return cmd
+
+
+def run_subprocess(cmd: list[str], *, cwd: Path, timeout: int) -> dict[str, Any]:
+    started_at = datetime.now(timezone.utc).isoformat()
+    try:
+        completed = subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout,
+            check=False,
+        )
+        return {
+            "command": cmd,
+            "started_at": started_at,
+            "returncode": completed.returncode,
+            "timed_out": False,
+            "stdout_tail": completed.stdout[-4000:],
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "command": cmd,
+            "started_at": started_at,
+            "returncode": None,
+            "timed_out": True,
+            "stdout_tail": (exc.stdout or "")[-4000:] if isinstance(exc.stdout, str) else "",
+        }
+
+
+def run_target_candidates(args: argparse.Namespace) -> tuple[dict[str, Any], list[tuple[str, dict[str, Any]]], list[dict[str, Any]], list[str]]:
+    if not args.run_target:
+        raise RuntimeError("--run-target is required for benchmark execution mode")
+    candidates = args.run_candidate or []
+    if not candidates:
+        raise RuntimeError("--run-candidate is required with --run-target")
+    target = RUN_TARGETS[args.run_target]
+    root = args.run_output_root.resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    run_records: list[dict[str, Any]] = []
+    failures: list[str] = []
+    repetitions = max(1, int(args.run_repetitions or 1))
+    target_kconfig = list(target["extra_kconfig"])
+    module_path = args.module_path.resolve()
+    west_root = args.west_root.resolve()
+    baseline_metric_paths: list[Path] = []
+    for repetition in range(repetitions):
+        base_output = root / f"{args.run_target}__baseline_auto__rep{repetition + 1}"
+        baseline_cmd = benchmark_command(
+            module_path=module_path,
+            west_root=west_root,
+            west=args.west,
+            target=target,
+            output_dir=base_output,
+            backend_policy="auto",
+            extra_kconfig=target_kconfig,
+            timeout=args.timeout,
+        )
+        baseline_record = run_subprocess(baseline_cmd, cwd=module_path, timeout=args.timeout + 60)
+        baseline_metrics = base_output / "consolidated_metrics.csv"
+        baseline_metrics_sha = sha256_file(baseline_metrics) if baseline_metrics.exists() else None
+        run_records.append(
+            {
+                "name": "baseline_auto",
+                "candidate_id": "baseline_auto",
+                "target_id": str(target["target_id"]),
+                "run_target": args.run_target,
+                "sample": str(target["sample"]),
+                "parameter_set": str(target["parameter_set"]),
+                "operation": str(target["operation"]),
+                "backend_policy": "auto",
+                "extra_kconfig": target_kconfig,
+                "repetition": repetition + 1,
+                "output_dir": str(base_output),
+                "consolidated_metrics": str(baseline_metrics),
+                "metrics_sha256": baseline_metrics_sha,
+                **baseline_record,
+            }
+        )
+        if baseline_record["returncode"] == 0 and baseline_metrics.exists():
+            baseline_metric_paths.append(baseline_metrics)
+    if not baseline_metric_paths:
+        failures.append(f"baseline run for {args.run_target} failed")
+        return {"schema_version": 1, "passed": False, "statistics": [], "failures": failures}, [], run_records, failures
+    baseline_campaign = campaign_from_consolidated_metric_files(baseline_metric_paths, label="baseline_auto")
+    candidate_campaigns: list[tuple[str, dict[str, Any]]] = []
+    for candidate_id in candidates:
+        candidate_metric_paths: list[Path] = []
+        for repetition in range(repetitions):
+            candidate_output = root / f"{args.run_target}__{candidate_id}__rep{repetition + 1}"
+            candidate_cmd = benchmark_command(
+                module_path=module_path,
+                west_root=west_root,
+                west=args.west,
+                target=target,
+                output_dir=candidate_output,
+                backend_policy=backend_policy_for_candidate(candidate_id),
+                extra_kconfig=target_kconfig + kconfig_for_candidate(candidate_id),
+                timeout=args.timeout,
+            )
+            record = run_subprocess(candidate_cmd, cwd=module_path, timeout=args.timeout + 60)
+            metrics_path = candidate_output / "consolidated_metrics.csv"
+            metrics_sha = sha256_file(metrics_path) if metrics_path.exists() else None
+            backend_policy = backend_policy_for_candidate(candidate_id)
+            run_records.append(
+                {
+                    "name": candidate_id,
+                    "candidate_id": candidate_id,
+                    "target_id": str(target["target_id"]),
+                    "run_target": args.run_target,
+                    "sample": str(target["sample"]),
+                    "parameter_set": str(target["parameter_set"]),
+                    "operation": str(target["operation"]),
+                    "backend_policy": backend_policy,
+                    "extra_kconfig": target_kconfig + kconfig_for_candidate(candidate_id),
+                    "repetition": repetition + 1,
+                    "output_dir": str(candidate_output),
+                    "consolidated_metrics": str(metrics_path),
+                    "metrics_sha256": metrics_sha,
+                    **record,
+                }
+            )
+            if record["returncode"] == 0 and metrics_path.exists():
+                candidate_metric_paths.append(metrics_path)
+        if not candidate_metric_paths:
+            failures.append(f"candidate run {candidate_id} for {args.run_target} failed")
+            continue
+        candidate_campaigns.append(
+            (
+                candidate_id,
+                campaign_from_consolidated_metric_files(candidate_metric_paths, label=candidate_id),
+            )
+        )
+    return baseline_campaign, candidate_campaigns, run_records, failures
 
 
 def stat_matches(row: dict[str, Any], target: dict[str, Any]) -> bool:
@@ -523,17 +909,39 @@ def command_plan(output_root: str = "/tmp/pqcp-opt-campaign") -> list[dict[str, 
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    targets = selected_targets(args.target)
-    baseline_path = args.baseline_campaign.resolve()
-    baseline = load_json(baseline_path)
-    artifact_hashes = {str(baseline_path): sha256_file(baseline_path)}
+    run_records: list[dict[str, Any]] = []
+    execution_failures: list[str] = []
+    if args.run_target:
+        run_target = RUN_TARGETS[args.run_target]
+        target_ids = [run_target["target_id"]]
+        if args.target:
+            target_ids.extend(args.target)
+        targets = selected_targets(target_ids)
+        baseline, executed_candidates, run_records, execution_failures = run_target_candidates(args)
+        artifact_hashes: dict[str, str] = {}
+        for record in run_records:
+            metrics_path = Path(str(record.get("consolidated_metrics") or ""))
+            if metrics_path.exists():
+                artifact_hashes[str(metrics_path.resolve())] = sha256_file(metrics_path)
+        candidate_items = executed_candidates
+    else:
+        targets = selected_targets(args.target)
+        if args.baseline_campaign is None:
+            raise RuntimeError("--baseline-campaign is required unless --run-target is used")
+        baseline_path = args.baseline_campaign.resolve()
+        baseline = load_json(baseline_path)
+        artifact_hashes = {str(baseline_path): sha256_file(baseline_path)}
+        candidate_items = []
+        for raw in args.candidate_campaign:
+            name, path = parse_candidate(raw)
+            candidate_path = path.resolve()
+            candidate = load_json(candidate_path)
+            artifact_hashes[str(candidate_path)] = sha256_file(candidate_path)
+            candidate_items.append((name, candidate))
     failures: list[str] = []
+    failures.extend(execution_failures)
     candidate_results: list[dict[str, Any]] = []
-    for raw in args.candidate_campaign:
-        name, path = parse_candidate(raw)
-        candidate_path = path.resolve()
-        candidate = load_json(candidate_path)
-        artifact_hashes[str(candidate_path)] = sha256_file(candidate_path)
+    for name, candidate in candidate_items:
         if candidate.get("passed") is not True:
             failures.append(f"candidate {name} campaign did not pass replay preconditions")
         result = evaluate_candidate(
@@ -545,8 +953,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             max_tail_regression=args.max_tail_regression,
             max_resource_regression=args.max_resource_regression,
         )
+        metadata = candidate_by_id(name) if name in {candidate["id"] for candidate in SAFE_CANDIDATES} else {}
+        result["candidate_metadata"] = metadata
+        if metadata.get("class") == "measurement":
+            result["production_promotion_allowed"] = False
+            result["promotion_scope"] = "measurement_only"
+        else:
+            result["production_promotion_allowed"] = result.get("decision") == "keep"
+            result["promotion_scope"] = "production_candidate" if result.get("decision") == "keep" else "rejected"
         failures.extend(result.get("failures") or [])
         candidate_results.append(result)
+    if baseline.get("passed") is not True:
+        failures.append("baseline campaign did not pass replay preconditions")
     if args.require_kept and not any(result.get("decision") == "keep" for result in candidate_results):
         failures.append("--require-kept was set but no candidate was accepted")
     if args.cost_evidence:
@@ -576,6 +994,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "candidate_results": candidate_results,
         "backend_selection": backend_selection(baseline),
         "hardware_promotion": hardware_promotion(args.hardware_result),
+        "execution": {
+            "mode": "targeted_qemu" if args.run_target else "replay",
+            "run_target": args.run_target,
+            "run_records": run_records,
+        },
         "commands": command_plan(),
         "artifact_hashes": artifact_hashes,
         "failures": failures,
