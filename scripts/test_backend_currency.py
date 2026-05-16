@@ -49,6 +49,25 @@ def write_repo(root: Path, *, mlkem_revision: str = MLKEM_SHA) -> None:
     )
 
 
+def write_backend_meta(root: Path) -> None:
+    backend = root / "ext" / "mlkem-native"
+    (backend / "mlkem" / "src").mkdir(parents=True)
+    (backend / "META.yml").write_text(
+        """name: ML-KEM
+type: kem
+implementations:
+  - name: ML-KEM-768
+    claimed-nist-level: 3
+    length-public-key: 1184
+    kat-sha256: 8cff42556667edbd0fec7d0b2666d7710d80db71b684f8b4852a37ece2a4c844
+""",
+        encoding="utf-8",
+    )
+    (backend / "LICENSE").write_text("backend license\n", encoding="utf-8")
+    (backend / "mlkem" / "src" / "kem.c").write_text("int kem(void) { return 0; }\n",
+                                                       encoding="utf-8")
+
+
 class BackendCurrencyTests(unittest.TestCase):
     def test_offline_pin_metadata_passes_with_west_and_gitmodules(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -119,6 +138,30 @@ class BackendCurrencyTests(unittest.TestCase):
         self.assertTrue(any("differs from pinned revision" in warning for warning in result["warnings"]))
         self.assertTrue(all(row["upstream_checked"] for row in result["backends"]))
         self.assertTrue(all(not row["upstream_matches_pin"] for row in result["backends"]))
+
+    def test_backend_metadata_records_meta_kat_and_source_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_repo(root)
+            write_backend_meta(root)
+            result = verify_backend_currency.verify(
+                Namespace(
+                    module_path=root,
+                    west_manifest=root / "west.yml",
+                    output=root / "result.json",
+                    check_upstream=False,
+                    require_initialized_submodules=False,
+                )
+            )
+        mlkem = next(row for row in result["backends"] if row["name"] == "mlkem-native")
+        metadata = mlkem["backend_metadata"]
+        self.assertTrue(metadata["available"])
+        self.assertEqual(metadata["metadata"]["name"], "ML-KEM")
+        self.assertEqual(metadata["metadata"]["type"], "kem")
+        self.assertEqual(metadata["metadata"]["implementations"][0]["name"], "ML-KEM-768")
+        self.assertIn("kat-sha256", metadata["metadata"]["implementations"][0])
+        self.assertEqual(metadata["source_file_count"], 1)
+        self.assertRegex(metadata["meta_sha256"], r"^[0-9a-f]{64}$")
 
 
 if __name__ == "__main__":

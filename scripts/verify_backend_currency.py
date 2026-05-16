@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -28,6 +29,16 @@ BACKENDS = {
         "url": "https://github.com/pq-code-package/mldsa-native",
     },
 }
+
+
+def sha256_file(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def parse_args() -> argparse.Namespace:
@@ -116,6 +127,61 @@ def parse_gitmodules(path: Path) -> dict[str, dict[str, str]]:
     return modules
 
 
+def parse_backend_meta(path: Path) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "name": None,
+        "type": None,
+        "implementations": [],
+    }
+    current_impl: dict[str, Any] | None = None
+    in_implementations = False
+    if not path.exists():
+        return metadata
+
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "implementations:":
+            in_implementations = True
+            continue
+        if in_implementations and stripped.startswith("- name:"):
+            current_impl = {"name": stripped.split(":", 1)[1].strip().strip("'\"")}
+            metadata["implementations"].append(current_impl)
+            continue
+        if ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if in_implementations and current_impl is not None:
+            current_impl[key] = value
+        elif key in {"name", "type"}:
+            metadata[key] = value
+
+    return metadata
+
+
+def collect_backend_metadata(module_path: Path, backend_path: str) -> dict[str, Any]:
+    root = module_path / backend_path
+    meta_path = root / "META.yml"
+    license_path = root / "LICENSE"
+    source_files = [
+        str(path.relative_to(root))
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix in {".c", ".h", ".S", ".s"}
+    ] if root.exists() else []
+    return {
+        "available": root.exists(),
+        "meta_path": str(meta_path) if meta_path.exists() else None,
+        "meta_sha256": sha256_file(meta_path),
+        "license_path": str(license_path) if license_path.exists() else None,
+        "license_sha256": sha256_file(license_path),
+        "source_file_count": len(source_files),
+        "metadata": parse_backend_meta(meta_path),
+    }
+
+
 def parse_submodule_status(module_path: Path) -> dict[str, dict[str, str]]:
     code, stdout, _stderr = run_git(module_path, "submodule", "status", "--recursive")
     if code != 0:
@@ -176,6 +242,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         state = status.get("state", "missing")
         checked_out_head = local_head(module_path, expected["submodule_path"])
         upstream = upstream_head(expected["url"]) if args.check_upstream else None
+        backend_metadata = collect_backend_metadata(module_path, expected["submodule_path"])
 
         row_failures: list[str] = []
         row_warnings: list[str] = []
@@ -236,6 +303,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
                 "upstream_checked": bool(args.check_upstream),
                 "upstream_matches_pin": bool(upstream and revision and upstream == revision),
                 "release_or_tag_metadata": "not queried",
+                "backend_metadata": backend_metadata,
                 "passed": not row_failures,
                 "warnings": row_warnings,
                 "failures": row_failures,
