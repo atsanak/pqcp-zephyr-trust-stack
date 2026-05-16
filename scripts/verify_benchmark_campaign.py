@@ -61,6 +61,11 @@ def verify(campaign_path: Path) -> dict[str, Any]:
                 checks.append({"check": "pairwise_ratio", "row": index, "passed": ok})
                 if not ok:
                     failures.append(f"benchmark campaign pairwise row {index} has non-numeric ratio")
+                for field in ("candidate_backend", "baseline_backend"):
+                    ok = isinstance(row, dict) and row.get(field) not in (None, "")
+                    checks.append({"check": "pairwise_backend", "row": index, "field": field, "passed": ok})
+                    if not ok:
+                        failures.append(f"benchmark campaign pairwise row {index} missing {field}")
     comparison_summary = (campaign.get("summary") or {}).get("pairwise_comparisons")
     if pairwise:
         ok = isinstance(comparison_summary, dict) and isinstance(
@@ -69,6 +74,22 @@ def verify(campaign_path: Path) -> dict[str, Any]:
         checks.append({"check": "pairwise_summary", "passed": ok})
         if not ok:
             failures.append("benchmark campaign pairwise summary geomean_ratio is required")
+    rankings = campaign.get("backend_rankings")
+    if rankings is not None:
+        if not isinstance(rankings, list):
+            failures.append("benchmark campaign backend_rankings must be a list")
+        else:
+            for index, row in enumerate(rankings, start=1):
+                candidates = row.get("candidates") if isinstance(row, dict) else None
+                ok = (
+                    isinstance(row, dict)
+                    and row.get("fastest_backend") not in (None, "")
+                    and isinstance(candidates, list)
+                    and len(candidates) >= 2
+                )
+                checks.append({"check": "backend_ranking", "row": index, "passed": ok})
+                if not ok:
+                    failures.append(f"benchmark campaign backend ranking row {index} is incomplete")
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
