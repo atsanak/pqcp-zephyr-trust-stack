@@ -30,6 +30,14 @@ DEFAULT_EXCLUDE_PATTERNS = (
     "test_",
     "run_mlkem_decap_ct_smoke",
 )
+DEFAULT_REQUIRED_SYMBOL_GROUPS = {
+    "api_decap": (
+        "pqcp_mlkem_decapsulate",
+        "crypto_kem_dec",
+        "decapsulate",
+        "decap",
+    ),
+}
 DIVISION_RE = re.compile(r"\b(?:idiv|div|udiv|sdiv)[a-z0-9_.]*\b", re.IGNORECASE)
 DIVISION_HELPER_RE = re.compile(
     r"\b(?:__aeabi_(?:uidiv|idiv|uldiv|ldiv)(?:mod)?|"
@@ -65,6 +73,15 @@ def parse_args() -> argparse.Namespace:
         "--allow-missing-targets",
         action="store_true",
         help="Return success if no target symbols are found, but record a degraded result.",
+    )
+    parser.add_argument(
+        "--required-symbol-group",
+        action="append",
+        dest="required_symbol_groups",
+        help=(
+            "Required ML-KEM decapsulation symbol group. Supported built-in "
+            "group: api_decap. May be repeated."
+        ),
     )
     parser.add_argument("--output", type=Path, required=True, help="Result JSON path.")
     return parser.parse_args()
@@ -104,6 +121,18 @@ def symbol_is_target(
     return any(pattern.lower() in lowered for pattern in patterns)
 
 
+def symbol_is_excluded_match(
+    symbol: str,
+    patterns: tuple[str, ...],
+    exclude_patterns: tuple[str, ...],
+) -> bool:
+    lowered = symbol.lower()
+    return (
+        any(pattern.lower() in lowered for pattern in patterns)
+        and any(pattern.lower() in lowered for pattern in exclude_patterns)
+    )
+
+
 def scan_disassembly(
     text: str,
     patterns: tuple[str, ...],
@@ -112,6 +141,7 @@ def scan_disassembly(
     current_symbol: str | None = None
     current_is_target = False
     target_symbols: set[str] = set()
+    excluded_symbols: set[str] = set()
     findings: list[dict[str, Any]] = []
 
     for line_number, line in enumerate(text.splitlines(), start=1):
@@ -121,6 +151,8 @@ def scan_disassembly(
             current_is_target = symbol_is_target(current_symbol, patterns, exclude_patterns)
             if current_is_target:
                 target_symbols.add(current_symbol)
+            elif symbol_is_excluded_match(current_symbol, patterns, exclude_patterns):
+                excluded_symbols.add(current_symbol)
             continue
 
         if not current_is_target or current_symbol is None:
@@ -140,8 +172,32 @@ def scan_disassembly(
 
     return {
         "target_symbols": sorted(target_symbols),
+        "excluded_matching_symbols": sorted(excluded_symbols),
         "findings": findings,
     }
+
+
+def required_group_coverage(
+    target_symbols: list[str],
+    required_groups: tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    coverage: dict[str, dict[str, Any]] = {}
+    for group in required_groups:
+        patterns = DEFAULT_REQUIRED_SYMBOL_GROUPS.get(group)
+        if patterns is None:
+            coverage[group] = {"passed": False, "patterns": [], "matches": [], "failure": "unknown required group"}
+            continue
+        matches = [
+            symbol
+            for symbol in target_symbols
+            if any(pattern.lower() in symbol.lower() for pattern in patterns)
+        ]
+        coverage[group] = {
+            "passed": bool(matches),
+            "patterns": list(patterns),
+            "matches": matches,
+        }
+    return coverage
 
 
 def build_result(
@@ -151,15 +207,26 @@ def build_result(
     patterns: tuple[str, ...],
     allow_missing_targets: bool,
     exclude_patterns: tuple[str, ...] = DEFAULT_EXCLUDE_PATTERNS,
+    required_symbol_groups: tuple[str, ...] = ("api_decap",),
 ) -> dict[str, Any]:
     scan = scan_disassembly(disassembly, patterns, exclude_patterns)
     failures: list[str] = []
+    coverage = required_group_coverage(scan["target_symbols"], required_symbol_groups)
 
     if not scan["target_symbols"] and not allow_missing_targets:
-        failures.append(
-            "no ML-KEM decapsulation-related symbols matched target patterns: "
-            + ", ".join(patterns)
-        )
+        if scan.get("excluded_matching_symbols"):
+            failures.append(
+                "only harness/test symbols matched ML-KEM decapsulation target patterns: "
+                + ", ".join(scan["excluded_matching_symbols"])
+            )
+        else:
+            failures.append(
+                "no ML-KEM decapsulation-related symbols matched target patterns: "
+                + ", ".join(patterns)
+            )
+    for group, item in coverage.items():
+        if not item.get("passed") and not allow_missing_targets:
+            failures.append(f"required symbol group {group!r} was not covered")
     for finding in scan["findings"]:
         failures.append(
             f"{finding['symbol']} contains variable-latency division "
@@ -174,6 +241,7 @@ def build_result(
             "name": "mlkem_decap_no_variable_latency_division",
             "target_patterns": list(patterns),
             "exclude_patterns": list(exclude_patterns),
+            "required_symbol_groups": list(required_symbol_groups),
             "disallowed_mnemonics": [
                 "div",
                 "idiv",
@@ -189,6 +257,8 @@ def build_result(
         "passed": not failures,
         "target_symbol_count": len(scan["target_symbols"]),
         "target_symbols": scan["target_symbols"],
+        "excluded_matching_symbols": scan["excluded_matching_symbols"],
+        "symbol_coverage": coverage,
         "finding_count": len(scan["findings"]),
         "findings": scan["findings"],
         "failures": failures,
@@ -212,6 +282,7 @@ def main() -> int:
             patterns=patterns,
             exclude_patterns=exclude_patterns,
             allow_missing_targets=args.allow_missing_targets,
+            required_symbol_groups=tuple(args.required_symbol_groups or ("api_decap",)),
         )
     except Exception as exc:  # pragma: no cover - defensive CLI boundary
         result = {

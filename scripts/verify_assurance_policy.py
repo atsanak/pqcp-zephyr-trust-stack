@@ -47,6 +47,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-provenance", type=Path)
     parser.add_argument("--build-provenance-result", type=Path)
     parser.add_argument("--ct-sample-analysis-result", type=Path)
+    parser.add_argument("--ct-sample-manifest", type=Path)
+    parser.add_argument("--backend-currency-result", type=Path)
+    parser.add_argument("--external-reference-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -321,6 +324,9 @@ def default_passport_v4_paths(base: Path) -> dict[str, Path]:
         "pqc_build_provenance.slsa.json": base / "pqc_build_provenance.slsa.json",
         "pqc_build_provenance_result.json": base / "pqc_build_provenance_result.json",
         "ct_sample_analysis_result.json": base / "ct_sample_analysis_result.json",
+        "ct_sample_manifest.json": base / "ct_sample_manifest.json",
+        "backend_currency_result.json": base / "backend_currency_result.json",
+        "external_reference_import/hardware_benchmark_report.json": base / "external_reference_import" / "hardware_benchmark_report.json",
     }
 
 
@@ -518,6 +524,9 @@ def verify_policy(
     build_provenance_path: Path | None = None,
     build_provenance_result_path: Path | None = None,
     ct_sample_analysis_result_path: Path | None = None,
+    ct_sample_manifest_path: Path | None = None,
+    backend_currency_result_path: Path | None = None,
+    external_reference_result_path: Path | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     checks: list[dict[str, Any]] = []
@@ -615,6 +624,9 @@ def verify_policy(
                 "pqc_build_provenance.slsa.json": build_provenance_path,
                 "pqc_build_provenance_result.json": build_provenance_result_path,
                 "ct_sample_analysis_result.json": ct_sample_analysis_result_path,
+                "ct_sample_manifest.json": ct_sample_manifest_path,
+                "backend_currency_result.json": backend_currency_result_path,
+                "external_reference_import/hardware_benchmark_report.json": external_reference_result_path,
             },
             failures=failures,
             checks=checks,
@@ -654,6 +666,9 @@ def main() -> int:
         build_provenance_path=args.build_provenance.resolve() if args.build_provenance else None,
         build_provenance_result_path=args.build_provenance_result.resolve() if args.build_provenance_result else None,
         ct_sample_analysis_result_path=args.ct_sample_analysis_result.resolve() if args.ct_sample_analysis_result else None,
+        ct_sample_manifest_path=args.ct_sample_manifest.resolve() if args.ct_sample_manifest else None,
+        backend_currency_result_path=args.backend_currency_result.resolve() if args.backend_currency_result else None,
+        external_reference_result_path=args.external_reference_result.resolve() if args.external_reference_result else None,
     )
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.output.resolve().write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

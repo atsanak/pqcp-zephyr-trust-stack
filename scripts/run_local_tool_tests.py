@@ -35,6 +35,7 @@ TOOL_TESTS = (
     "test_acvp_json_interop_verifier.py",
     "test_pqc_build_provenance.py",
     "test_ct_sample_analysis.py",
+    "test_backend_currency.py",
 )
 
 

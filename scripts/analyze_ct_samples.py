@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transcript", type=Path, action="append", default=[])
     parser.add_argument("--transcript-dir", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--manifest-output", type=Path)
     parser.add_argument("--min-samples", type=int, default=16)
     parser.add_argument("--relative-bound-percent", type=float, default=50.0)
     parser.add_argument("--t2-bound", type=float, default=10000.0)
@@ -60,8 +61,8 @@ def welch_t2(valid: list[int], invalid: list[int]) -> float:
     return (delta * delta) / denom
 
 
-def parse_samples(paths: list[Path]) -> tuple[dict[str, dict[str, list[int]]], list[str]]:
-    samples: dict[str, dict[str, list[int]]] = {}
+def parse_samples(paths: list[Path]) -> tuple[dict[str, dict[str, list[dict[str, Any]]]], list[str]]:
+    samples: dict[str, dict[str, list[dict[str, Any]]]] = {}
     sources: list[str] = []
     for path in paths:
         if not path.exists() or not path.is_file():
@@ -75,9 +76,63 @@ def parse_samples(paths: list[Path]) -> tuple[dict[str, dict[str, list[int]]], l
                 continue
             alg = match.group("alg")
             klass = match.group("class")
+            idx = int(match.group("idx"))
             cycles = int(match.group("cycles"))
-            samples.setdefault(alg, {"valid": [], "invalid": []})[klass].append(cycles)
+            samples.setdefault(alg, {"valid": [], "invalid": []})[klass].append(
+                {"idx": idx, "cycles": cycles, "source": str(path)}
+            )
     return samples, sources
+
+
+def validate_indexes(alg: str, klass: str, rows: list[dict[str, Any]]) -> list[str]:
+    failures: list[str] = []
+    indexes = [int(row["idx"]) for row in rows]
+    duplicates = sorted({idx for idx in indexes if indexes.count(idx) > 1})
+    if duplicates:
+        failures.append(f"{alg}/{klass} has duplicate CT sample indexes: {duplicates}")
+    expected = list(range(len(rows)))
+    if sorted(indexes) != expected:
+        failures.append(
+            f"{alg}/{klass} CT sample indexes are not contiguous from 0: "
+            f"observed={sorted(indexes)} expected={expected}"
+        )
+    return failures
+
+
+def build_manifest(
+    *,
+    generated_at: str,
+    sources: list[str],
+    samples: dict[str, dict[str, list[dict[str, Any]]]],
+    algorithms: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rows = []
+    by_alg = {item["algorithm"]: item for item in algorithms}
+    for alg, by_class in sorted(samples.items()):
+        valid = by_class.get("valid", [])
+        invalid = by_class.get("invalid", [])
+        rows.append(
+            {
+                "algorithm": alg,
+                "valid_count": len(valid),
+                "invalid_count": len(invalid),
+                "valid_indexes": sorted(int(row["idx"]) for row in valid),
+                "invalid_indexes": sorted(int(row["idx"]) for row in invalid),
+                "passed": bool(by_alg.get(alg, {}).get("passed")),
+                "sources": sorted({str(row["source"]) for row in [*valid, *invalid]}),
+            }
+        )
+    return {
+        "schema_version": 1,
+        "generated_at": generated_at,
+        "generator": "scripts/analyze_ct_samples.py",
+        "sources": sources,
+        "algorithms": rows,
+        "summary": {
+            "algorithms": len(rows),
+            "total_samples": sum(row["valid_count"] + row["invalid_count"] for row in rows),
+        },
+    }
 
 
 def analyze(args: argparse.Namespace) -> dict[str, Any]:
@@ -88,8 +143,12 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         failures.append("no PQCP_CT_SAMPLE markers found")
     algorithms: list[dict[str, Any]] = []
     for alg, by_class in sorted(samples.items()):
-        valid = by_class.get("valid", [])
-        invalid = by_class.get("invalid", [])
+        valid_rows = by_class.get("valid", [])
+        invalid_rows = by_class.get("invalid", [])
+        failures.extend(validate_indexes(alg, "valid", valid_rows))
+        failures.extend(validate_indexes(alg, "invalid", invalid_rows))
+        valid = [int(row["cycles"]) for row in valid_rows]
+        invalid = [int(row["cycles"]) for row in invalid_rows]
         median_valid = float(statistics.median(valid)) if valid else 0.0
         median_invalid = float(statistics.median(invalid)) if invalid else 0.0
         lo = min(median_valid, median_invalid)
@@ -111,25 +170,36 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "welch_t2": t2,
         }
         enough = len(valid) >= args.min_samples and len(invalid) >= args.min_samples
+        counts_match = len(valid) == len(invalid)
         rel_ok = rel <= args.relative_bound_percent
         t_ok = t2 <= args.t2_bound or math.isfinite(t2) and t2 == 0.0
-        passed = enough and rel_ok and t_ok
+        passed = enough and counts_match and rel_ok and t_ok
         result["passed"] = passed
         checks.append({"check": "ct_samples", "algorithm": alg, "passed": passed})
         if not enough:
             failures.append(f"{alg} has insufficient CT samples")
+        if not counts_match:
+            failures.append(f"{alg} valid/invalid CT sample counts differ: {len(valid)} != {len(invalid)}")
         if not rel_ok:
             failures.append(f"{alg} median delta {rel:.2f}% exceeds {args.relative_bound_percent:.2f}%")
         if not t_ok:
             failures.append(f"{alg} Welch t^2 {t2:.2f} exceeds {args.t2_bound:.2f}")
         algorithms.append(result)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    manifest = build_manifest(
+        generated_at=generated_at,
+        sources=sources,
+        samples=samples,
+        algorithms=algorithms,
+    )
     return {
         "schema_version": 1,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": generated_at,
         "passed": not failures,
         "sources": sources,
         "summary": {"algorithms": len(algorithms), "failures": len(failures)},
         "algorithms": algorithms,
+        "sample_manifest": manifest,
         "checks": checks,
         "failures": failures,
     }
@@ -140,6 +210,12 @@ def main() -> int:
     result = analyze(args)
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.output.resolve().write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.manifest_output:
+        args.manifest_output.resolve().parent.mkdir(parents=True, exist_ok=True)
+        args.manifest_output.resolve().write_text(
+            json.dumps(result["sample_manifest"], indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if result["passed"]:
         print("PASS: CT sample analysis passed")
         print(f"  output: {args.output.resolve()}")

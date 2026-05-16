@@ -18,7 +18,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from export_results import validate_benchmark_csv, verify_provenance  # noqa: E402
+from export_results import validate_benchmark_csv, validate_comparison_context, verify_provenance  # noqa: E402
 from verify_acvp_json_interop import verify as verify_acvp_json_interop  # noqa: E402
 from verify_assurance_ledger import verify_ledger  # noqa: E402
 from verify_assurance_policy import verify_policy  # noqa: E402
@@ -299,6 +299,9 @@ def verify_passport_artifacts(
     build_provenance = output_root / "pqc_build_provenance.slsa.json"
     build_provenance_result = output_root / "pqc_build_provenance_result.json"
     ct_sample_analysis_result = output_root / "ct_sample_analysis_result.json"
+    ct_sample_manifest = output_root / "ct_sample_manifest.json"
+    backend_currency_result = output_root / "backend_currency_result.json"
+    external_reference_result = output_root / "external_reference_import" / "hardware_benchmark_report.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     if not policy_path.exists():
@@ -332,6 +335,9 @@ def verify_passport_artifacts(
         require_file(build_provenance, "PQC build provenance", failures)
         require_file(build_provenance_result, "PQC build provenance result", failures)
         require_file(ct_sample_analysis_result, "CT sample analysis result", failures)
+        require_file(ct_sample_manifest, "CT sample manifest", failures)
+        require_file(backend_currency_result, "backend currency result", failures)
+        require_file(external_reference_result, "external reference import result", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -450,10 +456,45 @@ def verify_passport_artifacts(
             (acvp_json_interop_result, "ACVP JSON interop result"),
             (build_provenance_result, "PQC build provenance result"),
             (ct_sample_analysis_result, "CT sample analysis result"),
+            (backend_currency_result, "backend currency result"),
+            (external_reference_result, "external reference import result"),
         ):
             payload = load_json(path, label, failures)
             if payload and payload.get("passed") is not True:
                 failures.append(f"{label} did not pass")
+        provenance_sidecar = load_json(output_root / "benchmark_provenance.json", "benchmark provenance", failures)
+        if provenance_sidecar:
+            for item in validate_comparison_context(provenance_sidecar.get("comparison_context")):
+                failures.append(f"benchmark provenance [{item['check']}]: {item['message']}")
+        ct_manifest = load_json(ct_sample_manifest, "CT sample manifest", failures)
+        ct_analysis = load_json(ct_sample_analysis_result, "CT sample analysis result", failures)
+        if ct_manifest and ct_analysis:
+            manifest_algs = {
+                item.get("algorithm"): item
+                for item in ct_manifest.get("algorithms") or []
+                if isinstance(item, dict)
+            }
+            for alg in ct_analysis.get("algorithms") or []:
+                if not isinstance(alg, dict):
+                    continue
+                name = alg.get("algorithm")
+                manifest_row = manifest_algs.get(name)
+                if manifest_row is None:
+                    failures.append(f"CT sample manifest missing algorithm: {name}")
+                    continue
+                if manifest_row.get("valid_count") != alg.get("valid_count"):
+                    failures.append(f"CT sample manifest valid_count mismatch for {name}")
+                if manifest_row.get("invalid_count") != alg.get("invalid_count"):
+                    failures.append(f"CT sample manifest invalid_count mismatch for {name}")
+        external_reference = load_json(external_reference_result, "external reference import result", failures)
+        if external_reference:
+            context_failures = external_reference.get("execution", {}).get("failures") or []
+            for failure in context_failures:
+                failures.append(f"external reference import: {failure}")
+            if not external_reference.get("comparison_context"):
+                failures.append("external reference import missing comparison_context")
+            elif external_reference.get("comparison_context", {}).get("environment_type") != "external_reference":
+                failures.append("external reference import environment_type must be external_reference")
         ref = load_json(reference_values, "PQC reference values", failures)
         if ref:
             manifest_for_ref = load_json(manifest_path, "release manifest", failures) if manifest_path else {}
@@ -486,10 +527,13 @@ def verify_passport_artifacts(
             assurance_profile_result,
             output_root / "transcripts/evidence_transcript_manifest.json",
             build_provenance,
+            backend_currency_result,
+            external_reference_result,
             output_root / "benchmark_results.csv",
             output_root / "cost_of_assurance_evidence.json",
             acvp_json_interop_result,
             ct_sample_analysis_result,
+            ct_sample_manifest,
         )
         if all(path.exists() and path.is_file() for path in required_v6_paths):
             reference_replay = verify_reference(
@@ -547,6 +591,9 @@ def verify_passport_artifacts(
                         output_root / "cost_of_assurance_evidence.json",
                         acvp_json_interop_result,
                         ct_sample_analysis_result,
+                        ct_sample_manifest,
+                        backend_currency_result,
+                        external_reference_result,
                     ],
                     release_manifest=manifest_path,
                     output=output_root / "__build_provenance_replay_result.json",
@@ -586,6 +633,14 @@ def verify_passport_artifacts(
                     "pqc_migration_readiness.md",
                 ):
                     if required_name not in seen_paths:
+                        failures.append(f"PQC assurance digest missing artifact: {required_name}")
+            if (ledger.get("schema_version") or 0) >= 6:
+                for required_name in (
+                    "ct_sample_manifest.json",
+                    "backend_currency_result.json",
+                    "hardware_benchmark_report.json",
+                ):
+                    if required_name not in seen_paths and not any(path.endswith(required_name) for path in seen_paths):
                         failures.append(f"PQC assurance digest missing artifact: {required_name}")
             for item in artifacts:
                 if not isinstance(item, dict):

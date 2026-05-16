@@ -588,8 +588,12 @@ def main() -> int:
     ct_instruction_policy_result_path = output_root / "ct_instruction_policy_result.json"
     pqc_claim_closure_result_path = output_root / "pqc_claim_closure_result.json"
     ct_sample_analysis_result_path = output_root / "ct_sample_analysis_result.json"
+    ct_sample_manifest_path = output_root / "ct_sample_manifest.json"
     acvp_json_interop_result_path = output_root / "acvp_json_interop_result.json"
     acvp_json_transcript_manifest_path = output_root / "acvp_json_transcript_manifest.json"
+    backend_currency_result_path = output_root / "backend_currency_result.json"
+    external_reference_output_dir = output_root / "external_reference_import"
+    external_reference_result_path = external_reference_output_dir / "hardware_benchmark_report.json"
     pqc_reference_values_path = output_root / "pqc_reference_values.json"
     pqc_reference_values_result_path = output_root / "pqc_reference_values_result.json"
     firmware_assurance_status_result_path = output_root / "firmware_assurance_status_result.json"
@@ -737,6 +741,12 @@ def main() -> int:
         str(acvp_json_transcript_manifest_path),
         "--ct-sample-analysis-result",
         str(ct_sample_analysis_result_path),
+        "--ct-sample-manifest",
+        str(ct_sample_manifest_path),
+        "--backend-currency-result",
+        str(backend_currency_result_path),
+        "--external-reference-result",
+        str(external_reference_result_path),
         "--output",
         str(pqc_attestation_path),
         "--digest-output",
@@ -789,6 +799,12 @@ def main() -> int:
         str(pqc_build_provenance_result_path),
         "--ct-sample-analysis-result",
         str(ct_sample_analysis_result_path),
+        "--ct-sample-manifest",
+        str(ct_sample_manifest_path),
+        "--backend-currency-result",
+        str(backend_currency_result_path),
+        "--external-reference-result",
+        str(external_reference_result_path),
         "--output",
         str(pqc_policy_result_path),
     ]
@@ -825,6 +841,8 @@ def main() -> int:
         str(pqc_build_provenance_result_path),
         "--ct-sample-analysis-result",
         str(ct_sample_analysis_result_path),
+        "--backend-currency-result",
+        str(backend_currency_result_path),
         "--output",
         str(pqc_claim_closure_result_path),
     ]
@@ -927,6 +945,43 @@ def main() -> int:
         str(transcript_dir),
         "--output",
         str(ct_sample_analysis_result_path),
+        "--manifest-output",
+        str(ct_sample_manifest_path),
+    ]
+    backend_currency_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_backend_currency.py"),
+        "--module-path",
+        str(module_path),
+        "--output",
+        str(backend_currency_result_path),
+    ]
+    external_reference_import_cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_hardware_benchmarks.py"),
+        "--mode",
+        "import-reference",
+        "--reference-csv",
+        str(module_path / "scripts/testdata/reference/pqm4_methodology_smoke.csv"),
+        "--reference-name",
+        "pqm4-methodology-smoke",
+        "--source-ecosystem",
+        "pqm4",
+        "--board-class",
+        "cortex-m4",
+        "--clock-mhz",
+        "168",
+        "--compiler",
+        "arm-none-eabi-gcc",
+        "--toolchain",
+        "pqm4",
+        "--optimization-flags=-O3",
+        "--statistic-type",
+        "median_cycles",
+        "--environment-type",
+        "external_reference",
+        "--output-root",
+        str(external_reference_output_dir),
     ]
     acvp_json_interop_cmd = [
         sys.executable,
@@ -1068,6 +1123,12 @@ def main() -> int:
         str(acvp_json_interop_result_path),
         "--byproduct",
         str(ct_sample_analysis_result_path),
+        "--byproduct",
+        str(ct_sample_manifest_path),
+        "--byproduct",
+        str(backend_currency_result_path),
+        "--byproduct",
+        str(external_reference_result_path),
         "--output",
         str(pqc_build_provenance_path),
     ]
@@ -1092,6 +1153,12 @@ def main() -> int:
         str(acvp_json_interop_result_path),
         "--byproduct",
         str(ct_sample_analysis_result_path),
+        "--byproduct",
+        str(ct_sample_manifest_path),
+        "--byproduct",
+        str(backend_currency_result_path),
+        "--byproduct",
+        str(external_reference_result_path),
         "--release-manifest",
         str(release_manifest_path),
         "--output",
@@ -1419,6 +1486,11 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="external reference import",
+            cmd=external_reference_import_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="resource_budgets",
             cmd=[
                 sys.executable,
@@ -1479,6 +1551,11 @@ def main() -> int:
         Step(
             name="PQC release environment",
             cmd=pqc_environment_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="backend currency",
+            cmd=backend_currency_cmd,
             cwd=module_path,
         ),
         Step(

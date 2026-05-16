@@ -134,6 +134,14 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                         "distribution_row_count": 1,
                     },
                     "benchmark_metadata": metadata,
+                    "comparison_context": {
+                        "source_dataset": "synthetic",
+                        "board_class": "qemu",
+                        "clock_assumption": "synthetic test values",
+                        "backend_family": "synthetic",
+                        "statistic_type": "single",
+                        "environment_type": "qemu",
+                    },
                 },
                 indent=2,
             )
@@ -485,6 +493,56 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             "# PQC Migration Readiness\n\nML-KEM-768\n",
             encoding="utf-8",
         )
+        (output / "ct_sample_manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "algorithms": [
+                        {
+                            "algorithm": "MLKEM-768",
+                            "valid_count": 8,
+                            "invalid_count": 8,
+                            "valid_indexes": list(range(8)),
+                            "invalid_indexes": list(range(8)),
+                            "passed": True,
+                            "sources": [],
+                        }
+                    ],
+                    "summary": {"algorithms": 1, "total_samples": 16},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output / "backend_currency_result.json").write_text(
+            json.dumps({"schema_version": 1, "passed": True, "backends": [], "failures": []}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (output / "external_reference_import").mkdir()
+        (output / "external_reference_import" / "hardware_benchmark_report.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "mode": "import-reference",
+                    "passed": True,
+                    "execution": {"passed": True, "failures": []},
+                    "comparison_context": {
+                        "source_dataset": "synthetic-reference",
+                        "source_ecosystem": "pqm4",
+                        "board_class": "cortex-m4",
+                        "clock_mhz": 168,
+                        "statistic_type": "median_cycles",
+                        "environment_type": "external_reference",
+                    },
+                    "summary": {"metric_count": 1},
+                    "metrics": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         attestation_args = Namespace(
             module_path=module,
             ledger=ledger_path,
@@ -504,6 +562,9 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             migration_readiness_json=output / "pqc_migration_readiness.json",
             migration_readiness_md=output / "pqc_migration_readiness.md",
             environment_result=output / "pqc_environment_result.json",
+            ct_sample_manifest=output / "ct_sample_manifest.json",
+            backend_currency_result=output / "backend_currency_result.json",
+            external_reference_result=output / "external_reference_import" / "hardware_benchmark_report.json",
             output=attestation_path,
             digest_output=digest_path,
         )
@@ -524,6 +585,9 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 output / "pqc_evidence_quality_result.json",
                 output / "pqc_migration_readiness.json",
                 output / "pqc_migration_readiness.md",
+                output / "ct_sample_manifest.json",
+                output / "backend_currency_result.json",
+                output / "external_reference_import" / "hardware_benchmark_report.json",
                 manifest,
             ],
             attestation_path=attestation_path,
@@ -639,7 +703,23 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             encoding="utf-8",
         )
         (output / "ct_sample_analysis_result.json").write_text(
-            json.dumps({"schema_version": 1, "passed": True, "algorithms": [{"algorithm": "MLKEM-768", "passed": True}], "checks": [], "failures": []}, indent=2)
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "passed": True,
+                    "algorithms": [
+                        {
+                            "algorithm": "MLKEM-768",
+                            "valid_count": 8,
+                            "invalid_count": 8,
+                            "passed": True,
+                        }
+                    ],
+                    "checks": [],
+                    "failures": [],
+                },
+                indent=2,
+            )
             + "\n",
             encoding="utf-8",
         )
@@ -655,6 +735,9 @@ class ReleaseEvidencePackTests(unittest.TestCase):
             output / "cost_of_assurance_evidence.json",
             output / "acvp_json_interop_result.json",
             output / "ct_sample_analysis_result.json",
+            output / "ct_sample_manifest.json",
+            output / "backend_currency_result.json",
+            output / "external_reference_import" / "hardware_benchmark_report.json",
         ]
         provenance = generate_pqc_build_provenance.build_statement(
             Namespace(
@@ -699,6 +782,7 @@ class ReleaseEvidencePackTests(unittest.TestCase):
                 acvp_json_interop_result=output / "acvp_json_interop_result.json",
                 build_provenance_result=output / "pqc_build_provenance_result.json",
                 ct_sample_analysis_result=output / "ct_sample_analysis_result.json",
+                backend_currency_result=output / "backend_currency_result.json",
             )
         )
         (output / "pqc_claim_closure_result.json").write_text(
