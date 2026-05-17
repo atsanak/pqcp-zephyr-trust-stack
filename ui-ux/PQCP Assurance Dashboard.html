@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="graphite" data-density="regular">
+<head>
+  <meta charset="utf-8" />
+  <title>PQCP Assurance Console · Local Release Evidence</title>
+  <meta name="viewport" content="width=1360, initial-scale=1" />
+  <meta name="ext-resource-dependency" content="samples/pqcp-dashboard-seed-pack.json" data-resource-id="sampleSeedPack" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React + Babel (pinned) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- Tweak panel scaffold -->
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+
+  <!-- Core data + adapters -->
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="seedpack.jsx"></script>
+  <script type="text/babel" src="store.jsx"></script>
+
+  <!-- UI primitives -->
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="components-ext.jsx"></script>
+
+  <!-- Views -->
+  <script type="text/babel" src="views-overview.jsx"></script>
+  <script type="text/babel" src="views-ledger.jsx"></script>
+  <script type="text/babel" src="views-policy.jsx"></script>
+  <script type="text/babel" src="views-inventory.jsx"></script>
+  <script type="text/babel" src="views-bench.jsx"></script>
+  <script type="text/babel" src="views-validation.jsx"></script>
+  <script type="text/babel" src="views-firmware.jsx"></script>
+  <script type="text/babel" src="views-provenance.jsx"></script>
+  <script type="text/babel" src="views-ingest.jsx"></script>
+  <script type="text/babel" src="views-misc.jsx"></script>
+
+  <!-- Shell -->
+  <script type="text/babel" src="app.jsx"></script>
+
+  <template id="__bundler_thumbnail" data-bg-color="#0A0C0F">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <rect width="200" height="200" fill="#0A0C0F"/>
+      <g fill="none" stroke="#6FE3B8" stroke-width="2">
+        <rect x="40" y="40" width="120" height="120" />
+        <path d="M40 80 L160 80 M40 120 L160 120 M80 40 L80 160 M120 40 L120 160" stroke-width="1" opacity=".55"/>
+        <circle cx="100" cy="100" r="6" fill="#6FE3B8" stroke="none"/>
+      </g>
+      <text x="100" y="184" text-anchor="middle" fill="#6FE3B8" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="2">PQCP · ASSURANCE</text>
+    </svg>
+  </template>
+</body>
+</html>
