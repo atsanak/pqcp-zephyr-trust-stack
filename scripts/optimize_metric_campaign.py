@@ -122,6 +122,12 @@ SAFE_CANDIDATES: tuple[dict[str, Any], ...] = (
         "overlay_lines": ('CONFIG_PQCP_BACKEND_FORCE_C=y',),
     },
     {
+        "id": "reduce_ram",
+        "class": "footprint",
+        "description": "Enable backend reduced-RAM mode for stack/RAM footprint campaigns",
+        "overlay_lines": ('CONFIG_PQCP_REDUCE_RAM=y',),
+    },
+    {
         "id": "reduced_distribution_samples",
         "class": "measurement",
         "description": "Reduce distribution samples for fast candidate screening only",
@@ -136,63 +142,47 @@ SAFE_CANDIDATES: tuple[dict[str, Any], ...] = (
 )
 
 
+def level_kconfig(*, mlkem: str = "768", mldsa: str = "65") -> tuple[str, ...]:
+    return (
+        f"CONFIG_PQCP_MLKEM_LEVEL_512={'y' if mlkem == '512' else 'n'}",
+        f"CONFIG_PQCP_MLKEM_LEVEL_768={'y' if mlkem == '768' else 'n'}",
+        f"CONFIG_PQCP_MLKEM_LEVEL_1024={'y' if mlkem == '1024' else 'n'}",
+        f"CONFIG_PQCP_MLDSA_LEVEL_44={'y' if mldsa == '44' else 'n'}",
+        f"CONFIG_PQCP_MLDSA_LEVEL_65={'y' if mldsa == '65' else 'n'}",
+        f"CONFIG_PQCP_MLDSA_LEVEL_87={'y' if mldsa == '87' else 'n'}",
+    )
+
+
+def sig_run_target(level: str) -> dict[str, Any]:
+    return {
+        "target_id": "mldsa.sign",
+        "sample": "pqcp_basic_sig",
+        "parameter_set": f"ML-DSA-{level}",
+        "operation": "sign",
+        "extra_kconfig": level_kconfig(mldsa=level),
+    }
+
+
+def kem_run_target(level: str, operation: str) -> dict[str, Any]:
+    return {
+        "target_id": f"mlkem.{operation}",
+        "sample": "pqcp_basic_kem",
+        "parameter_set": f"ML-KEM-{level}",
+        "operation": operation,
+        "extra_kconfig": level_kconfig(mlkem=level),
+    }
+
+
 RUN_TARGETS: dict[str, dict[str, Any]] = {
-    "mldsa87-sign": {
-        "target_id": "mldsa.sign",
-        "sample": "pqcp_basic_sig",
-        "parameter_set": "ML-DSA-87",
-        "operation": "sign",
-        "extra_kconfig": (
-            "CONFIG_PQCP_MLKEM_LEVEL_512=n",
-            "CONFIG_PQCP_MLKEM_LEVEL_768=y",
-            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_44=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_65=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_87=y",
-        ),
-    },
-    "mldsa44-sign": {
-        "target_id": "mldsa.sign",
-        "sample": "pqcp_basic_sig",
-        "parameter_set": "ML-DSA-44",
-        "operation": "sign",
-        "extra_kconfig": (
-            "CONFIG_PQCP_MLKEM_LEVEL_512=n",
-            "CONFIG_PQCP_MLKEM_LEVEL_768=y",
-            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_44=y",
-            "CONFIG_PQCP_MLDSA_LEVEL_65=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_87=n",
-        ),
-    },
-    "mlkem512-encaps": {
-        "target_id": "mlkem.encaps",
-        "sample": "pqcp_basic_kem",
-        "parameter_set": "ML-KEM-512",
-        "operation": "encaps",
-        "extra_kconfig": (
-            "CONFIG_PQCP_MLKEM_LEVEL_512=y",
-            "CONFIG_PQCP_MLKEM_LEVEL_768=n",
-            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_44=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_65=y",
-            "CONFIG_PQCP_MLDSA_LEVEL_87=n",
-        ),
-    },
-    "mlkem512-decaps": {
-        "target_id": "mlkem.decaps",
-        "sample": "pqcp_basic_kem",
-        "parameter_set": "ML-KEM-512",
-        "operation": "decaps",
-        "extra_kconfig": (
-            "CONFIG_PQCP_MLKEM_LEVEL_512=y",
-            "CONFIG_PQCP_MLKEM_LEVEL_768=n",
-            "CONFIG_PQCP_MLKEM_LEVEL_1024=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_44=n",
-            "CONFIG_PQCP_MLDSA_LEVEL_65=y",
-            "CONFIG_PQCP_MLDSA_LEVEL_87=n",
-        ),
-    },
+    "mldsa44-sign": sig_run_target("44"),
+    "mldsa65-sign": sig_run_target("65"),
+    "mldsa87-sign": sig_run_target("87"),
+    "mlkem512-encaps": kem_run_target("512", "encaps"),
+    "mlkem768-encaps": kem_run_target("768", "encaps"),
+    "mlkem1024-encaps": kem_run_target("1024", "encaps"),
+    "mlkem512-decaps": kem_run_target("512", "decaps"),
+    "mlkem768-decaps": kem_run_target("768", "decaps"),
+    "mlkem1024-decaps": kem_run_target("1024", "decaps"),
 }
 
 
