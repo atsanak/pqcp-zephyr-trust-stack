@@ -818,6 +818,38 @@ def best_candidate_recommendations(candidate_results: list[dict[str, Any]]) -> l
     return [winners[key] for key in sorted(winners)]
 
 
+def near_miss_candidates(candidate_results: list[dict[str, Any]], *, min_improvement: float) -> list[dict[str, Any]]:
+    near_misses: list[dict[str, Any]] = []
+    for candidate in candidate_results:
+        candidate_name = str(candidate.get("name") or "")
+        candidate_class = str((candidate.get("candidate_metadata") or {}).get("class") or "")
+        for target_result in candidate.get("target_results") or []:
+            if target_result.get("status") != "evaluated":
+                continue
+            for comparison in target_result.get("comparisons") or []:
+                improvement = as_float(comparison.get("median_improvement"))
+                if improvement is None or improvement <= 0.0 or improvement >= min_improvement:
+                    continue
+                checks = list(comparison.get("tail_checks") or []) + list(comparison.get("resource_checks") or [])
+                if any(check.get("passed") is False for check in checks):
+                    continue
+                near_misses.append(
+                    {
+                        "target": target_result.get("target"),
+                        "candidate": candidate_name,
+                        "candidate_class": candidate_class,
+                        "parameter_set": comparison.get("parameter_set"),
+                        "operation": comparison.get("operation"),
+                        "median_improvement": improvement,
+                        "required_improvement": min_improvement,
+                        "improvement_gap": min_improvement - improvement,
+                        "baseline_median": comparison.get("baseline_median"),
+                        "candidate_median": comparison.get("candidate_median"),
+                    }
+                )
+    return sorted(near_misses, key=lambda row: (row["improvement_gap"], row["target"], row["candidate"]))
+
+
 def priority_from_pairwise(campaign: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in campaign.get("pairwise_ratios") or []:
@@ -1026,6 +1058,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "cost_of_assurance_priorities": cost_evidence_priorities(args.cost_evidence),
         "candidate_results": candidate_results,
         "best_candidate_recommendations": best_candidate_recommendations(candidate_results),
+        "near_miss_candidates": near_miss_candidates(candidate_results, min_improvement=args.min_median_improvement),
         "backend_selection": backend_selection(baseline),
         "hardware_promotion": hardware_promotion(args.hardware_result),
         "execution": {
