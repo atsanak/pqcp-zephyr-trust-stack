@@ -128,6 +128,19 @@ class OptimizeMetricCampaignTests(unittest.TestCase):
         self.assertEqual(result["best_candidate_recommendations"][0]["candidate"], "larger")
         self.assertAlmostEqual(result["best_candidate_recommendations"][0]["median_improvement"], 0.2)
 
+    def test_near_miss_candidates_track_clean_subthreshold_wins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            baseline = self.write_json(root, "baseline.json", campaign(stat("ML-DSA-87", "sign", 100.0, 100.0, 100.0)))
+            candidate = self.write_json(root, "candidate.json", campaign(stat("ML-DSA-87", "sign", 96.0, 96.0, 96.0)))
+            result = optimize_metric_campaign.run(
+                self.args(baseline, [f"almost={candidate}"], root / "out.json")
+            )
+        self.assertTrue(result["passed"], result["failures"])
+        self.assertEqual(result["candidate_results"][0]["decision"], "reject")
+        self.assertEqual(result["near_miss_candidates"][0]["candidate"], "almost")
+        self.assertAlmostEqual(result["near_miss_candidates"][0]["improvement_gap"], 0.01)
+
     def test_rejects_candidate_with_tail_regression(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
