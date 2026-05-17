@@ -84,6 +84,27 @@ class OptimizeMetricCampaignTests(unittest.TestCase):
             run_repetitions=1,
         )
 
+    def test_metric_campaign_covers_all_single_level_hot_paths(self) -> None:
+        expected = {
+            "mldsa44-sign",
+            "mldsa65-sign",
+            "mldsa87-sign",
+            "mlkem512-encaps",
+            "mlkem768-encaps",
+            "mlkem1024-encaps",
+            "mlkem512-decaps",
+            "mlkem768-decaps",
+            "mlkem1024-decaps",
+        }
+        self.assertTrue(expected.issubset(optimize_metric_campaign.RUN_TARGETS))
+        self.assertIn("CONFIG_PQCP_MLDSA_LEVEL_65=y", optimize_metric_campaign.RUN_TARGETS["mldsa65-sign"]["extra_kconfig"])
+        self.assertIn("CONFIG_PQCP_MLKEM_LEVEL_1024=y", optimize_metric_campaign.RUN_TARGETS["mlkem1024-decaps"]["extra_kconfig"])
+
+    def test_reduce_ram_candidate_is_executable_and_scoped_as_footprint(self) -> None:
+        candidate = optimize_metric_campaign.candidate_by_id("reduce_ram")
+        self.assertEqual(candidate["class"], "footprint")
+        self.assertEqual(optimize_metric_campaign.kconfig_for_candidate("reduce_ram"), ["CONFIG_PQCP_REDUCE_RAM=y"])
+
     def test_accepts_candidate_with_median_win_and_clean_tail(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
