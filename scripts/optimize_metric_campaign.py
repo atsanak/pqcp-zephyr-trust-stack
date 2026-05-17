@@ -775,6 +775,49 @@ def evaluate_candidate(
     }
 
 
+def best_candidate_recommendations(candidate_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    winners: dict[str, dict[str, Any]] = {}
+    for candidate in candidate_results:
+        if candidate.get("production_promotion_allowed") is not True:
+            continue
+        candidate_name = str(candidate.get("name") or "")
+        candidate_class = str((candidate.get("candidate_metadata") or {}).get("class") or "")
+        for target_result in candidate.get("target_results") or []:
+            if target_result.get("decision") != "keep":
+                continue
+            target_id = str(target_result.get("target") or "")
+            for comparison in target_result.get("comparisons") or []:
+                if comparison.get("passed") is not True:
+                    continue
+                improvement = as_float(comparison.get("median_improvement"))
+                candidate_median = as_float(comparison.get("candidate_median"))
+                if improvement is None or candidate_median is None:
+                    continue
+                current = winners.get(target_id)
+                replacement = {
+                    "target": target_id,
+                    "candidate": candidate_name,
+                    "candidate_class": candidate_class,
+                    "parameter_set": comparison.get("parameter_set"),
+                    "operation": comparison.get("operation"),
+                    "median_improvement": improvement,
+                    "baseline_median": comparison.get("baseline_median"),
+                    "candidate_median": candidate_median,
+                    "tail_checks": comparison.get("tail_checks") or [],
+                    "resource_checks": comparison.get("resource_checks") or [],
+                }
+                if current is None:
+                    winners[target_id] = replacement
+                    continue
+                current_improvement = as_float(current.get("median_improvement")) or -math.inf
+                current_median = as_float(current.get("candidate_median")) or math.inf
+                if improvement > current_improvement or (
+                    math.isclose(improvement, current_improvement) and candidate_median < current_median
+                ):
+                    winners[target_id] = replacement
+    return [winners[key] for key in sorted(winners)]
+
+
 def priority_from_pairwise(campaign: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in campaign.get("pairwise_ratios") or []:
@@ -982,6 +1025,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "baseline_priorities": priority_from_pairwise(baseline),
         "cost_of_assurance_priorities": cost_evidence_priorities(args.cost_evidence),
         "candidate_results": candidate_results,
+        "best_candidate_recommendations": best_candidate_recommendations(candidate_results),
         "backend_selection": backend_selection(baseline),
         "hardware_promotion": hardware_promotion(args.hardware_result),
         "execution": {
