@@ -103,7 +103,7 @@ BACKEND_POLICIES: Dict[str, Dict[str, Any]] = {
     },
     "clean": {
         "kconfig": ["CONFIG_PQCP_BACKEND_CLEAN=y"],
-        "description": "Clean/reference backend used by the QEMU baseline provider",
+        "description": "Native-C/reference backend label used by the QEMU baseline provider",
     },
 }
 
@@ -114,7 +114,7 @@ IMPLEMENTATION_FAMILIES: Dict[str, Dict[str, Any]] = {
     },
     "baseline": {
         "kconfig": ["CONFIG_PQCP_IMPLEMENTATION_BASELINE=y"],
-        "description": "QEMU-only clean reference baseline provider",
+        "description": "QEMU-only native-C reference baseline provider",
     },
 }
 

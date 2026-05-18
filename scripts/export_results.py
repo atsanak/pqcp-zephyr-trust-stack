@@ -79,7 +79,7 @@ REQUIRED_BENCHMARK_METADATA_KEYS = (
     "zephyr.version",
 )
 # This is a sanity floor, not a regression budget.  QEMU/native timing can make
-# the PQCP path substantially faster than the clean baseline, so only reject
+# the PQCP path substantially faster than the native-C baseline, so only reject
 # near-zero ratios that indicate broken timing extraction.
 MIN_PQCP_BASELINE_TIME_RATIO = 0.1
 MAX_PQCP_BASELINE_TIME_RATIO = 10.0

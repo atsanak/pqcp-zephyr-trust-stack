@@ -10,7 +10,6 @@
       "source_files": [
         "include/pqcp_zephyr/mlkem.h",
         "src/mlkem_zephyr.c",
-        "src/mlkem_baseline.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
         "tests/ztest_acvp_kat/src/main.c",
         "tests/ztest_ct_smoke/src/main.c",
@@ -46,7 +45,6 @@
       "source_files": [
         "include/pqcp_zephyr/mlkem.h",
         "src/mlkem_zephyr.c",
-        "src/mlkem_baseline.c",
         "src/psa_mlkem_driver.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
         "tests/ztest_ct_smoke/src/main.c",
@@ -85,7 +83,6 @@
       "source_files": [
         "include/pqcp_zephyr/mlkem.h",
         "src/mlkem_zephyr.c",
-        "src/mlkem_baseline.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
         "tests/ztest_acvp_kat/src/main.c",
         "tests/ztest_ct_smoke/src/main.c",
@@ -121,7 +118,6 @@
       "source_files": [
         "include/pqcp_zephyr/mldsa.h",
         "src/mldsa_zephyr.c",
-        "src/mldsa_baseline.c",
         "src/mldsa_streaming.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
         "tests/ztest_acvp_kat/src/main.c"
@@ -152,7 +148,6 @@
       "source_files": [
         "include/pqcp_zephyr/mldsa.h",
         "src/mldsa_zephyr.c",
-        "src/mldsa_baseline.c",
         "src/mldsa_streaming.c",
         "src/psa_mldsa_driver.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
@@ -185,7 +180,6 @@
       "source_files": [
         "include/pqcp_zephyr/mldsa.h",
         "src/mldsa_zephyr.c",
-        "src/mldsa_baseline.c",
         "src/mldsa_streaming.c",
         "tests/ztest_acvp_kat/src/kat_vectors.h",
         "tests/ztest_acvp_kat/src/main.c"

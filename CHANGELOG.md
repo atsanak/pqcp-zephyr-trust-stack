@@ -168,9 +168,9 @@ sidecar.
 - A production-oriented PQCP provider family for ML-KEM and ML-DSA with RNG
    abstraction, PSA driver shims, deterministic KAT coverage, and stable
    `PQCP_METRIC` logging for primitive and protocol samples.
-- A QEMU-only PQClean-derived baseline provider for ML-KEM-512/768 and
-   ML-DSA-65/87, wired through the same Zephyr-facing APIs and shared RNG hooks
-   for cost-of-assurance comparisons.
+- A QEMU-only native-C baseline provider for ML-KEM-512/768 and ML-DSA-65/87,
+   wired through the same Zephyr-facing APIs and shared RNG hooks for
+   cost-of-assurance comparisons.
 - A shared TLS self-test and protocol benchmark harness with RTOS-aware jitter
    counters, TLS layer-decomposition metrics, and a three-CSV
    cost-of-assurance pipeline for runnable QEMU slices plus build-only MCU
