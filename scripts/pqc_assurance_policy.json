@@ -44,6 +44,10 @@
     "acvp.json_interop",
     "supply_chain.slsa_build_provenance",
     "security.ct_sample_analysis",
+    "supply_chain.backend_contract",
+    "supply_chain.liboqs_non_native_scope",
+    "benchmark.paper_comparison_export",
+    "release.reference_provider_scope",
     "release.policy_pass",
     "firmware.assurance_digest_manifest",
     "firmware.assurance_digest_embeddable"
@@ -66,6 +70,10 @@
     "acvp.json_interop",
     "supply_chain.slsa_build_provenance",
     "security.ct_sample_analysis",
+    "supply_chain.backend_contract",
+    "supply_chain.liboqs_non_native_scope",
+    "benchmark.paper_comparison_export",
+    "release.reference_provider_scope",
     "firmware.assurance_digest_manifest",
     "firmware.assurance_digest_embeddable"
   ],
@@ -77,7 +85,9 @@
     "Zephyr RTOS",
     "Zephyr SDK",
     "mlkem-native",
-    "mldsa-native"
+    "mldsa-native",
+    "SLH-DSA",
+    "HQC"
   ],
   "forbidden_production_rng_components": [
     "Deterministic test RNG"

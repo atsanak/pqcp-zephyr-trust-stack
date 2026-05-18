@@ -26,6 +26,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--policy-result", type=Path, required=True)
     parser.add_argument("--profile-result", type=Path, required=True)
     parser.add_argument("--transcript-manifest", type=Path, required=True)
+    parser.add_argument("--backend-contract", type=Path)
+    parser.add_argument("--provider-scope-result", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -109,6 +111,12 @@ def verify_reference(args: argparse.Namespace) -> dict[str, Any]:
         "pqc_assurance_profile_result.json": args.profile_result,
         "transcripts/evidence_transcript_manifest.json": args.transcript_manifest,
     }
+    backend_contract = getattr(args, "backend_contract", None)
+    provider_scope_result = getattr(args, "provider_scope_result", None)
+    if backend_contract:
+        artifact_inputs["backend_contract_result.json"] = backend_contract
+    if provider_scope_result:
+        artifact_inputs["provider_scope_result.json"] = provider_scope_result
     artifact_hashes = reference.get("artifact_hashes") if isinstance(reference.get("artifact_hashes"), dict) else {}
     for name, path in artifact_inputs.items():
         entry = artifact_hashes.get(name)

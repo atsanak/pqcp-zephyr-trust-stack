@@ -43,6 +43,10 @@ TOOL_TESTS = (
     "test_pqc_build_provenance.py",
     "test_ct_sample_analysis.py",
     "test_backend_currency.py",
+    "test_backend_contract.py",
+    "test_provider_scope.py",
+    "test_paper_comparison_campaign.py",
+    "test_release_reference_values.py",
 )
 
 

@@ -40,6 +40,7 @@ ALLOWED_LIFECYCLE = {
     "validation_only",
     "test_only",
     "smoke_only",
+    "experimental_inventory",
 }
 
 

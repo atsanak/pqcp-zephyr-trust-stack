@@ -24,6 +24,7 @@ POST_LEDGER_CLAIMS = {
     "release.evidence_appraisal_profile",
     "firmware.device_evidence_token",
     "release.strict_partner_policy",
+    "release.reference_provider_scope",
 }
 
 

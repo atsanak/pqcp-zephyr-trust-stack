@@ -391,6 +391,50 @@
         "PQCP_CT_TTEST alg=MLKEM-768",
         "PQCP_CT_TTEST alg=MLKEM-1024"
       ]
+    },
+    {
+      "id": "crypto.slhdsa.external",
+      "name": "SLH-DSA external-provider inventory",
+      "category": "signature",
+      "cbom_component": "SLH-DSA",
+      "source_files": [
+        "scripts/export_liboqs_inventory.py",
+        "scripts/verify_provider_scope.py"
+      ],
+      "kconfig_symbols": [
+        "PQCP_LIBOQS_EXPERIMENTAL"
+      ],
+      "claim_ids": [
+        "supply_chain.liboqs_non_native_scope"
+      ],
+      "ztests": [
+        "scripts/test_provider_scope.py"
+      ],
+      "transcript_markers": [
+        "provider_scope:SLH-DSA"
+      ]
+    },
+    {
+      "id": "crypto.hqc.external",
+      "name": "HQC external-provider inventory",
+      "category": "kem",
+      "cbom_component": "HQC",
+      "source_files": [
+        "scripts/export_liboqs_inventory.py",
+        "scripts/verify_provider_scope.py"
+      ],
+      "kconfig_symbols": [
+        "PQCP_LIBOQS_EXPERIMENTAL"
+      ],
+      "claim_ids": [
+        "supply_chain.liboqs_non_native_scope"
+      ],
+      "ztests": [
+        "scripts/test_provider_scope.py"
+      ],
+      "transcript_markers": [
+        "provider_scope:HQC"
+      ]
     }
   ]
 }

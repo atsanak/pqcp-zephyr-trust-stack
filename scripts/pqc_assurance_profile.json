@@ -106,6 +106,22 @@
       "production_allowed": false,
       "profile_support": ["native_lab", "qemu_release"],
       "validation_scope": ["ct_smoke"]
+    },
+    {
+      "asset_id": "crypto.slhdsa.external",
+      "cbom_component": "SLH-DSA",
+      "lifecycle_status": "experimental_inventory",
+      "production_allowed": false,
+      "profile_support": ["native_lab"],
+      "validation_scope": ["inventory", "policy_replay"]
+    },
+    {
+      "asset_id": "crypto.hqc.external",
+      "cbom_component": "HQC",
+      "lifecycle_status": "experimental_inventory",
+      "production_allowed": false,
+      "profile_support": ["native_lab"],
+      "validation_scope": ["inventory", "policy_replay"]
     }
   ],
   "profiles": [
@@ -133,7 +149,9 @@
         "rng.psa",
         "rng.deterministic_test",
         "boot.kat_self_verify",
-        "security.ct_smoke"
+        "security.ct_smoke",
+        "crypto.slhdsa.external",
+        "crypto.hqc.external"
       ],
       "forbidden_asset_ids": [],
       "test_only_asset_ids": ["rng.deterministic_test"]
@@ -193,6 +211,8 @@
         "rng.deterministic_test",
         "validation.acvp_serial",
         "validation.tls_selftest",
+        "crypto.slhdsa.external",
+        "crypto.hqc.external",
         "security.ct_smoke"
       ],
       "test_only_asset_ids": []

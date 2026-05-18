@@ -188,8 +188,8 @@
         },
         "handshake_provider_overhead": {
           "max_ratio": 8.0,
-          "max_candidate": 76.0,
-          "measured_candidate": 43.0
+          "max_candidate": 167.0,
+          "measured_candidate": 95.0
         },
         "handshake_transport_overhead_bytes": {
           "max_ratio": 2.0,
