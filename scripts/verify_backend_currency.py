@@ -29,6 +29,35 @@ BACKENDS = {
         "url": "https://github.com/pq-code-package/mldsa-native",
     },
 }
+FORBIDDEN_BACKEND_RE = re.compile(r"OQ" r"Clean|PQC" r"LEAN", re.IGNORECASE)
+POLICY_SCAN_ROOTS = (
+    ".github",
+    "docs",
+    "include",
+    "samples",
+    "scripts",
+    "src",
+    "tests",
+    "zephyr",
+    "CMakeLists.txt",
+    "Kconfig",
+    "README.md",
+    "west.yml",
+)
+POLICY_SKIP_DIRS = {"__pycache__", "html"}
+POLICY_SCAN_SUFFIXES = {
+    "",
+    ".c",
+    ".cmake",
+    ".conf",
+    ".h",
+    ".json",
+    ".md",
+    ".py",
+    ".txt",
+    ".yml",
+    ".yaml",
+}
 
 
 def sha256_file(path: Path) -> str | None:
@@ -198,6 +227,45 @@ def parse_submodule_status(module_path: Path) -> dict[str, dict[str, str]]:
     return status
 
 
+def scan_implementation_policy(module_path: Path) -> dict[str, Any]:
+    """Verify repo-owned files do not select forbidden ML-KEM/ML-DSA backends."""
+    hits: list[dict[str, Any]] = []
+    scanned_files = 0
+    for root_name in POLICY_SCAN_ROOTS:
+        root = module_path / root_name
+        if not root.exists():
+            continue
+        paths = [root] if root.is_file() else sorted(path for path in root.rglob("*") if path.is_file())
+        for path in paths:
+            if any(part in POLICY_SKIP_DIRS for part in path.relative_to(module_path).parts):
+                continue
+            if path.suffix not in POLICY_SCAN_SUFFIXES:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            scanned_files += 1
+            for line_number, line in enumerate(text.splitlines(), start=1):
+                if FORBIDDEN_BACKEND_RE.search(line):
+                    hits.append(
+                        {
+                            "path": str(path.relative_to(module_path)),
+                            "line": line_number,
+                            "snippet": line.strip()[:160],
+                        }
+                    )
+    return {
+        "allowed_mlkem_backend": "mlkem-native",
+        "allowed_mldsa_backend": "mldsa-native",
+        "liboqs_scope": "permitted only for non-ML-KEM/ML-DSA families or external comparison metadata",
+        "scanned_files": scanned_files,
+        "forbidden_reference_count": len(hits),
+        "forbidden_references": hits,
+        "passed": not hits,
+    }
+
+
 def local_head(module_path: Path, path: str) -> str | None:
     repo = module_path / path
     if not (repo / ".git").exists():
@@ -232,6 +300,12 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
     failures: list[str] = []
     warnings: list[str] = []
     backend_rows: list[dict[str, Any]] = []
+    implementation_policy = scan_implementation_policy(module_path)
+    if not implementation_policy["passed"]:
+        for hit in implementation_policy["forbidden_references"]:
+            failures.append(
+                f"implementation policy: forbidden backend reference in {hit['path']}:{hit['line']}"
+            )
 
     for name, expected in BACKENDS.items():
         project = west_projects.get(name) or {}
@@ -325,6 +399,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
             "warnings": len(warnings),
         },
         "backends": backend_rows,
+        "implementation_policy": implementation_policy,
         "warnings": warnings,
         "failures": failures,
     }

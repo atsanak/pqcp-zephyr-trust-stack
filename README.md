@@ -849,7 +849,7 @@ Zephyr builds. Each run now carries:
 
 - `implementation`: the cryptographic provider family. Today this is always
   `pqcp` for the production implementation family and `baseline` for the
-  QEMU-only clean reference comparator.
+  QEMU-only native-C reference comparator.
 - `backend`: the backend-selection policy within that implementation family.
 - `run_mode`: whether the row is a fully runnable benchmark (`run`) or a
   build-only footprint capture (`build_only`).
@@ -863,9 +863,9 @@ The curated QEMU matrix now includes:
 
 - `implementation=pqcp` rows using the normal PQCP wrappers and backend-policy
   switches (`auto`, `force_c`, `force_native`)
-- `implementation=baseline` rows using a vendored PQClean-derived clean
-  reference provider for ML-KEM-512 / ML-KEM-768 and ML-DSA-65 / ML-DSA-87 on
-  `qemu_x86_64`
+- `implementation=baseline` rows using the portable C backend paths from
+  `mlkem-native` and `mldsa-native` for ML-KEM-512 / ML-KEM-768 and
+  ML-DSA-65 / ML-DSA-87 on `qemu_x86_64`
 
 That means the QEMU cost-of-assurance flow can now compare PQCP against a real
 second implementation family instead of only comparing PQCP backend variants to

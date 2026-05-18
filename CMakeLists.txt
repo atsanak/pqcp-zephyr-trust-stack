@@ -65,8 +65,6 @@ else()
     set(MLDSA_NATIVE_DIR ${PQCP_EXT}/mldsa-native)
 endif()
 
-set(PQCLEAN_BASELINE_DIR ${PQCP_EXT}/pqclean-baseline)
-
 # =============================================================================
 # Include Paths
 # =============================================================================
@@ -92,43 +90,14 @@ endif()
 # Common RNG interface
 zephyr_library_sources(${PQCP_SRC}/rng_common.c)
 
-if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
-    zephyr_include_directories(${PQCLEAN_BASELINE_DIR})
-    zephyr_include_directories(${PQCLEAN_BASELINE_DIR}/common)
-    zephyr_library_sources(${PQCLEAN_BASELINE_DIR}/common/fips202.c)
-    zephyr_library_sources(${PQCP_SRC}/pqclean_randombytes.c)
-endif()
-
 # =============================================================================
 # ML-KEM Library
 # =============================================================================
 if(CONFIG_PQCP_MLKEM)
     zephyr_library_named(pqcp_mlkem)
 
-    if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
-        if(CONFIG_PQCP_MLKEM_LEVEL_512)
-            set(PQCLEAN_MLKEM_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mlkem512_clean)
-        elseif(CONFIG_PQCP_MLKEM_LEVEL_1024)
-            set(PQCLEAN_MLKEM_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mlkem1024_clean)
-        else()
-            set(PQCLEAN_MLKEM_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mlkem768_clean)
-        endif()
-
-        zephyr_include_directories(${PQCLEAN_MLKEM_BASELINE_DIR})
-        zephyr_library_sources(
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/cbd.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/indcpa.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/kem.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/ntt.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/poly.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/polyvec.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/reduce.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/symmetric-shake.c
-            ${PQCLEAN_MLKEM_BASELINE_DIR}/verify.c
-            ${PQCP_SRC}/mlkem_baseline.c
-        )
     # Check for mlkem-native availability
-    elseif(EXISTS ${MLKEM_NATIVE_DIR}/mlkem)
+    if(EXISTS ${MLKEM_NATIVE_DIR}/mlkem)
         set(PQCP_MLKEM_LEVEL_COUNT 0)
         if(CONFIG_PQCP_MLKEM_LEVEL_512)
             math(EXPR PQCP_MLKEM_LEVEL_COUNT "${PQCP_MLKEM_LEVEL_COUNT} + 1")
@@ -172,7 +141,7 @@ if(CONFIG_PQCP_MLKEM)
         endif()
         
         # Backend selection
-        if(CONFIG_PQCP_BACKEND_FORCE_C)
+        if(CONFIG_PQCP_IMPLEMENTATION_BASELINE OR CONFIG_PQCP_BACKEND_FORCE_C)
             zephyr_compile_definitions(MLKEM_USE_NATIVE=0)
         elseif(CONFIG_PQCP_BACKEND_FORCE_NATIVE)
             zephyr_compile_definitions(MLKEM_USE_NATIVE=1)
@@ -216,29 +185,8 @@ endif()
 if(CONFIG_PQCP_MLDSA)
     zephyr_library_named(pqcp_mldsa)
 
-    if(CONFIG_PQCP_IMPLEMENTATION_BASELINE)
-        if(CONFIG_PQCP_MLDSA_LEVEL_44)
-            set(PQCLEAN_MLDSA_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mldsa44_clean)
-        elseif(CONFIG_PQCP_MLDSA_LEVEL_87)
-            set(PQCLEAN_MLDSA_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mldsa87_clean)
-        else()
-            set(PQCLEAN_MLDSA_BASELINE_DIR ${PQCLEAN_BASELINE_DIR}/mldsa65_clean)
-        endif()
-
-        zephyr_include_directories(${PQCLEAN_MLDSA_BASELINE_DIR})
-        zephyr_library_sources(
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/ntt.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/packing.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/poly.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/polyvec.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/reduce.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/rounding.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/sign.c
-            ${PQCLEAN_MLDSA_BASELINE_DIR}/symmetric-shake.c
-            ${PQCP_SRC}/mldsa_baseline.c
-        )
     # Check for mldsa-native availability
-    elseif(EXISTS ${MLDSA_NATIVE_DIR}/mldsa)
+    if(EXISTS ${MLDSA_NATIVE_DIR}/mldsa)
         set(PQCP_MLDSA_LEVEL_COUNT 0)
         if(CONFIG_PQCP_MLDSA_LEVEL_44)
             math(EXPR PQCP_MLDSA_LEVEL_COUNT "${PQCP_MLDSA_LEVEL_COUNT} + 1")
@@ -282,7 +230,7 @@ if(CONFIG_PQCP_MLDSA)
         endif()
         
         # Backend selection
-        if(CONFIG_PQCP_BACKEND_FORCE_C)
+        if(CONFIG_PQCP_IMPLEMENTATION_BASELINE OR CONFIG_PQCP_BACKEND_FORCE_C)
             zephyr_compile_definitions(MLDSA_USE_NATIVE=0)
         elseif(CONFIG_PQCP_BACKEND_FORCE_NATIVE)
             zephyr_compile_definitions(MLDSA_USE_NATIVE=1)

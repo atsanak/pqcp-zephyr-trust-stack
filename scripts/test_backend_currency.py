@@ -163,6 +163,30 @@ class BackendCurrencyTests(unittest.TestCase):
         self.assertEqual(metadata["source_file_count"], 1)
         self.assertRegex(metadata["meta_sha256"], r"^[0-9a-f]{64}$")
 
+    def test_repo_owned_forbidden_backend_reference_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_repo(root)
+            (root / "src").mkdir()
+            forbidden_name = "OQ" + "Clean"
+            (root / "src" / "backend.c").write_text(
+                f"/* accidental {forbidden_name} ML-KEM backend selection */\n",
+                encoding="utf-8",
+            )
+            result = verify_backend_currency.verify(
+                Namespace(
+                    module_path=root,
+                    west_manifest=root / "west.yml",
+                    output=root / "result.json",
+                    check_upstream=False,
+                    require_initialized_submodules=False,
+                )
+            )
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["implementation_policy"]["passed"])
+        self.assertEqual(result["implementation_policy"]["forbidden_reference_count"], 1)
+        self.assertTrue(any("implementation policy" in failure for failure in result["failures"]))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
