@@ -264,6 +264,15 @@ config PQCP_FIPS202_EXTERNAL
 	  bundled with mlkem-native and mldsa-native. This allows sharing
 	  a single FIPS-202 implementation across the system.
 
+config PQCP_LIBOQS_EXPERIMENTAL
+	bool "Enable experimental external-provider inventory"
+	default n
+	help
+	  Enable metadata for optional schemes that are outside the native
+	  provider families. This option is inventory and policy plumbing only:
+	  it is not a production default, does not change the existing crypto
+	  APIs, and does not select an implementation for the native families.
+
 config PQCP_REDUCE_RAM
 	bool "Reduced RAM mode"
 	default n

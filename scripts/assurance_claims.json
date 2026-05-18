@@ -326,6 +326,34 @@
       "claim": "The partner-review appraisal policy rejects missing or silently not-applicable v7 evidence unless a less strict mode explicitly permits it.",
       "required": true,
       "schema_version_added": 7
+    },
+    {
+      "id": "supply_chain.backend_contract",
+      "category": "supply_chain",
+      "claim": "The release pack proves the backend contract: native backend pins are present, repo-owned files pass provider-policy scanning, and no forbidden implementation provider is selected.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "supply_chain.liboqs_non_native_scope",
+      "category": "supply_chain",
+      "claim": "Optional external-provider inventory is restricted to non-native schemes, marked experimental, and rejected from production-oriented profiles unless policy explicitly permits it.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "benchmark.paper_comparison_export",
+      "category": "benchmark",
+      "claim": "Benchmark campaign evidence is exported to a paper-comparable CSV/JSON shape with explicit platform, clock, compiler, statistic, backend, and transcript-hash metadata.",
+      "required": true,
+      "schema_version_added": 7
+    },
+    {
+      "id": "release.reference_provider_scope",
+      "category": "release",
+      "claim": "Release reference values replay against backend-contract, provider-scope, release manifest, and CBOM metadata so provider-family drift cannot pass silently.",
+      "required": true,
+      "schema_version_added": 7
     }
   ]
 }

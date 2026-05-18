@@ -64,6 +64,10 @@
     {"id": "security.ct_campaign_analysis", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
     {"id": "acvp.json_schema_coverage", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
     {"id": "firmware.device_evidence_token", "evidence_class": "transcript_hash", "environment": "qemu_x86_64", "requires_artifact": true, "allow_not_applicable": true},
-    {"id": "release.strict_partner_policy", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true}
+    {"id": "release.strict_partner_policy", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "supply_chain.backend_contract", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "supply_chain.liboqs_non_native_scope", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "benchmark.paper_comparison_export", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true},
+    {"id": "release.reference_provider_scope", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true, "allow_not_applicable": true}
   ]
 }

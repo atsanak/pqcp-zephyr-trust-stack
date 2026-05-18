@@ -69,9 +69,21 @@ release review.
   `PQCP_CT_SAMPLE` timing-smoke transcript markers.
 - `backend_update_evaluation.json` — comparison-only review of pinned native
   backend metadata and optional upstream drift.
+- `backend_contract_result.json` — release backend-contract result showing
+  native backend pins, provider-policy scan coverage, denied references, and
+  the allowed external-provider scope.
+- `liboqs_non_native_inventory.json` — experimental external-provider inventory
+  for schemes outside the native provider families. It is inventory and policy
+  evidence, not a production default.
+- `provider_scope_result.json` — replay result checking that CBOM provider
+  metadata agrees with the backend contract and external-provider inventory.
 - `benchmark_campaign_result.json` /
   `benchmark_campaign_verify_result.json` — benchmark campaign statistics and
   replay result.
+- `paper_comparison_campaign.csv` /
+  `paper_comparison_campaign.json` — normalized benchmark export with explicit
+  source, platform, clock, compiler, statistic, backend, and transcript-hash
+  metadata for comparison workflows.
 - `ct_campaign_result.json` — replay result over the CT sample manifest.
 - `acvp_json_schema_result.json` — ACVP JSON operation-coverage replay result.
 - `device_evidence_token.json` /
@@ -80,6 +92,9 @@ release review.
 - `pqc_appraisal_evidence.json` /
   `pqc_appraisal_result.json` — mode-specific evidence appraisal inputs and
   replay result.
+- `release_reference_values_result.json` — replay result checking reference
+  values against the release manifest, CBOM, backend contract, and provider
+  scope.
 
 ## Local Commands
 

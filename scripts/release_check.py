@@ -609,10 +609,16 @@ def main() -> int:
     acvp_json_interop_result_path = output_root / "acvp_json_interop_result.json"
     acvp_json_transcript_manifest_path = output_root / "acvp_json_transcript_manifest.json"
     backend_currency_result_path = output_root / "backend_currency_result.json"
+    backend_contract_result_path = output_root / "backend_contract_result.json"
+    liboqs_inventory_path = output_root / "liboqs_non_native_inventory.json"
+    provider_scope_result_path = output_root / "provider_scope_result.json"
     external_reference_output_dir = output_root / "external_reference_import"
     external_reference_result_path = external_reference_output_dir / "hardware_benchmark_report.json"
+    paper_comparison_csv_path = output_root / "paper_comparison_campaign.csv"
+    paper_comparison_result_path = output_root / "paper_comparison_campaign.json"
     pqc_reference_values_path = output_root / "pqc_reference_values.json"
     pqc_reference_values_result_path = output_root / "pqc_reference_values_result.json"
+    release_reference_values_result_path = output_root / "release_reference_values_result.json"
     firmware_assurance_status_result_path = output_root / "firmware_assurance_status_result.json"
     pqc_build_provenance_path = output_root / "pqc_build_provenance.slsa.json"
     pqc_build_provenance_result_path = output_root / "pqc_build_provenance_result.json"
@@ -667,8 +673,14 @@ def main() -> int:
             acvp_json_interop_result_path,
             acvp_json_transcript_manifest_path,
             backend_currency_result_path,
+            backend_contract_result_path,
+            liboqs_inventory_path,
+            provider_scope_result_path,
+            paper_comparison_csv_path,
+            paper_comparison_result_path,
             pqc_reference_values_path,
             pqc_reference_values_result_path,
+            release_reference_values_result_path,
             firmware_assurance_status_result_path,
             pqc_build_provenance_path,
             pqc_build_provenance_result_path,
@@ -740,8 +752,14 @@ def main() -> int:
         str(pqc_build_provenance_result_path),
         "--backend-update-evaluation",
         str(backend_update_evaluation_path),
+        "--backend-contract-result",
+        str(backend_contract_result_path),
+        "--liboqs-inventory",
+        str(liboqs_inventory_path),
         "--benchmark-campaign-result",
         str(benchmark_campaign_result_path),
+        "--paper-comparison-result",
+        str(paper_comparison_result_path),
         "--ct-campaign-result",
         str(ct_campaign_result_path),
         "--acvp-json-schema-result",
@@ -750,6 +768,10 @@ def main() -> int:
         str(device_evidence_token_result_path),
         "--appraisal-result",
         str(pqc_appraisal_result_path),
+        "--provider-scope-result",
+        str(provider_scope_result_path),
+        "--release-reference-values-result",
+        str(release_reference_values_result_path),
         "--output-json",
         str(assurance_ledger_json),
         "--output-md",
@@ -784,6 +806,8 @@ def main() -> int:
         str(assurance_ledger_json),
         "--release-manifest",
         str(release_manifest_path),
+        "--liboqs-inventory",
+        str(liboqs_inventory_path),
         "--output",
         str(pqc_cbom_path),
     ]
@@ -836,12 +860,34 @@ def main() -> int:
         str(ct_sample_manifest_path),
         "--backend-currency-result",
         str(backend_currency_result_path),
+        "--backend-contract-result",
+        str(backend_contract_result_path),
+        "--liboqs-inventory",
+        str(liboqs_inventory_path),
+        "--provider-scope-result",
+        str(provider_scope_result_path),
         "--external-reference-result",
         str(external_reference_result_path),
+        "--paper-comparison-json",
+        str(paper_comparison_result_path),
+        "--paper-comparison-csv",
+        str(paper_comparison_csv_path),
         "--output",
         str(pqc_attestation_path),
         "--digest-output",
         str(pqc_assurance_digest_path),
+    ]
+    provider_scope_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_provider_scope.py"),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--backend-contract",
+        str(backend_contract_result_path),
+        "--liboqs-inventory",
+        str(liboqs_inventory_path),
+        "--output",
+        str(provider_scope_result_path),
     ]
     pqc_policy_cmd = [
         sys.executable,
@@ -1047,6 +1093,24 @@ def main() -> int:
         "--output",
         str(backend_currency_result_path),
     ]
+    backend_contract_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_backend_contract.py"),
+        "--module-path",
+        str(module_path),
+        "--backend-currency-result",
+        str(backend_currency_result_path),
+        "--output",
+        str(backend_contract_result_path),
+    ]
+    liboqs_inventory_cmd = [
+        sys.executable,
+        str(module_path / "scripts/export_liboqs_inventory.py"),
+        "--module-path",
+        str(module_path),
+        "--output",
+        str(liboqs_inventory_path),
+    ]
     backend_update_cmd = [
         sys.executable,
         str(module_path / "scripts/evaluate_backend_update.py"),
@@ -1172,6 +1236,10 @@ def main() -> int:
         str(pqc_assurance_profile_result_path),
         "--transcript-manifest",
         str(evidence_transcript_manifest),
+        "--backend-contract",
+        str(backend_contract_result_path),
+        "--provider-scope-result",
+        str(provider_scope_result_path),
         "--output",
         str(pqc_reference_values_path),
     ]
@@ -1196,8 +1264,28 @@ def main() -> int:
         str(pqc_assurance_profile_result_path),
         "--transcript-manifest",
         str(evidence_transcript_manifest),
+        "--backend-contract",
+        str(backend_contract_result_path),
+        "--provider-scope-result",
+        str(provider_scope_result_path),
         "--output",
         str(pqc_reference_values_result_path),
+    ]
+    release_reference_values_verify_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_release_reference_values.py"),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--release-manifest",
+        str(release_manifest_path),
+        "--backend-contract",
+        str(backend_contract_result_path),
+        "--provider-scope-result",
+        str(provider_scope_result_path),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--output",
+        str(release_reference_values_result_path),
     ]
     firmware_assurance_status_verify_cmd = [
         sys.executable,
@@ -1241,15 +1329,27 @@ def main() -> int:
         "--byproduct",
         str(backend_currency_result_path),
         "--byproduct",
+        str(backend_contract_result_path),
+        "--byproduct",
+        str(provider_scope_result_path),
+        "--byproduct",
+        str(liboqs_inventory_path),
+        "--byproduct",
         str(backend_update_evaluation_path),
         "--byproduct",
         str(external_reference_result_path),
         "--byproduct",
         str(benchmark_campaign_result_path),
         "--byproduct",
+        str(paper_comparison_result_path),
+        "--byproduct",
+        str(paper_comparison_csv_path),
+        "--byproduct",
         str(device_evidence_token_path),
         "--byproduct",
         str(device_evidence_token_result_path),
+        "--byproduct",
+        str(release_reference_values_result_path),
         "--output",
         str(pqc_build_provenance_path),
     ]
@@ -1283,15 +1383,27 @@ def main() -> int:
         "--byproduct",
         str(backend_currency_result_path),
         "--byproduct",
+        str(backend_contract_result_path),
+        "--byproduct",
+        str(provider_scope_result_path),
+        "--byproduct",
+        str(liboqs_inventory_path),
+        "--byproduct",
         str(backend_update_evaluation_path),
         "--byproduct",
         str(external_reference_result_path),
         "--byproduct",
         str(benchmark_campaign_result_path),
         "--byproduct",
+        str(paper_comparison_result_path),
+        "--byproduct",
+        str(paper_comparison_csv_path),
+        "--byproduct",
         str(device_evidence_token_path),
         "--byproduct",
         str(device_evidence_token_result_path),
+        "--byproduct",
+        str(release_reference_values_result_path),
         "--release-manifest",
         str(release_manifest_path),
         "--output",
@@ -1316,6 +1428,16 @@ def main() -> int:
         str(benchmark_campaign_result_path),
         "--output",
         str(benchmark_campaign_verify_result_path),
+    ]
+    paper_comparison_cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_paper_comparison_campaign.py"),
+        "--benchmark-campaign",
+        str(benchmark_campaign_result_path),
+        "--output-csv",
+        str(paper_comparison_csv_path),
+        "--output-json",
+        str(paper_comparison_result_path),
     ]
     metric_optimization_cmd = [
         sys.executable,
@@ -1736,6 +1858,11 @@ def main() -> int:
             cwd=module_path,
         ),
         Step(
+            name="paper comparison campaign",
+            cmd=paper_comparison_cmd,
+            cwd=module_path,
+        ),
+        Step(
             name="metric optimization campaign",
             cmd=metric_optimization_cmd,
             cwd=module_path,
@@ -1743,6 +1870,16 @@ def main() -> int:
         Step(
             name="backend currency",
             cmd=backend_currency_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="backend contract",
+            cmd=backend_contract_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="external provider inventory",
+            cmd=liboqs_inventory_cmd,
             cwd=module_path,
         ),
         Step(
@@ -1806,6 +1943,11 @@ def main() -> int:
         Step(
             name="PQC CBOM",
             cmd=pqc_cbom_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="provider scope",
+            cmd=provider_scope_cmd,
             cwd=module_path,
         ),
         Step(
@@ -1877,6 +2019,11 @@ def main() -> int:
         Step(
             name="PQC reference values verification",
             cmd=pqc_reference_values_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="release reference values provider replay",
+            cmd=release_reference_values_verify_cmd,
             cwd=module_path,
         ),
         Step(

@@ -24,6 +24,24 @@ from check_version_consistency import parse_header_version  # noqa: E402
 
 LICENSE_EXPRESSION = "LicenseRef-Proprietary-Collaborative-Evaluation"
 DEFAULT_PROFILE = SCRIPT_DIR / "pqc_assurance_profile.json"
+DEFAULT_EXTERNAL_SCHEMES = (
+    {
+        "name": "SLH-DSA",
+        "primitive": "signature",
+        "standard": "FIPS 205",
+        "provider_family": "liboqs",
+        "claim_ids": ["supply_chain.liboqs_non_native_scope"],
+        "profile_allowed": {"partner_review": "allowed_with_policy"},
+    },
+    {
+        "name": "HQC",
+        "primitive": "kem",
+        "standard": "NIST PQC migration tracking",
+        "provider_family": "liboqs",
+        "claim_ids": ["supply_chain.liboqs_non_native_scope"],
+        "profile_allowed": {"partner_review": "allowed_with_policy"},
+    },
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--module-path", type=Path, default=REPO_ROOT)
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--release-manifest", type=Path, required=True)
+    parser.add_argument("--liboqs-inventory", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -155,7 +174,15 @@ def crypto_asset(
     production_status: str,
     claim_ids: list[str],
     usage: str,
+    provider_family: str | None = None,
+    implementation_source: str | None = None,
+    native_required: bool = False,
+    liboqs_allowed: bool = False,
+    production_allowed: bool | None = None,
+    policy_decision: str = "allowed",
 ) -> dict[str, Any]:
+    if production_allowed is None:
+        production_allowed = production_status in {"supported"}
     return {
         "type": "cryptographic-asset",
         "bom-ref": bom_ref,
@@ -174,6 +201,12 @@ def crypto_asset(
             property_item("pqcp:production_status", production_status),
             property_item("pqcp:usage", usage),
             property_item("pqcp:claim_ids", ",".join(claim_ids)),
+            property_item("pqcp:implementation_source", implementation_source or provider_family or "pqcp"),
+            property_item("pqcp:provider_family", provider_family or "pqcp"),
+            property_item("pqcp:native_required", str(native_required).lower()),
+            property_item("pqcp:liboqs_allowed", str(liboqs_allowed).lower()),
+            property_item("pqcp:production_allowed", str(production_allowed).lower()),
+            property_item("pqcp:policy_decision", policy_decision),
         ],
     }
 
@@ -197,7 +230,12 @@ def library_component(
     }
 
 
-def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
+def build_cbom(
+    module_path: Path,
+    ledger: dict[str, Any],
+    manifest: dict[str, Any],
+    liboqs_inventory: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     version = str(manifest.get("version") or ledger.get("version") or parse_header_version(module_path))
     tag = str(manifest.get("tag") or ledger.get("tag") or "")
     head_sha = str(manifest.get("source_commit") or ledger.get("head_sha") or "")
@@ -225,6 +263,11 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
                 "security.mlkem_decap_instruction_policy",
             ],
             usage="key establishment",
+            provider_family="mlkem-native",
+            implementation_source="mlkem-native",
+            native_required=True,
+            liboqs_allowed=False,
+            policy_decision="native_backend_required",
         ),
         crypto_asset(
             name="ML-KEM-768",
@@ -241,6 +284,11 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
                 "security.mlkem_decap_instruction_policy",
             ],
             usage="key establishment and TLS self-test",
+            provider_family="mlkem-native",
+            implementation_source="mlkem-native",
+            native_required=True,
+            liboqs_allowed=False,
+            policy_decision="native_backend_required",
         ),
         crypto_asset(
             name="ML-KEM-1024",
@@ -256,6 +304,11 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
                 "security.mlkem_decap_instruction_policy",
             ],
             usage="key establishment",
+            provider_family="mlkem-native",
+            implementation_source="mlkem-native",
+            native_required=True,
+            liboqs_allowed=False,
+            policy_decision="native_backend_required",
         ),
         crypto_asset(
             name="ML-DSA-44",
@@ -266,6 +319,11 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="supported",
             claim_ids=["kat.mldsa_44", "benchmark.mldsa_throughput", "benchmark.distribution_quality"],
             usage="digital signature",
+            provider_family="mldsa-native",
+            implementation_source="mldsa-native",
+            native_required=True,
+            liboqs_allowed=False,
+            policy_decision="native_backend_required",
         ),
         crypto_asset(
             name="ML-DSA-65",
@@ -276,6 +334,11 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="supported",
             claim_ids=["kat.mldsa_65", "benchmark.mldsa_throughput", "benchmark.distribution_quality"],
             usage="digital signature and TLS self-test",
+            provider_family="mldsa-native",
+            implementation_source="mldsa-native",
+            native_required=True,
+            liboqs_allowed=False,
+            policy_decision="native_backend_required",
         ),
         crypto_asset(
             name="ML-DSA-87",
@@ -286,6 +349,11 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="supported",
             claim_ids=["kat.mldsa_87", "benchmark.mldsa_throughput", "benchmark.distribution_quality"],
             usage="digital signature",
+            provider_family="mldsa-native",
+            implementation_source="mldsa-native",
+            native_required=True,
+            liboqs_allowed=False,
+            policy_decision="native_backend_required",
         ),
         crypto_asset(
             name="ACVP serial validation harness",
@@ -300,6 +368,10 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
                 "acvp.negative_scenarios_replay",
             ],
             usage="lab validation and negative-path replay",
+            provider_family="pqcp-validation",
+            implementation_source="pqcp",
+            production_allowed=False,
+            policy_decision="lab_only",
         ),
         crypto_asset(
             name="TLS/PSA PQC self-test path",
@@ -310,6 +382,10 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="validation_only",
             claim_ids=["security.asan_clean", "security.ubsan_clean"],
             usage="offline integration self-test and protocol metrics",
+            provider_family="pqcp-validation",
+            implementation_source="pqcp",
+            production_allowed=False,
+            policy_decision="validation_only",
         ),
         crypto_asset(
             name="Zephyr entropy RNG",
@@ -320,6 +396,9 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="supported",
             claim_ids=[],
             usage="production entropy backend",
+            provider_family="zephyr",
+            implementation_source="zephyr",
+            production_allowed=True,
         ),
         crypto_asset(
             name="PSA RNG",
@@ -330,6 +409,9 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="supported",
             claim_ids=[],
             usage="production PSA RNG backend",
+            provider_family="psa",
+            implementation_source="psa",
+            production_allowed=True,
         ),
         crypto_asset(
             name="Deterministic test RNG",
@@ -340,6 +422,10 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             production_status="test_only",
             claim_ids=["kat.offline_provenance"],
             usage="KAT and deterministic test vectors only",
+            provider_family="pqcp-test",
+            implementation_source="pqcp",
+            production_allowed=False,
+            policy_decision="test_only",
         ),
         library_component(
             name="Zephyr RTOS",
@@ -366,6 +452,41 @@ def build_cbom(module_path: Path, ledger: dict[str, Any], manifest: dict[str, An
             purpose="ML-DSA implementation backend",
         ),
     ]
+
+    external_schemes = (
+        liboqs_inventory.get("schemes")
+        if isinstance(liboqs_inventory, dict) and isinstance(liboqs_inventory.get("schemes"), list)
+        else DEFAULT_EXTERNAL_SCHEMES
+    )
+    if external_schemes:
+        for scheme in external_schemes:
+            if not isinstance(scheme, dict):
+                continue
+            name = str(scheme.get("name") or "")
+            if not name:
+                continue
+            components.append(
+                crypto_asset(
+                    name=name,
+                    bom_ref=f"pqcp:crypto:external:{name.lower().replace(' ', '-').replace('/', '-')}",
+                    primitive=str(scheme.get("primitive") or "pqc"),
+                    parameter_set=name,
+                    standard=str(scheme.get("standard") or "tracked external"),
+                    production_status="experimental",
+                    claim_ids=[
+                        str(item)
+                        for item in scheme.get("claim_ids") or []
+                        if isinstance(item, str)
+                    ],
+                    usage="external provider inventory and partner-review policy planning",
+                    provider_family=str(scheme.get("provider_family") or "liboqs"),
+                    implementation_source="external_inventory",
+                    native_required=False,
+                    liboqs_allowed=True,
+                    production_allowed=False,
+                    policy_decision=str(scheme.get("profile_allowed", {}).get("partner_review") or "allowed_with_policy"),
+                )
+            )
 
     for component in components:
         metadata = profile_metadata.get(str(component.get("name")))
@@ -438,7 +559,12 @@ def main() -> int:
     module_path = args.module_path.resolve()
     ledger = load_json(args.ledger.resolve(), "assurance ledger")
     manifest = load_json(args.release_manifest.resolve(), "release manifest")
-    cbom = build_cbom(module_path, ledger, manifest)
+    liboqs_inventory = (
+        load_json(args.liboqs_inventory.resolve(), "liboqs non-native inventory")
+        if args.liboqs_inventory
+        else None
+    )
+    cbom = build_cbom(module_path, ledger, manifest, liboqs_inventory)
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.output.resolve().write_text(json.dumps(cbom, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print("PQC CBOM generated")

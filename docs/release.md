@@ -157,7 +157,10 @@ For schema v7 packs, replay also checks `backend_update_evaluation.json`,
 `benchmark_campaign_result.json`, `benchmark_campaign_verify_result.json`,
 `ct_campaign_result.json`, `acvp_json_schema_result.json`,
 `device_evidence_token.json`, `device_evidence_token_result.json`,
-`pqc_appraisal_evidence.json`, and `pqc_appraisal_result.json`.
+`pqc_appraisal_evidence.json`, `pqc_appraisal_result.json`,
+`backend_contract_result.json`, `liboqs_non_native_inventory.json`,
+`provider_scope_result.json`, `paper_comparison_campaign.csv`,
+`paper_comparison_campaign.json`, and `release_reference_values_result.json`.
 
 If GitHub Actions is later restored, rerun the normal release workflow and
 compare the generated release notes with `output/release/v1.0.0/release-notes-v1.0.0.md`.
@@ -207,6 +210,13 @@ The full local release gate now emits the Passport artifacts described in
   replay result.
 - `ct_sample_analysis_result.json`: replay result for optional raw CT smoke
   sample markers.
+- `backend_contract_result.json`: backend-contract evidence for native provider
+  pins and provider-policy scan results.
+- `provider_scope_result.json`: CBOM/provider replay result that keeps external
+  provider inventory outside production defaults.
+- `paper_comparison_campaign.csv` /
+  `paper_comparison_campaign.json`: normalized benchmark campaign export for
+  partner comparison and review workflows.
 
 The CI fast gate intentionally skips the full Passport because it would require
 the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence

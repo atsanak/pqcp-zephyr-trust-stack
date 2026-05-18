@@ -123,11 +123,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-provenance-result", type=Path, help="Optional SLSA build provenance verification result JSON.")
     parser.add_argument("--ct-sample-analysis-result", type=Path, help="Optional CT sample analysis result JSON.")
     parser.add_argument("--backend-update-evaluation", type=Path, help="Optional backend update evaluation result JSON.")
+    parser.add_argument("--backend-contract-result", type=Path, help="Optional backend contract result JSON.")
+    parser.add_argument("--liboqs-inventory", type=Path, help="Optional non-native external-provider inventory JSON.")
     parser.add_argument("--benchmark-campaign-result", type=Path, help="Optional benchmark campaign result JSON.")
+    parser.add_argument("--paper-comparison-result", type=Path, help="Optional paper-comparison campaign result JSON.")
     parser.add_argument("--ct-campaign-result", type=Path, help="Optional CT campaign result JSON.")
     parser.add_argument("--acvp-json-schema-result", type=Path, help="Optional ACVP JSON schema coverage result JSON.")
     parser.add_argument("--device-evidence-result", type=Path, help="Optional device evidence token result JSON.")
     parser.add_argument("--appraisal-result", type=Path, help="Optional PQC appraisal verification result JSON.")
+    parser.add_argument("--provider-scope-result", type=Path, help="Optional provider scope verification result JSON.")
+    parser.add_argument("--release-reference-values-result", type=Path, help="Optional release reference-values replay result JSON.")
     parser.add_argument(
         "--ct-instruction-policy-result",
         type=Path,
@@ -1878,11 +1883,16 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     build_provenance_result_arg = getattr(args, "build_provenance_result", None)
     ct_sample_analysis_result_arg = getattr(args, "ct_sample_analysis_result", None)
     backend_update_evaluation_arg = getattr(args, "backend_update_evaluation", None)
+    backend_contract_result_arg = getattr(args, "backend_contract_result", None)
+    liboqs_inventory_arg = getattr(args, "liboqs_inventory", None)
     benchmark_campaign_result_arg = getattr(args, "benchmark_campaign_result", None)
+    paper_comparison_result_arg = getattr(args, "paper_comparison_result", None)
     ct_campaign_result_arg = getattr(args, "ct_campaign_result", None)
     acvp_json_schema_result_arg = getattr(args, "acvp_json_schema_result", None)
     device_evidence_result_arg = getattr(args, "device_evidence_result", None)
     appraisal_result_arg = getattr(args, "appraisal_result", None)
+    provider_scope_result_arg = getattr(args, "provider_scope_result", None)
+    release_reference_values_result_arg = getattr(args, "release_reference_values_result", None)
     ct_instruction_policy_result_arg = getattr(args, "ct_instruction_policy_result", None)
     cbom = resolve_path(cbom_arg, module_path) if cbom_arg else None
     attestation = resolve_path(attestation_arg, module_path) if attestation_arg else None
@@ -1901,11 +1911,20 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
     build_provenance_result = resolve_path(build_provenance_result_arg, module_path) if build_provenance_result_arg else None
     ct_sample_analysis_result = resolve_path(ct_sample_analysis_result_arg, module_path) if ct_sample_analysis_result_arg else None
     backend_update_evaluation = resolve_path(backend_update_evaluation_arg, module_path) if backend_update_evaluation_arg else None
+    backend_contract_result = resolve_path(backend_contract_result_arg, module_path) if backend_contract_result_arg else None
+    liboqs_inventory = resolve_path(liboqs_inventory_arg, module_path) if liboqs_inventory_arg else None
     benchmark_campaign_result = resolve_path(benchmark_campaign_result_arg, module_path) if benchmark_campaign_result_arg else None
+    paper_comparison_result = resolve_path(paper_comparison_result_arg, module_path) if paper_comparison_result_arg else None
     ct_campaign_result = resolve_path(ct_campaign_result_arg, module_path) if ct_campaign_result_arg else None
     acvp_json_schema_result = resolve_path(acvp_json_schema_result_arg, module_path) if acvp_json_schema_result_arg else None
     device_evidence_result = resolve_path(device_evidence_result_arg, module_path) if device_evidence_result_arg else None
     appraisal_result = resolve_path(appraisal_result_arg, module_path) if appraisal_result_arg else None
+    provider_scope_result = resolve_path(provider_scope_result_arg, module_path) if provider_scope_result_arg else None
+    release_reference_values_result = (
+        resolve_path(release_reference_values_result_arg, module_path)
+        if release_reference_values_result_arg
+        else None
+    )
     ct_instruction_policy_result = (
         resolve_path(ct_instruction_policy_result_arg, module_path)
         if ct_instruction_policy_result_arg
@@ -2151,11 +2170,32 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             required_keys=("schema_version", "passed", "backends", "checks", "failures"),
             success_field="passed",
         ),
+        "supply_chain.backend_contract": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=backend_contract_result,
+            label="backend contract result",
+            required_keys=("schema_version", "passed", "contract", "native_backend_shas", "checks"),
+            success_field="passed",
+        ),
+        "supply_chain.liboqs_non_native_scope": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=liboqs_inventory,
+            label="external-provider non-native inventory",
+            required_keys=("schema_version", "passed", "provider_family", "schemes"),
+            success_field="passed",
+        ),
         "benchmark.campaign_reproducibility": lambda spec: evaluate_json_artifact_claim(
             spec,
             path=benchmark_campaign_result,
             label="benchmark campaign result",
             required_keys=("schema_version", "passed", "statistics", "comparison_context"),
+            success_field="passed",
+        ),
+        "benchmark.paper_comparison_export": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=paper_comparison_result,
+            label="paper-comparison campaign result",
+            required_keys=("schema_version", "passed", "summary", "comparison_context"),
             success_field="passed",
         ),
         "benchmark.external_reference_context": lambda spec: evaluate_json_artifact_claim(
@@ -2191,6 +2231,13 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             path=appraisal_result,
             label="PQC appraisal verification result",
             required_keys=("schema_version", "passed", "mode", "checks"),
+            success_field="passed",
+        ),
+        "release.reference_provider_scope": lambda spec: evaluate_json_artifact_claim(
+            spec,
+            path=release_reference_values_result or provider_scope_result,
+            label="release reference/provider-scope replay result",
+            required_keys=("schema_version", "passed", "checks"),
             success_field="passed",
         ),
     }

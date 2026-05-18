@@ -303,7 +303,12 @@ def verify_passport_artifacts(
     ct_sample_analysis_result = output_root / "ct_sample_analysis_result.json"
     ct_sample_manifest = output_root / "ct_sample_manifest.json"
     backend_currency_result = output_root / "backend_currency_result.json"
+    backend_contract_result = output_root / "backend_contract_result.json"
+    liboqs_inventory = output_root / "liboqs_non_native_inventory.json"
+    provider_scope_result = output_root / "provider_scope_result.json"
     external_reference_result = output_root / "external_reference_import" / "hardware_benchmark_report.json"
+    paper_comparison_csv = output_root / "paper_comparison_campaign.csv"
+    paper_comparison_result = output_root / "paper_comparison_campaign.json"
     backend_update_evaluation = output_root / "backend_update_evaluation.json"
     benchmark_campaign_result = output_root / "benchmark_campaign_result.json"
     benchmark_campaign_verify_result = output_root / "benchmark_campaign_verify_result.json"
@@ -312,6 +317,7 @@ def verify_passport_artifacts(
     acvp_json_schema_result = output_root / "acvp_json_schema_result.json"
     device_evidence_token = output_root / "device_evidence_token.json"
     device_evidence_token_result = output_root / "device_evidence_token_result.json"
+    release_reference_values_result = output_root / "release_reference_values_result.json"
     appraisal_evidence = output_root / "pqc_appraisal_evidence.json"
     appraisal_result = output_root / "pqc_appraisal_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
@@ -352,6 +358,12 @@ def verify_passport_artifacts(
         require_file(backend_currency_result, "backend currency result", failures)
         require_file(external_reference_result, "external reference import result", failures)
     if (ledger.get("schema_version") or 0) >= 7:
+        require_file(backend_contract_result, "backend contract result", failures)
+        require_file(liboqs_inventory, "external-provider non-native inventory", failures)
+        require_file(provider_scope_result, "provider scope result", failures)
+        require_file(paper_comparison_csv, "paper comparison campaign CSV", failures)
+        require_file(paper_comparison_result, "paper comparison campaign result", failures)
+        require_file(release_reference_values_result, "release reference values provider replay result", failures)
         require_file(backend_update_evaluation, "backend update evaluation", failures)
         require_file(benchmark_campaign_result, "benchmark campaign result", failures)
         require_file(benchmark_campaign_verify_result, "benchmark campaign verification result", failures)
@@ -570,6 +582,8 @@ def verify_passport_artifacts(
                     policy_result=policy_result_path,
                     profile_result=assurance_profile_result,
                     transcript_manifest=output_root / "transcripts/evidence_transcript_manifest.json",
+                    backend_contract=backend_contract_result if backend_contract_result.exists() else None,
+                    provider_scope_result=provider_scope_result if provider_scope_result.exists() else None,
                     output=output_root / "__reference_replay_result.json",
                 )
             )
@@ -615,9 +629,15 @@ def verify_passport_artifacts(
                         acvp_json_schema_result,
                         ct_campaign_result,
                         backend_update_evaluation,
+                        backend_contract_result,
+                        provider_scope_result,
+                        liboqs_inventory,
                         benchmark_campaign_result,
+                        paper_comparison_result,
+                        paper_comparison_csv,
                         device_evidence_token,
                         device_evidence_token_result,
+                        release_reference_values_result,
                     ]
                 )
 
@@ -641,6 +661,11 @@ def verify_passport_artifacts(
 
     if (ledger.get("schema_version") or 0) >= 7:
         for path, label in (
+            (backend_contract_result, "backend contract result"),
+            (liboqs_inventory, "external-provider non-native inventory"),
+            (provider_scope_result, "provider scope result"),
+            (paper_comparison_result, "paper comparison campaign result"),
+            (release_reference_values_result, "release reference values provider replay result"),
             (backend_update_evaluation, "backend update evaluation"),
             (benchmark_campaign_result, "benchmark campaign result"),
             (benchmark_campaign_verify_result, "benchmark campaign verification result"),
@@ -711,6 +736,16 @@ def verify_passport_artifacts(
                     "ct_sample_manifest.json",
                     "backend_currency_result.json",
                     "hardware_benchmark_report.json",
+                ):
+                    if required_name not in seen_paths and not any(path.endswith(required_name) for path in seen_paths):
+                        failures.append(f"PQC assurance digest missing artifact: {required_name}")
+            if (ledger.get("schema_version") or 0) >= 7:
+                for required_name in (
+                    "backend_contract_result.json",
+                    "liboqs_non_native_inventory.json",
+                    "provider_scope_result.json",
+                    "paper_comparison_campaign.json",
+                    "paper_comparison_campaign.csv",
                 ):
                     if required_name not in seen_paths and not any(path.endswith(required_name) for path in seen_paths):
                         failures.append(f"PQC assurance digest missing artifact: {required_name}")
