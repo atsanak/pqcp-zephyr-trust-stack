@@ -187,6 +187,53 @@ class BackendCurrencyTests(unittest.TestCase):
         self.assertEqual(result["implementation_policy"]["forbidden_reference_count"], 1)
         self.assertTrue(any("implementation policy" in failure for failure in result["failures"]))
 
+    def test_external_provider_is_forbidden_for_native_family_implementation_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_repo(root)
+            (root / "src").mkdir()
+            external_provider = "lib" + "oqs"
+            native_family = "ML-" + "KEM"
+            (root / "src" / "backend.c").write_text(
+                f"/* accidental {external_provider} {native_family} implementation path */\n",
+                encoding="utf-8",
+            )
+            result = verify_backend_currency.verify(
+                Namespace(
+                    module_path=root,
+                    west_manifest=root / "west.yml",
+                    output=root / "result.json",
+                    check_upstream=False,
+                    require_initialized_submodules=False,
+                )
+            )
+        self.assertFalse(result["passed"])
+        self.assertEqual(
+            result["implementation_policy"]["forbidden_references"][0]["reason"],
+            ("lib" + "oqs_for_") + ("ml" + "kem_mldsa_forbidden"),
+        )
+
+    def test_liboqs_reference_for_non_native_scheme_scope_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_repo(root)
+            (root / "scripts").mkdir()
+            liboqs = "lib" + "oqs"
+            (root / "scripts" / "inventory.py").write_text(
+                f"# {liboqs} SLH-DSA inventory placeholder for a non-native scheme\n",
+                encoding="utf-8",
+            )
+            result = verify_backend_currency.verify(
+                Namespace(
+                    module_path=root,
+                    west_manifest=root / "west.yml",
+                    output=root / "result.json",
+                    check_upstream=False,
+                    require_initialized_submodules=False,
+                )
+            )
+        self.assertTrue(result["implementation_policy"]["passed"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

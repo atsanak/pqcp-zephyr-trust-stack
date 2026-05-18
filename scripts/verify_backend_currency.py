@@ -29,7 +29,9 @@ BACKENDS = {
         "url": "https://github.com/pq-code-package/mldsa-native",
     },
 }
-FORBIDDEN_BACKEND_RE = re.compile(r"OQ" r"Clean|PQC" r"LEAN", re.IGNORECASE)
+FORBIDDEN_PQCLEAN_RE = re.compile(r"OQ" r"Clean|PQC" r"LEAN", re.IGNORECASE)
+LIBOQS_RE = re.compile(r"lib" r"oqs|\bOQS\b", re.IGNORECASE)
+MLKEM_MLDSA_RE = re.compile(r"ML[-_ ]?KEM|MLKEM|Kyber|ML[-_ ]?DSA|MLDSA|Dilithium", re.IGNORECASE)
 POLICY_SCAN_ROOTS = (
     ".github",
     "docs",
@@ -45,6 +47,7 @@ POLICY_SCAN_ROOTS = (
     "west.yml",
 )
 POLICY_SKIP_DIRS = {"__pycache__", "html"}
+POLICY_SKIP_FILES = {"scripts/verify_backend_currency.py"}
 POLICY_SCAN_SUFFIXES = {
     "",
     ".c",
@@ -237,7 +240,11 @@ def scan_implementation_policy(module_path: Path) -> dict[str, Any]:
             continue
         paths = [root] if root.is_file() else sorted(path for path in root.rglob("*") if path.is_file())
         for path in paths:
-            if any(part in POLICY_SKIP_DIRS for part in path.relative_to(module_path).parts):
+            relative_path = path.relative_to(module_path)
+            relative_name = str(relative_path)
+            if relative_name in POLICY_SKIP_FILES:
+                continue
+            if any(part in POLICY_SKIP_DIRS for part in relative_path.parts):
                 continue
             if path.suffix not in POLICY_SCAN_SUFFIXES:
                 continue
@@ -247,18 +254,24 @@ def scan_implementation_policy(module_path: Path) -> dict[str, Any]:
                 continue
             scanned_files += 1
             for line_number, line in enumerate(text.splitlines(), start=1):
-                if FORBIDDEN_BACKEND_RE.search(line):
+                reason = None
+                if FORBIDDEN_PQCLEAN_RE.search(line):
+                    reason = "pqclean_forbidden"
+                elif LIBOQS_RE.search(line) and MLKEM_MLDSA_RE.search(line):
+                    reason = "liboqs_for_mlkem_mldsa_forbidden"
+                if reason:
                     hits.append(
                         {
-                            "path": str(path.relative_to(module_path)),
+                            "path": relative_name,
                             "line": line_number,
+                            "reason": reason,
                             "snippet": line.strip()[:160],
                         }
                     )
     return {
         "allowed_mlkem_backend": "mlkem-native",
         "allowed_mldsa_backend": "mldsa-native",
-        "liboqs_scope": "permitted only for non-ML-KEM/ML-DSA families or external comparison metadata",
+        "liboqs_scope": "permitted for PQC schemes outside the native ML-KEM and ML-DSA implementation families",
         "scanned_files": scanned_files,
         "forbidden_reference_count": len(hits),
         "forbidden_references": hits,
