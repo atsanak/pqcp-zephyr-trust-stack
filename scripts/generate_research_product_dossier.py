@@ -455,7 +455,7 @@ def hardening_items(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "priority": "medium",
                 "area": "supply-chain",
                 "rationale": "The CBOM includes experimental non-native provider inventory entries.",
-                "implementation": "Keep liboqs scoped to non-ML-KEM/non-ML-DSA schemes and require provider-scope replay before partner review.",
+                "implementation": "Keep the external-provider lane scoped to schemes outside the native families and require provider-scope replay before partner review.",
             }
         )
     if release.get("available") and not (release.get("artifacts", {}).get("transcript_manifest", {}).get("exists")):
@@ -548,7 +548,7 @@ def market_strategy(summary: dict[str, Any]) -> dict[str, Any]:
             "need to inventory ML-KEM/ML-DSA use in embedded firmware",
             "need to hand partners a local release pack without granting CI access",
             "need to separate QEMU regression evidence from hardware-validated performance claims",
-            "need to enforce backend policy: mlkem-native for ML-KEM, mldsa-native for ML-DSA, no PQClean",
+            "need to enforce backend policy: native providers for the native families, denied providers rejected by scan",
         ],
         "packaging": [
             "repository access under the proprietary collaborative evaluation terms",
@@ -637,7 +637,7 @@ def render_research_markdown(summary: dict[str, Any], *, depth: str) -> str:
     lines.append(md_table(["Provider family", "CBOM component count"], provider_rows))
     lines.append(
         "Backend policy remains explicit: ML-KEM evidence must stay on `mlkem-native`, ML-DSA evidence must stay on "
-        "`mldsa-native`, PQClean remains denied, and liboqs is limited to schemes outside those native families.\n\n"
+        "`mldsa-native`, and external-provider inventory is limited to schemes outside those native families.\n\n"
     )
     lines.append(md_heading(2, "Benchmark And Measurement Credibility"))
     confidence = benchmark.get("confidence_summary") or {}
@@ -724,7 +724,7 @@ def render_work_packages(summary: dict[str, Any]) -> str:
         [
             "Provider governance",
             "Backend contract, provider scope, CBOM provider-family properties",
-            "Keep ML-KEM on mlkem-native and ML-DSA on mldsa-native; keep liboqs outside those native families.",
+            "Keep ML-KEM on mlkem-native and ML-DSA on mldsa-native; keep external providers outside those native families.",
             "Release pack fails if provider family and CBOM/policy/reference values disagree.",
         ],
         [
@@ -877,7 +877,7 @@ def render_product_markdown(summary: dict[str, Any]) -> str:
                 "QEMU results are regression evidence, not physical performance claims.",
                 "CT smoke and instruction-policy checks are regression signals, not a formal side-channel proof.",
                 "Hash-bound attestations are replayable evidence, not identity-signed certification artifacts.",
-                "liboqs inventory remains experimental and outside ML-KEM / ML-DSA implementation paths.",
+                "External-provider inventory remains experimental and outside native-family implementation paths.",
             ]
         )
     )
@@ -931,8 +931,8 @@ def render_product_markdown(summary: dict[str, Any]) -> str:
                     "Formal side-channel security, physical-board performance, and signed release identity are explicit future steps.",
                 ],
                 [
-                    "Why not use generic ML-KEM/ML-DSA from liboqs?",
-                    "The backend contract keeps ML-KEM on mlkem-native and ML-DSA on mldsa-native; liboqs is scoped to other schemes only.",
+                    "Why not use a generic external provider for the native families?",
+                    "The backend contract keeps ML-KEM on mlkem-native and ML-DSA on mldsa-native; external providers are scoped to other schemes only.",
                 ],
                 [
                     "What makes this partner-ready?",
