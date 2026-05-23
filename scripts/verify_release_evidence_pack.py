@@ -23,6 +23,7 @@ from verify_acvp_json_interop import verify as verify_acvp_json_interop  # noqa:
 from verify_assurance_ledger import verify_ledger  # noqa: E402
 from verify_assurance_policy import verify_policy  # noqa: E402
 from verify_benchmark_campaign import verify as verify_benchmark_campaign  # noqa: E402
+from verify_benchmark_confidence import verify as verify_benchmark_confidence  # noqa: E402
 from verify_pqc_appraisal_evidence import verify as verify_appraisal_evidence  # noqa: E402
 from verify_partner_review_scorecard import verify as verify_partner_scorecard  # noqa: E402
 from verify_firmware_assurance_status import verify_status as verify_firmware_status  # noqa: E402
@@ -313,6 +314,7 @@ def verify_passport_artifacts(
     backend_update_evaluation = output_root / "backend_update_evaluation.json"
     benchmark_campaign_result = output_root / "benchmark_campaign_result.json"
     benchmark_campaign_verify_result = output_root / "benchmark_campaign_verify_result.json"
+    benchmark_confidence_result = output_root / "benchmark_confidence_result.json"
     metric_optimization_result = output_root / "metric_optimization_campaign.json"
     ct_campaign_result = output_root / "ct_campaign_result.json"
     acvp_json_schema_result = output_root / "acvp_json_schema_result.json"
@@ -372,6 +374,7 @@ def verify_passport_artifacts(
         require_file(backend_update_evaluation, "backend update evaluation", failures)
         require_file(benchmark_campaign_result, "benchmark campaign result", failures)
         require_file(benchmark_campaign_verify_result, "benchmark campaign verification result", failures)
+        require_file(benchmark_confidence_result, "benchmark confidence replay result", failures)
         require_file(ct_campaign_result, "CT campaign result", failures)
         require_file(acvp_json_schema_result, "ACVP JSON schema coverage result", failures)
         require_file(device_evidence_token, "device evidence token", failures)
@@ -677,6 +680,7 @@ def verify_passport_artifacts(
             (backend_update_evaluation, "backend update evaluation"),
             (benchmark_campaign_result, "benchmark campaign result"),
             (benchmark_campaign_verify_result, "benchmark campaign verification result"),
+            (benchmark_confidence_result, "benchmark confidence replay result"),
             (ct_campaign_result, "CT campaign result"),
             (acvp_json_schema_result, "ACVP JSON schema coverage result"),
             (device_evidence_token_result, "device evidence token result"),
@@ -694,6 +698,10 @@ def verify_passport_artifacts(
             if campaign_replay.get("passed") is not True:
                 for failure in campaign_replay.get("failures", []):
                     failures.append(f"benchmark campaign replay: {failure}")
+            confidence_replay = verify_benchmark_confidence(benchmark_campaign_result)
+            if confidence_replay.get("passed") is not True:
+                for failure in confidence_replay.get("failures", []):
+                    failures.append(f"benchmark confidence replay: {failure}")
         if metric_optimization_result.exists():
             payload = load_json(metric_optimization_result, "metric optimization campaign result", failures)
             if payload and payload.get("passed") is not True:

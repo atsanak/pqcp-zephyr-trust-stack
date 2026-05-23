@@ -162,7 +162,8 @@ python3 scripts/verify_release_evidence_pack.py \
 
 For schema v7 packs, replay also checks `backend_update_evaluation.json`,
 `benchmark_campaign_result.json`, `benchmark_campaign_verify_result.json`,
-`ct_campaign_result.json`, `acvp_json_schema_result.json`,
+`benchmark_confidence_result.json`, `ct_campaign_result.json`,
+`acvp_json_schema_result.json`,
 `device_evidence_token.json`, `device_evidence_token_result.json`,
 `pqc_appraisal_evidence.json`, `pqc_appraisal_result.json`,
 `backend_contract_result.json`, `liboqs_non_native_inventory.json`,
@@ -228,6 +229,9 @@ The full local release gate now emits the Passport artifacts described in
 - `paper_comparison_campaign.csv` /
   `paper_comparison_campaign.json`: normalized benchmark campaign export for
   partner comparison and review workflows.
+- `benchmark_confidence_result.json`: replay result that checks benchmark
+  distribution shape, balanced candidate/baseline sample counts, and whether
+  rows are regression-only or paper-comparable.
 - `partner_review_scorecard.json` /
   `partner_review_scorecard.md` /
   `partner_review_scorecard_result.json`: derived blocker/warning/readiness

@@ -31,6 +31,7 @@ TOOL_TESTS = (
     "test_pqc_performance_hardening.py",
     "test_backend_update_evaluation.py",
     "test_benchmark_campaign.py",
+    "test_benchmark_confidence.py",
     "test_optimize_metric_campaign.py",
     "test_ct_campaign.py",
     "test_acvp_json_schema.py",

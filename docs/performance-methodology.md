@@ -27,6 +27,25 @@ release pack remains explicit about the statistic available. Treat those rows
 as compatibility evidence, not as a substitute for repeated hardware
 measurement.
 
+## Benchmark Confidence Replay
+
+The full local release pack runs `scripts/verify_benchmark_confidence.py`
+against `benchmark_campaign_result.json` and writes
+`benchmark_confidence_result.json`. This does not change benchmark output. It
+adds a replay check over the generated distribution rows:
+
+- distribution shape must be coherent (`min <= median <= p90 <= p99`);
+- every row must have a positive `sample_count`;
+- pairwise candidate/baseline comparisons must use balanced sample counts;
+- rows are graded as `single_observation`, `low`, `distribution`, or
+  `paper_comparable`;
+- p99/median tail spread and MAD/median noise are recorded for reviewers.
+
+By default, single-observation QEMU rows remain valid regression evidence but
+are not labeled paper-comparable. Maintainers can run the verifier with
+`--require-paper-comparable` for stricter comparison campaigns after repeated
+hardware or high-repetition QEMU runs are available.
+
 ## Comparing Results
 
 Use the following rules when comparing generated numbers:
