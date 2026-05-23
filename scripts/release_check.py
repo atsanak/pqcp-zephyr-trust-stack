@@ -636,6 +636,7 @@ def main() -> int:
     partner_scorecard_json_path = output_root / "partner_review_scorecard.json"
     partner_scorecard_md_path = output_root / "partner_review_scorecard.md"
     partner_scorecard_result_path = output_root / "partner_review_scorecard_result.json"
+    evidence_tamper_drill_result_path = output_root / "evidence_tamper_drill_result.json"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
     assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
@@ -701,6 +702,7 @@ def main() -> int:
             partner_scorecard_json_path,
             partner_scorecard_md_path,
             partner_scorecard_result_path,
+            evidence_tamper_drill_result_path,
             junit_output,
         ],
     )
@@ -1602,6 +1604,19 @@ def main() -> int:
     ]
     if args.tag:
         evidence_pack_verify_cmd.extend(["--tag", args.tag])
+    evidence_tamper_drill_cmd = [
+        sys.executable,
+        str(module_path / "scripts/run_evidence_tamper_drill.py"),
+        str(output_root),
+        "--module-path",
+        str(module_path),
+        "--policy",
+        str(module_path / "scripts/evidence_tamper_drill_policy.json"),
+        "--output",
+        str(evidence_tamper_drill_result_path),
+    ]
+    if args.tag:
+        evidence_tamper_drill_cmd.extend(["--tag", args.tag])
 
     steps = [
         Step(
@@ -2154,6 +2169,11 @@ def main() -> int:
         Step(
             name="release evidence pack verification",
             cmd=evidence_pack_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="release evidence tamper drill",
+            cmd=evidence_tamper_drill_cmd,
             cwd=module_path,
         ),
     ]

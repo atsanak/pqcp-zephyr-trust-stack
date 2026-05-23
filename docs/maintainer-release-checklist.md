@@ -264,6 +264,11 @@ warnings must be explained, and QEMU-only evidence must not be described as
 physical-hardware validation. The companion `partner_review_scorecard_result.json`
 is the replay result; it must pass before treating the scorecard as current.
 
+Also inspect `evidence_tamper_drill_result.json`. It must report `passed=true`
+and a detected scenario count equal to the configured policy scenario count. If
+the drill fails, the evidence pack may contain an artifact relationship that is
+documented but not enforced by replay verification.
+
 For benchmark comparison and side-channel-smoke interpretation, read
 [`performance-methodology.md`](performance-methodology.md) before comparing
 generated figures across environments.

@@ -127,6 +127,13 @@ benchmark CSV/provenance pair, benchmark summary, cost-of-assurance evidence,
 MCU footprint CSV, local release manifest, release notes hash, transcript
 hashes, and ledger/bundle commit metadata alignment.
 
+The full local gate then runs an evidence tamper drill. The drill mutates a
+temporary copy of the evidence pack and confirms that replay verification fails
+for benchmark provenance drift, digest hash drift, reference-value drift,
+build-provenance subject drift, and partner-scorecard hash drift. A passing
+`evidence_tamper_drill_result.json` means these relationships are enforced, not
+just documented.
+
 To regenerate and verify only the ledger from existing artifacts:
 
 ```bash
@@ -227,6 +234,8 @@ The full local release gate now emits the Passport artifacts described in
   summary over the Passport artifacts plus a replay result proving the summary
   still matches the underlying artifact hashes. Start here during partner
   review, then inspect the referenced artifacts for replay details.
+- `evidence_tamper_drill_result.json`: controlled mutation drill showing that
+  important evidence-pack corruptions are rejected by replay verification.
 
 The CI fast gate intentionally skips the full Passport because it would require
 the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence

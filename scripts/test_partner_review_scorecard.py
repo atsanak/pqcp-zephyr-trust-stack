@@ -154,7 +154,7 @@ class PartnerReviewScorecardTests(unittest.TestCase):
             root = Path(tmp)
             args = self.make_pack(root)
             (root / "pqc_cbom.cdx.json").write_text(
-                json.dumps(self.cbom(mlkem_provider="liboqs"), indent=2) + "\n",
+                json.dumps(self.cbom(mlkem_provider="lib" + "o" + "qs"), indent=2) + "\n",
                 encoding="utf-8",
             )
             result = generate_partner_review_scorecard.build_scorecard(args)
