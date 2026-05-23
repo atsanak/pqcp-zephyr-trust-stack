@@ -261,7 +261,8 @@ device-evidence token replay, and the evidence appraisal result.
 After the full local gate completes, open `partner_review_scorecard.md` before
 sharing the pack externally. It is the short triage view: blockers must be fixed,
 warnings must be explained, and QEMU-only evidence must not be described as
-physical-hardware validation.
+physical-hardware validation. The companion `partner_review_scorecard_result.json`
+is the replay result; it must pass before treating the scorecard as current.
 
 For benchmark comparison and side-channel-smoke interpretation, read
 [`performance-methodology.md`](performance-methodology.md) before comparing

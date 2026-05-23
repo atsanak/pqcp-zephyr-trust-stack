@@ -11,6 +11,7 @@ from argparse import Namespace
 from pathlib import Path
 
 import generate_partner_review_scorecard
+import verify_partner_review_scorecard
 
 
 class PartnerReviewScorecardTests(unittest.TestCase):
@@ -171,6 +172,74 @@ class PartnerReviewScorecardTests(unittest.TestCase):
             result = generate_partner_review_scorecard.build_scorecard(args)
         self.assertFalse(result["passed"])
         self.assertTrue(any(item["id"] == "failed_claim_release_version_consistency" for item in result["findings"]))
+
+    def write_scorecard(self, args: Namespace) -> dict:
+        result = generate_partner_review_scorecard.build_scorecard(args)
+        args.output_json.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.output_md.write_text(generate_partner_review_scorecard.render_markdown(result), encoding="utf-8")
+        return result
+
+    def verify_args(self, args: Namespace) -> Namespace:
+        return Namespace(
+            scorecard=args.output_json,
+            markdown=args.output_md,
+            ledger=args.ledger,
+            cbom=args.cbom,
+            policy_result=args.policy_result,
+            profile_result=args.profile_result,
+            quality_result=args.quality_result,
+            migration_readiness=args.migration_readiness,
+            backend_contract=args.backend_contract,
+            provider_scope_result=args.provider_scope_result,
+            benchmark_campaign=args.benchmark_campaign,
+            ct_campaign=args.ct_campaign,
+            acvp_schema_result=args.acvp_schema_result,
+            device_evidence_result=args.device_evidence_result,
+            reference_values=args.reference_values,
+            appraisal_result=args.appraisal_result,
+            output=args.output_json.with_name("partner_review_scorecard_result.json"),
+        )
+
+    def test_scorecard_replay_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.make_pack(root)
+            self.write_scorecard(args)
+            result = verify_partner_review_scorecard.verify(self.verify_args(args))
+        self.assertTrue(result["passed"], result["failures"])
+
+    def test_scorecard_replay_fails_on_stale_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.make_pack(root)
+            payload = self.write_scorecard(args)
+            payload["summary"]["blockers"] = 99
+            args.output_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            result = verify_partner_review_scorecard.verify(self.verify_args(args))
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("summary" in failure for failure in result["failures"]))
+
+    def test_scorecard_replay_fails_on_tampered_artifact_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.make_pack(root)
+            payload = self.write_scorecard(args)
+            payload["input_artifacts"][0]["sha256"] = "0" * 64
+            args.output_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            result = verify_partner_review_scorecard.verify(self.verify_args(args))
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("hash/status drift" in failure for failure in result["failures"]))
+
+    def test_scorecard_replay_fails_when_markdown_loses_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.make_pack(root)
+            self.write_scorecard(args)
+            body = args.output_md.read_text(encoding="utf-8")
+            args.output_md.write_text(body.replace("hardware_promotion_not_completed", "hardware-redacted"), encoding="utf-8")
+            result = verify_partner_review_scorecard.verify(self.verify_args(args))
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("Markdown missing finding" in failure for failure in result["failures"]))
 
 
 if __name__ == "__main__":
