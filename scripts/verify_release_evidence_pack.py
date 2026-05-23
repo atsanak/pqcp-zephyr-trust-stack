@@ -24,6 +24,7 @@ from verify_assurance_ledger import verify_ledger  # noqa: E402
 from verify_assurance_policy import verify_policy  # noqa: E402
 from verify_benchmark_campaign import verify as verify_benchmark_campaign  # noqa: E402
 from verify_pqc_appraisal_evidence import verify as verify_appraisal_evidence  # noqa: E402
+from verify_partner_review_scorecard import verify as verify_partner_scorecard  # noqa: E402
 from verify_firmware_assurance_status import verify_status as verify_firmware_status  # noqa: E402
 from verify_pqc_build_provenance import verify as verify_build_provenance  # noqa: E402
 from verify_pqc_reference_values import verify_reference  # noqa: E402
@@ -320,6 +321,9 @@ def verify_passport_artifacts(
     release_reference_values_result = output_root / "release_reference_values_result.json"
     appraisal_evidence = output_root / "pqc_appraisal_evidence.json"
     appraisal_result = output_root / "pqc_appraisal_result.json"
+    partner_scorecard = output_root / "partner_review_scorecard.json"
+    partner_scorecard_md = output_root / "partner_review_scorecard.md"
+    partner_scorecard_result = output_root / "partner_review_scorecard_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     appraisal_policy_path = claims_path.parent / "pqc_appraisal_policy.json"
@@ -373,6 +377,9 @@ def verify_passport_artifacts(
         require_file(device_evidence_token_result, "device evidence token result", failures)
         require_file(appraisal_evidence, "PQC appraisal evidence", failures)
         require_file(appraisal_result, "PQC appraisal verification result", failures)
+        require_file(partner_scorecard, "partner review scorecard", failures)
+        require_file(partner_scorecard_md, "partner review scorecard Markdown", failures)
+        require_file(partner_scorecard_result, "partner review scorecard replay result", failures)
     if manifest_path is None:
         return
     if not all(path.exists() and path.is_file() for path in (cbom_path, attestation_path, policy_result_path, digest_path)):
@@ -673,6 +680,7 @@ def verify_passport_artifacts(
             (acvp_json_schema_result, "ACVP JSON schema coverage result"),
             (device_evidence_token_result, "device evidence token result"),
             (appraisal_result, "PQC appraisal verification result"),
+            (partner_scorecard_result, "partner review scorecard replay result"),
         ):
             payload = load_json(path, label, failures)
             if payload and payload.get("passed") is not True:
@@ -699,6 +707,31 @@ def verify_passport_artifacts(
             if appraisal_replay.get("passed") is not True:
                 for failure in appraisal_replay.get("failures", []):
                     failures.append(f"PQC appraisal replay: {failure}")
+        if partner_scorecard.exists() and partner_scorecard_md.exists():
+            scorecard_replay = verify_partner_scorecard(
+                argparse.Namespace(
+                    scorecard=partner_scorecard,
+                    markdown=partner_scorecard_md,
+                    ledger=output_root / "assurance_ledger.json",
+                    cbom=cbom_path,
+                    policy_result=policy_result_path,
+                    profile_result=assurance_profile_result,
+                    quality_result=evidence_quality_result,
+                    migration_readiness=migration_readiness_json,
+                    backend_contract=backend_contract_result,
+                    provider_scope_result=provider_scope_result,
+                    benchmark_campaign=benchmark_campaign_result,
+                    ct_campaign=ct_campaign_result,
+                    acvp_schema_result=acvp_json_schema_result,
+                    device_evidence_result=device_evidence_token_result,
+                    reference_values=reference_values,
+                    appraisal_result=appraisal_result,
+                    output=output_root / "__partner_scorecard_replay_result.json",
+                )
+            )
+            if scorecard_replay.get("passed") is not True:
+                for failure in scorecard_replay.get("failures", []):
+                    failures.append(f"partner review scorecard replay: {failure}")
 
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:
