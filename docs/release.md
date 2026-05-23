@@ -161,6 +161,9 @@ For schema v7 packs, replay also checks `backend_update_evaluation.json`,
 `backend_contract_result.json`, `liboqs_non_native_inventory.json`,
 `provider_scope_result.json`, `paper_comparison_campaign.csv`,
 `paper_comparison_campaign.json`, and `release_reference_values_result.json`.
+The same full local path now also writes
+`partner_review_scorecard.json` and `partner_review_scorecard.md` as a compact
+triage view over those artifacts.
 
 If GitHub Actions is later restored, rerun the normal release workflow and
 compare the generated release notes with `output/release/v1.0.0/release-notes-v1.0.0.md`.
@@ -217,6 +220,10 @@ The full local release gate now emits the Passport artifacts described in
 - `paper_comparison_campaign.csv` /
   `paper_comparison_campaign.json`: normalized benchmark campaign export for
   partner comparison and review workflows.
+- `partner_review_scorecard.json` /
+  `partner_review_scorecard.md`: derived blocker/warning/readiness summary over
+  the Passport artifacts. Start here during partner review, then inspect the
+  referenced artifacts for replay details.
 
 The CI fast gate intentionally skips the full Passport because it would require
 the expensive benchmark, sanitizer, MCU footprint, and release-bundle evidence

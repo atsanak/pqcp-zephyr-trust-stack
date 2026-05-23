@@ -290,3 +290,24 @@ profiles, and test-only assets represented as production-capable.
 assembled pack. It verifies post-ledger claims, policy result status, profile
 and evidence-quality status, migration readiness Markdown coverage, firmware
 digest header macros, and SHA-256 hashes in `pqc_assurance_digest.json`.
+
+## Partner Review Scorecard
+
+The full local release gate also emits `partner_review_scorecard.json` and
+`partner_review_scorecard.md`. This is a derived review layer over the Passport:
+it does not introduce new evidence, and it does not replace replay verification.
+It reads the ledger, CBOM, policy/profile/quality results, backend-contract
+result, provider-scope result, benchmark campaign, CT campaign, ACVP schema
+coverage, device-evidence result, reference values, and appraisal result.
+
+The scorecard converts those artifacts into a concise partner-review decision:
+
+- `blocker`: a release artifact failed, a required claim failed, a forbidden
+  provider path appeared, or a test-only asset was marked production-capable.
+- `warning`: evidence is reviewable but incomplete for stronger claims, such as
+  QEMU-only benchmark context when no physical hardware promotion has run.
+- `score` and `readiness`: deterministic summary fields for triage. These are
+  review aids, not certification claims.
+
+Use the scorecard as the first file to read during partner review, then drill
+into the referenced Passport artifacts for the underlying replay evidence.
