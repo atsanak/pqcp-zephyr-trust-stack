@@ -50,6 +50,7 @@ TOOL_TESTS = (
     "test_release_reference_values.py",
     "test_partner_review_scorecard.py",
     "test_evidence_tamper_drill.py",
+    "test_research_product_dossier.py",
 )
 
 
