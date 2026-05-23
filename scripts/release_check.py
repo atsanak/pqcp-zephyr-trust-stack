@@ -633,6 +633,8 @@ def main() -> int:
     device_evidence_token_result_path = output_root / "device_evidence_token_result.json"
     pqc_appraisal_evidence_path = output_root / "pqc_appraisal_evidence.json"
     pqc_appraisal_result_path = output_root / "pqc_appraisal_result.json"
+    partner_scorecard_json_path = output_root / "partner_review_scorecard.json"
+    partner_scorecard_md_path = output_root / "partner_review_scorecard.md"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
     assurance_status_build_dir = output_root / "pqcp_assurance_status_qemu"
@@ -695,6 +697,8 @@ def main() -> int:
             device_evidence_token_result_path,
             pqc_appraisal_evidence_path,
             pqc_appraisal_result_path,
+            partner_scorecard_json_path,
+            partner_scorecard_md_path,
             junit_output,
         ],
     )
@@ -1511,6 +1515,42 @@ def main() -> int:
         "--output",
         str(pqc_appraisal_result_path),
     ]
+    partner_scorecard_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_partner_review_scorecard.py"),
+        "--ledger",
+        str(assurance_ledger_json),
+        "--cbom",
+        str(pqc_cbom_path),
+        "--policy-result",
+        str(pqc_policy_result_path),
+        "--profile-result",
+        str(pqc_assurance_profile_result_path),
+        "--quality-result",
+        str(pqc_evidence_quality_result_path),
+        "--migration-readiness",
+        str(pqc_migration_readiness_json_path),
+        "--backend-contract",
+        str(backend_contract_result_path),
+        "--provider-scope-result",
+        str(provider_scope_result_path),
+        "--benchmark-campaign",
+        str(benchmark_campaign_result_path),
+        "--ct-campaign",
+        str(ct_campaign_result_path),
+        "--acvp-schema-result",
+        str(acvp_json_schema_result_path),
+        "--device-evidence-result",
+        str(device_evidence_token_result_path),
+        "--reference-values",
+        str(pqc_reference_values_path),
+        "--appraisal-result",
+        str(pqc_appraisal_result_path),
+        "--output-json",
+        str(partner_scorecard_json_path),
+        "--output-md",
+        str(partner_scorecard_md_path),
+    ]
     evidence_pack_verify_cmd = [
         sys.executable,
         str(module_path / "scripts/verify_release_evidence_pack.py"),
@@ -2054,6 +2094,11 @@ def main() -> int:
         Step(
             name="PQC appraisal verification",
             cmd=appraisal_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="partner review scorecard",
+            cmd=partner_scorecard_cmd,
             cwd=module_path,
         ),
         Step(

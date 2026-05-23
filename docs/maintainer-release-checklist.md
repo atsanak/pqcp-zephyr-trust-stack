@@ -258,6 +258,11 @@ For `schema_version >= 7` packs it also requires backend update evaluation,
 benchmark campaign replay, CT campaign replay, ACVP JSON schema coverage,
 device-evidence token replay, and the evidence appraisal result.
 
+After the full local gate completes, open `partner_review_scorecard.md` before
+sharing the pack externally. It is the short triage view: blockers must be fixed,
+warnings must be explained, and QEMU-only evidence must not be described as
+physical-hardware validation.
+
 For benchmark comparison and side-channel-smoke interpretation, read
 [`performance-methodology.md`](performance-methodology.md) before comparing
 generated figures across environments.
