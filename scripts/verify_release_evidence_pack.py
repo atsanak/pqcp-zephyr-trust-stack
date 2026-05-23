@@ -326,6 +326,9 @@ def verify_passport_artifacts(
     partner_scorecard = output_root / "partner_review_scorecard.json"
     partner_scorecard_md = output_root / "partner_review_scorecard.md"
     partner_scorecard_result = output_root / "partner_review_scorecard_result.json"
+    research_product_dossier = output_root / "research_product_dossier.json"
+    research_hardening_dossier = output_root / "research_hardening_dossier.md"
+    product_strategy_brief = output_root / "product_strategy_brief.md"
     tamper_drill_result = output_root / "evidence_tamper_drill_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
@@ -686,13 +689,18 @@ def verify_passport_artifacts(
             (device_evidence_token_result, "device evidence token result"),
             (appraisal_result, "PQC appraisal verification result"),
             (partner_scorecard_result, "partner review scorecard replay result"),
+            (research_product_dossier, "research/product dossier JSON"),
             (tamper_drill_result, "release evidence tamper drill result"),
         ):
             if path == tamper_drill_result and not path.exists():
                 continue
             payload = load_json(path, label, failures)
+            if path == research_product_dossier:
+                continue
             if payload and payload.get("passed") is not True:
                 failures.append(f"{label} did not pass")
+        require_file(research_hardening_dossier, "research hardening dossier Markdown", failures)
+        require_file(product_strategy_brief, "product strategy brief Markdown", failures)
         if benchmark_campaign_result.exists():
             campaign_replay = verify_benchmark_campaign(benchmark_campaign_result)
             if campaign_replay.get("passed") is not True:
@@ -744,6 +752,25 @@ def verify_passport_artifacts(
             if scorecard_replay.get("passed") is not True:
                 for failure in scorecard_replay.get("failures", []):
                     failures.append(f"partner review scorecard replay: {failure}")
+        if research_product_dossier.exists():
+            dossier = load_json(research_product_dossier, "research/product dossier JSON", failures)
+            research_text = research_hardening_dossier.read_text(encoding="utf-8") if research_hardening_dossier.exists() else ""
+            product_text = product_strategy_brief.read_text(encoding="utf-8") if product_strategy_brief.exists() else ""
+            if dossier:
+                if dossier.get("schema_version") != 1:
+                    failures.append(
+                        f"research/product dossier schema_version={dossier.get('schema_version')!r}, expected 1"
+                    )
+                claim_ids = dossier.get("claims", {}).get("all_claim_ids") or []
+                asset_ids = dossier.get("assets", {}).get("trace_asset_ids") or []
+                mentioned_claims = sum(1 for claim_id in claim_ids if isinstance(claim_id, str) and claim_id in research_text)
+                mentioned_assets = sum(1 for asset_id in asset_ids if isinstance(asset_id, str) and asset_id in research_text)
+                if mentioned_claims < min(5, len(claim_ids)):
+                    failures.append("research hardening dossier is not grounded in enough live claim IDs")
+                if mentioned_assets < min(3, len(asset_ids)):
+                    failures.append("research hardening dossier is not grounded in enough live asset IDs")
+                if "QEMU results are regression evidence" not in product_text:
+                    failures.append("product strategy brief missing QEMU evidence boundary")
 
     digest = load_json(digest_path, "PQC assurance digest manifest", failures)
     if digest:

@@ -637,6 +637,9 @@ def main() -> int:
     partner_scorecard_json_path = output_root / "partner_review_scorecard.json"
     partner_scorecard_md_path = output_root / "partner_review_scorecard.md"
     partner_scorecard_result_path = output_root / "partner_review_scorecard_result.json"
+    research_product_dossier_json_path = output_root / "research_product_dossier.json"
+    research_hardening_dossier_md_path = output_root / "research_hardening_dossier.md"
+    product_strategy_brief_md_path = output_root / "product_strategy_brief.md"
     evidence_tamper_drill_result_path = output_root / "evidence_tamper_drill_result.json"
     generated_include_dir = output_root / "generated"
     firmware_digest_header_path = generated_include_dir / "pqcp_assurance_digest_generated.h"
@@ -704,6 +707,9 @@ def main() -> int:
             partner_scorecard_json_path,
             partner_scorecard_md_path,
             partner_scorecard_result_path,
+            research_product_dossier_json_path,
+            research_hardening_dossier_md_path,
+            product_strategy_brief_md_path,
             evidence_tamper_drill_result_path,
             junit_output,
         ],
@@ -1609,6 +1615,20 @@ def main() -> int:
         "--output",
         str(partner_scorecard_result_path),
     ]
+    research_product_dossier_cmd = [
+        sys.executable,
+        str(module_path / "scripts/generate_research_product_dossier.py"),
+        "--module-path",
+        str(module_path),
+        "--release-output",
+        str(output_root),
+        "--output-root",
+        str(output_root),
+        "--tag",
+        release_tag,
+        "--depth",
+        "full",
+    ]
     evidence_pack_verify_cmd = [
         sys.executable,
         str(module_path / "scripts/verify_release_evidence_pack.py"),
@@ -2180,6 +2200,11 @@ def main() -> int:
         Step(
             name="partner review scorecard verification",
             cmd=partner_scorecard_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="research product dossier",
+            cmd=research_product_dossier_cmd,
             cwd=module_path,
         ),
         Step(
