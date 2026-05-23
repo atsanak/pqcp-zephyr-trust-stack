@@ -51,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--backend-contract-result", type=Path)
     parser.add_argument("--liboqs-inventory", type=Path)
     parser.add_argument("--provider-scope-result", type=Path)
+    parser.add_argument("--benchmark-confidence-result", type=Path)
     parser.add_argument("--external-reference-result", type=Path)
     parser.add_argument("--paper-comparison-json", type=Path)
     parser.add_argument("--paper-comparison-csv", type=Path)
@@ -156,6 +157,7 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
     backend_contract_result = getattr(args, "backend_contract_result", None)
     liboqs_inventory = getattr(args, "liboqs_inventory", None)
     provider_scope_result = getattr(args, "provider_scope_result", None)
+    benchmark_confidence_result = getattr(args, "benchmark_confidence_result", None)
     external_reference_result = getattr(args, "external_reference_result", None)
     paper_comparison_json = getattr(args, "paper_comparison_json", None)
     paper_comparison_csv = getattr(args, "paper_comparison_csv", None)
@@ -183,6 +185,7 @@ def build_subjects(args: argparse.Namespace) -> list[dict[str, Any]]:
         (backend_contract_result or args.ledger.with_name("backend_contract_result.json"), "backend_contract_result.json", False),
         (liboqs_inventory or args.ledger.with_name("liboqs_non_native_inventory.json"), "liboqs_non_native_inventory.json", False),
         (provider_scope_result or args.ledger.with_name("provider_scope_result.json"), "provider_scope_result.json", False),
+        (benchmark_confidence_result or args.ledger.with_name("benchmark_confidence_result.json"), "benchmark_confidence_result.json", False),
         (paper_comparison_json or args.ledger.with_name("paper_comparison_campaign.json"), "paper_comparison_campaign.json", False),
         (paper_comparison_csv or args.ledger.with_name("paper_comparison_campaign.csv"), "paper_comparison_campaign.csv", False),
         (
@@ -314,6 +317,7 @@ def main() -> int:
         backend_contract_result = getattr(args, "backend_contract_result", None)
         liboqs_inventory = getattr(args, "liboqs_inventory", None)
         provider_scope_result = getattr(args, "provider_scope_result", None)
+        benchmark_confidence_result = getattr(args, "benchmark_confidence_result", None)
         external_reference_result = getattr(args, "external_reference_result", None)
         paper_comparison_json = getattr(args, "paper_comparison_json", None)
         paper_comparison_csv = getattr(args, "paper_comparison_csv", None)
@@ -338,6 +342,7 @@ def main() -> int:
             backend_contract_result or args.ledger.with_name("backend_contract_result.json"),
             liboqs_inventory or args.ledger.with_name("liboqs_non_native_inventory.json"),
             provider_scope_result or args.ledger.with_name("provider_scope_result.json"),
+            benchmark_confidence_result or args.ledger.with_name("benchmark_confidence_result.json"),
             paper_comparison_json or args.ledger.with_name("paper_comparison_campaign.json"),
             paper_comparison_csv or args.ledger.with_name("paper_comparison_campaign.csv"),
             external_reference_result

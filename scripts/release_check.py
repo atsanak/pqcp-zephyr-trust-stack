@@ -625,6 +625,7 @@ def main() -> int:
     backend_update_evaluation_path = output_root / "backend_update_evaluation.json"
     benchmark_campaign_result_path = output_root / "benchmark_campaign_result.json"
     benchmark_campaign_verify_result_path = output_root / "benchmark_campaign_verify_result.json"
+    benchmark_confidence_result_path = output_root / "benchmark_confidence_result.json"
     metric_optimization_result_path = output_root / "metric_optimization_campaign.json"
     metric_optimization_overlay_dir = output_root / "metric_optimization_overlays"
     ct_campaign_result_path = output_root / "ct_campaign_result.json"
@@ -691,6 +692,7 @@ def main() -> int:
             backend_update_evaluation_path,
             benchmark_campaign_result_path,
             benchmark_campaign_verify_result_path,
+            benchmark_confidence_result_path,
             metric_optimization_result_path,
             metric_optimization_overlay_dir,
             ct_campaign_result_path,
@@ -874,6 +876,8 @@ def main() -> int:
         str(liboqs_inventory_path),
         "--provider-scope-result",
         str(provider_scope_result_path),
+        "--benchmark-confidence-result",
+        str(benchmark_confidence_result_path),
         "--external-reference-result",
         str(external_reference_result_path),
         "--paper-comparison-json",
@@ -1349,6 +1353,8 @@ def main() -> int:
         "--byproduct",
         str(benchmark_campaign_result_path),
         "--byproduct",
+        str(benchmark_confidence_result_path),
+        "--byproduct",
         str(paper_comparison_result_path),
         "--byproduct",
         str(paper_comparison_csv_path),
@@ -1403,6 +1409,8 @@ def main() -> int:
         "--byproduct",
         str(benchmark_campaign_result_path),
         "--byproduct",
+        str(benchmark_confidence_result_path),
+        "--byproduct",
         str(paper_comparison_result_path),
         "--byproduct",
         str(paper_comparison_csv_path),
@@ -1436,6 +1444,14 @@ def main() -> int:
         str(benchmark_campaign_result_path),
         "--output",
         str(benchmark_campaign_verify_result_path),
+    ]
+    benchmark_confidence_cmd = [
+        sys.executable,
+        str(module_path / "scripts/verify_benchmark_confidence.py"),
+        "--campaign",
+        str(benchmark_campaign_result_path),
+        "--output",
+        str(benchmark_confidence_result_path),
     ]
     paper_comparison_cmd = [
         sys.executable,
@@ -1950,6 +1966,11 @@ def main() -> int:
         Step(
             name="benchmark campaign verification",
             cmd=benchmark_campaign_verify_cmd,
+            cwd=module_path,
+        ),
+        Step(
+            name="benchmark confidence replay",
+            cmd=benchmark_confidence_cmd,
             cwd=module_path,
         ),
         Step(
