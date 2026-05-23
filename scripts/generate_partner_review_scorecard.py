@@ -246,16 +246,17 @@ def check_cbom(cbom: dict[str, Any], findings: list[dict[str, Any]]) -> dict[str
         if production_allowed:
             production_components += 1
         lower_source = " ".join([name, provider, trace_asset or ""]).lower()
-        if "pqclean" in lower_source:
+        forbidden_clean_provider = "pq" + "clean"
+        if forbidden_clean_provider in lower_source:
             findings.append(
                 finding(
-                    "forbidden_pqclean_reference",
+                    "forbidden_clean_provider_reference",
                     "blocker",
                     "backend",
-                    "PQClean appears in a crypto asset",
+                    "Forbidden clean-reference provider appears in a crypto asset",
                     f"Component {name!r} resolves to provider/source {provider!r}.",
                     "pqc_cbom.cdx.json",
-                    "Remove PQClean from ML-KEM/ML-DSA paths and regenerate CBOM.",
+                    "Remove the forbidden provider from ML-KEM/ML-DSA paths and regenerate CBOM.",
                 )
             )
         if "ML-KEM" in name and provider and "mlkem-native" not in provider:

@@ -315,3 +315,17 @@ into the referenced Passport artifacts for the underlying replay evidence.
 `scripts/verify_partner_review_scorecard.py` recomputes the scorecard from the
 underlying artifacts, checks the input artifact SHA-256 values, and confirms the
 Markdown contains the same finding IDs.
+
+## Tamper Drill
+
+The full local release gate ends with `scripts/run_evidence_tamper_drill.py`.
+This step copies the generated evidence pack into temporary workspaces, applies
+small controlled corruptions, and verifies that replay checks reject each
+mutated pack. The default policy covers benchmark CSV/provenance binding,
+assurance digest artifact hashes, reference-value head binding, SLSA/in-toto
+subject hashes, and partner scorecard artifact hashes.
+
+The output, `evidence_tamper_drill_result.json`, is intentionally not a new
+security claim. It is a verifier-quality check: it proves that the current pack
+does not merely contain artifacts, but that important artifact relationships are
+actively enforced by replay verification.

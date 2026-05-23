@@ -48,6 +48,7 @@ TOOL_TESTS = (
     "test_paper_comparison_campaign.py",
     "test_release_reference_values.py",
     "test_partner_review_scorecard.py",
+    "test_evidence_tamper_drill.py",
 )
 
 

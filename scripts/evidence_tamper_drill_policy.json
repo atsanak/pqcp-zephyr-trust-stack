@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "description": "Controlled evidence-pack mutations that must be rejected by replay verification.",
+  "scenarios": [
+    {
+      "id": "benchmark_csv_hash_binding",
+      "description": "Benchmark CSV changes must invalidate benchmark provenance.",
+      "artifact": "benchmark_results.csv",
+      "required": true,
+      "mutation": {
+        "type": "append_text",
+        "text": "\n# tamper-drill: benchmark CSV changed after provenance capture\n"
+      },
+      "expected_failure_contains": [
+        "benchmark provenance"
+      ]
+    },
+    {
+      "id": "assurance_digest_artifact_hash_binding",
+      "description": "Digest-manifest artifact hashes must be replay-checked against files on disk.",
+      "artifact": "pqc_assurance_digest.json",
+      "required": true,
+      "mutation": {
+        "type": "set_json_pointer",
+        "pointer": "/artifacts/0/sha256",
+        "value": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected_failure_contains": [
+        "PQC assurance digest hash mismatch"
+      ]
+    },
+    {
+      "id": "reference_values_head_binding",
+      "description": "Reference values must agree with the ledger/release manifest head SHA.",
+      "artifact": "pqc_reference_values.json",
+      "required": true,
+      "mutation": {
+        "type": "set_json_pointer",
+        "pointer": "/head_sha",
+        "value": "0000000000000000000000000000000000000000"
+      },
+      "expected_failure_contains": [
+        "reference values"
+      ]
+    },
+    {
+      "id": "build_provenance_subject_hash_binding",
+      "description": "SLSA/in-toto subject digests must match their referenced artifacts.",
+      "artifact": "pqc_build_provenance.slsa.json",
+      "required": true,
+      "mutation": {
+        "type": "set_json_pointer",
+        "pointer": "/subject/0/digest/sha256",
+        "value": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected_failure_contains": [
+        "PQC build provenance replay"
+      ]
+    },
+    {
+      "id": "partner_scorecard_artifact_hash_binding",
+      "description": "Partner scorecards must be replayed from current artifact hashes, not trusted as static summaries.",
+      "artifact": "partner_review_scorecard.json",
+      "required": true,
+      "mutation": {
+        "type": "set_json_pointer",
+        "pointer": "/input_artifacts/0/sha256",
+        "value": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected_failure_contains": [
+        "partner review scorecard replay"
+      ]
+    }
+  ]
+}

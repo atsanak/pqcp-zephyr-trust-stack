@@ -324,6 +324,7 @@ def verify_passport_artifacts(
     partner_scorecard = output_root / "partner_review_scorecard.json"
     partner_scorecard_md = output_root / "partner_review_scorecard.md"
     partner_scorecard_result = output_root / "partner_review_scorecard_result.json"
+    tamper_drill_result = output_root / "evidence_tamper_drill_result.json"
     firmware_digest_header = output_root / "generated" / "pqcp_assurance_digest_generated.h"
     policy_path = claims_path.parent / "pqc_assurance_policy.json"
     appraisal_policy_path = claims_path.parent / "pqc_appraisal_policy.json"
@@ -681,7 +682,10 @@ def verify_passport_artifacts(
             (device_evidence_token_result, "device evidence token result"),
             (appraisal_result, "PQC appraisal verification result"),
             (partner_scorecard_result, "partner review scorecard replay result"),
+            (tamper_drill_result, "release evidence tamper drill result"),
         ):
+            if path == tamper_drill_result and not path.exists():
+                continue
             payload = load_json(path, label, failures)
             if payload and payload.get("passed") is not True:
                 failures.append(f"{label} did not pass")
