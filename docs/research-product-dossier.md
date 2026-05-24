@@ -25,3 +25,7 @@ python3 scripts/generate_research_product_dossier.py \
 The generated Markdown names real claim IDs, asset IDs, artifact paths, and
 SHA-256 hashes where a release pack is provided. This keeps the analysis tied
 to executable evidence rather than generic positioning text.
+
+For the deeper repository-grounded roadmap of what is still missing before the
+project can support stronger research or product claims, see
+[`research-product-hardening-audit.md`](research-product-hardening-audit.md).
