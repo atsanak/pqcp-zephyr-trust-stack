@@ -62,6 +62,11 @@ TOOL_TESTS = (
     "test_pqcp_product_generated_rules.py",
     "test_pqcp_product_generated_selection.py",
     "test_pqcp_product_experiment_matrix.py",
+    "test_pqcp_product_reproducibility_compare.py",
+    "test_pqcp_product_coverage.py",
+    "test_pqcp_product_result_quality.py",
+    "test_pqcp_product_statistical_sanity.py",
+    "test_pqcp_product_paper_evidence.py",
 )
 
 

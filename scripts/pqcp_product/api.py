@@ -9,8 +9,13 @@ from typing import Iterable
 
 from .baseline import compare_csvs
 from .catalog import ExperimentCatalog
+from .coverage import validate_coverage
 from .evidence_pack import EvidencePackBuilder
 from .experiment_matrix import matrix_payload
+from .paper_evidence import generate_paper_evidence_report
+from .reproducibility_compare import compare_evidence_packs
+from .result_quality import validate_result_csvs
+from .statistical_sanity import analyze_statistics
 from .models import BaselineComparisonReport, CatalogValidationResult, EvidencePackManifest, ExperimentSelection, RunManifest, ReproducibilitySnapshot
 from .reproducibility import capture_reproducibility_snapshot
 from .runner import ExperimentRunner
@@ -104,3 +109,47 @@ class ProductEvidenceApi:
     def readiness_matrix(self, *, catalog_path: Path | None = None) -> dict[str, object]:
         catalog = self.catalog(catalog_path)
         return matrix_payload(catalog.experiments, self.module_path)
+
+    def compare_runs(self, *, packs: list[Path], output_root: Path) -> dict[str, object]:
+        return compare_evidence_packs(packs=packs, output_root=output_root)
+
+    def validate_coverage(self, *, output_root: Path, catalog_path: Path | None = None) -> dict[str, object]:
+        return validate_coverage(catalog=self.catalog(catalog_path), output_root=output_root)
+
+    def validate_results(
+        self,
+        *,
+        csv_paths: list[Path],
+        output_root: Path,
+        zero_is_fail: bool = False,
+        require_core_combos: bool = True,
+    ) -> dict[str, object]:
+        return validate_result_csvs(
+            csv_paths=csv_paths,
+            output_root=output_root,
+            zero_is_fail=zero_is_fail,
+            require_core_combos=require_core_combos,
+        )
+
+    def statistical_sanity(
+        self,
+        *,
+        csv_paths: list[Path],
+        output_root: Path,
+        min_samples: int = 3,
+        cv_warn_threshold: float = 0.10,
+    ) -> dict[str, object]:
+        return analyze_statistics(
+            csv_paths=csv_paths,
+            output_root=output_root,
+            min_samples=min_samples,
+            cv_warn_threshold=cv_warn_threshold,
+        )
+
+    def paper_evidence_report(
+        self,
+        *,
+        output_root: Path,
+        reports: dict[str, Path | None],
+    ) -> dict[str, object]:
+        return generate_paper_evidence_report(output_root=output_root, reports=reports)
