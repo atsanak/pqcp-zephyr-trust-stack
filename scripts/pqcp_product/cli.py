@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+"""Command line interface for product-grade evidence workflows."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from .api import ProductEvidenceApi
+from .errors import ProductEvidenceError
+from .fs import write_json_atomic, write_text_atomic
+from .reports import render_baseline_report, render_catalog_report, render_pack_report, render_run_report
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="PQCP product/research evidence toolkit")
+    parser.add_argument("--module-path", type=Path, default=REPO_ROOT, help="Repository root to inspect")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("list-experiments", help="List catalog experiments")
+    _catalog_arg(p)
+    p.add_argument("--profile", choices=("fast", "paper", "product", "hardware", "all"))
+    p.add_argument("--category", action="append")
+    p.add_argument("--glob")
+    p.add_argument("--contains")
+    p.add_argument("--limit", type=int)
+    p.add_argument("--json", action="store_true")
+
+    p = sub.add_parser("validate-catalog", help="Validate the experiment catalog")
+    _catalog_arg(p)
+    p.add_argument("--output", type=Path)
+    p.add_argument("--report", type=Path)
+
+    p = sub.add_parser("plan-experiments", help="Create a dry-run manifest for selected experiments")
+    _selection_args(p)
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--timeout", type=int, default=300)
+
+    p = sub.add_parser("run-experiments", help="Execute selected experiment commands")
+    _selection_args(p)
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--timeout", type=int, default=300)
+
+    p = sub.add_parser("build-pack", help="Build a hash-bound evidence pack manifest")
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--pack-id", default="pqcp-product-evidence")
+    p.add_argument("--profile", default="product")
+    p.add_argument("--tag")
+    p.add_argument("--required", action="append", default=[])
+    p.add_argument("--report", type=Path)
+
+    p = sub.add_parser("validate-pack", help="Replay evidence pack artifact hashes")
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--output", type=Path)
+
+    p = sub.add_parser("compare-baselines", help="Compare candidate and baseline CSV metrics")
+    p.add_argument("--candidate", type=Path, required=True)
+    p.add_argument("--baseline", type=Path, required=True)
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--threshold", type=float, default=1.05)
+    p.add_argument("--report", type=Path)
+
+    p = sub.add_parser("readiness-matrix", help="Generate executable experiment readiness matrix")
+    _catalog_arg(p)
+    p.add_argument("--output", type=Path)
+
+    p = sub.add_parser("environment", help="Capture reproducibility metadata")
+    p.add_argument("--output", type=Path)
+
+    return parser
+
+
+def _catalog_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--catalog", type=Path, help="Experiment catalog path")
+
+
+def _selection_args(parser: argparse.ArgumentParser) -> None:
+    _catalog_arg(parser)
+    parser.add_argument("--profile", choices=("fast", "paper", "product", "hardware", "all"), default="fast")
+    parser.add_argument("--id", action="append", dest="ids")
+    parser.add_argument("--category", action="append")
+    parser.add_argument("--glob")
+    parser.add_argument("--contains")
+    parser.add_argument("--limit", type=int)
+
+
+def _select(api: ProductEvidenceApi, args: argparse.Namespace):
+    ids = getattr(args, "ids", None)
+    categories = getattr(args, "category", None)
+    glob = getattr(args, "glob", None)
+    contains = getattr(args, "contains", None)
+    profile = getattr(args, "profile", None)
+    limit = getattr(args, "limit", None)
+    catalog = getattr(args, "catalog", None)
+    if ids:
+        return api.select_experiments(catalog_path=catalog, ids=ids, limit=limit)
+    if categories or glob or contains:
+        return api.select_experiments(
+            catalog_path=catalog,
+            categories=categories,
+            glob=glob,
+            contains=contains,
+            limit=limit,
+        )
+    return api.select_experiments(catalog_path=catalog, profile=profile, limit=limit)
+
+
+def cmd_list(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    selection = _select(api, args)
+    if args.json:
+        print(json.dumps(selection.to_dict(), indent=2, sort_keys=True))
+    else:
+        for item in selection.experiments:
+            print(f"{item.id}\t{item.category}\t{item.command_count()} command(s)\t{item.objective}")
+    return 0
+
+
+def cmd_validate_catalog(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    result = api.validate_catalog(args.catalog)
+    payload = result.to_dict()
+    if args.output:
+        write_json_atomic(args.output, payload)
+    if args.report:
+        write_text_atomic(args.report, render_catalog_report(result))
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if result.passed else 1
+
+
+def cmd_plan_or_run(api: ProductEvidenceApi, args: argparse.Namespace, *, dry_run: bool) -> int:
+    selection = _select(api, args)
+    manifest = api.run_experiments(
+        selection=selection,
+        output_root=args.output_root,
+        dry_run=dry_run,
+        timeout_seconds=args.timeout,
+    )
+    write_text_atomic(Path(args.output_root) / "run-report.md", render_run_report(manifest))
+    print(json.dumps(manifest.to_dict(), indent=2, sort_keys=True))
+    return 0 if manifest.passed() else 1
+
+
+def cmd_build_pack(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    manifest = api.build_evidence_pack(
+        output_root=args.output_root,
+        pack_id=args.pack_id,
+        profile=args.profile,
+        tag=args.tag,
+        required=args.required,
+    )
+    if args.report:
+        write_text_atomic(args.report, render_pack_report(manifest))
+    print(json.dumps(manifest.to_dict(), indent=2, sort_keys=True))
+    return 0 if manifest.passed() else 1
+
+
+def cmd_validate_pack(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    result = api.validate_evidence_pack(output_root=args.output_root)
+    if args.output:
+        write_json_atomic(args.output, result)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("passed") else 1
+
+
+def cmd_compare(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    report = api.compare_baselines(
+        candidate_csv=args.candidate,
+        baseline_csv=args.baseline,
+        output_root=args.output_root,
+        threshold=args.threshold,
+    )
+    if args.report:
+        write_text_atomic(args.report, render_baseline_report(report))
+    print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+    return 0 if report.passed() else 1
+
+
+def cmd_readiness_matrix(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.readiness_matrix(catalog_path=args.catalog)
+    if args.output:
+        write_json_atomic(args.output, payload)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if payload.get("passed") else 1
+
+
+def cmd_environment(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    snapshot = api.reproducibility()
+    payload = snapshot.to_dict()
+    if args.output:
+        write_json_atomic(args.output, payload)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if snapshot.passed() else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    api = ProductEvidenceApi(args.module_path)
+    try:
+        if args.command == "list-experiments":
+            return cmd_list(api, args)
+        if args.command == "validate-catalog":
+            return cmd_validate_catalog(api, args)
+        if args.command == "plan-experiments":
+            return cmd_plan_or_run(api, args, dry_run=True)
+        if args.command == "run-experiments":
+            return cmd_plan_or_run(api, args, dry_run=False)
+        if args.command == "build-pack":
+            return cmd_build_pack(api, args)
+        if args.command == "validate-pack":
+            return cmd_validate_pack(api, args)
+        if args.command == "compare-baselines":
+            return cmd_compare(api, args)
+        if args.command == "readiness-matrix":
+            return cmd_readiness_matrix(api, args)
+        if args.command == "environment":
+            return cmd_environment(api, args)
+        parser.error(f"unhandled command: {args.command}")
+        return 2
+    except ProductEvidenceError as exc:
+        print(exc.format_for_console(), file=sys.stderr)
+        return exc.exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

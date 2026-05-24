@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+"""Product-grade local evidence tooling for PQCP maintainers."""
+
+from .api import ProductEvidenceApi
+from .catalog import ExperimentCatalog
+from .evidence_pack import EvidencePackBuilder
+from .runner import ExperimentRunner
+
+__all__ = [
+    "ProductEvidenceApi",
+    "ExperimentCatalog",
+    "ExperimentRunner",
+    "EvidencePackBuilder",
+]

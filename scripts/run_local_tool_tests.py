@@ -53,6 +53,15 @@ TOOL_TESTS = (
     "test_research_product_dossier.py",
     "test_evidence_schema_contract.py",
     "test_research_experiment_catalog.py",
+    "test_pqcp_product_catalog.py",
+    "test_pqcp_product_runner.py",
+    "test_pqcp_product_evidence_pack.py",
+    "test_pqcp_product_baseline.py",
+    "test_pqcp_product_cli.py",
+    "test_pqcp_product_reproducibility.py",
+    "test_pqcp_product_generated_rules.py",
+    "test_pqcp_product_generated_selection.py",
+    "test_pqcp_product_experiment_matrix.py",
 )
 
 
