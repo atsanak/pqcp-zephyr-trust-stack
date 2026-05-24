@@ -225,6 +225,40 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         self.assertEqual(pair["status"], "comparable_with_warning")
         self.assertIn("suspicious_metric_ratio", pair["reasons"])
 
+    def test_cross_framework_claim_matrix_cites_supporting_evidence(self) -> None:
+        self.import_payload("local", self.local_csv(), "claim-local")
+        self.import_payload("pqm4", self.tmp_pqm4(), "claim-pqm4")
+        result = self.api.cross_framework_claim_matrix(
+            evidence_paths=[self.normalized_path("claim-local"), self.normalized_path("claim-pqm4")],
+            output_root=self.tmp / "claim-matrix",
+        )
+        claims = {item["id"]: item for item in result["claims"]}
+        self.assertEqual(claims["mlkem.constrained_deployment"]["support"], "cross_framework_supported")
+        self.assertTrue(claims["mlkem.constrained_deployment"]["supporting_evidence"])
+        self.assertTrue(claims["mlkem.constrained_deployment"]["direct_comparison_pairs"])
+        self.assertIn("hqc.fallback_resource_cost", claims)
+
+    def test_cross_framework_claim_matrix_marks_local_only_claims(self) -> None:
+        self.import_payload("local", self.local_csv(), "claim-local-only")
+        result = self.api.cross_framework_claim_matrix(
+            evidence_paths=[self.normalized_path("claim-local-only")],
+            output_root=self.tmp / "claim-local-only-result",
+        )
+        claims = {item["id"]: item for item in result["claims"]}
+        self.assertEqual(claims["mlkem.constrained_deployment"]["support"], "locally_supported")
+        self.assertIn("independent external framework evidence", claims["mlkem.constrained_deployment"]["missing_artifacts"])
+
+    def test_cross_framework_claim_matrix_marks_noncomparable_sources(self) -> None:
+        self.import_payload("local", self.local_csv(), "claim-nc-local")
+        self.import_payload("oqs", self.tmp_oqs_host(), "claim-nc-oqs")
+        result = self.api.cross_framework_claim_matrix(
+            evidence_paths=[self.normalized_path("claim-nc-local"), self.normalized_path("claim-nc-oqs")],
+            output_root=self.tmp / "claim-nc-result",
+        )
+        claims = {item["id"]: item for item in result["claims"]}
+        self.assertEqual(claims["mlkem.constrained_deployment"]["support"], "not_comparable")
+        self.assertIn("directly comparable local/external row pair", claims["mlkem.constrained_deployment"]["missing_artifacts"])
+
     def test_compare_frameworks_detects_comparable_and_incompatible_rows(self) -> None:
         local = self.import_payload("local", self.local_csv(), "local")
         pqm4 = self.import_payload("pqm4", self.tmp_pqm4(), "pqm4")
@@ -307,6 +341,8 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         completed = self.run_cli("audit-framework-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-audit"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("explain-framework-comparability", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-matrix"))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        completed = self.run_cli("cross-framework-claim-matrix", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-claim-matrix"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("score-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--scenario", str(scenario), "--output-root", str(self.tmp / "cli-score"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
