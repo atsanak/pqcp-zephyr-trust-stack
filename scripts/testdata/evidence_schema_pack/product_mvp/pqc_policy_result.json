@@ -1,0 +1,19 @@
+{
+  "checked_claims": [
+    "release.version_consistency",
+    "kat.offline_provenance"
+  ],
+  "generated_at": "2026-05-24T00:00:00Z",
+  "issues": [],
+  "missing_claims": [],
+  "passed": true,
+  "required_claims": [
+    "release.version_consistency",
+    "kat.offline_provenance"
+  ],
+  "required_components": [
+    "crypto.mlkem_768"
+  ],
+  "schema_version": 3,
+  "status": "pass"
+}

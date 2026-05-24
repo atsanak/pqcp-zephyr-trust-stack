@@ -1,0 +1,13 @@
+{
+  "comparison_context": {
+    "environment": "synthetic"
+  },
+  "csv_sha256": "4f6f8fca12251a6ed2568f41ac11c6c2f4ea8737e1ed9faff3e5911f4bb88e0f",
+  "dirty": false,
+  "host": {
+    "system": "synthetic"
+  },
+  "module_git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "row_count": 1,
+  "schema_version": 1
+}

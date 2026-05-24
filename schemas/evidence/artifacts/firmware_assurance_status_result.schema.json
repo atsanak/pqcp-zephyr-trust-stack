@@ -1,0 +1,135 @@
+{
+  "type": "object",
+  "description": "Replay result for firmware assurance status transcript markers.",
+  "required": [
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Artifact schema version."
+    },
+    "status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "passed",
+        "fail",
+        "failed",
+        "warning",
+        "not_applicable",
+        "skipped",
+        null
+      ],
+      "description": "Verifier status when present."
+    },
+    "passed": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Boolean pass/fail summary when present."
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Generation timestamp when available."
+    },
+    "summary": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "description": "Human or machine-readable summary."
+    },
+    "issues": {
+      "type": "array",
+      "description": "Validation issues emitted by the tool.",
+      "items": {
+        "type": "object",
+        "description": "Validation issue emitted by a replay or policy verifier.",
+        "required": [
+          "severity",
+          "location",
+          "message"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "fatal"
+            ],
+            "description": "Issue severity."
+          },
+          "location": {
+            "type": "string",
+            "description": "Artifact, claim, field, or path where the issue was detected.",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable issue message.",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "artifact_hashes": {
+      "type": "array",
+      "description": "Optional artifact hash bindings.",
+      "items": {
+        "type": "object",
+        "description": "Artifact hash entry used by digests and reference values.",
+        "required": [
+          "name",
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Stable evidence artifact identifier from the schema catalog.",
+            "minLength": 1,
+            "format": "artifact-id"
+          },
+          "path": {
+            "type": "string",
+            "description": "Safe path relative to the evidence output root or artifact parent.",
+            "minLength": 1,
+            "format": "relative-path"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+            "minLength": 64,
+            "format": "sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Artifact byte length."
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "firmware-assurance-status-result.schema.json",
+  "title": "Firmware Assurance Status Result"
+}

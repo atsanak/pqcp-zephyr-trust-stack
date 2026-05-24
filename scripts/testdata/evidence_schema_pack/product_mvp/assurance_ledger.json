@@ -1,0 +1,47 @@
+{
+  "claims": [
+    {
+      "category": "release",
+      "claim": "Synthetic version consistency claim for schema contract tests.",
+      "commands": [
+        "python3 scripts/check_version_consistency.py"
+      ],
+      "evidence_artifacts": [
+        "release_manifest"
+      ],
+      "failure_reason": null,
+      "id": "release.version_consistency",
+      "status": "pass",
+      "validators": [
+        "synthetic"
+      ]
+    },
+    {
+      "category": "kat",
+      "claim": "Synthetic KAT provenance claim for schema contract tests.",
+      "commands": [],
+      "evidence_artifacts": [
+        "assurance_ledger"
+      ],
+      "failure_reason": null,
+      "id": "kat.offline_provenance",
+      "status": "pass",
+      "validators": [
+        "synthetic"
+      ]
+    }
+  ],
+  "dirty": false,
+  "generated_at": "2026-05-24T00:00:00Z",
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project": "pqcp-zephyr-trust-stack",
+  "schema_version": 7,
+  "summary": {
+    "failed": 0,
+    "not_applicable": 0,
+    "passed": 5,
+    "total": 5
+  },
+  "tag": "v1.0.0",
+  "version": "1.0.0"
+}

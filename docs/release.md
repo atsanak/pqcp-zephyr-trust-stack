@@ -22,6 +22,13 @@ python3 scripts/prepare_release_bundle.py --exact-tag --verify-remote-tag
 #    it without rebuilding anything. Requires only Python 3.12.
 python3 scripts/verify_release_evidence_pack.py /tmp/pqcp-release-pack \
     --tag v1.0.0
+
+# 4. Validate the product-facing evidence data contract used by dashboards,
+#    partner review tooling, and external replay automation.
+python3 scripts/validate_evidence_schemas.py \
+    --output-root /tmp/pqcp-release-pack \
+    --tag v1.0.0 \
+    --profile partner_review
 ```
 
 Step (1) writes `assurance_ledger.json`, `assurance_ledger.md`,
@@ -42,6 +49,11 @@ Passport subject hash, every SLSA byproduct hash, every firmware status marker,
 and every ACVP JSON command/response transcript hash, and exits non-zero with
 the exact offending file/claim if anything has drifted. See
 [`assurance-model.md`](assurance-model.md) for the architecture.
+Step (4) checks the stable evidence-pack schema contract documented in
+[`evidence-schema-contract.md`](evidence-schema-contract.md). It validates
+artifact shape, required product profiles, safe paths, SHA-256 formats, CSV
+columns, and basic cross-artifact metadata alignment before dashboards or
+external partner tools consume the pack.
 
 ## What This Produces
 

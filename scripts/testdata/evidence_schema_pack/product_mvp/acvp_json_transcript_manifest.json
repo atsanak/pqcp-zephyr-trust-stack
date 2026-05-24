@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {
+      "sha256": "d8d4ba8df071f72995edfc6dd63ef51525491c4fcddcad893ba4802fc60abbdd",
+      "size_bytes": 69,
+      "step": "acvp_json",
+      "transcript_path": "01-version.log"
+    }
+  ],
+  "qemu_stdout_transcripts": [],
+  "schema_version": 1
+}

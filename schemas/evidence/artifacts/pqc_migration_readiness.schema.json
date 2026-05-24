@@ -1,0 +1,125 @@
+{
+  "type": "object",
+  "description": "Generated profile summary for partner review and maintenance planning.",
+  "required": [
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Artifact schema version."
+    },
+    "status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "passed",
+        "fail",
+        "failed",
+        "warning",
+        "not_applicable",
+        "skipped",
+        null
+      ],
+      "description": "Verifier status when present."
+    },
+    "passed": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Boolean pass/fail summary when present."
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Generation timestamp when available."
+    },
+    "summary": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "description": "Human or machine-readable summary."
+    },
+    "issues": {
+      "type": "array",
+      "description": "Validation issues emitted by the tool.",
+      "items": {
+        "type": "object",
+        "description": "Validation issue emitted by a replay or policy verifier.",
+        "required": [
+          "severity",
+          "location",
+          "message"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "fatal"
+            ],
+            "description": "Issue severity."
+          },
+          "location": {
+            "type": "string",
+            "description": "Artifact, claim, field, or path where the issue was detected.",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable issue message.",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "profiles": {
+      "type": [
+        "array",
+        "object",
+        "null"
+      ],
+      "description": "Profile readiness entries."
+    },
+    "blocked_conditions": {
+      "type": "array",
+      "description": "Blocked readiness conditions.",
+      "items": {
+        "type": "string",
+        "description": "Blocked condition.",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "test_only_assets": {
+      "type": "array",
+      "description": "Assets restricted to test/validation scope.",
+      "items": {
+        "type": "string",
+        "description": "Stable evidence artifact identifier from the schema catalog.",
+        "minLength": 1,
+        "format": "artifact-id"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pqc-migration-readiness.schema.json",
+  "title": "PQC Migration Readiness"
+}

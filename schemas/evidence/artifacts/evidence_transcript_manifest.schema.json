@@ -1,0 +1,180 @@
+{
+  "type": "object",
+  "description": "Evidence transcript manifest binding commands and QEMU/stdout logs to hashes.",
+  "required": [
+    "schema_version",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Transcript manifest schema version."
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Manifest generation timestamp."
+    },
+    "required_steps": {
+      "type": "array",
+      "description": "Release steps expected for this manifest.",
+      "items": {
+        "type": "string",
+        "description": "Required step name.",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "entries": {
+      "type": "array",
+      "description": "Captured command transcript entries.",
+      "items": {
+        "type": "object",
+        "description": "Transcript entry with command metadata and hash binding.",
+        "required": [
+          "step",
+          "transcript_path",
+          "sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "step": {
+            "type": "string",
+            "description": "Release-check or validation step name.",
+            "minLength": 1
+          },
+          "command": {
+            "type": [
+              "array",
+              "string"
+            ],
+            "description": "Command argv or command string used to produce the transcript."
+          },
+          "command_text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Shell-style command rendering."
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory for the command."
+          },
+          "returncode": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Process return code."
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Wall-clock duration in seconds."
+          },
+          "transcript_path": {
+            "type": "string",
+            "description": "Safe path relative to the evidence output root or artifact parent.",
+            "minLength": 1,
+            "format": "relative-path"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+            "minLength": 64,
+            "format": "sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Transcript size in bytes."
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 1
+    },
+    "qemu_stdout_transcripts": {
+      "type": "array",
+      "description": "Raw QEMU/stdout transcript entries.",
+      "items": {
+        "type": "object",
+        "description": "Transcript entry with command metadata and hash binding.",
+        "required": [
+          "step",
+          "transcript_path",
+          "sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "step": {
+            "type": "string",
+            "description": "Release-check or validation step name.",
+            "minLength": 1
+          },
+          "command": {
+            "type": [
+              "array",
+              "string"
+            ],
+            "description": "Command argv or command string used to produce the transcript."
+          },
+          "command_text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Shell-style command rendering."
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory for the command."
+          },
+          "returncode": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Process return code."
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Wall-clock duration in seconds."
+          },
+          "transcript_path": {
+            "type": "string",
+            "description": "Safe path relative to the evidence output root or artifact parent.",
+            "minLength": 1,
+            "format": "relative-path"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+            "minLength": 64,
+            "format": "sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Transcript size in bytes."
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/evidence_transcript_manifest.schema.json",
+  "title": "Evidence Transcript Manifest"
+}

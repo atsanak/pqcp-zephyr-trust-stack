@@ -1,0 +1,23 @@
+{
+  "artifact_hashes": [
+    {
+      "name": "assurance_ledger",
+      "path": "assurance_ledger.json",
+      "sha256": "6efbc7600ea95789395e08cb195573a7d8adf5ca327718acd63f5991869f7188",
+      "size_bytes": 1125
+    }
+  ],
+  "comparison_context": {
+    "environment": "synthetic"
+  },
+  "generated_at": "2026-05-24T00:00:00Z",
+  "issues": [],
+  "passed": true,
+  "results": [],
+  "rows": [],
+  "schema_version": 1,
+  "status": "pass",
+  "summary": {
+    "fixture": "synthetic"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "description": "Non-JSON artifact contract. Content is checked by existence, size, and SHA-256 in the catalog validator.",
+  "required": [
+    "path",
+    "sha256"
+  ],
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Safe path relative to the evidence output root or artifact parent.",
+      "minLength": 1,
+      "format": "relative-path"
+    },
+    "sha256": {
+      "type": "string",
+      "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+      "minLength": 64,
+      "format": "sha256"
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Artifact size in bytes."
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "text_artifact.schema.json",
+  "title": "Text Artifact"
+}

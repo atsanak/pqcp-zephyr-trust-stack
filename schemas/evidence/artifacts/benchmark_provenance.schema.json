@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "description": "Benchmark CSV provenance sidecar.",
+  "required": [
+    "schema_version",
+    "csv_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Provenance schema version."
+    },
+    "csv_sha256": {
+      "type": "string",
+      "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+      "minLength": 64,
+      "format": "sha256"
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "CSV row count."
+    },
+    "module_git_sha": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Repository git SHA recorded by exporter."
+    },
+    "dirty": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Dirty-tree flag recorded by exporter."
+    },
+    "host": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Host metadata."
+    },
+    "comparison_context": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Board/toolchain/statistic comparison context."
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/benchmark_provenance.schema.json",
+  "title": "Benchmark Provenance"
+}

@@ -1,0 +1,147 @@
+{
+  "type": "object",
+  "description": "Unsigned in-toto Statement-style PQC assurance attestation.",
+  "required": [
+    "_type",
+    "predicateType",
+    "subject",
+    "predicate"
+  ],
+  "properties": {
+    "_type": {
+      "type": "string",
+      "description": "in-toto Statement type URI.",
+      "minLength": 1
+    },
+    "predicateType": {
+      "type": "string",
+      "description": "PQC assurance predicate URI.",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "array",
+      "description": "Hash-bound subjects.",
+      "items": {
+        "type": "object",
+        "description": "Hash-bound subject in an attestation or provenance statement.",
+        "required": [
+          "name",
+          "digest"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Subject artifact name or path.",
+            "minLength": 1
+          },
+          "digest": {
+            "type": "object",
+            "description": "Digest map for the subject.",
+            "required": [
+              "sha256"
+            ],
+            "properties": {
+              "sha256": {
+                "type": "string",
+                "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+                "minLength": 64,
+                "format": "sha256"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 1
+    },
+    "predicate": {
+      "type": "object",
+      "description": "Predicate body.",
+      "required": [],
+      "properties": {
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Project version."
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Release tag."
+        },
+        "head_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "sha256",
+          "description": "Source SHA."
+        },
+        "dirty": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Dirty-tree flag."
+        },
+        "required_claim_summary": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Claim summary."
+        },
+        "artifact_hashes": {
+          "type": "array",
+          "description": "Artifact hash entries.",
+          "items": {
+            "type": "object",
+            "description": "Artifact hash entry used by digests and reference values.",
+            "required": [
+              "name",
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Stable evidence artifact identifier from the schema catalog.",
+                "minLength": 1,
+                "format": "artifact-id"
+              },
+              "path": {
+                "type": "string",
+                "description": "Safe path relative to the evidence output root or artifact parent.",
+                "minLength": 1,
+                "format": "relative-path"
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+                "minLength": 64,
+                "format": "sha256"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Artifact byte length."
+              }
+            },
+            "additionalProperties": true
+          },
+          "minItems": 0
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/pqc_attestation.schema.json",
+  "title": "PQC Attestation"
+}

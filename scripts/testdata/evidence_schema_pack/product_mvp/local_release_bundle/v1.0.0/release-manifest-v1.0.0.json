@@ -1,0 +1,19 @@
+{
+  "dependencies": [
+    {
+      "name": "zephyr",
+      "revision": "synthetic"
+    }
+  ],
+  "release_notes": {
+    "path": "release-notes-v1.0.0.md",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "schema_version": 1,
+  "source_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "tag": "v1.0.0",
+  "tag_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "version": "1.0.0",
+  "working_tree_dirty": false,
+  "zephyr_revision": "synthetic-zephyr"
+}

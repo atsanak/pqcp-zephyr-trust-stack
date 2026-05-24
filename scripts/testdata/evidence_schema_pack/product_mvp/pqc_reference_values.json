@@ -1,0 +1,25 @@
+{
+  "allowed_profile_ids": [
+    "qemu_release"
+  ],
+  "artifact_hashes": [
+    {
+      "name": "assurance_ledger",
+      "path": "assurance_ledger.json",
+      "sha256": "6efbc7600ea95789395e08cb195573a7d8adf5ca327718acd63f5991869f7188",
+      "size_bytes": 1125
+    }
+  ],
+  "cbom_component_ids": [
+    "crypto.mlkem_768"
+  ],
+  "dirty": false,
+  "firmware_digest_root": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "required_claim_ids": [
+    "release.version_consistency"
+  ],
+  "schema_version": 1,
+  "tag": "v1.0.0",
+  "version": "1.0.0"
+}

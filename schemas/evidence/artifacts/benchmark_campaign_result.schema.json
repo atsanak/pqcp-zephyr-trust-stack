@@ -1,0 +1,415 @@
+{
+  "type": "object",
+  "description": "Repeated benchmark campaign statistics and metadata.",
+  "required": [
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Artifact schema version."
+    },
+    "status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "passed",
+        "fail",
+        "failed",
+        "warning",
+        "not_applicable",
+        "skipped",
+        null
+      ],
+      "description": "Verifier status when present."
+    },
+    "passed": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Boolean pass/fail summary when present."
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Generation timestamp when available."
+    },
+    "summary": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "description": "Human or machine-readable summary."
+    },
+    "issues": {
+      "type": "array",
+      "description": "Validation issues emitted by the tool.",
+      "items": {
+        "type": "object",
+        "description": "Validation issue emitted by a replay or policy verifier.",
+        "required": [
+          "severity",
+          "location",
+          "message"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "fatal"
+            ],
+            "description": "Issue severity."
+          },
+          "location": {
+            "type": "string",
+            "description": "Artifact, claim, field, or path where the issue was detected.",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable issue message.",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "campaign": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Campaign configuration snapshot."
+    },
+    "rows": {
+      "type": "array",
+      "description": "Benchmark rows with distribution statistics.",
+      "items": {
+        "type": "object",
+        "description": "Normalized benchmark campaign row.",
+        "required": [
+          "operation",
+          "algorithm",
+          "implementation",
+          "board",
+          "environment"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "Operation name such as keygen, encaps, decaps, sign, verify, or protocol handshake.",
+            "minLength": 1
+          },
+          "algorithm": {
+            "type": "string",
+            "description": "Algorithm family or suite name.",
+            "minLength": 1
+          },
+          "parameter_set": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Parameter set identifier."
+          },
+          "implementation": {
+            "type": "string",
+            "description": "Implementation label such as pqcp, baseline, native, or imported reference.",
+            "minLength": 1
+          },
+          "board": {
+            "type": "string",
+            "description": "Board or execution target.",
+            "minLength": 1
+          },
+          "environment": {
+            "type": "string",
+            "description": "Execution environment such as qemu, native_sim, host, or physical_hardware.",
+            "minLength": 1
+          },
+          "cycles": {
+            "type": "object",
+            "description": "Distribution statistic set for a benchmark operation.",
+            "required": [
+              "min",
+              "median",
+              "p90",
+              "p99",
+              "max",
+              "sample_count"
+            ],
+            "properties": {
+              "min": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Minimum observed value."
+              },
+              "median": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Median observed value."
+              },
+              "p90": {
+                "type": "number",
+                "minimum": 0,
+                "description": "90th percentile value."
+              },
+              "p99": {
+                "type": "number",
+                "minimum": 0,
+                "description": "99th percentile value."
+              },
+              "max": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Maximum observed value."
+              },
+              "mad": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Median absolute deviation."
+              },
+              "sample_count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of samples in the distribution."
+              }
+            },
+            "additionalProperties": true
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Benchmark metadata needed for paper-style comparison.",
+            "required": [],
+            "properties": {
+              "compiler": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Compiler ID/version."
+              },
+              "flags": {
+                "type": [
+                  "array",
+                  "string",
+                  "null"
+                ],
+                "description": "Optimization flags or flag list."
+              },
+              "zephyr_revision": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Zephyr revision."
+              },
+              "sdk_version": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Zephyr SDK version."
+              },
+              "backend_family": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Backend family used by the row."
+              },
+              "transcript_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "sha256",
+                "description": "Transcript hash if available."
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "results": {
+      "type": "array",
+      "description": "Benchmark result rows with distribution statistics.",
+      "items": {
+        "type": "object",
+        "description": "Normalized benchmark campaign row.",
+        "required": [
+          "operation",
+          "algorithm",
+          "implementation",
+          "board",
+          "environment"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "Operation name such as keygen, encaps, decaps, sign, verify, or protocol handshake.",
+            "minLength": 1
+          },
+          "algorithm": {
+            "type": "string",
+            "description": "Algorithm family or suite name.",
+            "minLength": 1
+          },
+          "parameter_set": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Parameter set identifier."
+          },
+          "implementation": {
+            "type": "string",
+            "description": "Implementation label such as pqcp, baseline, native, or imported reference.",
+            "minLength": 1
+          },
+          "board": {
+            "type": "string",
+            "description": "Board or execution target.",
+            "minLength": 1
+          },
+          "environment": {
+            "type": "string",
+            "description": "Execution environment such as qemu, native_sim, host, or physical_hardware.",
+            "minLength": 1
+          },
+          "cycles": {
+            "type": "object",
+            "description": "Distribution statistic set for a benchmark operation.",
+            "required": [
+              "min",
+              "median",
+              "p90",
+              "p99",
+              "max",
+              "sample_count"
+            ],
+            "properties": {
+              "min": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Minimum observed value."
+              },
+              "median": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Median observed value."
+              },
+              "p90": {
+                "type": "number",
+                "minimum": 0,
+                "description": "90th percentile value."
+              },
+              "p99": {
+                "type": "number",
+                "minimum": 0,
+                "description": "99th percentile value."
+              },
+              "max": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Maximum observed value."
+              },
+              "mad": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Median absolute deviation."
+              },
+              "sample_count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of samples in the distribution."
+              }
+            },
+            "additionalProperties": true
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Benchmark metadata needed for paper-style comparison.",
+            "required": [],
+            "properties": {
+              "compiler": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Compiler ID/version."
+              },
+              "flags": {
+                "type": [
+                  "array",
+                  "string",
+                  "null"
+                ],
+                "description": "Optimization flags or flag list."
+              },
+              "zephyr_revision": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Zephyr revision."
+              },
+              "sdk_version": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Zephyr SDK version."
+              },
+              "backend_family": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Backend family used by the row."
+              },
+              "transcript_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "sha256",
+                "description": "Transcript hash if available."
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "comparison_context": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Comparison context shared by rows."
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-campaign-result.schema.json",
+  "title": "Benchmark Campaign Result"
+}

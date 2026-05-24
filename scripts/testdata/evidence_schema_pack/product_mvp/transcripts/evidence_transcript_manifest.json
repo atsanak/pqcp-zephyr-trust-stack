@@ -1,0 +1,24 @@
+{
+  "entries": [
+    {
+      "command": [
+        "python3",
+        "scripts/check_version_consistency.py"
+      ],
+      "command_text": "python3 scripts/check_version_consistency.py",
+      "cwd": ".",
+      "duration_seconds": 0.1,
+      "returncode": 0,
+      "sha256": "d8d4ba8df071f72995edfc6dd63ef51525491c4fcddcad893ba4802fc60abbdd",
+      "size_bytes": 69,
+      "step": "version_consistency",
+      "transcript_path": "01-version.log"
+    }
+  ],
+  "generated_at": "2026-05-24T00:00:00Z",
+  "qemu_stdout_transcripts": [],
+  "required_steps": [
+    "version_consistency"
+  ],
+  "schema_version": 1
+}
