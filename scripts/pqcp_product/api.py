@@ -11,11 +11,13 @@ from .baseline import compare_csvs
 from .catalog import ExperimentCatalog
 from .coverage import validate_coverage
 from .cross_framework_bridge import (
+    audit_cross_framework_evidence,
     compare_frameworks,
     ecosystem_gap_report,
     import_external_evidence,
     plan_cross_framework_experiments,
     score_evidence,
+    verify_cross_framework_evidence_manifest,
 )
 from .deployment_decision import claim_matrix, compare_scenarios, plan_evidence, recommend_deployment
 from .evidence_pack import EvidencePackBuilder
@@ -251,6 +253,12 @@ class ProductEvidenceApi:
 
     def compare_frameworks(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
         return compare_frameworks(evidence_paths=evidence_paths, output_root=output_root)
+
+    def verify_cross_framework_evidence_manifest(self, *, manifest_path: Path, output_root: Path) -> dict[str, object]:
+        return verify_cross_framework_evidence_manifest(manifest_path=manifest_path, output_root=output_root)
+
+    def audit_cross_framework_evidence(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
+        return audit_cross_framework_evidence(evidence_paths=evidence_paths, output_root=output_root)
 
     def score_evidence(
         self,

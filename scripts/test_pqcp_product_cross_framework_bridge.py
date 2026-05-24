@@ -132,6 +132,62 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         self.assertEqual(result["record_count"], 1)
         self.assertTrue(result["records"][0]["import_warnings"])
 
+    def test_import_writes_manifest_and_manifest_verification_passes(self) -> None:
+        self.import_payload("local", self.local_csv(), "manifest-local")
+        manifest = self.tmp / "manifest-local" / "cross-framework-evidence-manifest.json"
+        self.assertTrue(manifest.exists())
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        self.assertEqual(payload["record_count"], 3)
+        self.assertEqual(len(payload["normalized_artifacts"]), 2)
+        result = self.api.verify_cross_framework_evidence_manifest(
+            manifest_path=manifest,
+            output_root=self.tmp / "manifest-verify",
+        )
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(result["passed"])
+
+    def test_manifest_verification_fails_when_normalized_json_is_tampered(self) -> None:
+        self.import_payload("local", self.local_csv(), "manifest-tamper")
+        manifest = self.tmp / "manifest-tamper" / "cross-framework-evidence-manifest.json"
+        normalized = self.tmp / "manifest-tamper" / "normalized-evidence.json"
+        payload = json.loads(normalized.read_text(encoding="utf-8"))
+        payload["records"][0]["cycles"] = 1
+        normalized.write_text(json.dumps(payload), encoding="utf-8")
+        result = self.api.verify_cross_framework_evidence_manifest(
+            manifest_path=manifest,
+            output_root=self.tmp / "manifest-tamper-result",
+        )
+        self.assertEqual(result["status"], "FAIL")
+        self.assertFalse(result["passed"])
+        self.assertTrue(any(diag["code"] == "bridge_manifest_hash_mismatch" for diag in result["diagnostics"]))
+
+    def test_audit_reports_comparable_local_external_group(self) -> None:
+        self.import_payload("local", self.local_csv(), "audit-local")
+        self.import_payload("pqm4", self.tmp_pqm4(), "audit-pqm4")
+        result = self.api.audit_cross_framework_evidence(
+            evidence_paths=[self.normalized_path("audit-local"), self.normalized_path("audit-pqm4")],
+            output_root=self.tmp / "audit",
+        )
+        self.assertNotEqual(result["status"], "FAIL")
+        self.assertGreaterEqual(result["summary"]["comparable_group_count"], 1)
+        self.assertTrue(result["comparable_groups"])
+
+    def test_audit_fails_on_duplicate_normalized_records(self) -> None:
+        duplicate_csv = self.write_csv(
+            "duplicate.csv",
+            [
+                {"algorithm": "ML-KEM", "parameter_set": "768", "operation": "encaps", "implementation": "mlkem-native", "board": "qemu_x86_64", "device_class": "cortex-m4", "cycles": "10000"},
+                {"algorithm": "ML-KEM", "parameter_set": "768", "operation": "encaps", "implementation": "mlkem-native", "board": "qemu_x86_64", "device_class": "cortex-m4", "cycles": "10000"},
+            ],
+        )
+        self.import_payload("local", duplicate_csv, "audit-duplicate")
+        result = self.api.audit_cross_framework_evidence(
+            evidence_paths=[self.normalized_path("audit-duplicate")],
+            output_root=self.tmp / "audit-duplicate-result",
+        )
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(any(diag["code"] == "bridge_audit_duplicate_records" for diag in result["diagnostics"]))
+
     def test_compare_frameworks_detects_comparable_and_incompatible_rows(self) -> None:
         local = self.import_payload("local", self.local_csv(), "local")
         pqm4 = self.import_payload("pqm4", self.tmp_pqm4(), "pqm4")
@@ -208,6 +264,10 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         local_norm = self.tmp / "cli-local" / "normalized-evidence.json"
         pqm4_norm = self.tmp / "cli-pqm4" / "normalized-evidence.json"
         completed = self.run_cli("compare-frameworks", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-compare"))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        completed = self.run_cli("verify-external-evidence", "--manifest", str(self.tmp / "cli-local" / "cross-framework-evidence-manifest.json"), "--output-root", str(self.tmp / "cli-verify"))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        completed = self.run_cli("audit-framework-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-audit"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("score-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--scenario", str(scenario), "--output-root", str(self.tmp / "cli-score"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
