@@ -1971,3 +1971,557 @@ If those steps are completed, the project can become a credible proprietary
 evaluation kit and then a supported embedded PQC assurance product. Without
 those steps, it remains a sophisticated research prototype with impressive
 local tooling but insufficient customer trust boundaries.
+
+## Concrete Product Packaging Detail
+
+The product should be packaged around evidence maturity rather than around algorithm
+count. The repository already shows that algorithm support alone is not the strongest
+differentiator. A buyer will care about whether the firmware module can be integrated,
+tested, measured, audited, and handed to another reviewer with minimal ambiguity. The
+commercial package should therefore name the evidence level being purchased and the
+support boundary attached to that level.
+
+
+### Package: Evaluation Workspace
+
+Repository access, west consumer flow, QEMU release pack generation, schema-contract
+validation, and offline replay for one internal review team.
+
+- Buyer expectation: the package must produce a concrete artifact or review outcome, not
+  just consulting notes.
+- Repository dependency: the package should map directly to `release_check.py`,
+  `verify_release_evidence_pack.py`, `validate_evidence_schemas.py`, the Passport
+  scripts, and profile-specific evidence outputs.
+- Sales boundary: do not imply certification, physical side-channel proof, or
+  unsupported board readiness unless the specific evidence pack contains those
+  artifacts.
+- Upgrade path: the buyer can start with QEMU/local replay and then pay for board
+  promotion, dashboard integration, custom policy overlays, or signed-pack support.
+
+### Package: Partner Review Pack
+
+A generated release evidence directory, human scorecard, CBOM, policy result, transcript
+manifest, benchmark provenance, and replay instructions for a specific tag or commit.
+
+- Buyer expectation: the package must produce a concrete artifact or review outcome, not
+  just consulting notes.
+- Repository dependency: the package should map directly to `release_check.py`,
+  `verify_release_evidence_pack.py`, `validate_evidence_schemas.py`, the Passport
+  scripts, and profile-specific evidence outputs.
+- Sales boundary: do not imply certification, physical side-channel proof, or
+  unsupported board readiness unless the specific evidence pack contains those
+  artifacts.
+- Upgrade path: the buyer can start with QEMU/local replay and then pay for board
+  promotion, dashboard integration, custom policy overlays, or signed-pack support.
+
+### Package: Board Promotion Pack
+
+A hardware-focused add-on that captures UART transcripts, board metadata, benchmark
+campaign rows, memory footprint, entropy notes, and board-specific failure recovery.
+
+- Buyer expectation: the package must produce a concrete artifact or review outcome, not
+  just consulting notes.
+- Repository dependency: the package should map directly to `release_check.py`,
+  `verify_release_evidence_pack.py`, `validate_evidence_schemas.py`, the Passport
+  scripts, and profile-specific evidence outputs.
+- Sales boundary: do not imply certification, physical side-channel proof, or
+  unsupported board readiness unless the specific evidence pack contains those
+  artifacts.
+- Upgrade path: the buyer can start with QEMU/local replay and then pay for board
+  promotion, dashboard integration, custom policy overlays, or signed-pack support.
+
+### Package: Supplier Intake Verifier
+
+A lightweight offline verifier and dashboard/data contract that a buyer can use to
+inspect supplier-provided packs without building the firmware.
+
+- Buyer expectation: the package must produce a concrete artifact or review outcome, not
+  just consulting notes.
+- Repository dependency: the package should map directly to `release_check.py`,
+  `verify_release_evidence_pack.py`, `validate_evidence_schemas.py`, the Passport
+  scripts, and profile-specific evidence outputs.
+- Sales boundary: do not imply certification, physical side-channel proof, or
+  unsupported board readiness unless the specific evidence pack contains those
+  artifacts.
+- Upgrade path: the buyer can start with QEMU/local replay and then pay for board
+  promotion, dashboard integration, custom policy overlays, or signed-pack support.
+
+### Package: Supported Integration Retainer
+
+Support for Zephyr version updates, backend revision review, board enablement, policy
+customization, and evidence-pack schema migration.
+
+- Buyer expectation: the package must produce a concrete artifact or review outcome, not
+  just consulting notes.
+- Repository dependency: the package should map directly to `release_check.py`,
+  `verify_release_evidence_pack.py`, `validate_evidence_schemas.py`, the Passport
+  scripts, and profile-specific evidence outputs.
+- Sales boundary: do not imply certification, physical side-channel proof, or
+  unsupported board readiness unless the specific evidence pack contains those
+  artifacts.
+- Upgrade path: the buyer can start with QEMU/local replay and then pay for board
+  promotion, dashboard integration, custom policy overlays, or signed-pack support.
+
+## Customer Success Criteria By Profile
+
+Profiles should become the customer-facing maturity model. A profile is useful only if
+it names required evidence, allowed gaps, and the exact reason a pack is acceptable or
+not acceptable for a use case.
+
+
+### Profile `native_lab`
+
+This repository profile should be explained to customers as an evidence boundary. Its
+current description is: Local developer and partner-review profile that permits
+validation-only harnesses and deterministic test material.. Product packaging should
+preserve that machine-readable source of truth.
+
+- Customer-ready outcome: the profile should have a one-page explanation, a required
+  artifact list, a supported environment list, and a known limitations section.
+- Engineering requirement: every profile result should be generated, schema-validated,
+  summarized in migration readiness output, and visible in the partner scorecard.
+- Support requirement: when a customer asks whether a deployment is acceptable, the
+  answer should be framed as a profile decision backed by evidence, not as a vague
+  yes/no statement.
+- Commercial requirement: pricing and support should differ by profile because QEMU-only
+  evidence, MCU build-only evidence, and physical hardware review have different effort
+  and risk.
+
+### Profile `qemu_release`
+
+This repository profile should be explained to customers as an evidence boundary. Its
+current description is: Replay-verifiable release profile backed by QEMU, native_sim,
+transcripts, Passport artifacts, and local bundle metadata.. Product packaging should
+preserve that machine-readable source of truth.
+
+- Customer-ready outcome: the profile should have a one-page explanation, a required
+  artifact list, a supported environment list, and a known limitations section.
+- Engineering requirement: every profile result should be generated, schema-validated,
+  summarized in migration readiness output, and visible in the partner scorecard.
+- Support requirement: when a customer asks whether a deployment is acceptable, the
+  answer should be framed as a profile decision backed by evidence, not as a vague
+  yes/no statement.
+- Commercial requirement: pricing and support should differ by profile because QEMU-only
+  evidence, MCU build-only evidence, and physical hardware review have different effort
+  and risk.
+
+### Profile `mcu_minimal`
+
+This repository profile should be explained to customers as an evidence boundary. Its
+current description is: Build-only constrained MCU profile centered on the default ML-
+KEM-768 and ML-DSA-65 protocol suite.. Product packaging should preserve that machine-
+readable source of truth.
+
+- Customer-ready outcome: the profile should have a one-page explanation, a required
+  artifact list, a supported environment list, and a known limitations section.
+- Engineering requirement: every profile result should be generated, schema-validated,
+  summarized in migration readiness output, and visible in the partner scorecard.
+- Support requirement: when a customer asks whether a deployment is acceptable, the
+  answer should be framed as a profile decision backed by evidence, not as a vague
+  yes/no statement.
+- Commercial requirement: pricing and support should differ by profile because QEMU-only
+  evidence, MCU build-only evidence, and physical hardware review have different effort
+  and risk.
+
+### Profile `gateway`
+
+This repository profile should be explained to customers as an evidence boundary. Its
+current description is: Higher-capacity embedded profile that permits all supported ML-
+KEM and ML-DSA parameter sets with production RNG backends.. Product packaging should
+preserve that machine-readable source of truth.
+
+- Customer-ready outcome: the profile should have a one-page explanation, a required
+  artifact list, a supported environment list, and a known limitations section.
+- Engineering requirement: every profile result should be generated, schema-validated,
+  summarized in migration readiness output, and visible in the partner scorecard.
+- Support requirement: when a customer asks whether a deployment is acceptable, the
+  answer should be framed as a profile decision backed by evidence, not as a vague
+  yes/no statement.
+- Commercial requirement: pricing and support should differ by profile because QEMU-only
+  evidence, MCU build-only evidence, and physical hardware review have different effort
+  and risk.
+
+## Product Data Contract As Commercial Enabler
+
+The evidence schema contract added to the repository is more than a developer
+convenience. It is the product boundary that lets a dashboard, partner verifier,
+customer policy tool, or procurement workflow consume the release pack without depending
+on private implementation details. A serious product should treat the schema catalog as
+an API.
+
+
+### Product-MVP artifact `acvp_json_interop_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`acvp_json_interop_result.json`. Its schema is
+`artifacts/acvp_json_interop_result.schema.json`. Its product value is: Stabilizes
+release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `acvp_json_schema_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`acvp_json_schema_result.json`. Its schema is
+`artifacts/acvp_json_schema_result.schema.json`. Its product value is: Stabilizes
+release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `acvp_json_transcript_manifest`
+
+This artifact is required for the product-MVP profile and is expected at
+`acvp_json_transcript_manifest.json`. Its schema is
+`artifacts/acvp_json_transcript_manifest.schema.json`. Its product value is: Binds
+release claims to exact execution output..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `acvp_negative_scenario_floor_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`acvp_negative_scenario_floor_result.json`. Its schema is
+`artifacts/acvp_negative_scenario_floor_result.schema.json`. Its product value is:
+Stabilizes release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `assurance_ledger`
+
+This artifact is required for the product-MVP profile and is expected at
+`assurance_ledger.json`. Its schema is `artifacts/assurance_ledger.schema.json`. Its
+product value is: Stabilizes release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `assurance_report_html`
+
+This artifact is required for the product-MVP profile and is expected at
+`assurance_report.html`. Its schema is `artifacts/text_artifact.schema.json`. Its
+product value is: Stabilizes release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `backend_contract_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`backend_contract_result.json`. Its schema is
+`artifacts/backend_contract_result.schema.json`. Its product value is: Stabilizes
+release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `benchmark_campaign_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`benchmark_campaign_result.json`. Its schema is
+`artifacts/benchmark_campaign_result.schema.json`. Its product value is: Makes
+performance evidence reproducible, comparable, and auditable..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `benchmark_campaign_verify_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`benchmark_campaign_verify_result.json`. Its schema is
+`artifacts/benchmark_campaign_verify_result.schema.json`. Its product value is: Makes
+performance evidence reproducible, comparable, and auditable..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `benchmark_confidence_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`benchmark_confidence_result.json`. Its schema is
+`artifacts/benchmark_confidence_result.schema.json`. Its product value is: Makes
+performance evidence reproducible, comparable, and auditable..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `benchmark_provenance`
+
+This artifact is required for the product-MVP profile and is expected at
+`benchmark_provenance.json`. Its schema is `artifacts/benchmark_provenance.schema.json`.
+Its product value is: Makes performance evidence reproducible, comparable, and
+auditable..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `benchmark_results_csv`
+
+This artifact is required for the product-MVP profile and is expected at
+`benchmark_results.csv`. Its schema is `artifacts/csv_artifact.schema.json`. Its product
+value is: Makes performance evidence reproducible, comparable, and auditable..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `cost_of_assurance_evidence`
+
+This artifact is required for the product-MVP profile and is expected at
+`cost_of_assurance_evidence.json`. Its schema is
+`artifacts/cost_of_assurance_evidence.schema.json`. Its product value is: Stabilizes
+release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `ct_instruction_policy_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`ct_instruction_policy_result.json`. Its schema is
+`artifacts/ct_instruction_policy_result.schema.json`. Its product value is: Converts raw
+evidence into an explicit accept/reject decision..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `evidence_tamper_drill_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`evidence_tamper_drill_result.json`. Its schema is
+`artifacts/evidence_tamper_drill_result.schema.json`. Its product value is: Stabilizes
+release evidence so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `evidence_transcript_manifest`
+
+This artifact is required for the product-MVP profile and is expected at
+`transcripts/evidence_transcript_manifest.json`. Its schema is
+`artifacts/evidence_transcript_manifest.schema.json`. Its product value is: Binds
+release claims to exact execution output..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `mcu_protocol_footprint_csv`
+
+This artifact is required for the product-MVP profile and is expected at
+`mcu_protocol_footprint/cost_of_assurance_protocols_mcu.csv`. Its schema is
+`artifacts/csv_artifact.schema.json`. Its product value is: Stabilizes release evidence
+so tools can replay and inspect it..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `partner_review_scorecard`
+
+This artifact is required for the product-MVP profile and is expected at
+`partner_review_scorecard.json`. Its schema is
+`artifacts/partner_review_scorecard.schema.json`. Its product value is: Provides a
+concise partner-facing review summary..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `partner_review_scorecard_markdown`
+
+This artifact is required for the product-MVP profile and is expected at
+`partner_review_scorecard.md`. Its schema is `artifacts/text_artifact.schema.json`. Its
+product value is: Provides a concise partner-facing review summary..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+### Product-MVP artifact `partner_review_scorecard_result`
+
+This artifact is required for the product-MVP profile and is expected at
+`partner_review_scorecard_result.json`. Its schema is
+`artifacts/partner_review_scorecard_result.schema.json`. Its product value is: Provides
+a concise partner-facing review summary..
+
+- Customer value: this artifact gives a reviewer a stable object to inspect, archive,
+  diff between releases, or ingest into a dashboard.
+- Support value: when a pack fails validation, support can ask for this artifact and
+  reproduce the failure locally without rebuilding the full Zephyr workspace.
+- Packaging value: this artifact should be included in a release-pack manifest and
+  described in product onboarding so customers know whether they are missing QEMU,
+  policy, CBOM, benchmark, or transcript evidence.
+
+## MVP Sales Qualification Checklist
+
+- Does the customer use Zephyr or plan to evaluate Zephyr for embedded firmware? If no,
+  this repository is not the first product to sell. The strongest current value is
+  Zephyr module integration and Zephyr-targeted evidence.
+- Does the customer need ML-KEM or ML-DSA in embedded firmware? If no, position the
+  project as an assurance workflow preview, not as a direct production library.
+- Can the customer accept local replay evidence before formal certification? If no, the
+  sale must be framed as pre-certification engineering support, not a certified product.
+- Does the customer have a physical target board available? If yes, board promotion is
+  the highest-value paid engagement. If no, sell QEMU/local review as a lower-risk
+  evaluation phase.
+- Does the customer need supplier-review artifacts? If yes, emphasize CBOM, ledger,
+  transcript hashes, policy replay, schema contract, and partner scorecard outputs.
+- Does the customer need broad cryptography discovery? If yes, integrate with their
+  inventory program instead of pretending this repository is an enterprise scanner.
+
+## Concrete Roadmap To First Paid Pilot
+
+
+### Week 0 readiness
+
+Freeze a known-good commit, generate a sample product-MVP fixture, run schema
+validation, run replay verification, and prepare a short partner guide.
+
+- Repository output: at least one command transcript, one schema validation result, one
+  replay verification result, and one human-readable summary should be produced for this
+  phase.
+- Customer output: the partner should know which claims passed, which claims are
+  QEMU/local-only, which evidence is missing, and what it would cost or require to close
+  the next profile level.
+
+### Week 1 onboarding
+
+Walk the partner through west setup, QEMU smoke, the offline verifier, and the
+scorecard. Capture every command that required maintainer explanation.
+
+- Repository output: at least one command transcript, one schema validation result, one
+  replay verification result, and one human-readable summary should be produced for this
+  phase.
+- Customer output: the partner should know which claims passed, which claims are
+  QEMU/local-only, which evidence is missing, and what it would cost or require to close
+  the next profile level.
+
+### Week 2 evidence review
+
+Generate a partner-specific pack and review the ledger, CBOM, policy result, benchmark
+provenance, transcript manifest, and schema-contract output.
+
+- Repository output: at least one command transcript, one schema validation result, one
+  replay verification result, and one human-readable summary should be produced for this
+  phase.
+- Customer output: the partner should know which claims passed, which claims are
+  QEMU/local-only, which evidence is missing, and what it would cost or require to close
+  the next profile level.
+
+### Week 3 board scoping
+
+Select one board, identify entropy and UART assumptions, decide whether the engagement
+is build-only, UART-run, benchmark-run, or deeper hardware review.
+
+- Repository output: at least one command transcript, one schema validation result, one
+  replay verification result, and one human-readable summary should be produced for this
+  phase.
+- Customer output: the partner should know which claims passed, which claims are
+  QEMU/local-only, which evidence is missing, and what it would cost or require to close
+  the next profile level.
+
+### Week 4 pilot close
+
+Deliver a gap report, a verified pack, a compatibility entry, and a priced proposal for
+board promotion or supported integration.
+
+- Repository output: at least one command transcript, one schema validation result, one
+  replay verification result, and one human-readable summary should be produced for this
+  phase.
+- Customer output: the partner should know which claims passed, which claims are
+  QEMU/local-only, which evidence is missing, and what it would cost or require to close
+  the next profile level.

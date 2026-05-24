@@ -52,6 +52,7 @@ TOOL_TESTS = (
     "test_evidence_tamper_drill.py",
     "test_research_product_dossier.py",
     "test_evidence_schema_contract.py",
+    "test_research_experiment_catalog.py",
 )
 
 
