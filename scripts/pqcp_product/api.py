@@ -11,6 +11,7 @@ from .baseline import compare_csvs
 from .catalog import ExperimentCatalog
 from .coverage import validate_coverage
 from .cross_framework_bridge import (
+    assess_cross_framework_provenance,
     audit_cross_framework_evidence,
     compare_frameworks,
     cross_framework_claim_matrix,
@@ -267,6 +268,9 @@ class ProductEvidenceApi:
 
     def cross_framework_claim_matrix(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
         return cross_framework_claim_matrix(evidence_paths=evidence_paths, output_root=output_root)
+
+    def assess_cross_framework_provenance(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
+        return assess_cross_framework_provenance(evidence_paths=evidence_paths, output_root=output_root)
 
     def score_evidence(
         self,
