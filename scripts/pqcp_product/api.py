@@ -10,6 +10,7 @@ from typing import Iterable
 from .baseline import compare_csvs
 from .catalog import ExperimentCatalog
 from .coverage import validate_coverage
+from .deployment_decision import claim_matrix, compare_scenarios, plan_evidence, recommend_deployment
 from .evidence_pack import EvidencePackBuilder
 from .experiment_matrix import matrix_payload
 from .paper_evidence import generate_paper_evidence_report
@@ -153,3 +154,75 @@ class ProductEvidenceApi:
         reports: dict[str, Path | None],
     ) -> dict[str, object]:
         return generate_paper_evidence_report(output_root=output_root, reports=reports)
+
+    def recommend_deployment(
+        self,
+        *,
+        scenario_path: Path,
+        output_root: Path,
+        packs: list[Path] | None = None,
+        csv_paths: list[Path] | None = None,
+        validation_reports: list[Path] | None = None,
+    ) -> dict[str, object]:
+        return recommend_deployment(
+            scenario_path=scenario_path,
+            module_path=self.module_path,
+            output_root=output_root,
+            packs=packs,
+            csv_paths=csv_paths,
+            validation_reports=validation_reports,
+        )
+
+    def plan_evidence(
+        self,
+        *,
+        scenario_path: Path,
+        output_root: Path,
+        catalog_path: Path | None = None,
+        packs: list[Path] | None = None,
+        csv_paths: list[Path] | None = None,
+        validation_reports: list[Path] | None = None,
+    ) -> dict[str, object]:
+        return plan_evidence(
+            scenario_path=scenario_path,
+            module_path=self.module_path,
+            output_root=output_root,
+            catalog_path=catalog_path,
+            packs=packs,
+            csv_paths=csv_paths,
+            validation_reports=validation_reports,
+        )
+
+    def claim_matrix(
+        self,
+        *,
+        output_root: Path,
+        packs: list[Path] | None = None,
+        csv_paths: list[Path] | None = None,
+        validation_reports: list[Path] | None = None,
+    ) -> dict[str, object]:
+        return claim_matrix(
+            module_path=self.module_path,
+            output_root=output_root,
+            packs=packs,
+            csv_paths=csv_paths,
+            validation_reports=validation_reports,
+        )
+
+    def compare_scenarios(
+        self,
+        *,
+        scenario_paths: list[Path],
+        output_root: Path,
+        packs: list[Path] | None = None,
+        csv_paths: list[Path] | None = None,
+        validation_reports: list[Path] | None = None,
+    ) -> dict[str, object]:
+        return compare_scenarios(
+            scenario_paths=scenario_paths,
+            module_path=self.module_path,
+            output_root=output_root,
+            packs=packs,
+            csv_paths=csv_paths,
+            validation_reports=validation_reports,
+        )

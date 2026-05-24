@@ -98,6 +98,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--quality-report", type=Path)
     p.add_argument("--statistics-report", type=Path)
 
+    p = sub.add_parser("recommend-deployment", help="Rank PQC deployment candidates for a constrained scenario")
+    _decision_evidence_args(p)
+    p.add_argument("--scenario", type=Path, required=True)
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("plan-evidence", help="Plan missing experiments for a deployment scenario")
+    _decision_evidence_args(p)
+    _catalog_arg(p)
+    p.add_argument("--scenario", type=Path, required=True)
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("claim-matrix", help="Map product/paper claims to available evidence")
+    _decision_evidence_args(p)
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("compare-scenarios", help="Compare supportability of multiple deployment scenarios")
+    _decision_evidence_args(p)
+    p.add_argument("--scenario", action="append", type=Path, required=True)
+    p.add_argument("--output-root", type=Path, required=True)
+
     p = sub.add_parser("environment", help="Capture reproducibility metadata")
     p.add_argument("--output", type=Path)
 
@@ -116,6 +136,12 @@ def _selection_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--glob")
     parser.add_argument("--contains")
     parser.add_argument("--limit", type=int)
+
+
+def _decision_evidence_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--pack", action="append", type=Path, default=[], help="Evidence pack root")
+    parser.add_argument("--csv", action="append", type=Path, default=[], dest="csv_paths", help="Benchmark/result CSV")
+    parser.add_argument("--validation-report", action="append", type=Path, default=[], help="Validation JSON report")
 
 
 def _select(api: ProductEvidenceApi, args: argparse.Namespace):
@@ -279,6 +305,54 @@ def cmd_paper_report(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
     return _status_exit(payload)
 
 
+def cmd_recommend_deployment(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.recommend_deployment(
+        scenario_path=args.scenario,
+        output_root=args.output_root,
+        packs=args.pack,
+        csv_paths=args.csv_paths,
+        validation_reports=args.validation_report,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_plan_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.plan_evidence(
+        scenario_path=args.scenario,
+        output_root=args.output_root,
+        catalog_path=args.catalog,
+        packs=args.pack,
+        csv_paths=args.csv_paths,
+        validation_reports=args.validation_report,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_claim_matrix(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.claim_matrix(
+        output_root=args.output_root,
+        packs=args.pack,
+        csv_paths=args.csv_paths,
+        validation_reports=args.validation_report,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_compare_scenarios(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.compare_scenarios(
+        scenario_paths=args.scenario,
+        output_root=args.output_root,
+        packs=args.pack,
+        csv_paths=args.csv_paths,
+        validation_reports=args.validation_report,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -310,6 +384,14 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_stats_summary(api, args)
         if args.command == "paper-report":
             return cmd_paper_report(api, args)
+        if args.command == "recommend-deployment":
+            return cmd_recommend_deployment(api, args)
+        if args.command == "plan-evidence":
+            return cmd_plan_evidence(api, args)
+        if args.command == "claim-matrix":
+            return cmd_claim_matrix(api, args)
+        if args.command == "compare-scenarios":
+            return cmd_compare_scenarios(api, args)
         if args.command == "environment":
             return cmd_environment(api, args)
         parser.error(f"unhandled command: {args.command}")
