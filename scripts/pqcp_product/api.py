@@ -10,6 +10,13 @@ from typing import Iterable
 from .baseline import compare_csvs
 from .catalog import ExperimentCatalog
 from .coverage import validate_coverage
+from .cross_framework_bridge import (
+    compare_frameworks,
+    ecosystem_gap_report,
+    import_external_evidence,
+    plan_cross_framework_experiments,
+    score_evidence,
+)
 from .deployment_decision import claim_matrix, compare_scenarios, plan_evidence, recommend_deployment
 from .evidence_pack import EvidencePackBuilder
 from .experiment_matrix import matrix_payload
@@ -226,3 +233,53 @@ class ProductEvidenceApi:
             csv_paths=csv_paths,
             validation_reports=validation_reports,
         )
+
+    def import_external_evidence(
+        self,
+        *,
+        source_type: str,
+        input_paths: list[Path],
+        output_root: Path,
+        aliases: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        return import_external_evidence(
+            source_type=source_type,
+            input_paths=input_paths,
+            output_root=output_root,
+            aliases=aliases,
+        )
+
+    def compare_frameworks(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
+        return compare_frameworks(evidence_paths=evidence_paths, output_root=output_root)
+
+    def score_evidence(
+        self,
+        *,
+        evidence_paths: list[Path],
+        output_root: Path,
+        scenario_path: Path | None = None,
+    ) -> dict[str, object]:
+        return score_evidence(evidence_paths=evidence_paths, output_root=output_root, scenario_path=scenario_path)
+
+    def plan_cross_framework_experiments(
+        self,
+        *,
+        evidence_paths: list[Path],
+        output_root: Path,
+        catalog_path: Path | None = None,
+    ) -> dict[str, object]:
+        return plan_cross_framework_experiments(
+            evidence_paths=evidence_paths,
+            module_path=self.module_path,
+            output_root=output_root,
+            catalog_path=catalog_path,
+        )
+
+    def ecosystem_gap_report(
+        self,
+        *,
+        evidence_paths: list[Path],
+        output_root: Path,
+        pack: Path | None = None,
+    ) -> dict[str, object]:
+        return ecosystem_gap_report(evidence_paths=evidence_paths, output_root=output_root, pack=pack)

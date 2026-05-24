@@ -118,6 +118,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scenario", action="append", type=Path, required=True)
     p.add_argument("--output-root", type=Path, required=True)
 
+    p = sub.add_parser("import-external-evidence", help="Normalize external PQC benchmark/status evidence")
+    p.add_argument("--source-type", choices=("oqs", "pqm4", "mupq", "rustpq", "quantcrypt", "supercop", "ebacs", "mlkem-native", "pqc-leo", "generic-csv", "local"), required=True)
+    p.add_argument("--input", action="append", type=Path, required=True, dest="input_paths")
+    p.add_argument("--alias", action="append", default=[], help="Column alias in canonical=source_column form")
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("compare-frameworks", help="Compare normalized local and external PQC evidence")
+    p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("score-evidence", help="Score normalized evidence for deployment/research/product readiness")
+    p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
+    p.add_argument("--scenario", type=Path)
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("plan-cross-framework-experiments", help="Plan missing cross-framework PQC experiments")
+    _catalog_arg(p)
+    p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("ecosystem-gap-report", help="Summarize external PQC ecosystem coverage and bridge gaps")
+    p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
+    p.add_argument("--pack", type=Path)
+    p.add_argument("--output-root", type=Path, required=True)
+
     p = sub.add_parser("environment", help="Capture reproducibility metadata")
     p.add_argument("--output", type=Path)
 
@@ -353,6 +378,55 @@ def cmd_compare_scenarios(api: ProductEvidenceApi, args: argparse.Namespace) -> 
     return _status_exit(payload)
 
 
+def _parse_aliases(values: list[str]) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for value in values:
+        if "=" not in value:
+            raise ProductEvidenceError(f"invalid --alias {value!r}; expected canonical=source_column")
+        key, column = value.split("=", 1)
+        aliases[key.strip()] = column.strip()
+    return aliases
+
+
+def cmd_import_external_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.import_external_evidence(
+        source_type=args.source_type,
+        input_paths=args.input_paths,
+        output_root=args.output_root,
+        aliases=_parse_aliases(args.alias),
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_compare_frameworks(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.compare_frameworks(evidence_paths=args.evidence_paths, output_root=args.output_root)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_score_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.score_evidence(evidence_paths=args.evidence_paths, output_root=args.output_root, scenario_path=args.scenario)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_plan_cross_framework_experiments(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.plan_cross_framework_experiments(
+        evidence_paths=args.evidence_paths,
+        output_root=args.output_root,
+        catalog_path=args.catalog,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_ecosystem_gap_report(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.ecosystem_gap_report(evidence_paths=args.evidence_paths, output_root=args.output_root, pack=args.pack)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -392,6 +466,16 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_claim_matrix(api, args)
         if args.command == "compare-scenarios":
             return cmd_compare_scenarios(api, args)
+        if args.command == "import-external-evidence":
+            return cmd_import_external_evidence(api, args)
+        if args.command == "compare-frameworks":
+            return cmd_compare_frameworks(api, args)
+        if args.command == "score-evidence":
+            return cmd_score_evidence(api, args)
+        if args.command == "plan-cross-framework-experiments":
+            return cmd_plan_cross_framework_experiments(api, args)
+        if args.command == "ecosystem-gap-report":
+            return cmd_ecosystem_gap_report(api, args)
         if args.command == "environment":
             return cmd_environment(api, args)
         parser.error(f"unhandled command: {args.command}")

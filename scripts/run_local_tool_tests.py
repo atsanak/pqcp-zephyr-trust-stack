@@ -68,6 +68,7 @@ TOOL_TESTS = (
     "test_pqcp_product_statistical_sanity.py",
     "test_pqcp_product_paper_evidence.py",
     "test_pqcp_product_deployment_decision.py",
+    "test_pqcp_product_cross_framework_bridge.py",
 )
 
 

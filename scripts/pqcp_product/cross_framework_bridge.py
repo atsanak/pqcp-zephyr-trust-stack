@@ -1,0 +1,1259 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+"""Cross-framework PQC evidence import, comparison, scoring, and planning."""
+
+from __future__ import annotations
+
+import csv
+import json
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+from statistics import median
+from typing import Any, Iterable
+
+from .catalog import ExperimentCatalog
+from .deployment_decision import DeploymentScenario
+from .errors import Diagnostic, error, warning
+from .fs import load_json, sha256_file, utc_now, write_json_atomic, write_text_atomic
+
+SOURCE_TYPES = {
+    "oqs",
+    "pqm4",
+    "mupq",
+    "rustpq",
+    "quantcrypt",
+    "supercop",
+    "ebacs",
+    "mlkem-native",
+    "pqc-leo",
+    "generic-csv",
+    "local",
+}
+
+CANONICAL_FIELDS = {
+    "framework",
+    "source_type",
+    "algorithm",
+    "parameter_set",
+    "operation",
+    "implementation",
+    "target_architecture",
+    "board",
+    "device_class",
+    "security_level",
+    "cycles",
+    "latency_us",
+    "stack_bytes",
+    "heap_bytes",
+    "ram_bytes",
+    "flash_bytes",
+    "energy_uj",
+    "compiler",
+    "configuration",
+    "benchmark_context",
+    "reproducibility",
+    "verification_status",
+}
+
+DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
+    "algorithm": ("algorithm", "alg", "scheme", "primitive", "kem", "sig"),
+    "parameter_set": ("parameter_set", "parameter", "param", "level", "variant", "claimed_nist_level"),
+    "operation": ("operation", "op", "primitive_op", "bench", "test"),
+    "implementation": ("implementation", "impl", "backend", "variant_impl"),
+    "target_architecture": ("target_architecture", "arch", "architecture", "cpu", "platform"),
+    "board": ("board", "target", "device", "platform_name", "machine"),
+    "device_class": ("device_class", "target_class", "platform_class"),
+    "security_level": ("security_level", "nist_level", "level"),
+    "cycles": ("cycles", "median_cycles", "cycles_median", "median", "cpucycles"),
+    "latency_us": ("latency_us", "time_us", "median_us", "us"),
+    "stack_bytes": ("stack_bytes", "stack", "stack_usage", "stack_b"),
+    "heap_bytes": ("heap_bytes", "heap", "malloc_bytes"),
+    "ram_bytes": ("ram_bytes", "ram", "memory", "sram", "working_set"),
+    "flash_bytes": ("flash_bytes", "flash", "rom", "code_size", "text_bytes"),
+    "energy_uj": ("energy_uj", "energy", "uj"),
+    "compiler": ("compiler", "toolchain", "cc"),
+    "configuration": ("configuration", "config", "flags", "opt"),
+    "benchmark_context": ("benchmark_context", "context", "source", "dataset"),
+    "reproducibility": ("reproducibility", "repro", "runs"),
+    "verification_status": ("verification_status", "status", "state"),
+}
+
+
+@dataclass(frozen=True)
+class FrameworkSource:
+    source_name: str
+    source_type: str
+    supported_algorithms: tuple[str, ...]
+    operations: tuple[str, ...]
+    target_class: str
+    result_fields: tuple[str, ...]
+    confidence_level: str
+    limitations: tuple[str, ...]
+    import_status: str
+    local_model_compatibility: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_name": self.source_name,
+            "source_type": self.source_type,
+            "supported_algorithms": list(self.supported_algorithms),
+            "operations": list(self.operations),
+            "target_class": self.target_class,
+            "result_fields": list(self.result_fields),
+            "confidence_level": self.confidence_level,
+            "limitations": list(self.limitations),
+            "import_status": self.import_status,
+            "local_model_compatibility": self.local_model_compatibility,
+        }
+
+
+@dataclass(frozen=True)
+class NormalizedEvidenceRecord:
+    framework: str
+    source_type: str
+    source_file: str
+    row_number: int
+    algorithm: str
+    parameter_set: str
+    operation: str
+    implementation: str
+    target_architecture: str
+    board: str
+    device_class: str
+    security_level: int | None = None
+    cycles: float | None = None
+    latency_us: float | None = None
+    stack_bytes: float | None = None
+    heap_bytes: float | None = None
+    ram_bytes: float | None = None
+    flash_bytes: float | None = None
+    energy_uj: float | None = None
+    benchmark_context: str = ""
+    compiler: str = ""
+    configuration: str = ""
+    reproducibility: str = ""
+    source_confidence: float = 0.5
+    verification_status: str = ""
+    import_warnings: tuple[str, ...] = ()
+    missing_fields: tuple[str, ...] = ()
+    raw_digest: str = ""
+
+    def key(self) -> tuple[str, str, str, str]:
+        return (self.algorithm, self.parameter_set, self.operation, self.target_class())
+
+    def option_key(self) -> tuple[str, str, str]:
+        return (self.algorithm, self.parameter_set, self.target_class())
+
+    def target_class(self) -> str:
+        if self.device_class:
+            return self.device_class
+        if self.board:
+            board = self.board.lower()
+            if "nucleo" in board or "stm32" in board:
+                return "cortex-m"
+            if "qemu" in board:
+                return "qemu"
+            if "native" in board:
+                return "native-host"
+            return board
+        return self.target_architecture or "unknown"
+
+    def numeric_metrics(self) -> dict[str, float]:
+        out = {}
+        for name in ("cycles", "latency_us", "stack_bytes", "heap_bytes", "ram_bytes", "flash_bytes", "energy_uj"):
+            value = getattr(self, name)
+            if value is not None and not math.isnan(value):
+                out[name] = value
+        return out
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "framework": self.framework,
+            "source_type": self.source_type,
+            "source_file": self.source_file,
+            "row_number": self.row_number,
+            "algorithm": self.algorithm,
+            "parameter_set": self.parameter_set,
+            "operation": self.operation,
+            "implementation": self.implementation,
+            "target_architecture": self.target_architecture,
+            "board": self.board,
+            "device_class": self.device_class,
+            "security_level": self.security_level,
+            "cycles": self.cycles,
+            "latency_us": self.latency_us,
+            "stack_bytes": self.stack_bytes,
+            "heap_bytes": self.heap_bytes,
+            "ram_bytes": self.ram_bytes,
+            "flash_bytes": self.flash_bytes,
+            "energy_uj": self.energy_uj,
+            "benchmark_context": self.benchmark_context,
+            "compiler": self.compiler,
+            "configuration": self.configuration,
+            "reproducibility": self.reproducibility,
+            "source_confidence": round(self.source_confidence, 4),
+            "verification_status": self.verification_status,
+            "import_warnings": list(self.import_warnings),
+            "missing_fields": list(self.missing_fields),
+            "raw_digest": self.raw_digest,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> "NormalizedEvidenceRecord":
+        return cls(
+            framework=str(raw.get("framework", "")),
+            source_type=str(raw.get("source_type", "")),
+            source_file=str(raw.get("source_file", "")),
+            row_number=int(raw.get("row_number", 0) or 0),
+            algorithm=str(raw.get("algorithm", "")),
+            parameter_set=str(raw.get("parameter_set", "")),
+            operation=str(raw.get("operation", "")),
+            implementation=str(raw.get("implementation", "")),
+            target_architecture=str(raw.get("target_architecture", "")),
+            board=str(raw.get("board", "")),
+            device_class=str(raw.get("device_class", "")),
+            security_level=_optional_int(raw.get("security_level")),
+            cycles=_optional_float(raw.get("cycles")),
+            latency_us=_optional_float(raw.get("latency_us")),
+            stack_bytes=_optional_float(raw.get("stack_bytes")),
+            heap_bytes=_optional_float(raw.get("heap_bytes")),
+            ram_bytes=_optional_float(raw.get("ram_bytes")),
+            flash_bytes=_optional_float(raw.get("flash_bytes")),
+            energy_uj=_optional_float(raw.get("energy_uj")),
+            benchmark_context=str(raw.get("benchmark_context", "")),
+            compiler=str(raw.get("compiler", "")),
+            configuration=str(raw.get("configuration", "")),
+            reproducibility=str(raw.get("reproducibility", "")),
+            source_confidence=float(raw.get("source_confidence", 0.5) or 0.5),
+            verification_status=str(raw.get("verification_status", "")),
+            import_warnings=tuple(str(item) for item in raw.get("import_warnings", [])),
+            missing_fields=tuple(str(item) for item in raw.get("missing_fields", [])),
+            raw_digest=str(raw.get("raw_digest", "")),
+        )
+
+
+def framework_sources() -> dict[str, FrameworkSource]:
+    return {
+        "oqs": FrameworkSource(
+            "Open Quantum Safe / liboqs",
+            "oqs",
+            ("ML-KEM", "ML-DSA", "SLH-DSA", "HQC", "FrodoKEM", "BIKE", "Classic McEliece", "Falcon", "SPHINCS+"),
+            ("keygen", "encaps", "decaps", "sign", "verify"),
+            "host-library",
+            ("algorithm", "operation", "cycles", "latency_us", "implementation", "compiler"),
+            "medium-high",
+            ("host-library benchmark context is not automatically embedded-target comparable",),
+            "csv/json adapter",
+            "compatible after target-class and implementation metadata are attached",
+        ),
+        "pqm4": FrameworkSource(
+            "mupq / pqm4",
+            "pqm4",
+            ("ML-KEM", "ML-DSA", "HQC", "Saber", "NTRU", "Falcon", "SPHINCS+"),
+            ("keygen", "encaps", "decaps", "sign", "verify"),
+            "cortex-m4",
+            ("cycles", "stack_bytes", "flash_bytes", "implementation", "board"),
+            "high-for-embedded",
+            ("board/toolchain details must be preserved for fair comparison",),
+            "csv/text adapter",
+            "highly compatible with constrained-target evidence after normalization",
+        ),
+        "mupq": FrameworkSource(
+            "mupq generic",
+            "mupq",
+            ("PQC KEMs", "PQC signatures"),
+            ("keygen", "encaps", "decaps", "sign", "verify"),
+            "embedded-benchmark-harness",
+            ("cycles", "stack_bytes", "implementation", "target_architecture"),
+            "medium-high",
+            ("format varies by harness and target",),
+            "generic CSV/text adapter",
+            "compatible when imported with aliases",
+        ),
+        "rustpq": FrameworkSource(
+            "rustpq / pqcrypto",
+            "rustpq",
+            ("ML-KEM", "ML-DSA", "Classic McEliece", "Falcon", "SPHINCS+"),
+            ("keygen", "encaps", "decaps", "sign", "verify"),
+            "rust-library",
+            ("algorithm", "operation", "latency_us", "implementation"),
+            "medium",
+            ("library API evidence is not the same as Zephyr firmware evidence",),
+            "generic CSV adapter",
+            "compatible as external reference evidence only",
+        ),
+        "quantcrypt": FrameworkSource(
+            "QuantCrypt",
+            "quantcrypt",
+            ("ML-KEM", "ML-DSA", "SLH-DSA"),
+            ("keygen", "encaps", "decaps", "sign", "verify"),
+            "python-library",
+            ("algorithm", "operation", "latency_us", "implementation"),
+            "medium",
+            ("Python package evidence is useful for workflow comparison, not embedded performance",),
+            "generic CSV adapter",
+            "compatible as API/workflow reference evidence",
+        ),
+        "supercop": FrameworkSource(
+            "SUPERCOP / eBACS",
+            "supercop",
+            ("PQC KEMs", "PQC signatures", "classical primitives"),
+            ("keygen", "encaps", "decaps", "sign", "verify"),
+            "cross-platform-benchmark-table",
+            ("cycles", "implementation", "target_architecture", "compiler"),
+            "high-for-benchmarking",
+            ("simple tables require context before embedded deployment interpretation",),
+            "simple table adapter",
+            "compatible after operation and platform context are normalized",
+        ),
+        "mlkem-native": FrameworkSource(
+            "PQ Code Package mlkem-native issue/status evidence",
+            "mlkem-native",
+            ("ML-KEM",),
+            ("status", "keygen", "encaps", "decaps"),
+            "backend-status",
+            ("verification_status", "implementation", "configuration"),
+            "medium",
+            ("issue metadata is maturity/status evidence, not benchmark evidence",),
+            "json status adapter",
+            "compatible as backend maturity and verification-status evidence",
+        ),
+        "pqc-leo": FrameworkSource(
+            "PQC-LEO",
+            "pqc-leo",
+            ("PQC KEMs", "PQC signatures"),
+            ("benchmark", "evaluation"),
+            "deployment-evaluation",
+            ("latency_us", "energy_uj", "device_class"),
+            "medium",
+            ("format and target assumptions must be preserved",),
+            "generic CSV adapter",
+            "compatible as external deployment-evaluation evidence",
+        ),
+        "local": FrameworkSource(
+            "Local Zephyr/QEMU evidence pack",
+            "local",
+            ("ML-KEM", "ML-DSA"),
+            ("keygen", "encaps", "decaps", "sign", "verify", "handshake"),
+            "zephyr-qemu-and-board",
+            ("cycles", "latency_us", "stack_bytes", "ram_bytes", "flash_bytes", "artifacts"),
+            "high-for-this-repo",
+            ("QEMU is regression evidence unless promoted to physical hardware",),
+            "native evidence-pack and CSV adapter",
+            "canonical local evidence model",
+        ),
+    }
+
+
+def import_external_evidence(
+    *,
+    source_type: str,
+    input_paths: list[Path],
+    output_root: Path,
+    aliases: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    if source_type not in SOURCE_TYPES:
+        raise ValueError(f"unsupported source_type: {source_type}")
+    output_root.mkdir(parents=True, exist_ok=True)
+    diagnostics: list[Diagnostic] = []
+    records: list[NormalizedEvidenceRecord] = []
+    for path in input_paths:
+        if not path.exists():
+            diagnostics.append(error("bridge_input_missing", str(path), "input evidence file is missing"))
+            continue
+        try:
+            if source_type == "mlkem-native":
+                records.extend(_import_mlkem_status(path, diagnostics))
+            elif source_type == "oqs":
+                records.extend(_import_oqs(path, diagnostics, aliases or {}))
+            elif source_type in {"pqm4", "mupq"}:
+                records.extend(_import_pqm4(path, source_type, diagnostics, aliases or {}))
+            elif source_type in {"supercop", "ebacs"}:
+                records.extend(_import_supercop(path, diagnostics, aliases or {}))
+            else:
+                records.extend(_import_generic(path, source_type, diagnostics, aliases or {}))
+        except Exception as exc:
+            diagnostics.append(error("bridge_import_failed", str(path), str(exc)))
+    result = _normalized_payload(source_type, input_paths, records, diagnostics)
+    write_json_atomic(output_root / "normalized-evidence.json", result)
+    write_text_atomic(output_root / "normalized-evidence.csv", _records_csv(records))
+    return result
+
+
+def compare_frameworks(*, evidence_paths: list[Path], output_root: Path) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    grouped: dict[tuple[str, str, str, str], list[NormalizedEvidenceRecord]] = {}
+    for record in records:
+        grouped.setdefault(record.key(), []).append(record)
+    comparisons: list[dict[str, Any]] = []
+    for key, rows in sorted(grouped.items()):
+        sources = sorted({row.source_type for row in rows})
+        local = [row for row in rows if row.source_type == "local"]
+        external = [row for row in rows if row.source_type != "local"]
+        numeric = _best_metric_name(rows)
+        item = {
+            "key": list(key),
+            "sources": sources,
+            "metric": numeric,
+            "status": "not_comparable",
+            "reason": "",
+            "local_value": None,
+            "external_median": None,
+            "ratio": None,
+        }
+        if not local:
+            item["reason"] = "external evidence exists but no local Zephyr/QEMU evidence was provided"
+            diagnostics.append(warning("bridge_missing_local_baseline", ":".join(key), item["reason"]))
+        elif not external:
+            item["reason"] = "local evidence exists but no independent external framework baseline was provided"
+            diagnostics.append(warning("bridge_missing_external_baseline", ":".join(key), item["reason"]))
+        elif numeric is None:
+            item["reason"] = "records share a key but have no common numeric metric"
+            diagnostics.append(warning("bridge_metric_missing", ":".join(key), item["reason"]))
+        else:
+            local_values = [_metric_value(row, numeric) for row in local]
+            ext_values = [_metric_value(row, numeric) for row in external]
+            local_values = [value for value in local_values if value is not None]
+            ext_values = [value for value in ext_values if value is not None]
+            if not local_values or not ext_values:
+                item["reason"] = f"{numeric} is missing from local or external records"
+            else:
+                local_value = median(local_values)
+                ext_value = median(ext_values)
+                ratio = local_value / ext_value if ext_value else None
+                item.update({"local_value": local_value, "external_median": ext_value, "ratio": ratio})
+                if ratio is None:
+                    item["status"] = "not_comparable"
+                    item["reason"] = "external median is zero"
+                elif ratio > 4.0 or ratio < 0.25:
+                    item["status"] = "suspicious_disagreement"
+                    item["reason"] = "local/external metric differs by more than 4x"
+                    diagnostics.append(warning("bridge_suspicious_disagreement", ":".join(key), item["reason"]))
+                elif ratio > 1.10:
+                    item["status"] = "local_worse"
+                    item["reason"] = "local metric is higher than the external median"
+                elif ratio < 0.90:
+                    item["status"] = "local_better"
+                    item["reason"] = "local metric is lower than the external median"
+                else:
+                    item["status"] = "comparable"
+                    item["reason"] = "local and external metrics are within 10 percent"
+        comparisons.append(item)
+    summary = {
+        "total": len(comparisons),
+        "comparable": sum(1 for item in comparisons if item["status"] == "comparable"),
+        "not_comparable": sum(1 for item in comparisons if item["status"] == "not_comparable"),
+        "suspicious": sum(1 for item in comparisons if item["status"] == "suspicious_disagreement"),
+    }
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "WARN" if diagnostics else "PASS",
+        "passed": True,
+        "summary": summary,
+        "comparisons": comparisons,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-comparison.json", result)
+    write_text_atomic(output_root / "cross-framework-comparison.md", _render_comparison(result))
+    return result
+
+
+def score_evidence(
+    *,
+    evidence_paths: list[Path],
+    output_root: Path,
+    scenario_path: Path | None = None,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    scenario = DeploymentScenario.from_path(scenario_path) if scenario_path else None
+    groups: dict[tuple[str, str, str], list[NormalizedEvidenceRecord]] = {}
+    for record in records:
+        groups.setdefault(record.option_key(), []).append(record)
+    scores = [_score_group(key, rows, scenario) for key, rows in sorted(groups.items())]
+    scores.sort(key=lambda item: (-item["deployment_confidence"], item["reviewer_risk_score"]))
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "WARN" if diagnostics else "PASS",
+        "passed": True,
+        "scenario": scenario.to_dict() if scenario else None,
+        "scores": scores,
+        "top_option": scores[0] if scores else None,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-evidence-scores.json", result)
+    write_text_atomic(output_root / "cross-framework-evidence-scores.md", _render_scores(result))
+    return result
+
+
+def plan_cross_framework_experiments(
+    *,
+    evidence_paths: list[Path],
+    module_path: Path,
+    output_root: Path,
+    catalog_path: Path | None = None,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    catalog = ExperimentCatalog(module_path, catalog_path)
+    plans = _cross_framework_plans(records, catalog)
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "WARN" if plans else "PASS",
+        "passed": True,
+        "experiment_count": len(plans),
+        "experiments": plans,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-experiment-plan.json", result)
+    write_text_atomic(output_root / "cross-framework-experiment-plan.md", _render_experiment_plan(result))
+    return result
+
+
+def ecosystem_gap_report(
+    *,
+    evidence_paths: list[Path],
+    output_root: Path,
+    pack: Path | None = None,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    observed = sorted({record.source_type for record in records})
+    missing = sorted(set(framework_sources()) - set(observed) - {"local"})
+    claim_support = cross_framework_claim_support(records)
+    pack_artifacts = _pack_artifacts(pack) if pack else []
+    repo_addition = {
+        "gap": "external PQC frameworks expose implementations or benchmark outputs, but not a shared constrained-deployment evidence layer",
+        "bridge_capability": "normalize heterogeneous framework outputs, compare them with local Zephyr/QEMU evidence, score deployment readiness, and propose missing experiments",
+        "local_pack_artifacts": pack_artifacts[:20],
+    }
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "WARN" if missing else "PASS",
+        "passed": True,
+        "framework_sources": [source.to_dict() for source in framework_sources().values()],
+        "observed_sources": observed,
+        "missing_sources": missing,
+        "repository_addition": repo_addition,
+        "claim_support": claim_support,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "ecosystem-gap-report.json", result)
+    write_text_atomic(output_root / "ecosystem-gap-report.md", _render_ecosystem_report(result))
+    return result
+
+
+def cross_framework_claim_support(records: list[NormalizedEvidenceRecord]) -> list[dict[str, Any]]:
+    claims = []
+    claims.append(_claim_support(
+        "ML-KEM constrained deployment is supported by local and external evidence",
+        [record for record in records if record.algorithm == "ML-KEM"],
+        require_local=True,
+        require_external=True,
+    ))
+    claims.append(_claim_support(
+        "ML-DSA signing bottleneck is externally and locally measurable",
+        [record for record in records if record.algorithm == "ML-DSA" and record.operation in {"sign", "verify", "keygen"}],
+        require_local=True,
+        require_external=True,
+    ))
+    claims.append(_claim_support(
+        "HQC fallback has resource-cost evidence",
+        [record for record in records if record.algorithm == "HQC"],
+        require_local=False,
+        require_external=True,
+    ))
+    mlkem768 = [record for record in records if record.algorithm == "ML-KEM" and record.parameter_set == "768"]
+    claims.append(_claim_support(
+        "ML-KEM-768 is a balanced operating point across evidence sources",
+        mlkem768,
+        require_local=True,
+        require_external=True,
+    ))
+    target_classes = {record.target_class() for record in records}
+    frameworks = {record.source_type for record in records}
+    if len(target_classes) >= 2 and len(frameworks) >= 2:
+        support = "cross_framework_supported"
+    elif len(frameworks) >= 2:
+        support = "not_comparable"
+    elif records:
+        support = "partially_supported"
+    else:
+        support = "unsupported"
+    claims.append({
+        "claim": "Cross-target benchmark comparison is reproducible across frameworks",
+        "support": support,
+        "source_types": sorted(frameworks),
+        "supporting_records": len(records),
+        "missing_artifacts": [] if support == "cross_framework_supported" else ["records from at least two target classes and two frameworks"],
+        "risk_level": _risk_for_support(support),
+        "next_experiment": "import pqm4/SUPERCOP plus local Zephyr/QEMU rows for a common algorithm-operation-target class",
+    })
+    return claims
+
+
+def load_normalized_records(paths: list[Path]) -> tuple[list[NormalizedEvidenceRecord], list[Diagnostic]]:
+    diagnostics: list[Diagnostic] = []
+    records: list[NormalizedEvidenceRecord] = []
+    for path in paths:
+        if not path.exists():
+            diagnostics.append(error("bridge_evidence_missing", str(path), "normalized evidence file is missing"))
+            continue
+        payload = load_json(path)
+        raw_records = payload.get("records", payload if isinstance(payload, list) else [])
+        if not isinstance(raw_records, list):
+            diagnostics.append(error("bridge_evidence_shape", str(path), "normalized evidence file must contain records[]"))
+            continue
+        for index, raw in enumerate(raw_records):
+            if not isinstance(raw, dict):
+                diagnostics.append(error("bridge_record_shape", f"{path}:{index}", "record must be an object"))
+                continue
+            records.append(NormalizedEvidenceRecord.from_dict(raw))
+    return records, diagnostics
+
+
+def _import_generic(
+    path: Path,
+    source_type: str,
+    diagnostics: list[Diagnostic],
+    aliases: dict[str, str],
+) -> list[NormalizedEvidenceRecord]:
+    if path.suffix.lower() == ".json":
+        payload = load_json(path)
+        rows = payload.get("records", payload.get("results", payload.get("benchmarks", payload if isinstance(payload, list) else [])))
+        if not isinstance(rows, list):
+            diagnostics.append(error("bridge_json_shape", str(path), "JSON input must contain records/results/benchmarks list"))
+            return []
+        return [_record_from_mapping(row, path, idx + 1, source_type, aliases, diagnostics) for idx, row in enumerate(rows) if isinstance(row, dict)]
+    return _import_csv(path, source_type, diagnostics, aliases)
+
+
+def _import_oqs(path: Path, diagnostics: list[Diagnostic], aliases: dict[str, str]) -> list[NormalizedEvidenceRecord]:
+    return _import_generic(path, "oqs", diagnostics, aliases)
+
+
+def _import_pqm4(path: Path, source_type: str, diagnostics: list[Diagnostic], aliases: dict[str, str]) -> list[NormalizedEvidenceRecord]:
+    if path.suffix.lower() == ".csv":
+        return _import_csv(path, source_type, diagnostics, aliases)
+    return _import_simple_text(path, source_type, diagnostics, default_device="cortex-m4")
+
+
+def _import_supercop(path: Path, diagnostics: list[Diagnostic], aliases: dict[str, str]) -> list[NormalizedEvidenceRecord]:
+    if path.suffix.lower() == ".csv":
+        return _import_csv(path, "supercop", diagnostics, aliases)
+    return _import_simple_text(path, "supercop", diagnostics, default_device="cross-platform-benchmark")
+
+
+def _import_csv(
+    path: Path,
+    source_type: str,
+    diagnostics: list[Diagnostic],
+    aliases: dict[str, str],
+) -> list[NormalizedEvidenceRecord]:
+    records: list[NormalizedEvidenceRecord] = []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            diagnostics.append(error("bridge_csv_header", str(path), "input CSV has no header"))
+            return []
+        for row_number, row in enumerate(reader, start=2):
+            records.append(_record_from_mapping(row, path, row_number, source_type, aliases, diagnostics))
+    return records
+
+
+def _import_simple_text(
+    path: Path,
+    source_type: str,
+    diagnostics: list[Diagnostic],
+    *,
+    default_device: str,
+) -> list[NormalizedEvidenceRecord]:
+    records: list[NormalizedEvidenceRecord] = []
+    for row_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.replace(",", " ").split()
+        if len(parts) < 4 or parts[0].lower() in {"algorithm", "scheme", "primitive"}:
+            continue
+        if len(parts) >= 5 and parts[1].isdigit():
+            raw = {
+                "algorithm": parts[0],
+                "parameter_set": parts[1],
+                "operation": parts[2],
+                "cycles": parts[3],
+                "implementation": parts[4],
+                "device_class": default_device,
+                "benchmark_context": source_type,
+            }
+            if len(parts) >= 6:
+                raw["stack_bytes"] = parts[5]
+        else:
+            raw = {
+                "algorithm": parts[0],
+                "operation": parts[1],
+                "cycles": parts[2],
+                "implementation": parts[3],
+                "device_class": default_device,
+                "benchmark_context": source_type,
+            }
+            if len(parts) >= 5:
+                raw["stack_bytes"] = parts[4]
+        records.append(_record_from_mapping(raw, path, row_number, source_type, {}, diagnostics))
+    return records
+
+
+def _import_mlkem_status(path: Path, diagnostics: list[Diagnostic]) -> list[NormalizedEvidenceRecord]:
+    payload = load_json(path)
+    items = payload.get("issues", payload.get("records", payload if isinstance(payload, list) else []))
+    if not isinstance(items, list):
+        diagnostics.append(error("bridge_mlkem_status_shape", str(path), "mlkem-native status JSON must contain issues[] or records[]"))
+        return []
+    records: list[NormalizedEvidenceRecord] = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        labels = " ".join(str(label) for label in item.get("labels", []))
+        state = str(item.get("state", item.get("status", "unknown")))
+        title = str(item.get("title", item.get("summary", "")))
+        records.append(
+            NormalizedEvidenceRecord(
+                framework="PQ Code Package mlkem-native",
+                source_type="mlkem-native",
+                source_file=str(path),
+                row_number=index,
+                algorithm="ML-KEM",
+                parameter_set=str(item.get("parameter_set", item.get("level", ""))),
+                operation="status",
+                implementation="mlkem-native",
+                target_architecture="portable-c",
+                board="",
+                device_class="backend-status",
+                benchmark_context=title,
+                configuration=labels,
+                reproducibility=str(item.get("url", item.get("html_url", ""))),
+                source_confidence=0.65,
+                verification_status=state,
+                missing_fields=("cycles", "latency_us", "memory"),
+                raw_digest=_raw_digest(item),
+            )
+        )
+    return records
+
+
+def _record_from_mapping(
+    raw: dict[str, Any],
+    path: Path,
+    row_number: int,
+    source_type: str,
+    aliases: dict[str, str],
+    diagnostics: list[Diagnostic],
+) -> NormalizedEvidenceRecord:
+    normalized = {field: _field(raw, field, aliases) for field in CANONICAL_FIELDS}
+    raw_algorithm = str(normalized["algorithm"])
+    algorithm = _normalize_algorithm(raw_algorithm)
+    operation = _normalize_operation(normalized["operation"])
+    parameter = _normalize_parameter(str(normalized["parameter_set"]), raw_algorithm, algorithm)
+    missing = tuple(field for field in ("algorithm", "operation") if not normalized[field])
+    warnings: list[str] = []
+    if not normalized["board"] and not normalized["target_architecture"] and not normalized["device_class"]:
+        warnings.append("target metadata missing")
+    if not any(normalized[field] for field in ("cycles", "latency_us", "stack_bytes", "ram_bytes", "flash_bytes", "energy_uj", "verification_status")):
+        warnings.append("no numeric metric or status field found")
+    for item in warnings:
+        diagnostics.append(warning("bridge_record_warning", f"{path}:{row_number}", item))
+    source = framework_sources().get(source_type)
+    return NormalizedEvidenceRecord(
+        framework=source.source_name if source else source_type,
+        source_type=source_type,
+        source_file=str(path),
+        row_number=row_number,
+        algorithm=algorithm,
+        parameter_set=parameter,
+        operation=operation,
+        implementation=str(normalized["implementation"] or source_type),
+        target_architecture=str(normalized["target_architecture"]),
+        board=str(normalized["board"]),
+        device_class=str(normalized["device_class"] or (source.target_class if source else "")),
+        security_level=_optional_int(normalized["security_level"]) or _infer_security_level(algorithm, parameter),
+        cycles=_optional_float(normalized["cycles"]),
+        latency_us=_optional_float(normalized["latency_us"]),
+        stack_bytes=_optional_float(normalized["stack_bytes"]),
+        heap_bytes=_optional_float(normalized["heap_bytes"]),
+        ram_bytes=_optional_float(normalized["ram_bytes"]),
+        flash_bytes=_optional_float(normalized["flash_bytes"]),
+        energy_uj=_optional_float(normalized["energy_uj"]),
+        benchmark_context=str(normalized["benchmark_context"]),
+        compiler=str(normalized["compiler"]),
+        configuration=str(normalized["configuration"]),
+        reproducibility=str(normalized["reproducibility"]),
+        source_confidence=_source_confidence(source_type),
+        verification_status=str(normalized["verification_status"]),
+        import_warnings=tuple(warnings),
+        missing_fields=missing,
+        raw_digest=_raw_digest(raw),
+    )
+
+
+def _normalized_payload(
+    source_type: str,
+    input_paths: list[Path],
+    records: list[NormalizedEvidenceRecord],
+    diagnostics: list[Diagnostic],
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "source_type": source_type,
+        "input_files": [{"path": str(path), "sha256": sha256_file(path) if path.exists() else None} for path in input_paths],
+        "framework_source": framework_sources().get(source_type, framework_sources()["local"]).to_dict(),
+        "record_count": len(records),
+        "records": [record.to_dict() for record in records],
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+        "status": "WARN" if diagnostics else "PASS",
+        "passed": not any(diag.is_error for diag in diagnostics),
+    }
+
+
+def _records_csv(records: list[NormalizedEvidenceRecord]) -> str:
+    fields = [
+        "framework",
+        "source_type",
+        "algorithm",
+        "parameter_set",
+        "operation",
+        "implementation",
+        "target_architecture",
+        "board",
+        "device_class",
+        "security_level",
+        "cycles",
+        "latency_us",
+        "stack_bytes",
+        "heap_bytes",
+        "ram_bytes",
+        "flash_bytes",
+        "energy_uj",
+        "benchmark_context",
+        "compiler",
+        "configuration",
+        "reproducibility",
+        "source_confidence",
+        "verification_status",
+    ]
+    rows = [",".join(fields)]
+    for record in records:
+        payload = record.to_dict()
+        rows.append(",".join(_csv_cell(payload.get(field)) for field in fields))
+    return "\n".join(rows) + "\n"
+
+
+def _score_group(
+    key: tuple[str, str, str],
+    rows: list[NormalizedEvidenceRecord],
+    scenario: DeploymentScenario | None,
+) -> dict[str, Any]:
+    source_types = {row.source_type for row in rows}
+    target_classes = {row.target_class() for row in rows}
+    numeric_names = {name for row in rows for name in row.numeric_metrics()}
+    local_present = "local" in source_types
+    external_count = len(source_types - {"local"})
+    source_diversity = len(source_types)
+    avg_conf = sum(row.source_confidence for row in rows) / len(rows)
+    perf = bool(numeric_names & {"cycles", "latency_us"})
+    memory = bool(numeric_names & {"stack_bytes", "heap_bytes", "ram_bytes", "flash_bytes"})
+    status = any(row.verification_status for row in rows)
+    reproducible = any(row.reproducibility for row in rows) or source_diversity >= 2
+    target_relevant = _target_relevant(rows, scenario)
+    operation_relevant = _operation_relevant(key[0], scenario)
+    missing = []
+    for name, present in {
+        "performance": perf,
+        "memory": memory,
+        "local": local_present,
+        "external_baseline": external_count > 0,
+        "reproducibility": reproducible,
+        "target_relevance": target_relevant,
+        "operation_relevance": operation_relevant,
+    }.items():
+        if not present:
+            missing.append(name)
+    evidence_score = min(100.0, 20 + 10 * source_diversity + 15 * int(perf) + 15 * int(memory) + 15 * int(local_present) + 10 * int(reproducible) + 10 * int(status))
+    deployment_confidence = min(100.0, evidence_score * 0.65 + avg_conf * 25 + (10 if target_relevant else 0) + (10 if operation_relevant else -25))
+    research_novelty = min(100.0, 25 + 15 * min(source_diversity, 4) + 15 * int(local_present and external_count > 0) + 10 * int(len(target_classes) > 1) + 10 * int(memory))
+    product_readiness = min(100.0, 15 + 20 * int(local_present) + 20 * int(perf) + 20 * int(memory) + 15 * int(status) + 10 * int(reproducible))
+    if scenario:
+        product_readiness -= _budget_penalty(rows, scenario)
+        deployment_confidence -= _budget_penalty(rows, scenario) * 0.7
+        if not operation_relevant:
+            product_readiness -= 25
+    risk = max(0.0, 100 - (deployment_confidence * 0.55 + product_readiness * 0.35 + research_novelty * 0.10))
+    return {
+        "option": {"algorithm": key[0], "parameter_set": key[1], "target_class": key[2]},
+        "record_count": len(rows),
+        "source_types": sorted(source_types),
+        "target_classes": sorted(target_classes),
+        "metrics_present": sorted(numeric_names),
+        "missing_evidence": missing,
+        "evidence_score": round(evidence_score, 2),
+        "deployment_confidence": round(max(0.0, deployment_confidence), 2),
+        "research_novelty_score": round(research_novelty, 2),
+        "product_readiness_score": round(max(0.0, product_readiness), 2),
+        "reviewer_risk_score": round(risk, 2),
+    }
+
+
+def _cross_framework_plans(records: list[NormalizedEvidenceRecord], catalog: ExperimentCatalog) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], list[NormalizedEvidenceRecord]] = {}
+    for record in records:
+        groups.setdefault((record.algorithm, record.parameter_set), []).append(record)
+    plans: list[dict[str, Any]] = []
+    for (algorithm, parameter), rows in sorted(groups.items()):
+        source_types = {row.source_type for row in rows}
+        target_classes = {row.target_class() for row in rows}
+        metrics = {name for row in rows for name in row.numeric_metrics()}
+        if "local" not in source_types:
+            plans.append(_plan_item(algorithm, parameter, "local", "qemu_x86_64", "cycles", "Add local Zephyr/QEMU evidence to connect external numbers to this repository.", catalog))
+        if len(source_types - {"local"}) == 0:
+            plans.append(_plan_item(algorithm, parameter, "pqm4-or-supercop", "cortex-m", "cycles", "Add independent external baseline evidence for reviewer comparison.", catalog))
+        if not metrics & {"stack_bytes", "ram_bytes", "flash_bytes"}:
+            plans.append(_plan_item(algorithm, parameter, "local", "constrained-target", "memory", "Add footprint evidence because constrained deployment needs more than speed.", catalog))
+        if len(target_classes) < 2:
+            plans.append(_plan_item(algorithm, parameter, "pqm4", "cortex-m4", "cycles+stack", "Add a second target class to separate QEMU regression evidence from embedded evidence.", catalog))
+    seen: set[tuple[str, str, str, str]] = set()
+    deduped = []
+    for item in plans:
+        key = (item["algorithm"], item["parameter_set"], item["framework_or_baseline"], item["metric"])
+        if key in seen:
+            continue
+        seen.add(key)
+        item["priority"] = len(deduped) + 1
+        deduped.append(item)
+    return deduped[:25]
+
+
+def _plan_item(
+    algorithm: str,
+    parameter: str,
+    framework: str,
+    target: str,
+    metric: str,
+    reason: str,
+    catalog: ExperimentCatalog,
+) -> dict[str, Any]:
+    return {
+        "priority": 0,
+        "algorithm": algorithm,
+        "parameter_set": parameter,
+        "target": target,
+        "framework_or_baseline": framework,
+        "operation": _default_operation(algorithm),
+        "metric": metric,
+        "why_needed": reason,
+        "claim_supported": f"{algorithm}-{parameter} constrained deployment evidence is cross-framework comparable",
+        "expected_artifact": "normalized-evidence.json plus benchmark transcript or imported source table",
+        "acceptance_criteria": [
+            "normalized record contains algorithm, operation, target class, implementation, and source type",
+            "at least one performance or footprint metric is numeric",
+            "comparison engine classifies the pair as comparable or explicitly not_comparable",
+        ],
+        "catalog_experiment_ids": _catalog_matches(catalog, algorithm, metric),
+    }
+
+
+def _claim_support(
+    claim: str,
+    rows: list[NormalizedEvidenceRecord],
+    *,
+    require_local: bool,
+    require_external: bool,
+) -> dict[str, Any]:
+    source_types = {row.source_type for row in rows}
+    local = "local" in source_types
+    external = bool(source_types - {"local"})
+    if require_local and require_external and local and external:
+        support = "cross_framework_supported"
+    elif require_local and local and not require_external:
+        support = "locally_supported"
+    elif require_external and external and not require_local:
+        support = "externally_supported"
+    elif local:
+        support = "locally_supported"
+    elif external:
+        support = "externally_supported"
+    elif rows:
+        support = "partially_supported"
+    else:
+        support = "unsupported"
+    missing = []
+    if require_local and not local:
+        missing.append("local Zephyr/QEMU evidence")
+    if require_external and not external:
+        missing.append("independent external framework evidence")
+    if rows and require_local and require_external and local and external:
+        local_targets = {row.target_class() for row in rows if row.source_type == "local"}
+        external_targets = {row.target_class() for row in rows if row.source_type != "local"}
+        if not (local_targets & external_targets):
+            support = "not_comparable"
+            if "shared target class" not in missing:
+                missing.append("shared target class")
+    return {
+        "claim": claim,
+        "support": support,
+        "source_types": sorted(source_types),
+        "supporting_records": len(rows),
+        "missing_artifacts": missing,
+        "risk_level": _risk_for_support(support),
+        "next_experiment": "generate or import the missing source/target evidence and rerun compare-frameworks",
+    }
+
+
+def _pack_artifacts(pack: Path | None) -> list[str]:
+    if not pack:
+        return []
+    manifest = pack / "evidence-pack-manifest.json"
+    if not manifest.exists():
+        return []
+    payload = load_json(manifest)
+    return [str(item.get("relative_path", "")) for item in payload.get("artifacts", []) if isinstance(item, dict)]
+
+
+def _field(raw: dict[str, Any], canonical: str, aliases: dict[str, str]) -> Any:
+    explicit = aliases.get(canonical)
+    if explicit and raw.get(explicit) not in (None, ""):
+        return raw.get(explicit)
+    for alias in DEFAULT_ALIASES.get(canonical, (canonical,)):
+        if raw.get(alias) not in (None, ""):
+            return raw.get(alias)
+    return raw.get(canonical, "")
+
+
+def _normalize_algorithm(value: Any) -> str:
+    text = str(value).strip()
+    compact = text.replace("-", "").replace("_", "").replace(" ", "").upper()
+    if compact in {"KYBER", "MLKEM"}:
+        return "ML-KEM"
+    if compact.startswith("MLKEM"):
+        return "ML-KEM"
+    if compact in {"DILITHIUM", "MLDSA"}:
+        return "ML-DSA"
+    if compact.startswith("MLDSA"):
+        return "ML-DSA"
+    if compact.startswith("HQC"):
+        return "HQC"
+    return text
+
+
+def _normalize_parameter(value: str, raw_algorithm: str, algorithm: str) -> str:
+    text = str(value).strip()
+    compact = text.replace("-", "").replace("_", "").replace(" ", "").upper()
+    if text:
+        return text
+    raw_compact = raw_algorithm.replace("-", "").replace("_", "").replace(" ", "").upper()
+    for marker in ("512", "768", "1024", "44", "65", "87", "128", "192", "256"):
+        if marker in compact or marker in raw_compact:
+            return marker
+    if algorithm == "ML-KEM":
+        return ""
+    return text
+
+
+def _normalize_operation(value: Any) -> str:
+    text = str(value).strip().lower().replace("_", "").replace("-", "")
+    return {
+        "keypair": "keygen",
+        "keygen": "keygen",
+        "keygeneration": "keygen",
+        "encaps": "encaps",
+        "encapsulation": "encaps",
+        "decaps": "decaps",
+        "decapsulation": "decaps",
+        "sign": "sign",
+        "siggen": "sign",
+        "verify": "verify",
+        "sigver": "verify",
+        "open": "verify",
+        "status": "status",
+    }.get(text, text or "unknown")
+
+
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(numeric) or math.isinf(numeric) else numeric
+
+
+def _optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value).replace("Level", "").replace("level", "").strip())
+    except ValueError:
+        return None
+
+
+def _infer_security_level(algorithm: str, parameter: str) -> int | None:
+    mapping = {"512": 1, "768": 3, "1024": 5, "44": 2, "65": 3, "87": 5, "128": 1, "192": 3, "256": 5}
+    return mapping.get(str(parameter))
+
+
+def _source_confidence(source_type: str) -> float:
+    return {
+        "local": 0.85,
+        "pqm4": 0.82,
+        "mupq": 0.78,
+        "supercop": 0.80,
+        "ebacs": 0.80,
+        "oqs": 0.72,
+        "mlkem-native": 0.65,
+        "rustpq": 0.58,
+        "quantcrypt": 0.52,
+        "pqc-leo": 0.60,
+        "generic-csv": 0.45,
+    }.get(source_type, 0.50)
+
+
+def _raw_digest(raw: Any) -> str:
+    import hashlib
+    return hashlib.sha256(json.dumps(raw, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def _csv_cell(value: Any) -> str:
+    text = "" if value is None else str(value)
+    if any(ch in text for ch in ",\"\n"):
+        return '"' + text.replace('"', '""') + '"'
+    return text
+
+
+def _best_metric_name(rows: list[NormalizedEvidenceRecord]) -> str | None:
+    for name in ("cycles", "latency_us", "stack_bytes", "ram_bytes", "flash_bytes"):
+        if any(_metric_value(row, name) is not None for row in rows):
+            return name
+    return None
+
+
+def _metric_value(row: NormalizedEvidenceRecord, name: str) -> float | None:
+    value = getattr(row, name)
+    return value if value is not None and not math.isnan(value) else None
+
+
+def _target_relevant(rows: list[NormalizedEvidenceRecord], scenario: DeploymentScenario | None) -> bool:
+    if scenario is None:
+        return True
+    wanted = {scenario.target_board.lower(), scenario.target_architecture.lower(), scenario.device_class.lower()}
+    for row in rows:
+        values = {row.board.lower(), row.target_architecture.lower(), row.device_class.lower(), row.target_class().lower()}
+        if wanted & values:
+            return True
+    return False
+
+
+def _operation_relevant(algorithm: str, scenario: DeploymentScenario | None) -> bool:
+    if scenario is None:
+        return True
+    if scenario.operation_type in {"KEM", "onboarding", "reconnect", "telemetry_session"}:
+        return algorithm in {"ML-KEM", "HQC"}
+    if scenario.operation_type in {"signature", "firmware_update"}:
+        return algorithm in {"ML-DSA", "SLH-DSA", "Falcon"}
+    if scenario.operation_type == "hybrid_tls":
+        return algorithm in {"ML-KEM", "ML-DSA"}
+    return True
+
+
+def _budget_penalty(rows: list[NormalizedEvidenceRecord], scenario: DeploymentScenario) -> float:
+    penalty = 0.0
+    if scenario.latency_budget_us is not None:
+        latencies = [row.latency_us for row in rows if row.latency_us is not None]
+        if latencies and min(latencies) > scenario.latency_budget_us:
+            penalty += 20
+    if scenario.memory_budget_bytes is not None:
+        memories = [value for row in rows for value in (row.ram_bytes, row.flash_bytes) if value is not None]
+        if memories and min(memories) > scenario.memory_budget_bytes:
+            penalty += 20
+    if scenario.stack_limit_bytes is not None:
+        stacks = [row.stack_bytes for row in rows if row.stack_bytes is not None]
+        if stacks and min(stacks) > scenario.stack_limit_bytes:
+            penalty += 15
+    return penalty
+
+
+def _default_operation(algorithm: str) -> str:
+    return "encaps" if algorithm in {"ML-KEM", "HQC"} else "sign"
+
+
+def _catalog_matches(catalog: ExperimentCatalog, algorithm: str, metric: str) -> list[str]:
+    needles = [algorithm.lower().replace("-", ""), metric.lower()]
+    matches = []
+    for experiment in catalog.experiments:
+        body = " ".join([
+            experiment.id,
+            experiment.objective,
+            experiment.research_value,
+            experiment.product_value,
+            *experiment.commands,
+            *experiment.expected_outputs,
+        ]).lower().replace("-", "")
+        if any(needle in body for needle in needles):
+            matches.append(experiment.id)
+    return matches[:8]
+
+
+def _risk_for_support(support: str) -> str:
+    return {
+        "cross_framework_supported": "low",
+        "locally_supported": "medium",
+        "externally_supported": "medium",
+        "partially_supported": "medium",
+        "not_comparable": "high",
+        "unsupported": "high",
+    }.get(support, "medium")
+
+
+def _render_comparison(result: dict[str, Any]) -> str:
+    lines = ["# Cross-Framework Comparison", "", f"Status: {result['status']}", "", "| Key | Status | Metric | Ratio | Reason |", "|---|---|---|---:|---|"]
+    for item in result["comparisons"]:
+        ratio = "" if item["ratio"] is None else f"{item['ratio']:.4f}"
+        lines.append(f"| {' / '.join(item['key'])} | {item['status']} | {item['metric'] or ''} | {ratio} | {item['reason']} |")
+    return "\n".join(lines) + "\n"
+
+
+def _render_scores(result: dict[str, Any]) -> str:
+    lines = ["# Cross-Framework Evidence Scores", "", f"Status: {result['status']}", "", "| Option | Evidence | Deployment | Research | Product | Risk |", "|---|---:|---:|---:|---:|---:|"]
+    for item in result["scores"]:
+        option = item["option"]
+        name = f"{option['algorithm']}-{option['parameter_set']} on {option['target_class']}"
+        lines.append(f"| {name} | {item['evidence_score']} | {item['deployment_confidence']} | {item['research_novelty_score']} | {item['product_readiness_score']} | {item['reviewer_risk_score']} |")
+    return "\n".join(lines) + "\n"
+
+
+def _render_experiment_plan(result: dict[str, Any]) -> str:
+    lines = ["# Cross-Framework Experiment Plan", "", f"Status: {result['status']}", ""]
+    for item in result["experiments"]:
+        lines.append(f"{item['priority']}. {item['algorithm']}-{item['parameter_set']} {item['operation']} on {item['target']} via {item['framework_or_baseline']}")
+        lines.append(f"   Metric: {item['metric']}; artifact: {item['expected_artifact']}")
+        lines.append(f"   Why: {item['why_needed']}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_ecosystem_report(result: dict[str, Any]) -> str:
+    lines = ["# Ecosystem Gap Report", "", f"Status: {result['status']}", ""]
+    lines.append(f"Observed sources: {', '.join(result['observed_sources']) or 'none'}")
+    lines.append(f"Missing sources: {', '.join(result['missing_sources']) or 'none'}")
+    lines.append("")
+    lines.append(result["repository_addition"]["gap"])
+    lines.append("")
+    lines.append("| Claim | Support | Risk | Missing |")
+    lines.append("|---|---|---|---|")
+    for item in result["claim_support"]:
+        lines.append(f"| {item['claim']} | {item['support']} | {item['risk_level']} | {', '.join(item['missing_artifacts']) or 'none'} |")
+    return "\n".join(lines) + "\n"
