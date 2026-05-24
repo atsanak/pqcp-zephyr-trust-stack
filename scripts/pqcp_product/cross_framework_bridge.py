@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from .catalog import ExperimentCatalog
 from .deployment_decision import DeploymentScenario
 from .errors import Diagnostic, error, warning
-from .fs import load_json, sha256_file, utc_now, write_json_atomic, write_text_atomic
+from .fs import json_digest, load_json, sha256_file, utc_now, write_json_atomic, write_text_atomic
 
 SOURCE_TYPES = {
     "oqs",
@@ -376,8 +376,150 @@ def import_external_evidence(
         except Exception as exc:
             diagnostics.append(error("bridge_import_failed", str(path), str(exc)))
     result = _normalized_payload(source_type, input_paths, records, diagnostics)
-    write_json_atomic(output_root / "normalized-evidence.json", result)
-    write_text_atomic(output_root / "normalized-evidence.csv", _records_csv(records))
+    normalized_json = output_root / "normalized-evidence.json"
+    normalized_csv = output_root / "normalized-evidence.csv"
+    write_json_atomic(normalized_json, result)
+    write_text_atomic(normalized_csv, _records_csv(records))
+    manifest = _cross_framework_manifest(
+        source_type=source_type,
+        input_paths=input_paths,
+        normalized_json=normalized_json,
+        normalized_csv=normalized_csv,
+        records=records,
+        diagnostics=diagnostics,
+    )
+    write_json_atomic(output_root / "cross-framework-evidence-manifest.json", manifest)
+    return result
+
+
+def verify_cross_framework_evidence_manifest(
+    *,
+    manifest_path: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    diagnostics: list[Diagnostic] = []
+    if not manifest_path.exists():
+        diagnostics.append(error("bridge_manifest_missing", str(manifest_path), "cross-framework evidence manifest is missing"))
+        result = _manifest_verification_result(manifest_path, [], diagnostics)
+        write_json_atomic(output_root / "cross-framework-evidence-manifest-result.json", result)
+        write_text_atomic(output_root / "cross-framework-evidence-manifest-result.md", _render_manifest_verification(result))
+        return result
+
+    manifest = load_json(manifest_path)
+    manifest_root = manifest_path.parent
+    checks: list[dict[str, Any]] = []
+    artifacts = manifest.get("normalized_artifacts", [])
+    if not isinstance(artifacts, list) or not artifacts:
+        diagnostics.append(error("bridge_manifest_artifacts_missing", str(manifest_path), "manifest does not list normalized artifacts"))
+    for artifact in artifacts if isinstance(artifacts, list) else []:
+        if not isinstance(artifact, dict):
+            diagnostics.append(error("bridge_manifest_artifact_shape", str(manifest_path), "artifact entry must be an object"))
+            continue
+        rel = str(artifact.get("path", ""))
+        expected = str(artifact.get("sha256", ""))
+        path = manifest_root / rel
+        if not rel or not path.exists():
+            diagnostics.append(error("bridge_manifest_artifact_missing", rel or str(manifest_path), "normalized evidence artifact is missing"))
+            checks.append({"path": rel, "expected_sha256": expected, "actual_sha256": None, "status": "FAIL"})
+            continue
+        actual = sha256_file(path)
+        status = "PASS" if actual == expected else "FAIL"
+        if status == "FAIL":
+            diagnostics.append(error("bridge_manifest_hash_mismatch", rel, "normalized evidence artifact hash changed"))
+        checks.append({"path": rel, "expected_sha256": expected, "actual_sha256": actual, "status": status})
+
+    for item in manifest.get("input_files", []):
+        if not isinstance(item, dict):
+            continue
+        path_text = str(item.get("path", ""))
+        expected = item.get("sha256")
+        if not path_text or expected is None:
+            continue
+        path = Path(path_text)
+        if not path.exists():
+            diagnostics.append(warning("bridge_source_input_unavailable", path_text, "original input file is not available for source replay"))
+            continue
+        actual = sha256_file(path)
+        if actual != expected:
+            diagnostics.append(error("bridge_source_input_hash_mismatch", path_text, "original input file hash changed since import"))
+
+    expected_count = int(manifest.get("record_count", 0) or 0)
+    record_digests = manifest.get("record_digests", [])
+    if not isinstance(record_digests, list) or len(record_digests) != expected_count:
+        diagnostics.append(error("bridge_manifest_record_digest_count", str(manifest_path), "record digest count does not match record_count"))
+
+    result = _manifest_verification_result(manifest_path, checks, diagnostics)
+    write_json_atomic(output_root / "cross-framework-evidence-manifest-result.json", result)
+    write_text_atomic(output_root / "cross-framework-evidence-manifest-result.md", _render_manifest_verification(result))
+    return result
+
+
+def audit_cross_framework_evidence(
+    *,
+    evidence_paths: list[Path],
+    output_root: Path,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    if not records:
+        diagnostics.append(error("bridge_audit_no_records", ",".join(str(path) for path in evidence_paths), "no normalized evidence records were loaded"))
+
+    duplicate_keys: dict[str, int] = {}
+    for record in records:
+        digest_key = json_digest(
+            {
+                "source_type": record.source_type,
+                "algorithm": record.algorithm,
+                "parameter_set": record.parameter_set,
+                "operation": record.operation,
+                "implementation": record.implementation,
+                "target_class": record.target_class(),
+                "metrics": record.numeric_metrics(),
+                "raw_digest": record.raw_digest,
+            }
+        )
+        duplicate_keys[digest_key] = duplicate_keys.get(digest_key, 0) + 1
+        _audit_record(record, diagnostics)
+    duplicate_count = sum(count - 1 for count in duplicate_keys.values() if count > 1)
+    if duplicate_count:
+        diagnostics.append(error("bridge_audit_duplicate_records", "normalized evidence", f"{duplicate_count} duplicate normalized record(s) detected"))
+
+    source_types = sorted({record.source_type for record in records})
+    algorithms = sorted({record.algorithm for record in records if record.algorithm})
+    target_classes = sorted({record.target_class() for record in records})
+    metric_counts: dict[str, int] = {}
+    for record in records:
+        for metric in record.numeric_metrics():
+            metric_counts[metric] = metric_counts.get(metric, 0) + 1
+
+    comparable_groups = _comparable_group_summaries(records)
+    if records and "local" not in source_types:
+        diagnostics.append(warning("bridge_audit_local_missing", "normalized evidence", "dataset has external evidence but no local Zephyr/QEMU baseline"))
+    if records and len(set(source_types) - {"local"}) == 0:
+        diagnostics.append(warning("bridge_audit_external_missing", "normalized evidence", "dataset has local evidence but no independent external baseline"))
+    if records and not comparable_groups:
+        diagnostics.append(warning("bridge_audit_no_comparable_pairs", "normalized evidence", "no local/external records share algorithm, parameter, operation, target class, and metric"))
+
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "FAIL" if any(diag.is_error for diag in diagnostics) else ("WARN" if diagnostics else "PASS"),
+        "passed": not any(diag.is_error for diag in diagnostics),
+        "summary": {
+            "record_count": len(records),
+            "source_types": source_types,
+            "algorithms": algorithms,
+            "target_classes": target_classes,
+            "metric_counts": dict(sorted(metric_counts.items())),
+            "comparable_group_count": len(comparable_groups),
+            "duplicate_record_count": duplicate_count,
+        },
+        "comparable_groups": comparable_groups,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-evidence-audit.json", result)
+    write_text_atomic(output_root / "cross-framework-evidence-audit.md", _render_evidence_audit(result))
     return result
 
 
@@ -821,6 +963,123 @@ def _normalized_payload(
     }
 
 
+def _cross_framework_manifest(
+    *,
+    source_type: str,
+    input_paths: list[Path],
+    normalized_json: Path,
+    normalized_csv: Path,
+    records: list[NormalizedEvidenceRecord],
+    diagnostics: list[Diagnostic],
+) -> dict[str, Any]:
+    source = framework_sources().get(source_type, framework_sources()["local"]).to_dict()
+    algorithm_counts: dict[str, int] = {}
+    operation_counts: dict[str, int] = {}
+    target_counts: dict[str, int] = {}
+    metric_counts: dict[str, int] = {}
+    for record in records:
+        algorithm_counts[record.algorithm] = algorithm_counts.get(record.algorithm, 0) + 1
+        operation_counts[record.operation] = operation_counts.get(record.operation, 0) + 1
+        target_counts[record.target_class()] = target_counts.get(record.target_class(), 0) + 1
+        for metric in record.numeric_metrics():
+            metric_counts[metric] = metric_counts.get(metric, 0) + 1
+    return {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "source_type": source_type,
+        "source_model_digest": json_digest(source),
+        "input_files": [{"path": str(path), "sha256": sha256_file(path) if path.exists() else None} for path in input_paths],
+        "normalized_artifacts": [
+            {
+                "path": normalized_json.name,
+                "sha256": sha256_file(normalized_json),
+                "media_type": "application/json",
+            },
+            {
+                "path": normalized_csv.name,
+                "sha256": sha256_file(normalized_csv),
+                "media_type": "text/csv",
+            },
+        ],
+        "record_count": len(records),
+        "record_digests": [_record_digest(record) for record in records],
+        "summary": {
+            "algorithm_counts": dict(sorted(algorithm_counts.items())),
+            "operation_counts": dict(sorted(operation_counts.items())),
+            "target_counts": dict(sorted(target_counts.items())),
+            "metric_counts": dict(sorted(metric_counts.items())),
+            "diagnostic_count": len(diagnostics),
+            "error_count": sum(1 for diag in diagnostics if diag.is_error),
+            "warning_count": sum(1 for diag in diagnostics if not diag.is_error),
+        },
+    }
+
+
+def _record_digest(record: NormalizedEvidenceRecord) -> str:
+    return json_digest(record.to_dict())
+
+
+def _manifest_verification_result(manifest_path: Path, checks: list[dict[str, Any]], diagnostics: list[Diagnostic]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "manifest_path": str(manifest_path),
+        "status": "FAIL" if any(diag.is_error for diag in diagnostics) else ("WARN" if diagnostics else "PASS"),
+        "passed": not any(diag.is_error for diag in diagnostics),
+        "artifact_checks": checks,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+
+
+def _audit_record(record: NormalizedEvidenceRecord, diagnostics: list[Diagnostic]) -> None:
+    location = f"{record.source_file}:{record.row_number}"
+    required = {
+        "source_type": record.source_type,
+        "algorithm": record.algorithm,
+        "operation": record.operation,
+        "implementation": record.implementation,
+        "target": record.target_class(),
+    }
+    for field, value in required.items():
+        if not value or value == "unknown":
+            diagnostics.append(error("bridge_audit_required_field_missing", location, f"record is missing required field {field}"))
+    if record.source_type not in SOURCE_TYPES:
+        diagnostics.append(error("bridge_audit_unknown_source", location, f"unsupported source_type {record.source_type!r}"))
+    if not record.raw_digest:
+        diagnostics.append(error("bridge_audit_raw_digest_missing", location, "record is not bound to an imported raw row digest"))
+    if not record.numeric_metrics() and not record.verification_status:
+        diagnostics.append(error("bridge_audit_no_evidence_value", location, "record has neither numeric metrics nor verification/status evidence"))
+    constrained = record.target_class().lower()
+    if any(marker in constrained for marker in ("cortex", "mcu", "stm32", "nucleo")):
+        if not any(value is not None for value in (record.stack_bytes, record.ram_bytes, record.flash_bytes, record.heap_bytes)):
+            diagnostics.append(warning("bridge_audit_constrained_memory_missing", location, "constrained-target record lacks footprint metrics"))
+    if record.source_type == "local" and not record.reproducibility:
+        diagnostics.append(warning("bridge_audit_local_reproducibility_missing", location, "local evidence record does not name transcript/run reproducibility metadata"))
+
+
+def _comparable_group_summaries(records: list[NormalizedEvidenceRecord]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str, str, str], list[NormalizedEvidenceRecord]] = {}
+    for record in records:
+        groups.setdefault(record.key(), []).append(record)
+    summaries: list[dict[str, Any]] = []
+    for key, rows in sorted(groups.items()):
+        source_types = {row.source_type for row in rows}
+        if "local" not in source_types or not (source_types - {"local"}):
+            continue
+        metrics = sorted(set.intersection(*(set(row.numeric_metrics()) for row in rows if row.numeric_metrics())) if all(row.numeric_metrics() for row in rows) else set())
+        if not metrics:
+            continue
+        summaries.append(
+            {
+                "key": list(key),
+                "source_types": sorted(source_types),
+                "metrics": metrics,
+                "record_count": len(rows),
+            }
+        )
+    return summaries
+
+
 def _records_csv(records: list[NormalizedEvidenceRecord]) -> str:
     fields = [
         "framework",
@@ -1256,4 +1515,52 @@ def _render_ecosystem_report(result: dict[str, Any]) -> str:
     lines.append("|---|---|---|---|")
     for item in result["claim_support"]:
         lines.append(f"| {item['claim']} | {item['support']} | {item['risk_level']} | {', '.join(item['missing_artifacts']) or 'none'} |")
+    return "\n".join(lines) + "\n"
+
+
+def _render_manifest_verification(result: dict[str, Any]) -> str:
+    lines = ["# Cross-Framework Evidence Manifest Verification", "", f"Status: {result['status']}", ""]
+    lines.append("| Artifact | Status | Expected | Actual |")
+    lines.append("|---|---|---|---|")
+    for item in result["artifact_checks"]:
+        actual = item.get("actual_sha256") or "missing"
+        lines.append(f"| {item.get('path', '')} | {item.get('status', '')} | `{item.get('expected_sha256', '')}` | `{actual}` |")
+    if result["diagnostics"]:
+        lines.append("")
+        lines.append("## Diagnostics")
+        for diag in result["diagnostics"]:
+            level = "ERROR" if diag.get("severity") == "error" else "WARN"
+            lines.append(f"- {level} `{diag.get('code')}` {diag.get('location')}: {diag.get('message')}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_evidence_audit(result: dict[str, Any]) -> str:
+    summary = result["summary"]
+    lines = ["# Cross-Framework Evidence Audit", "", f"Status: {result['status']}", ""]
+    lines.append(f"Records: {summary['record_count']}")
+    lines.append(f"Sources: {', '.join(summary['source_types']) or 'none'}")
+    lines.append(f"Algorithms: {', '.join(summary['algorithms']) or 'none'}")
+    lines.append(f"Targets: {', '.join(summary['target_classes']) or 'none'}")
+    lines.append("")
+    lines.append("## Metrics")
+    if summary["metric_counts"]:
+        for name, count in summary["metric_counts"].items():
+            lines.append(f"- {name}: {count}")
+    else:
+        lines.append("- none")
+    lines.append("")
+    lines.append("## Comparable Groups")
+    if result["comparable_groups"]:
+        lines.append("| Key | Sources | Metrics | Records |")
+        lines.append("|---|---|---|---:|")
+        for item in result["comparable_groups"]:
+            lines.append(f"| {' / '.join(item['key'])} | {', '.join(item['source_types'])} | {', '.join(item['metrics'])} | {item['record_count']} |")
+    else:
+        lines.append("No directly comparable local/external groups were found.")
+    if result["diagnostics"]:
+        lines.append("")
+        lines.append("## Diagnostics")
+        for diag in result["diagnostics"]:
+            level = "ERROR" if diag.get("severity") == "error" else "WARN"
+            lines.append(f"- {level} `{diag.get('code')}` {diag.get('location')}: {diag.get('message')}")
     return "\n".join(lines) + "\n"

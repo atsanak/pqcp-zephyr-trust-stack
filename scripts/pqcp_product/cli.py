@@ -128,6 +128,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
     p.add_argument("--output-root", type=Path, required=True)
 
+    p = sub.add_parser("verify-external-evidence", help="Replay a normalized external-evidence manifest and artifact hashes")
+    p.add_argument("--manifest", type=Path, required=True)
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("audit-framework-evidence", help="Audit normalized cross-framework evidence for replay and comparison readiness")
+    p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
+    p.add_argument("--output-root", type=Path, required=True)
+
     p = sub.add_parser("score-evidence", help="Score normalized evidence for deployment/research/product readiness")
     p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
     p.add_argument("--scenario", type=Path)
@@ -405,6 +413,18 @@ def cmd_compare_frameworks(api: ProductEvidenceApi, args: argparse.Namespace) ->
     return _status_exit(payload)
 
 
+def cmd_verify_external_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.verify_cross_framework_evidence_manifest(manifest_path=args.manifest, output_root=args.output_root)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_audit_framework_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.audit_cross_framework_evidence(evidence_paths=args.evidence_paths, output_root=args.output_root)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
 def cmd_score_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
     payload = api.score_evidence(evidence_paths=args.evidence_paths, output_root=args.output_root, scenario_path=args.scenario)
     print(json.dumps(payload, indent=2, sort_keys=True))
@@ -470,6 +490,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_import_external_evidence(api, args)
         if args.command == "compare-frameworks":
             return cmd_compare_frameworks(api, args)
+        if args.command == "verify-external-evidence":
+            return cmd_verify_external_evidence(api, args)
+        if args.command == "audit-framework-evidence":
+            return cmd_audit_framework_evidence(api, args)
         if args.command == "score-evidence":
             return cmd_score_evidence(api, args)
         if args.command == "plan-cross-framework-experiments":
