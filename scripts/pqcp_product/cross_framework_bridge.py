@@ -523,6 +523,51 @@ def audit_cross_framework_evidence(
     return result
 
 
+def framework_comparability_matrix(
+    *,
+    evidence_paths: list[Path],
+    output_root: Path,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    pairs: list[dict[str, Any]] = []
+    for index, left in enumerate(records):
+        for right in records[index + 1 :]:
+            if (left.algorithm, left.parameter_set, left.operation) != (right.algorithm, right.parameter_set, right.operation):
+                continue
+            if left.source_type == right.source_type and left.raw_digest == right.raw_digest:
+                continue
+            pairs.append(_comparability_pair(left, right))
+    gaps = _comparability_gaps(records, pairs)
+    if records and not pairs:
+        diagnostics.append(warning("bridge_comparability_no_pairs", "normalized evidence", "no same-algorithm/operation evidence pairs were found"))
+    if records and not any(pair["status"] == "directly_comparable" for pair in pairs):
+        diagnostics.append(warning("bridge_comparability_no_direct_pair", "normalized evidence", "no local/external pair is directly comparable"))
+    if gaps:
+        diagnostics.append(warning("bridge_comparability_gaps", "normalized evidence", f"{len(gaps)} comparison gap(s) require experiments or metadata"))
+    status_counts: dict[str, int] = {}
+    for pair in pairs:
+        status_counts[pair["status"]] = status_counts.get(pair["status"], 0) + 1
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "FAIL" if any(diag.is_error for diag in diagnostics) else ("WARN" if diagnostics else "PASS"),
+        "passed": not any(diag.is_error for diag in diagnostics),
+        "summary": {
+            "record_count": len(records),
+            "pair_count": len(pairs),
+            "status_counts": dict(sorted(status_counts.items())),
+            "gap_count": len(gaps),
+        },
+        "pairs": pairs,
+        "gaps": gaps,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-comparability-matrix.json", result)
+    write_text_atomic(output_root / "cross-framework-comparability-matrix.md", _render_comparability_matrix(result))
+    return result
+
+
 def compare_frameworks(*, evidence_paths: list[Path], output_root: Path) -> dict[str, Any]:
     output_root.mkdir(parents=True, exist_ok=True)
     records, diagnostics = load_normalized_records(evidence_paths)
@@ -1080,6 +1125,127 @@ def _comparable_group_summaries(records: list[NormalizedEvidenceRecord]) -> list
     return summaries
 
 
+def _comparability_pair(left: NormalizedEvidenceRecord, right: NormalizedEvidenceRecord) -> dict[str, Any]:
+    left_metrics = left.numeric_metrics()
+    right_metrics = right.numeric_metrics()
+    common_metrics = sorted(set(left_metrics) & set(right_metrics))
+    reasons: list[str] = []
+    if left.target_class() != right.target_class():
+        reasons.append("target_class_mismatch")
+    if not common_metrics:
+        reasons.append("no_common_numeric_metric")
+    source_pair = _source_pair_type(left, right)
+    metric_ratios = []
+    suspicious = False
+    for metric in common_metrics:
+        denominator = right_metrics[metric]
+        ratio = None if denominator == 0 else left_metrics[metric] / denominator
+        if ratio is not None and (ratio > 4.0 or ratio < 0.25):
+            suspicious = True
+        metric_ratios.append(
+            {
+                "metric": metric,
+                "left_value": left_metrics[metric],
+                "right_value": right_metrics[metric],
+                "ratio": None if ratio is None else round(ratio, 6),
+            }
+        )
+    if suspicious:
+        reasons.append("suspicious_metric_ratio")
+    if reasons:
+        status = "not_comparable" if any(reason in reasons for reason in ("target_class_mismatch", "no_common_numeric_metric")) else "comparable_with_warning"
+    elif source_pair == "local_external":
+        status = "directly_comparable"
+    elif source_pair == "external_external":
+        status = "external_baseline_pair"
+    else:
+        status = "local_repeat_or_variant"
+    return {
+        "subject": {
+            "algorithm": left.algorithm,
+            "parameter_set": left.parameter_set,
+            "operation": left.operation,
+        },
+        "status": status,
+        "source_pair_type": source_pair,
+        "left": _record_ref(left),
+        "right": _record_ref(right),
+        "common_metrics": common_metrics,
+        "metric_ratios": metric_ratios,
+        "reasons": reasons,
+    }
+
+
+def _source_pair_type(left: NormalizedEvidenceRecord, right: NormalizedEvidenceRecord) -> str:
+    source_types = {left.source_type, right.source_type}
+    if "local" in source_types and len(source_types) > 1:
+        return "local_external"
+    if left.source_type == "local" and right.source_type == "local":
+        return "local_local"
+    return "external_external"
+
+
+def _record_ref(record: NormalizedEvidenceRecord) -> dict[str, Any]:
+    return {
+        "source_type": record.source_type,
+        "implementation": record.implementation,
+        "target_class": record.target_class(),
+        "source_file": record.source_file,
+        "row_number": record.row_number,
+        "record_digest": _record_digest(record),
+    }
+
+
+def _comparability_gaps(records: list[NormalizedEvidenceRecord], pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], list[NormalizedEvidenceRecord]] = {}
+    for record in records:
+        grouped.setdefault((record.algorithm, record.parameter_set, record.operation), []).append(record)
+    direct_subjects = {
+        (pair["subject"]["algorithm"], pair["subject"]["parameter_set"], pair["subject"]["operation"])
+        for pair in pairs
+        if pair["status"] == "directly_comparable"
+    }
+    gaps: list[dict[str, Any]] = []
+    for subject, rows in sorted(grouped.items()):
+        if subject in direct_subjects:
+            continue
+        source_types = {row.source_type for row in rows}
+        target_classes = {row.target_class() for row in rows}
+        metric_names = {name for row in rows for name in row.numeric_metrics()}
+        missing = []
+        if "local" not in source_types:
+            missing.append("local Zephyr/QEMU evidence")
+        if not (source_types - {"local"}):
+            missing.append("independent external baseline")
+        if len(target_classes) > 1:
+            missing.append("shared target class")
+        if not metric_names:
+            missing.append("numeric performance or footprint metric")
+        gaps.append(
+            {
+                "subject": {"algorithm": subject[0], "parameter_set": subject[1], "operation": subject[2]},
+                "source_types": sorted(source_types),
+                "target_classes": sorted(target_classes),
+                "metrics": sorted(metric_names),
+                "missing": missing or ["direct comparability metadata"],
+                "next_step": _gap_next_step(missing),
+            }
+        )
+    return gaps
+
+
+def _gap_next_step(missing: list[str]) -> str:
+    if "local Zephyr/QEMU evidence" in missing:
+        return "run or import local Zephyr/QEMU evidence for this algorithm and operation"
+    if "independent external baseline" in missing:
+        return "import pqm4, SUPERCOP/eBACS, OQS, or paper baseline rows with matching target metadata"
+    if "shared target class" in missing:
+        return "add explicit target/device-class metadata or collect a matching target-class baseline"
+    if "numeric performance or footprint metric" in missing:
+        return "collect cycles, latency, stack, RAM, flash, or energy metrics"
+    return "add enough source and target metadata to explain direct comparability"
+
+
 def _records_csv(records: list[NormalizedEvidenceRecord]) -> str:
     fields = [
         "framework",
@@ -1557,6 +1723,33 @@ def _render_evidence_audit(result: dict[str, Any]) -> str:
             lines.append(f"| {' / '.join(item['key'])} | {', '.join(item['source_types'])} | {', '.join(item['metrics'])} | {item['record_count']} |")
     else:
         lines.append("No directly comparable local/external groups were found.")
+    if result["diagnostics"]:
+        lines.append("")
+        lines.append("## Diagnostics")
+        for diag in result["diagnostics"]:
+            level = "ERROR" if diag.get("severity") == "error" else "WARN"
+            lines.append(f"- {level} `{diag.get('code')}` {diag.get('location')}: {diag.get('message')}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_comparability_matrix(result: dict[str, Any]) -> str:
+    summary = result["summary"]
+    lines = ["# Cross-Framework Comparability Matrix", "", f"Status: {result['status']}", ""]
+    lines.append(f"Records: {summary['record_count']}; pairs: {summary['pair_count']}; gaps: {summary['gap_count']}")
+    lines.append("")
+    lines.append("| Subject | Status | Sources | Metrics | Reasons |")
+    lines.append("|---|---|---|---|---|")
+    for pair in result["pairs"]:
+        subject = pair["subject"]
+        subject_text = f"{subject['algorithm']}-{subject['parameter_set']} {subject['operation']}"
+        sources = f"{pair['left']['source_type']} vs {pair['right']['source_type']}"
+        lines.append(f"| {subject_text} | {pair['status']} | {sources} | {', '.join(pair['common_metrics']) or 'none'} | {', '.join(pair['reasons']) or 'direct'} |")
+    if result["gaps"]:
+        lines.append("")
+        lines.append("## Gaps")
+        for gap in result["gaps"]:
+            subject = gap["subject"]
+            lines.append(f"- {subject['algorithm']}-{subject['parameter_set']} {subject['operation']}: {', '.join(gap['missing'])}; next: {gap['next_step']}")
     if result["diagnostics"]:
         lines.append("")
         lines.append("## Diagnostics")

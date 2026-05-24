@@ -14,6 +14,7 @@ from .cross_framework_bridge import (
     audit_cross_framework_evidence,
     compare_frameworks,
     ecosystem_gap_report,
+    framework_comparability_matrix,
     import_external_evidence,
     plan_cross_framework_experiments,
     score_evidence,
@@ -259,6 +260,9 @@ class ProductEvidenceApi:
 
     def audit_cross_framework_evidence(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
         return audit_cross_framework_evidence(evidence_paths=evidence_paths, output_root=output_root)
+
+    def framework_comparability_matrix(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
+        return framework_comparability_matrix(evidence_paths=evidence_paths, output_root=output_root)
 
     def score_evidence(
         self,

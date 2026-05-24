@@ -188,6 +188,43 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         self.assertEqual(result["status"], "FAIL")
         self.assertTrue(any(diag["code"] == "bridge_audit_duplicate_records" for diag in result["diagnostics"]))
 
+    def test_comparability_matrix_explains_direct_pairs_and_gaps(self) -> None:
+        self.import_payload("local", self.local_csv(), "matrix-local")
+        self.import_payload("pqm4", self.tmp_pqm4(), "matrix-pqm4")
+        result = self.api.framework_comparability_matrix(
+            evidence_paths=[self.normalized_path("matrix-local"), self.normalized_path("matrix-pqm4")],
+            output_root=self.tmp / "matrix",
+        )
+        self.assertTrue(any(pair["status"] == "directly_comparable" for pair in result["pairs"]))
+        self.assertGreaterEqual(result["summary"]["pair_count"], 2)
+        self.assertTrue(any(gap["subject"]["operation"] == "verify" for gap in result["gaps"]))
+
+    def test_comparability_matrix_marks_target_mismatch_not_comparable(self) -> None:
+        self.import_payload("local", self.local_csv(), "matrix-target-local")
+        self.import_payload("oqs", self.tmp_oqs_host(), "matrix-target-oqs")
+        result = self.api.framework_comparability_matrix(
+            evidence_paths=[self.normalized_path("matrix-target-local"), self.normalized_path("matrix-target-oqs")],
+            output_root=self.tmp / "matrix-target",
+        )
+        mlkem_pairs = [pair for pair in result["pairs"] if pair["subject"]["algorithm"] == "ML-KEM"]
+        self.assertEqual(mlkem_pairs[0]["status"], "not_comparable")
+        self.assertIn("target_class_mismatch", mlkem_pairs[0]["reasons"])
+
+    def test_comparability_matrix_flags_suspicious_metric_ratio(self) -> None:
+        fast_external = self.write_csv(
+            "fast-external.csv",
+            [{"algorithm": "ML-KEM", "parameter_set": "768", "operation": "encaps", "implementation": "external", "device_class": "cortex-m4", "cycles": "100"}],
+        )
+        self.import_payload("local", self.local_csv(), "matrix-ratio-local")
+        self.import_payload("generic-csv", fast_external, "matrix-ratio-external")
+        result = self.api.framework_comparability_matrix(
+            evidence_paths=[self.normalized_path("matrix-ratio-local"), self.normalized_path("matrix-ratio-external")],
+            output_root=self.tmp / "matrix-ratio",
+        )
+        pair = next(item for item in result["pairs"] if item["subject"]["algorithm"] == "ML-KEM")
+        self.assertEqual(pair["status"], "comparable_with_warning")
+        self.assertIn("suspicious_metric_ratio", pair["reasons"])
+
     def test_compare_frameworks_detects_comparable_and_incompatible_rows(self) -> None:
         local = self.import_payload("local", self.local_csv(), "local")
         pqm4 = self.import_payload("pqm4", self.tmp_pqm4(), "pqm4")
@@ -268,6 +305,8 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         completed = self.run_cli("verify-external-evidence", "--manifest", str(self.tmp / "cli-local" / "cross-framework-evidence-manifest.json"), "--output-root", str(self.tmp / "cli-verify"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("audit-framework-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-audit"))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        completed = self.run_cli("explain-framework-comparability", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-matrix"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("score-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--scenario", str(scenario), "--output-root", str(self.tmp / "cli-score"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
