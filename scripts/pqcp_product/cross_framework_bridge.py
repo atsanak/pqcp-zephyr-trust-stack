@@ -765,6 +765,67 @@ def cross_framework_claim_matrix(
     return result
 
 
+def assess_cross_framework_provenance(
+    *,
+    evidence_paths: list[Path],
+    output_root: Path,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    if not records:
+        diagnostics.append(error("bridge_provenance_no_records", ",".join(str(path) for path in evidence_paths), "no normalized evidence records were loaded"))
+    items = [_provenance_item(record) for record in records]
+    source_summary: dict[str, dict[str, Any]] = {}
+    for item in items:
+        source_type = item["record"]["source_type"]
+        summary = source_summary.setdefault(
+            source_type,
+            {
+                "record_count": 0,
+                "paper_usable_count": 0,
+                "product_usable_count": 0,
+                "average_score": 0.0,
+                "min_score": 100.0,
+                "blocking_missing": [],
+            },
+        )
+        summary["record_count"] += 1
+        summary["paper_usable_count"] += int(item["paper_usable"])
+        summary["product_usable_count"] += int(item["product_usable"])
+        summary["average_score"] += item["score"]
+        summary["min_score"] = min(summary["min_score"], item["score"])
+        summary["blocking_missing"].extend(item["blocking_missing"])
+    for summary in source_summary.values():
+        count = summary["record_count"] or 1
+        summary["average_score"] = round(summary["average_score"] / count, 2)
+        summary["min_score"] = 0.0 if summary["min_score"] == 100.0 and count == 0 else round(summary["min_score"], 2)
+        summary["blocking_missing"] = sorted(set(summary["blocking_missing"]))
+    if items and not any(item["paper_usable"] for item in items):
+        diagnostics.append(warning("bridge_provenance_no_paper_usable_records", "normalized evidence", "no imported record has enough provenance for paper-grade comparison"))
+    if items and not any(item["product_usable"] for item in items):
+        diagnostics.append(warning("bridge_provenance_no_product_usable_records", "normalized evidence", "no imported record has enough provenance for product-grade review"))
+    low_quality = [item for item in items if item["quality"] == "low"]
+    if low_quality:
+        diagnostics.append(warning("bridge_provenance_low_quality_records", "normalized evidence", f"{len(low_quality)} record(s) have low provenance quality"))
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": "FAIL" if any(diag.is_error for diag in diagnostics) else ("WARN" if diagnostics else "PASS"),
+        "passed": not any(diag.is_error for diag in diagnostics),
+        "summary": {
+            "record_count": len(records),
+            "paper_usable_count": sum(1 for item in items if item["paper_usable"]),
+            "product_usable_count": sum(1 for item in items if item["product_usable"]),
+            "source_summary": dict(sorted(source_summary.items())),
+        },
+        "records": items,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-provenance-assessment.json", result)
+    write_text_atomic(output_root / "cross-framework-provenance-assessment.md", _render_provenance_assessment(result))
+    return result
+
+
 def cross_framework_claim_support(records: list[NormalizedEvidenceRecord]) -> list[dict[str, Any]]:
     claims = []
     claims.append(_claim_support(
@@ -1434,6 +1495,96 @@ def _support_counts(claims: list[dict[str, Any]]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _provenance_item(record: NormalizedEvidenceRecord) -> dict[str, Any]:
+    score = 20.0
+    strengths: list[str] = []
+    missing: list[str] = []
+    blocking_missing: list[str] = []
+    metrics = record.numeric_metrics()
+    required_fields = {
+        "algorithm": record.algorithm,
+        "operation": record.operation,
+        "implementation": record.implementation,
+        "target_class": record.target_class(),
+        "raw_digest": record.raw_digest,
+    }
+    for field, value in required_fields.items():
+        if value and value != "unknown":
+            score += 8
+            strengths.append(field)
+        else:
+            missing.append(field)
+            blocking_missing.append(field)
+    if metrics:
+        score += min(16, 4 * len(metrics))
+        strengths.append("numeric_metrics")
+    elif record.verification_status:
+        score += 10
+        strengths.append("verification_status")
+    else:
+        missing.append("numeric metric or verification status")
+        blocking_missing.append("numeric metric or verification status")
+    if record.benchmark_context:
+        score += 8
+        strengths.append("benchmark_context")
+    else:
+        missing.append("benchmark context/source dataset")
+    if record.reproducibility:
+        score += 10
+        strengths.append("reproducibility")
+    else:
+        missing.append("reproducibility reference")
+    if record.compiler:
+        score += 5
+        strengths.append("compiler")
+    else:
+        missing.append("compiler/toolchain")
+    if record.configuration:
+        score += 5
+        strengths.append("configuration")
+    else:
+        missing.append("configuration/build flags")
+    if record.security_level is not None:
+        score += 4
+        strengths.append("security_level")
+    else:
+        missing.append("security level")
+    if record.source_type in {"pqm4", "supercop", "ebacs", "oqs"} and record.source_file:
+        score += 5
+        strengths.append("recognized_external_source")
+    if record.source_type == "local" and record.reproducibility:
+        score += 5
+        strengths.append("local_replay_reference")
+    score = min(100.0, score)
+    if blocking_missing:
+        quality = "low"
+    elif score >= 78:
+        quality = "high"
+    elif score >= 58:
+        quality = "medium"
+    else:
+        quality = "low"
+    paper_usable = quality in {"high", "medium"} and bool(metrics or record.verification_status)
+    product_usable = quality == "high" and bool(record.reproducibility) and not blocking_missing
+    calibrated_confidence = min(1.0, max(0.0, record.source_confidence * (0.55 + score / 200.0)))
+    return {
+        "record": _record_ref(record),
+        "subject": {
+            "algorithm": record.algorithm,
+            "parameter_set": record.parameter_set,
+            "operation": record.operation,
+        },
+        "score": round(score, 2),
+        "quality": quality,
+        "paper_usable": paper_usable,
+        "product_usable": product_usable,
+        "calibrated_source_confidence": round(calibrated_confidence, 4),
+        "strengths": sorted(set(strengths)),
+        "missing": sorted(set(missing)),
+        "blocking_missing": sorted(set(blocking_missing)),
+    }
+
+
 def _records_csv(records: list[NormalizedEvidenceRecord]) -> str:
     fields = [
         "framework",
@@ -1478,7 +1629,9 @@ def _score_group(
     local_present = "local" in source_types
     external_count = len(source_types - {"local"})
     source_diversity = len(source_types)
-    avg_conf = sum(row.source_confidence for row in rows) / len(rows)
+    provenance = [_provenance_item(row) for row in rows]
+    avg_conf = sum(item["calibrated_source_confidence"] for item in provenance) / len(provenance)
+    avg_provenance_score = sum(item["score"] for item in provenance) / len(provenance)
     perf = bool(numeric_names & {"cycles", "latency_us"})
     memory = bool(numeric_names & {"stack_bytes", "heap_bytes", "ram_bytes", "flash_bytes"})
     status = any(row.verification_status for row in rows)
@@ -1514,6 +1667,7 @@ def _score_group(
         "target_classes": sorted(target_classes),
         "metrics_present": sorted(numeric_names),
         "missing_evidence": missing,
+        "average_provenance_score": round(avg_provenance_score, 2),
         "evidence_score": round(evidence_score, 2),
         "deployment_confidence": round(max(0.0, deployment_confidence), 2),
         "research_novelty_score": round(research_novelty, 2),
@@ -1958,6 +2112,40 @@ def _render_claim_matrix(result: dict[str, Any]) -> str:
         lines.append(
             f"| {item['claim']} | {item['support']} | {item['risk_level']} | "
             f"{', '.join(item['source_types']) or 'none'} | {', '.join(item['missing_artifacts']) or 'none'} |"
+        )
+    if result["diagnostics"]:
+        lines.append("")
+        lines.append("## Diagnostics")
+        for diag in result["diagnostics"]:
+            level = "ERROR" if diag.get("severity") == "error" else "WARN"
+            lines.append(f"- {level} `{diag.get('code')}` {diag.get('location')}: {diag.get('message')}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_provenance_assessment(result: dict[str, Any]) -> str:
+    summary = result["summary"]
+    lines = ["# Cross-Framework Evidence Provenance Assessment", "", f"Status: {result['status']}", ""]
+    lines.append(f"Records: {summary['record_count']}; paper usable: {summary['paper_usable_count']}; product usable: {summary['product_usable_count']}")
+    lines.append("")
+    lines.append("## Source Summary")
+    lines.append("| Source | Records | Avg Score | Min Score | Paper | Product | Missing |")
+    lines.append("|---|---:|---:|---:|---:|---:|---|")
+    for source, item in summary["source_summary"].items():
+        lines.append(
+            f"| {source} | {item['record_count']} | {item['average_score']} | {item['min_score']} | "
+            f"{item['paper_usable_count']} | {item['product_usable_count']} | {', '.join(item['blocking_missing']) or 'none'} |"
+        )
+    lines.append("")
+    lines.append("## Records")
+    lines.append("| Subject | Source | Quality | Score | Paper | Product | Missing |")
+    lines.append("|---|---|---|---:|---|---|---|")
+    for item in result["records"]:
+        subject = item["subject"]
+        record = item["record"]
+        subject_text = f"{subject['algorithm']}-{subject['parameter_set']} {subject['operation']}"
+        lines.append(
+            f"| {subject_text} | {record['source_type']} | {item['quality']} | {item['score']} | "
+            f"{item['paper_usable']} | {item['product_usable']} | {', '.join(item['missing']) or 'none'} |"
         )
     if result["diagnostics"]:
         lines.append("")

@@ -144,6 +144,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
     p.add_argument("--output-root", type=Path, required=True)
 
+    p = sub.add_parser("assess-evidence-provenance", help="Score normalized evidence provenance quality for paper/product use")
+    p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
+    p.add_argument("--output-root", type=Path, required=True)
+
     p = sub.add_parser("score-evidence", help="Score normalized evidence for deployment/research/product readiness")
     p.add_argument("--evidence", action="append", type=Path, required=True, dest="evidence_paths")
     p.add_argument("--scenario", type=Path)
@@ -445,6 +449,12 @@ def cmd_cross_framework_claim_matrix(api: ProductEvidenceApi, args: argparse.Nam
     return _status_exit(payload)
 
 
+def cmd_assess_evidence_provenance(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.assess_cross_framework_provenance(evidence_paths=args.evidence_paths, output_root=args.output_root)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
 def cmd_score_evidence(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
     payload = api.score_evidence(evidence_paths=args.evidence_paths, output_root=args.output_root, scenario_path=args.scenario)
     print(json.dumps(payload, indent=2, sort_keys=True))
@@ -518,6 +528,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_explain_framework_comparability(api, args)
         if args.command == "cross-framework-claim-matrix":
             return cmd_cross_framework_claim_matrix(api, args)
+        if args.command == "assess-evidence-provenance":
+            return cmd_assess_evidence_provenance(api, args)
         if args.command == "score-evidence":
             return cmd_score_evidence(api, args)
         if args.command == "plan-cross-framework-experiments":

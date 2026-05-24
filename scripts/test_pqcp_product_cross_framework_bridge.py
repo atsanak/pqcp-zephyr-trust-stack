@@ -259,6 +259,60 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         self.assertEqual(claims["mlkem.constrained_deployment"]["support"], "not_comparable")
         self.assertIn("directly comparable local/external row pair", claims["mlkem.constrained_deployment"]["missing_artifacts"])
 
+    def test_provenance_assessment_marks_well_grounded_rows_usable(self) -> None:
+        grounded = self.write_csv(
+            "grounded.csv",
+            [
+                {
+                    "algorithm": "ML-KEM",
+                    "parameter_set": "768",
+                    "operation": "encaps",
+                    "implementation": "mlkem-native",
+                    "device_class": "cortex-m4",
+                    "cycles": "10000",
+                    "stack_bytes": "1200",
+                    "source": "local qemu transcript",
+                    "reproducibility": "sha256:abc123",
+                    "compiler": "zephyr-sdk",
+                    "configuration": "-O2 CONFIG_PQCP_BACKEND_NATIVE=y",
+                    "security_level": "3",
+                }
+            ],
+        )
+        self.import_payload("local", grounded, "provenance-grounded")
+        result = self.api.assess_cross_framework_provenance(
+            evidence_paths=[self.normalized_path("provenance-grounded")],
+            output_root=self.tmp / "provenance-grounded-result",
+        )
+        self.assertEqual(result["summary"]["paper_usable_count"], 1)
+        self.assertEqual(result["summary"]["product_usable_count"], 1)
+        self.assertEqual(result["records"][0]["quality"], "high")
+
+    def test_provenance_assessment_flags_thin_external_rows(self) -> None:
+        thin = self.write_csv(
+            "thin-external.csv",
+            [{"algorithm": "ML-KEM", "parameter_set": "768", "operation": "encaps", "implementation": "external", "cycles": "10000"}],
+        )
+        self.import_payload("generic-csv", thin, "provenance-thin")
+        result = self.api.assess_cross_framework_provenance(
+            evidence_paths=[self.normalized_path("provenance-thin")],
+            output_root=self.tmp / "provenance-thin-result",
+        )
+        self.assertEqual(result["status"], "WARN")
+        self.assertEqual(result["records"][0]["quality"], "low")
+        self.assertFalse(result["records"][0]["product_usable"])
+
+    def test_provenance_assessment_handles_mlkem_status_evidence(self) -> None:
+        path = self.tmp / "mlkem-status-provenance.json"
+        path.write_text(json.dumps({"issues": [{"title": "verification status", "state": "closed", "labels": ["verified"], "parameter_set": "768", "url": "https://example.invalid/2"}]}), encoding="utf-8")
+        self.import_payload("mlkem-native", path, "provenance-mlkem")
+        result = self.api.assess_cross_framework_provenance(
+            evidence_paths=[self.normalized_path("provenance-mlkem")],
+            output_root=self.tmp / "provenance-mlkem-result",
+        )
+        self.assertTrue(result["records"][0]["paper_usable"])
+        self.assertIn("verification_status", result["records"][0]["strengths"])
+
     def test_compare_frameworks_detects_comparable_and_incompatible_rows(self) -> None:
         local = self.import_payload("local", self.local_csv(), "local")
         pqm4 = self.import_payload("pqm4", self.tmp_pqm4(), "pqm4")
@@ -343,6 +397,8 @@ class CrossFrameworkBridgeTests(unittest.TestCase):
         completed = self.run_cli("explain-framework-comparability", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-matrix"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("cross-framework-claim-matrix", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-claim-matrix"))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        completed = self.run_cli("assess-evidence-provenance", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--output-root", str(self.tmp / "cli-provenance"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
         completed = self.run_cli("score-evidence", "--evidence", str(local_norm), "--evidence", str(pqm4_norm), "--scenario", str(scenario), "--output-root", str(self.tmp / "cli-score"))
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
