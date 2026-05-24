@@ -736,6 +736,35 @@ def ecosystem_gap_report(
     return result
 
 
+def cross_framework_claim_matrix(
+    *,
+    evidence_paths: list[Path],
+    output_root: Path,
+) -> dict[str, Any]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    records, diagnostics = load_normalized_records(evidence_paths)
+    claims = _claim_matrix_items(records)
+    blocking = {"unsupported", "not_comparable"}
+    status = "FAIL" if any(diag.is_error for diag in diagnostics) else ("WARN" if diagnostics or any(item["support"] in blocking for item in claims) else "PASS")
+    result = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "status": status,
+        "passed": not any(diag.is_error for diag in diagnostics),
+        "summary": {
+            "claim_count": len(claims),
+            "support_counts": _support_counts(claims),
+            "record_count": len(records),
+            "source_types": sorted({record.source_type for record in records}),
+        },
+        "claims": claims,
+        "diagnostics": [diag.to_dict() for diag in diagnostics],
+    }
+    write_json_atomic(output_root / "cross-framework-claim-matrix.json", result)
+    write_text_atomic(output_root / "cross-framework-claim-matrix.md", _render_claim_matrix(result))
+    return result
+
+
 def cross_framework_claim_support(records: list[NormalizedEvidenceRecord]) -> list[dict[str, Any]]:
     claims = []
     claims.append(_claim_support(
@@ -1246,6 +1275,165 @@ def _gap_next_step(missing: list[str]) -> str:
     return "add enough source and target metadata to explain direct comparability"
 
 
+def _claim_matrix_items(records: list[NormalizedEvidenceRecord]) -> list[dict[str, Any]]:
+    definitions = [
+        {
+            "id": "mlkem.constrained_deployment",
+            "claim": "ML-KEM is feasible on constrained embedded targets",
+            "selector": lambda row: row.algorithm == "ML-KEM",
+            "require_local": True,
+            "require_external": True,
+            "require_direct_pair": True,
+        },
+        {
+            "id": "mldsa.signing_bottleneck",
+            "claim": "ML-DSA signing is measurable as a constrained-target bottleneck",
+            "selector": lambda row: row.algorithm == "ML-DSA" and row.operation == "sign",
+            "require_local": True,
+            "require_external": True,
+            "require_direct_pair": True,
+        },
+        {
+            "id": "hqc.fallback_resource_cost",
+            "claim": "HQC fallback has resource-cost evidence",
+            "selector": lambda row: row.algorithm == "HQC",
+            "require_local": False,
+            "require_external": True,
+            "require_direct_pair": False,
+        },
+        {
+            "id": "mlkem768.balanced_operating_point",
+            "claim": "ML-KEM-768 is a balanced operating point across evidence sources",
+            "selector": lambda row: row.algorithm == "ML-KEM" and row.parameter_set == "768",
+            "require_local": True,
+            "require_external": True,
+            "require_direct_pair": True,
+        },
+        {
+            "id": "comparison.cross_target_reproducibility",
+            "claim": "The system supports reproducible cross-target benchmarking",
+            "selector": lambda row: bool(row.algorithm and row.operation),
+            "require_local": True,
+            "require_external": True,
+            "require_direct_pair": False,
+            "require_two_targets": True,
+        },
+        {
+            "id": "product.partner_evidence_pack",
+            "claim": "The tool can produce partner-review evidence grounded in local and external sources",
+            "selector": lambda row: bool(row.raw_digest),
+            "require_local": True,
+            "require_external": True,
+            "require_direct_pair": False,
+        },
+    ]
+    return [_claim_matrix_item(definition, records) for definition in definitions]
+
+
+def _claim_matrix_item(definition: dict[str, Any], records: list[NormalizedEvidenceRecord]) -> dict[str, Any]:
+    selected = [record for record in records if definition["selector"](record)]
+    source_types = {record.source_type for record in selected}
+    target_classes = {record.target_class() for record in selected}
+    metrics = {metric for record in selected for metric in record.numeric_metrics()}
+    pairs = _direct_pairs_for_claim(selected)
+    missing = []
+    if not selected:
+        missing.append("normalized evidence records for this claim")
+    if definition.get("require_local") and "local" not in source_types:
+        missing.append("local Zephyr/QEMU evidence")
+    if definition.get("require_external") and not (source_types - {"local"}):
+        missing.append("independent external framework evidence")
+    if definition.get("require_direct_pair") and selected and not pairs:
+        missing.append("directly comparable local/external row pair")
+    if definition.get("require_two_targets") and len(target_classes) < 2:
+        missing.append("at least two target classes")
+    if selected and not metrics and not any(record.verification_status for record in selected):
+        missing.append("numeric metric or verification/status evidence")
+    support = _claim_matrix_support(definition, selected, source_types, pairs, target_classes, missing)
+    return {
+        "id": definition["id"],
+        "claim": definition["claim"],
+        "support": support,
+        "risk_level": _risk_for_support(support),
+        "source_types": sorted(source_types),
+        "target_classes": sorted(target_classes),
+        "metrics": sorted(metrics),
+        "supporting_evidence": [_record_ref(record) for record in selected[:12]],
+        "direct_comparison_pairs": pairs[:8],
+        "missing_artifacts": missing,
+        "next_experiment": _claim_next_experiment(definition, missing),
+    }
+
+
+def _direct_pairs_for_claim(records: list[NormalizedEvidenceRecord]) -> list[dict[str, Any]]:
+    pairs = []
+    for index, left in enumerate(records):
+        for right in records[index + 1 :]:
+            if (left.algorithm, left.parameter_set, left.operation, left.target_class()) != (
+                right.algorithm,
+                right.parameter_set,
+                right.operation,
+                right.target_class(),
+            ):
+                continue
+            if _source_pair_type(left, right) != "local_external":
+                continue
+            pair = _comparability_pair(left, right)
+            if pair["status"] in {"directly_comparable", "comparable_with_warning"}:
+                pairs.append(pair)
+    return pairs
+
+
+def _claim_matrix_support(
+    definition: dict[str, Any],
+    selected: list[NormalizedEvidenceRecord],
+    source_types: set[str],
+    direct_pairs: list[dict[str, Any]],
+    target_classes: set[str],
+    missing: list[str],
+) -> str:
+    if not selected:
+        return "unsupported"
+    local = "local" in source_types
+    external = bool(source_types - {"local"})
+    if definition.get("require_direct_pair") and local and external and not direct_pairs:
+        return "not_comparable"
+    if definition.get("require_two_targets") and len(target_classes) < 2:
+        return "partially_supported"
+    if not missing and local and external:
+        return "cross_framework_supported"
+    if not missing and external:
+        return "externally_supported"
+    if local and not external:
+        return "locally_supported"
+    if external and not local:
+        return "externally_supported" if not definition.get("require_local") else "partially_supported"
+    return "partially_supported"
+
+
+def _claim_next_experiment(definition: dict[str, Any], missing: list[str]) -> str:
+    if not missing:
+        return "no blocking experiment required; use repeat measurements to improve confidence"
+    claim_id = str(definition["id"])
+    if "directly comparable local/external row pair" in missing:
+        return f"collect matching local and external rows for {claim_id} with the same algorithm, operation, target class, and metric"
+    if "local Zephyr/QEMU evidence" in missing:
+        return f"run local Zephyr/QEMU benchmark or status capture for {claim_id}"
+    if "independent external framework evidence" in missing:
+        return f"import pqm4, SUPERCOP/eBACS, OQS, or paper baseline evidence for {claim_id}"
+    if "at least two target classes" in missing:
+        return f"add a second target class, for example QEMU plus cortex-m4, for {claim_id}"
+    return f"add the missing evidence artifacts for {claim_id}"
+
+
+def _support_counts(claims: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for claim in claims:
+        support = str(claim.get("support", "unknown"))
+        counts[support] = counts.get(support, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def _records_csv(records: list[NormalizedEvidenceRecord]) -> str:
     fields = [
         "framework",
@@ -1750,6 +1938,27 @@ def _render_comparability_matrix(result: dict[str, Any]) -> str:
         for gap in result["gaps"]:
             subject = gap["subject"]
             lines.append(f"- {subject['algorithm']}-{subject['parameter_set']} {subject['operation']}: {', '.join(gap['missing'])}; next: {gap['next_step']}")
+    if result["diagnostics"]:
+        lines.append("")
+        lines.append("## Diagnostics")
+        for diag in result["diagnostics"]:
+            level = "ERROR" if diag.get("severity") == "error" else "WARN"
+            lines.append(f"- {level} `{diag.get('code')}` {diag.get('location')}: {diag.get('message')}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_claim_matrix(result: dict[str, Any]) -> str:
+    summary = result["summary"]
+    lines = ["# Cross-Framework Claim Matrix", "", f"Status: {result['status']}", ""]
+    lines.append(f"Claims: {summary['claim_count']}; records: {summary['record_count']}; sources: {', '.join(summary['source_types']) or 'none'}")
+    lines.append("")
+    lines.append("| Claim | Support | Risk | Sources | Missing |")
+    lines.append("|---|---|---|---|---|")
+    for item in result["claims"]:
+        lines.append(
+            f"| {item['claim']} | {item['support']} | {item['risk_level']} | "
+            f"{', '.join(item['source_types']) or 'none'} | {', '.join(item['missing_artifacts']) or 'none'} |"
+        )
     if result["diagnostics"]:
         lines.append("")
         lines.append("## Diagnostics")

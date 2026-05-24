@@ -13,6 +13,7 @@ from .coverage import validate_coverage
 from .cross_framework_bridge import (
     audit_cross_framework_evidence,
     compare_frameworks,
+    cross_framework_claim_matrix,
     ecosystem_gap_report,
     framework_comparability_matrix,
     import_external_evidence,
@@ -263,6 +264,9 @@ class ProductEvidenceApi:
 
     def framework_comparability_matrix(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
         return framework_comparability_matrix(evidence_paths=evidence_paths, output_root=output_root)
+
+    def cross_framework_claim_matrix(self, *, evidence_paths: list[Path], output_root: Path) -> dict[str, object]:
+        return cross_framework_claim_matrix(evidence_paths=evidence_paths, output_root=output_root)
 
     def score_evidence(
         self,
