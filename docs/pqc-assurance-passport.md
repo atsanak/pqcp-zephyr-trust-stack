@@ -81,8 +81,8 @@ release review.
   `benchmark_campaign_verify_result.json` — benchmark campaign statistics and
   replay result.
 - `benchmark_confidence_result.json` — replay result that checks distribution
-  monotonicity, balanced sample counts, and confidence tier for each benchmark
-  row.
+  monotonicity through `max`, balanced sample counts, outlier spread, and
+  confidence tier for each benchmark row.
 - `paper_comparison_campaign.csv` /
   `paper_comparison_campaign.json` — normalized benchmark export with explicit
   source, platform, clock, compiler, statistic, backend, and transcript-hash

@@ -45,11 +45,26 @@ def verify(campaign_path: Path) -> dict[str, Any]:
         failures.append("benchmark campaign must contain non-empty statistics")
     else:
         for index, row in enumerate(statistics, start=1):
-            for key in ("min", "median", "p90", "p99", "mad", "sample_count"):
+            for key in ("min", "median", "p90", "p99", "max", "mad", "sample_count"):
                 ok = isinstance(row, dict) and isinstance(row.get(key), (int, float))
                 checks.append({"check": "statistic_row", "row": index, "field": key, "passed": ok})
                 if not ok:
                     failures.append(f"benchmark campaign row {index} missing numeric {key}")
+            if isinstance(row, dict):
+                ordered = all(
+                    isinstance(row.get(key), (int, float))
+                    for key in ("min", "median", "p90", "p99", "max")
+                )
+                ok = bool(
+                    ordered
+                    and float(row["min"]) <= float(row["median"])
+                    and float(row["median"]) <= float(row["p90"])
+                    and float(row["p90"]) <= float(row["p99"])
+                    and float(row["p99"]) <= float(row["max"])
+                )
+                checks.append({"check": "statistic_row_monotonicity", "row": index, "passed": ok})
+                if not ok:
+                    failures.append(f"benchmark campaign row {index} violates min <= median <= p90 <= p99 <= max")
     pairwise = campaign.get("pairwise_ratios")
     if pairwise is not None:
         if not isinstance(pairwise, list):

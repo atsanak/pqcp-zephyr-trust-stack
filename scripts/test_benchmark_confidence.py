@@ -17,6 +17,7 @@ def campaign_payload(
     sample_count: int = 20,
     p90: float = 112.0,
     p99: float = 118.0,
+    max_value: float = 125.0,
     candidate_samples: int | None = None,
     baseline_samples: int | None = None,
 ) -> dict[str, object]:
@@ -38,6 +39,7 @@ def campaign_payload(
                 "median": 100.0,
                 "p90": p90,
                 "p99": p99,
+                "max": max_value,
                 "mad": 4.0,
             },
             {
@@ -50,6 +52,7 @@ def campaign_payload(
                 "median": 200.0,
                 "p90": 220.0,
                 "p99": 230.0,
+                "max": 240.0,
                 "mad": 7.0,
             },
         ],
@@ -109,6 +112,26 @@ class BenchmarkConfidenceTests(unittest.TestCase):
         result = verify_benchmark_confidence.verify(self.write_campaign(campaign_payload(p90=90.0, p99=110.0)))
         self.assertFalse(result["passed"])
         self.assertTrue(any("median <= p90" in failure for failure in result["failures"]))
+
+    def test_max_must_bound_p99(self) -> None:
+        result = verify_benchmark_confidence.verify(self.write_campaign(campaign_payload(max_value=100.0)))
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("p99 <= max" in failure for failure in result["failures"]))
+
+    def test_outlier_max_warns_without_failing_smoke(self) -> None:
+        result = verify_benchmark_confidence.verify(self.write_campaign(campaign_payload(max_value=700.0)))
+        self.assertTrue(result["passed"], result["failures"])
+        self.assertEqual(result["summary"]["paper_comparable_rows"], 1)
+        self.assertAlmostEqual(result["summary"]["max_outlier_spread_ratio"], 7.0)
+        self.assertTrue(any("max/median outlier spread" in warning for warning in result["warnings"]))
+
+    def test_outlier_max_blocks_required_paper_comparable_mode(self) -> None:
+        result = verify_benchmark_confidence.verify(
+            self.write_campaign(campaign_payload(max_value=700.0)),
+            require_paper_comparable=True,
+        )
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("paper-comparable" in failure for failure in result["failures"]))
 
     def test_zero_sample_count_fails(self) -> None:
         result = verify_benchmark_confidence.verify(self.write_campaign(campaign_payload(sample_count=0)))
