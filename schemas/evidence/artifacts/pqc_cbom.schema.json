@@ -1,0 +1,120 @@
+{
+  "type": "object",
+  "description": "CycloneDX-style cryptographic bill of materials.",
+  "required": [
+    "bomFormat",
+    "specVersion",
+    "components"
+  ],
+  "properties": {
+    "bomFormat": {
+      "type": "string",
+      "const": "CycloneDX",
+      "description": "CycloneDX BOM format marker."
+    },
+    "specVersion": {
+      "type": "string",
+      "description": "CycloneDX specification version.",
+      "minLength": 1
+    },
+    "serialNumber": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Optional BOM serial."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "BOM version."
+    },
+    "metadata": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "BOM metadata."
+    },
+    "components": {
+      "type": "array",
+      "description": "BOM components.",
+      "items": {
+        "type": "object",
+        "description": "Cryptographic, dependency, validation, or platform component inventory entry.",
+        "required": [
+          "bom-ref",
+          "type",
+          "name"
+        ],
+        "properties": {
+          "bom-ref": {
+            "type": "string",
+            "description": "Stable component reference used by policy and trace links.",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "description": "CycloneDX component type or repo-specific inventory type.",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Component name.",
+            "minLength": 1
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Component version or revision if available."
+          },
+          "scope": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Runtime, required, optional, test, or evidence scope."
+          },
+          "properties": {
+            "type": "array",
+            "description": "Name/value properties, including pqcp:* evidence metadata.",
+            "items": {
+              "type": "object",
+              "description": "Component property.",
+              "required": [
+                "name",
+                "value"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Property name.",
+                  "minLength": 1
+                },
+                "value": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Property value."
+                }
+              },
+              "additionalProperties": true
+            },
+            "minItems": 0
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/pqc_cbom.schema.json",
+  "title": "PQC CBOM"
+}

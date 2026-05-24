@@ -1,0 +1,19 @@
+{
+  "comparisons": [
+    {
+      "metrics": [
+        {
+          "candidate_value": 100,
+          "metric": "cycles",
+          "passed": true,
+          "threshold": {
+            "max": 200
+          }
+        }
+      ],
+      "name": "synthetic",
+      "passed": true
+    }
+  ],
+  "schema_version": 1
+}

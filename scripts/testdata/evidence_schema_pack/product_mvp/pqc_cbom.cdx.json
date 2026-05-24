@@ -1,0 +1,33 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "crypto.mlkem_768",
+      "name": "ML-KEM-768",
+      "properties": [
+        {
+          "name": "pqcp:claim_ids",
+          "value": "kat.mlkem_768"
+        }
+      ],
+      "scope": "required",
+      "type": "cryptographic-asset",
+      "version": "1.0.0"
+    },
+    {
+      "bom-ref": "crypto.mldsa_65",
+      "name": "ML-DSA-65",
+      "properties": [
+        {
+          "name": "pqcp:claim_ids",
+          "value": "kat.mldsa_65"
+        }
+      ],
+      "scope": "required",
+      "type": "cryptographic-asset",
+      "version": "1.0.0"
+    }
+  ],
+  "specVersion": "1.7",
+  "version": 1
+}

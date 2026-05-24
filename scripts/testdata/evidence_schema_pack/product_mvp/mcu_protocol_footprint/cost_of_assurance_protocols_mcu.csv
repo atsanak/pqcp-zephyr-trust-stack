@@ -1,0 +1,2 @@
+board,suite,implementation,rom_bytes,ram_bytes
+qemu_x86_64,MLKEM+MLDSA,pqcp,1000,2000

@@ -1,0 +1,810 @@
+{
+  "schema_version": 1,
+  "catalog_id": "pqcp-release-evidence-contract",
+  "description": "Stable evidence-pack contract for PQCP local release, partner-review, and product-MVP packs.",
+  "profiles": {
+    "ci_fast": {
+      "description": "Fast local/CI gate contract for artifacts that should exist without full Passport generation."
+    },
+    "qemu_release": {
+      "description": "Full local QEMU/native-sim release contract for replayable evidence packs."
+    },
+    "partner_review": {
+      "description": "Partner-review contract requiring the major Passport, policy, benchmark, and report artifacts."
+    },
+    "product_mvp": {
+      "description": "Minimum product-grade contract for supported customer evaluation packs."
+    },
+    "hardware_review": {
+      "description": "Extension point for future physical-board evidence packs."
+    }
+  },
+  "contract_count": 55,
+  "contracts": [
+    {
+      "id": "acvp_json_interop_result",
+      "path": "acvp_json_interop_result.json",
+      "schema": "artifacts/acvp_json_interop_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "ACVP JSON vector translation evidence with serial transcript bindings.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "acvp_json_schema_result",
+      "path": "acvp_json_schema_result.json",
+      "schema": "artifacts/acvp_json_schema_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "ACVP JSON operation-coverage replay result.",
+      "producer": "release evidence tooling",
+      "consumer": "release replay verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "acvp_json_transcript_manifest",
+      "path": "acvp_json_transcript_manifest.json",
+      "schema": "artifacts/acvp_json_transcript_manifest.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Evidence transcript manifest binding commands and QEMU/stdout logs to hashes.",
+      "producer": "scripts/release_check.py",
+      "consumer": "offline release verifier",
+      "product_value": "Binds release claims to exact execution output."
+    },
+    {
+      "id": "acvp_negative_scenario_floor_result",
+      "path": "acvp_negative_scenario_floor_result.json",
+      "schema": "artifacts/acvp_negative_scenario_floor_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Append-only ACVP negative scenario compatibility-floor validation result.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "assurance_ledger",
+      "path": "assurance_ledger.json",
+      "schema": "artifacts/assurance_ledger.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "qemu_release",
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Assurance Ledger machine-readable claim/evidence status.",
+      "producer": "scripts/generate_assurance_ledger.py",
+      "consumer": "partner reviewer and dashboard",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "assurance_ledger_markdown",
+      "path": "assurance_ledger.md",
+      "schema": "artifacts/text_artifact.schema.json",
+      "artifact_type": "markdown",
+      "required_for": [
+        "qemu_release",
+        "partner_review"
+      ],
+      "description": "Human-readable ledger with the same claim identifiers as the JSON ledger.",
+      "producer": "scripts/generate_assurance_ledger.py",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "assurance_report_html",
+      "path": "assurance_report.html",
+      "schema": "artifacts/text_artifact.schema.json",
+      "artifact_type": "html",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Self-contained HTML report for release evidence review.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "backend_contract_result",
+      "path": "backend_contract_result.json",
+      "schema": "artifacts/backend_contract_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Backend provider contract result with scan coverage and pinned native backend SHAs.",
+      "producer": "release evidence tooling",
+      "consumer": "security reviewer",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "backend_update_evaluation",
+      "path": "backend_update_evaluation.json",
+      "schema": "artifacts/backend_update_evaluation.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Comparison-only review of pinned native backend metadata and optional upstream drift.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "benchmark_campaign_result",
+      "path": "benchmark_campaign_result.json",
+      "schema": "artifacts/benchmark_campaign_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Repeated benchmark campaign statistics and metadata.",
+      "producer": "benchmark tooling",
+      "consumer": "benchmark reviewer and paper appendix",
+      "product_value": "Makes performance evidence reproducible, comparable, and auditable."
+    },
+    {
+      "id": "benchmark_campaign_verify_result",
+      "path": "benchmark_campaign_verify_result.json",
+      "schema": "artifacts/benchmark_campaign_verify_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for benchmark campaign statistics and metadata.",
+      "producer": "benchmark tooling",
+      "consumer": "release replay verifier",
+      "product_value": "Makes performance evidence reproducible, comparable, and auditable."
+    },
+    {
+      "id": "benchmark_confidence_result",
+      "path": "benchmark_confidence_result.json",
+      "schema": "artifacts/benchmark_confidence_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for distribution shape, sample balance, and confidence tier.",
+      "producer": "benchmark tooling",
+      "consumer": "benchmark reviewer and paper appendix",
+      "product_value": "Makes performance evidence reproducible, comparable, and auditable."
+    },
+    {
+      "id": "benchmark_provenance",
+      "path": "benchmark_provenance.json",
+      "schema": "artifacts/benchmark_provenance.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "qemu_release",
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Benchmark CSV provenance sidecar.",
+      "producer": "benchmark tooling",
+      "consumer": "benchmark reviewer and paper appendix",
+      "product_value": "Makes performance evidence reproducible, comparable, and auditable."
+    },
+    {
+      "id": "benchmark_results_csv",
+      "path": "benchmark_results.csv",
+      "schema": "artifacts/csv_artifact.schema.json",
+      "artifact_type": "csv",
+      "required_for": [
+        "qemu_release",
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Primitive/protocol benchmark CSV with required operation metadata columns.",
+      "producer": "benchmark tooling",
+      "consumer": "benchmark reviewer and paper appendix",
+      "product_value": "Makes performance evidence reproducible, comparable, and auditable.",
+      "required_columns": [
+        "operation",
+        "algorithm",
+        "implementation"
+      ],
+      "min_rows": 1
+    },
+    {
+      "id": "benchmark_summary_markdown",
+      "path": "benchmark_summary.md",
+      "schema": "artifacts/text_artifact.schema.json",
+      "artifact_type": "markdown",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Human-readable benchmark summary generated next to benchmark_results.csv.",
+      "producer": "benchmark tooling",
+      "consumer": "benchmark reviewer and paper appendix",
+      "product_value": "Makes performance evidence reproducible, comparable, and auditable."
+    },
+    {
+      "id": "cost_of_assurance_evidence",
+      "path": "cost_of_assurance_evidence.json",
+      "schema": "artifacts/cost_of_assurance_evidence.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "qemu_release",
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Per-metric cost-of-assurance guardrail evidence.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "ct_campaign_result",
+      "path": "ct_campaign_result.json",
+      "schema": "artifacts/ct_campaign_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Replay result over CT sample campaign manifest.",
+      "producer": "release evidence tooling",
+      "consumer": "security reviewer",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "ct_instruction_policy_result",
+      "path": "ct_instruction_policy_result.json",
+      "schema": "artifacts/ct_instruction_policy_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "ML-KEM decapsulation instruction-policy scan result.",
+      "producer": "scripts/verify_assurance_policy.py",
+      "consumer": "security reviewer",
+      "product_value": "Converts raw evidence into an explicit accept/reject decision."
+    },
+    {
+      "id": "ct_sample_analysis_result",
+      "path": "ct_sample_analysis_result.json",
+      "schema": "artifacts/ct_sample_analysis_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Replay result for optional raw CT sample timing markers.",
+      "producer": "release evidence tooling",
+      "consumer": "security reviewer",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "device_evidence_token",
+      "path": "device_evidence_token.json",
+      "schema": "artifacts/device_evidence_token.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Firmware device-evidence marker captured from assurance-status sample.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "device_evidence_token_result",
+      "path": "device_evidence_token_result.json",
+      "schema": "artifacts/device_evidence_token_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Replay result for firmware device-evidence token.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "evidence_tamper_drill_result",
+      "path": "evidence_tamper_drill_result.json",
+      "schema": "artifacts/evidence_tamper_drill_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Result proving selected evidence mutations fail replay verification.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "evidence_transcript_manifest",
+      "path": "transcripts/evidence_transcript_manifest.json",
+      "schema": "artifacts/evidence_transcript_manifest.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "qemu_release",
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Evidence transcript manifest binding commands and QEMU/stdout logs to hashes.",
+      "producer": "scripts/release_check.py",
+      "consumer": "offline release verifier",
+      "product_value": "Binds release claims to exact execution output."
+    },
+    {
+      "id": "external_non_native_inventory",
+      "path": "liboqs_non_native_inventory.json",
+      "schema": "artifacts/external_non_native_inventory.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Experimental external-provider inventory for schemes outside the native provider families.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "firmware_assurance_status_result",
+      "path": "firmware_assurance_status_result.json",
+      "schema": "artifacts/firmware_assurance_status_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Replay result for firmware assurance status transcript markers.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "firmware_digest_header",
+      "path": "generated/pqcp_assurance_digest_generated.h",
+      "schema": "artifacts/firmware_digest_header.schema.json",
+      "artifact_type": "header",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Generated C header carrying assurance digest root for firmware binding.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "mcu_protocol_footprint_csv",
+      "path": "mcu_protocol_footprint/cost_of_assurance_protocols_mcu.csv",
+      "schema": "artifacts/csv_artifact.schema.json",
+      "artifact_type": "csv",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Build-only MCU ROM/RAM footprint CSV for protocol suites.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it.",
+      "required_columns": [
+        "board",
+        "suite",
+        "implementation",
+        "rom_bytes",
+        "ram_bytes"
+      ],
+      "min_rows": 1
+    },
+    {
+      "id": "paper_comparison_campaign_csv",
+      "path": "paper_comparison_campaign.csv",
+      "schema": "artifacts/paper_comparison_campaign_csv.schema.json",
+      "artifact_type": "csv",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Normalized CSV export for pqm4/SUPERCOP-style comparison workflows.",
+      "producer": "benchmark tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it.",
+      "required_columns": [
+        "source_url",
+        "platform_class",
+        "statistic_type",
+        "operation",
+        "algorithm"
+      ],
+      "min_rows": 1
+    },
+    {
+      "id": "paper_comparison_campaign_json",
+      "path": "paper_comparison_campaign.json",
+      "schema": "artifacts/paper_comparison_campaign.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Normalized external/reference comparison campaign metadata.",
+      "producer": "benchmark tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "partner_review_scorecard",
+      "path": "partner_review_scorecard.json",
+      "schema": "artifacts/partner_review_scorecard.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Compact partner-facing triage view over release evidence.",
+      "producer": "scripts/generate_partner_review_scorecard.py",
+      "consumer": "partner reviewer and dashboard",
+      "product_value": "Provides a concise partner-facing review summary."
+    },
+    {
+      "id": "partner_review_scorecard_markdown",
+      "path": "partner_review_scorecard.md",
+      "schema": "artifacts/text_artifact.schema.json",
+      "artifact_type": "markdown",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Human-readable compact partner scorecard.",
+      "producer": "scripts/generate_partner_review_scorecard.py",
+      "consumer": "offline release verifier",
+      "product_value": "Provides a concise partner-facing review summary."
+    },
+    {
+      "id": "partner_review_scorecard_result",
+      "path": "partner_review_scorecard_result.json",
+      "schema": "artifacts/partner_review_scorecard_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for partner scorecard hashes and summaries.",
+      "producer": "scripts/generate_partner_review_scorecard.py",
+      "consumer": "offline release verifier",
+      "product_value": "Provides a concise partner-facing review summary."
+    },
+    {
+      "id": "pqc_appraisal_evidence",
+      "path": "pqc_appraisal_evidence.json",
+      "schema": "artifacts/pqc_appraisal_evidence.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Mode-specific evidence appraisal inputs.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_appraisal_result",
+      "path": "pqc_appraisal_result.json",
+      "schema": "artifacts/pqc_appraisal_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Mode-specific evidence appraisal replay result.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_asset_trace_result",
+      "path": "pqc_asset_trace_result.json",
+      "schema": "artifacts/pqc_asset_trace_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Asset-to-source/Kconfig/claim/test/marker/CBOM trace-map validation result.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_assurance_digest",
+      "path": "pqc_assurance_digest.json",
+      "schema": "artifacts/pqc_assurance_digest.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Stable assurance digest manifest.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_assurance_profile_result",
+      "path": "pqc_assurance_profile_result.json",
+      "schema": "artifacts/pqc_assurance_profile_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Profile replay result for production, validation, lab, smoke, and test-only separation.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_attestation",
+      "path": "pqc_attestation.intoto.json",
+      "schema": "artifacts/pqc_attestation.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Unsigned in-toto Statement-style PQC assurance attestation.",
+      "producer": "scripts/generate_pqc_attestation.py",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_build_provenance",
+      "path": "pqc_build_provenance.slsa.json",
+      "schema": "artifacts/pqc_build_provenance.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "SLSA-shaped build provenance statement.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_build_provenance_result",
+      "path": "pqc_build_provenance_result.json",
+      "schema": "artifacts/pqc_build_provenance_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for SLSA-shaped build provenance.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_cbom",
+      "path": "pqc_cbom.cdx.json",
+      "schema": "artifacts/pqc_cbom.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "CycloneDX-style cryptographic bill of materials.",
+      "producer": "scripts/export_pqc_cbom.py",
+      "consumer": "partner reviewer and dashboard",
+      "product_value": "Lets partners inspect crypto inventory and provider scope."
+    },
+    {
+      "id": "pqc_claim_closure_result",
+      "path": "pqc_claim_closure_result.json",
+      "schema": "artifacts/pqc_claim_closure_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Post-policy closure result checking assembled Passport artifacts agree.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_environment_result",
+      "path": "pqc_environment_result.json",
+      "schema": "artifacts/pqc_environment_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for west/workflow/release-manifest/CBOM environment consistency.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_evidence_graph_json",
+      "path": "pqc_evidence_graph.json",
+      "schema": "artifacts/pqc_evidence_graph_json.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Graph-form asset/source/test/claim/marker/CBOM relationships.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_evidence_graph_markdown",
+      "path": "pqc_evidence_graph.md",
+      "schema": "artifacts/pqc_evidence_graph_markdown.schema.json",
+      "artifact_type": "markdown",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Human-readable evidence graph summary.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_evidence_quality_result",
+      "path": "pqc_evidence_quality_result.json",
+      "schema": "artifacts/pqc_evidence_quality_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Evidence-class replay result for required claims.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_migration_readiness_json",
+      "path": "pqc_migration_readiness.json",
+      "schema": "artifacts/pqc_migration_readiness.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Generated profile summary for partner review and maintenance planning.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_migration_readiness_markdown",
+      "path": "pqc_migration_readiness.md",
+      "schema": "artifacts/text_artifact.schema.json",
+      "artifact_type": "markdown",
+      "required_for": [
+        "partner_review"
+      ],
+      "description": "Human-readable migration readiness report.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_policy_result",
+      "path": "pqc_policy_result.json",
+      "schema": "artifacts/pqc_policy_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Partner-review policy replay result.",
+      "producer": "scripts/verify_assurance_policy.py",
+      "consumer": "partner reviewer and dashboard",
+      "product_value": "Converts raw evidence into an explicit accept/reject decision."
+    },
+    {
+      "id": "pqc_reference_values",
+      "path": "pqc_reference_values.json",
+      "schema": "artifacts/pqc_reference_values.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Release reference values for replay and future device evidence.",
+      "producer": "reference-value tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "pqc_reference_values_result",
+      "path": "pqc_reference_values_result.json",
+      "schema": "artifacts/pqc_reference_values_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for reference values.",
+      "producer": "reference-value tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "provider_scope_result",
+      "path": "provider_scope_result.json",
+      "schema": "artifacts/provider_scope_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result checking CBOM provider metadata against backend contract and inventory.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "release_manifest",
+      "path": "local_release_bundle/{tag}/release-manifest-{tag}.json",
+      "schema": "artifacts/release_manifest.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "qemu_release",
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Local release bundle manifest.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "release_notes_markdown",
+      "path": "local_release_bundle/{tag}/release-notes-{tag}.md",
+      "schema": "artifacts/text_artifact.schema.json",
+      "artifact_type": "markdown",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Release notes extracted from CHANGELOG for the selected tag.",
+      "producer": "release evidence tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    },
+    {
+      "id": "release_reference_values_result",
+      "path": "release_reference_values_result.json",
+      "schema": "artifacts/release_reference_values_result.schema.json",
+      "artifact_type": "json",
+      "required_for": [
+        "partner_review",
+        "product_mvp"
+      ],
+      "description": "Replay result for release reference values, backend contract, and provider scope.",
+      "producer": "reference-value tooling",
+      "consumer": "offline release verifier",
+      "product_value": "Stabilizes release evidence so tools can replay and inspect it."
+    }
+  ]
+}

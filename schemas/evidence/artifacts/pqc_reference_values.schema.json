@@ -1,0 +1,127 @@
+{
+  "type": "object",
+  "description": "Release reference values for replay and future device evidence.",
+  "required": [
+    "schema_version",
+    "version",
+    "tag",
+    "head_sha",
+    "dirty",
+    "artifact_hashes"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Reference value schema version."
+    },
+    "version": {
+      "type": "string",
+      "description": "Project semantic version associated with the evidence pack.",
+      "minLength": 1,
+      "format": "version"
+    },
+    "tag": {
+      "type": "string",
+      "description": "Release tag associated with the evidence pack.",
+      "minLength": 1,
+      "format": "tag"
+    },
+    "head_sha": {
+      "type": "string",
+      "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+      "minLength": 64,
+      "format": "sha256"
+    },
+    "dirty": {
+      "type": "boolean",
+      "description": "Dirty-tree expectation."
+    },
+    "artifact_hashes": {
+      "type": "array",
+      "description": "Reference artifact hashes.",
+      "items": {
+        "type": "object",
+        "description": "Artifact hash entry used by digests and reference values.",
+        "required": [
+          "name",
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Stable evidence artifact identifier from the schema catalog.",
+            "minLength": 1,
+            "format": "artifact-id"
+          },
+          "path": {
+            "type": "string",
+            "description": "Safe path relative to the evidence output root or artifact parent.",
+            "minLength": 1,
+            "format": "relative-path"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+            "minLength": 64,
+            "format": "sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Artifact byte length."
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 1
+    },
+    "required_claim_ids": {
+      "type": "array",
+      "description": "Claims expected in the ledger.",
+      "items": {
+        "type": "string",
+        "description": "Dotted assurance claim identifier from scripts/assurance_claims.json.",
+        "minLength": 1,
+        "format": "claim-id"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "cbom_component_ids": {
+      "type": "array",
+      "description": "Expected CBOM component identifiers.",
+      "items": {
+        "type": "string",
+        "description": "Stable evidence artifact identifier from the schema catalog.",
+        "minLength": 1,
+        "format": "artifact-id"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "allowed_profile_ids": {
+      "type": "array",
+      "description": "Allowed profile IDs.",
+      "items": {
+        "type": "string",
+        "description": "Stable evidence artifact identifier from the schema catalog.",
+        "minLength": 1,
+        "format": "artifact-id"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "firmware_digest_root": {
+      "type": "string",
+      "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+      "minLength": 64,
+      "format": "sha256"
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/pqc_reference_values.schema.json",
+  "title": "PQC Reference Values"
+}

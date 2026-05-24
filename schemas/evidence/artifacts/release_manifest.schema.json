@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "description": "Local release bundle manifest.",
+  "required": [
+    "version",
+    "tag",
+    "source_commit",
+    "working_tree_dirty"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Manifest schema version."
+    },
+    "version": {
+      "type": "string",
+      "description": "Project semantic version associated with the evidence pack.",
+      "minLength": 1,
+      "format": "version"
+    },
+    "tag": {
+      "type": "string",
+      "description": "Release tag associated with the evidence pack.",
+      "minLength": 1,
+      "format": "tag"
+    },
+    "source_commit": {
+      "type": "string",
+      "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+      "minLength": 64,
+      "format": "sha256"
+    },
+    "tag_commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "sha256",
+      "description": "Commit peeled from the tag when available."
+    },
+    "working_tree_dirty": {
+      "type": "boolean",
+      "description": "Dirty-tree flag."
+    },
+    "zephyr_revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Pinned Zephyr revision."
+    },
+    "dependencies": {
+      "type": [
+        "array",
+        "object",
+        "null"
+      ],
+      "description": "Dependency pins."
+    },
+    "release_notes": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Release notes metadata including path and hash."
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/release_manifest.schema.json",
+  "title": "Release Manifest"
+}

@@ -1,0 +1,138 @@
+{
+  "type": "object",
+  "description": "ACVP JSON vector translation evidence with serial transcript bindings.",
+  "required": [
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Artifact schema version."
+    },
+    "status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "passed",
+        "fail",
+        "failed",
+        "warning",
+        "not_applicable",
+        "skipped",
+        null
+      ],
+      "description": "Verifier status when present."
+    },
+    "passed": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Boolean pass/fail summary when present."
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Generation timestamp when available."
+    },
+    "summary": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "description": "Human or machine-readable summary."
+    },
+    "issues": {
+      "type": "array",
+      "description": "Validation issues emitted by the tool.",
+      "items": {
+        "type": "object",
+        "description": "Validation issue emitted by a replay or policy verifier.",
+        "required": [
+          "severity",
+          "location",
+          "message"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "fatal"
+            ],
+            "description": "Issue severity."
+          },
+          "location": {
+            "type": "string",
+            "description": "Artifact, claim, field, or path where the issue was detected.",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable issue message.",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "vector_groups": {
+      "type": "array",
+      "description": "Vector group summaries.",
+      "items": {
+        "type": "object",
+        "description": "Vector group summary.",
+        "required": [
+          "algorithm",
+          "operation"
+        ],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "description": "Algorithm.",
+            "minLength": 1
+          },
+          "operation": {
+            "type": "string",
+            "description": "Operation.",
+            "minLength": 1
+          },
+          "test_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Test count."
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "Group pass/fail."
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "transcript_manifest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "relative-path",
+      "description": "Transcript manifest path."
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acvp-json-interop-result.schema.json",
+  "title": "ACVP JSON Interop Result"
+}

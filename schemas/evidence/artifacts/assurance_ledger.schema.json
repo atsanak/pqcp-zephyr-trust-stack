@@ -1,0 +1,173 @@
+{
+  "type": "object",
+  "description": "Assurance Ledger machine-readable claim/evidence status.",
+  "required": [
+    "schema_version",
+    "project",
+    "version",
+    "head_sha",
+    "dirty",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Ledger schema version."
+    },
+    "generated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Ledger generation timestamp."
+    },
+    "project": {
+      "type": "string",
+      "description": "Project name.",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "Project semantic version associated with the evidence pack.",
+      "minLength": 1,
+      "format": "version"
+    },
+    "tag": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "tag",
+      "description": "Release tag or null for untagged runs."
+    },
+    "head_sha": {
+      "type": "string",
+      "description": "Lowercase SHA-256 digest of the exact artifact bytes.",
+      "minLength": 64,
+      "format": "sha256"
+    },
+    "dirty": {
+      "type": "boolean",
+      "description": "Whether the source tree was dirty when the ledger was generated."
+    },
+    "summary": {
+      "type": "object",
+      "description": "Claim summary counts.",
+      "required": [],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total claims."
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Passed claims."
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Failed claims."
+        },
+        "not_applicable": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Not applicable claims."
+        }
+      },
+      "additionalProperties": true
+    },
+    "claims": {
+      "type": "array",
+      "description": "Claim result entries.",
+      "items": {
+        "type": "object",
+        "description": "Claim result entry bound to validators and evidence artifacts.",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Dotted assurance claim identifier from scripts/assurance_claims.json.",
+            "minLength": 1,
+            "format": "claim-id"
+          },
+          "category": {
+            "type": "string",
+            "description": "Claim category such as release, kat, benchmark, security, firmware, or supply_chain.",
+            "minLength": 1
+          },
+          "claim": {
+            "type": "string",
+            "description": "Human-readable claim text.",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "passed",
+              "fail",
+              "failed",
+              "not_applicable",
+              "warning",
+              "skipped"
+            ],
+            "description": "Claim evaluation status."
+          },
+          "validators": {
+            "type": "array",
+            "description": "Validators that evaluated this claim.",
+            "items": {
+              "type": "string",
+              "description": "Validator name.",
+              "minLength": 1
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "evidence_artifacts": {
+            "type": "array",
+            "description": "Evidence artifacts referenced by this claim.",
+            "items": {
+              "type": "string",
+              "description": "Stable evidence artifact identifier from the schema catalog.",
+              "minLength": 1,
+              "format": "artifact-id"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "commands": {
+            "type": "array",
+            "description": "Commands or command labels that produced evidence.",
+            "items": {
+              "type": "string",
+              "description": "Command text or label.",
+              "minLength": 1
+            },
+            "minItems": 0
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Failure reason when status is failing."
+          }
+        },
+        "additionalProperties": true
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": true,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/assurance_ledger.schema.json",
+  "title": "Assurance Ledger"
+}
