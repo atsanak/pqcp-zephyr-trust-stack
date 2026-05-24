@@ -8,6 +8,7 @@
     "median",
     "p90",
     "p99",
+    "max",
     "mad"
   ],
   "required_context_fields": [

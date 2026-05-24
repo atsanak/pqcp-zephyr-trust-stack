@@ -34,12 +34,13 @@ against `benchmark_campaign_result.json` and writes
 `benchmark_confidence_result.json`. This does not change benchmark output. It
 adds a replay check over the generated distribution rows:
 
-- distribution shape must be coherent (`min <= median <= p90 <= p99`);
+- distribution shape must be coherent (`min <= median <= p90 <= p99 <= max`);
 - every row must have a positive `sample_count`;
 - pairwise candidate/baseline comparisons must use balanced sample counts;
 - rows are graded as `single_observation`, `low`, `distribution`, or
   `paper_comparable`;
-- p99/median tail spread and MAD/median noise are recorded for reviewers.
+- p99/median tail spread, max/median outlier spread, and MAD/median noise are
+  recorded for reviewers.
 
 By default, single-observation QEMU rows remain valid regression evidence but
 are not labeled paper-comparable. Maintainers can run the verifier with

@@ -94,6 +94,7 @@ def summarize_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
             "median": statistics.median(values),
             "p90": percentile(values, 90),
             "p99": percentile(values, 99),
+            "max": max(values),
             "mad": mad(values),
         }
         for field, field_values in resources.get((parameter_set, implementation, backend, operation), {}).items():

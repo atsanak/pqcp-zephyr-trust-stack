@@ -20,6 +20,7 @@ from typing import Any
 DEFAULT_MIN_DISTRIBUTION_SAMPLES = 5
 DEFAULT_MIN_PAPER_SAMPLES = 20
 DEFAULT_MAX_TAIL_SPREAD_RATIO = 3.0
+DEFAULT_MAX_OUTLIER_SPREAD_RATIO = 5.0
 DEFAULT_MAX_ROBUST_NOISE_RATIO = 0.25
 
 
@@ -30,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-distribution-samples", type=int, default=DEFAULT_MIN_DISTRIBUTION_SAMPLES)
     parser.add_argument("--min-paper-samples", type=int, default=DEFAULT_MIN_PAPER_SAMPLES)
     parser.add_argument("--max-tail-spread-ratio", type=float, default=DEFAULT_MAX_TAIL_SPREAD_RATIO)
+    parser.add_argument("--max-outlier-spread-ratio", type=float, default=DEFAULT_MAX_OUTLIER_SPREAD_RATIO)
     parser.add_argument("--max-robust-noise-ratio", type=float, default=DEFAULT_MAX_ROBUST_NOISE_RATIO)
     parser.add_argument(
         "--require-paper-comparable",
@@ -78,13 +80,14 @@ def assess_statistic_row(
     min_distribution_samples: int,
     min_paper_samples: int,
     max_tail_spread_ratio: float,
+    max_outlier_spread_ratio: float,
     max_robust_noise_ratio: float,
     require_paper_comparable: bool,
 ) -> tuple[dict[str, Any], list[str], list[str]]:
     failures: list[str] = []
     warnings: list[str] = []
     numeric: dict[str, float] = {}
-    for field in ("min", "median", "p90", "p99", "mad"):
+    for field in ("min", "median", "p90", "p99", "max", "mad"):
         value = finite_number(row.get(field))
         if value is None or value < 0.0:
             failures.append(f"row {index} has invalid {field}")
@@ -101,14 +104,19 @@ def assess_statistic_row(
             failures.append(f"row {index} violates median <= p90")
         if numeric["p90"] > numeric["p99"]:
             failures.append(f"row {index} violates p90 <= p99")
+        if numeric["p99"] > numeric["max"]:
+            failures.append(f"row {index} violates p99 <= max")
     median = numeric["median"]
     tail_spread_ratio = numeric["p99"] / median if median > 0.0 else None
+    outlier_spread_ratio = numeric["max"] / median if median > 0.0 else None
     robust_noise_ratio = numeric["mad"] / median if median > 0.0 else None
     tier = confidence_tier(sample_count, min_distribution_samples, min_paper_samples)
     paper_comparable = (
         tier == "paper_comparable"
         and tail_spread_ratio is not None
         and tail_spread_ratio <= max_tail_spread_ratio
+        and outlier_spread_ratio is not None
+        and outlier_spread_ratio <= max_outlier_spread_ratio
         and robust_noise_ratio is not None
         and robust_noise_ratio <= max_robust_noise_ratio
     )
@@ -119,6 +127,10 @@ def assess_statistic_row(
         warnings.append(f"{label}: fewer than {min_distribution_samples} samples")
     if tail_spread_ratio is not None and tail_spread_ratio > max_tail_spread_ratio:
         warnings.append(f"{label}: p99/median tail spread {tail_spread_ratio:.3f} exceeds {max_tail_spread_ratio:.3f}")
+    if outlier_spread_ratio is not None and outlier_spread_ratio > max_outlier_spread_ratio:
+        warnings.append(
+            f"{label}: max/median outlier spread {outlier_spread_ratio:.3f} exceeds {max_outlier_spread_ratio:.3f}"
+        )
     if robust_noise_ratio is not None and robust_noise_ratio > max_robust_noise_ratio:
         warnings.append(f"{label}: MAD/median noise {robust_noise_ratio:.3f} exceeds {max_robust_noise_ratio:.3f}")
     if require_paper_comparable and not paper_comparable:
@@ -133,6 +145,7 @@ def assess_statistic_row(
         "confidence_tier": tier,
         "paper_comparable": paper_comparable,
         "tail_spread_ratio": tail_spread_ratio,
+        "outlier_spread_ratio": outlier_spread_ratio,
         "robust_noise_ratio": robust_noise_ratio,
     }
     return assessment, failures, warnings
@@ -179,6 +192,7 @@ def verify(
     min_distribution_samples: int = DEFAULT_MIN_DISTRIBUTION_SAMPLES,
     min_paper_samples: int = DEFAULT_MIN_PAPER_SAMPLES,
     max_tail_spread_ratio: float = DEFAULT_MAX_TAIL_SPREAD_RATIO,
+    max_outlier_spread_ratio: float = DEFAULT_MAX_OUTLIER_SPREAD_RATIO,
     max_robust_noise_ratio: float = DEFAULT_MAX_ROBUST_NOISE_RATIO,
     require_paper_comparable: bool = False,
 ) -> dict[str, Any]:
@@ -205,6 +219,7 @@ def verify(
                 min_distribution_samples=min_distribution_samples,
                 min_paper_samples=min_paper_samples,
                 max_tail_spread_ratio=max_tail_spread_ratio,
+                max_outlier_spread_ratio=max_outlier_spread_ratio,
                 max_robust_noise_ratio=max_robust_noise_ratio,
                 require_paper_comparable=require_paper_comparable,
             )
@@ -227,6 +242,11 @@ def verify(
         for row in row_assessments
         if isinstance(row.get("robust_noise_ratio"), (int, float))
     ]
+    outlier_values = [
+        float(row["outlier_spread_ratio"])
+        for row in row_assessments
+        if isinstance(row.get("outlier_spread_ratio"), (int, float))
+    ]
     checks.append(
         {
             "check": "benchmark_confidence_rows",
@@ -243,6 +263,7 @@ def verify(
             "min_distribution_samples": min_distribution_samples,
             "min_paper_samples": min_paper_samples,
             "max_tail_spread_ratio": max_tail_spread_ratio,
+            "max_outlier_spread_ratio": max_outlier_spread_ratio,
             "max_robust_noise_ratio": max_robust_noise_ratio,
             "require_paper_comparable": require_paper_comparable,
         },
@@ -251,6 +272,7 @@ def verify(
             "paper_comparable_rows": len(paper_rows),
             "single_observation_rows": len(single_rows),
             "max_tail_spread_ratio": max(tail_values) if tail_values else None,
+            "max_outlier_spread_ratio": max(outlier_values) if outlier_values else None,
             "max_robust_noise_ratio": max(noise_values) if noise_values else None,
         },
         "row_assessments": row_assessments,
@@ -267,6 +289,7 @@ def main() -> int:
         min_distribution_samples=args.min_distribution_samples,
         min_paper_samples=args.min_paper_samples,
         max_tail_spread_ratio=args.max_tail_spread_ratio,
+        max_outlier_spread_ratio=args.max_outlier_spread_ratio,
         max_robust_noise_ratio=args.max_robust_noise_ratio,
         require_paper_comparable=args.require_paper_comparable,
     )

@@ -35,6 +35,7 @@ class BenchmarkCampaignTests(unittest.TestCase):
                     "median": 10,
                     "p90": 10,
                     "p99": 10,
+                    "max": 10,
                     "mad": 0,
                 }
             ],
@@ -73,6 +74,26 @@ class BenchmarkCampaignTests(unittest.TestCase):
             result = verify_benchmark_campaign.verify(self.write_campaign(Path(tmp), context=False))
         self.assertFalse(result["passed"])
         self.assertTrue(any("comparison_context" in failure for failure in result["failures"]))
+
+    def test_campaign_replay_fails_when_max_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_campaign(Path(tmp))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            del payload["statistics"][0]["max"]
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            result = verify_benchmark_campaign.verify(path)
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("missing numeric max" in failure for failure in result["failures"]))
+
+    def test_campaign_replay_fails_when_p99_exceeds_max(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_campaign(Path(tmp))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["statistics"][0]["max"] = 9
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            result = verify_benchmark_campaign.verify(path)
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("p99 <= max" in failure for failure in result["failures"]))
 
     def test_pairwise_ratio_summary_prefers_median_cycles(self) -> None:
         summaries = [
