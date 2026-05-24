@@ -29,3 +29,8 @@ to executable evidence rather than generic positioning text.
 For the deeper repository-grounded roadmap of what is still missing before the
 project can support stronger research or product claims, see
 [`research-product-hardening-audit.md`](research-product-hardening-audit.md).
+
+For the product and market path specifically, including customer segments,
+packaging, risks, go-to-market phases, and product-grade engineering
+requirements, see
+[`market-product-strategy.md`](market-product-strategy.md).
