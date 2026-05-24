@@ -69,6 +69,35 @@ def build_parser() -> argparse.ArgumentParser:
     _catalog_arg(p)
     p.add_argument("--output", type=Path)
 
+    p = sub.add_parser("compare-runs", help="Compare two or more evidence packs for reproducibility")
+    p.add_argument("--pack", action="append", type=Path, required=True, help="Evidence pack root; pass at least twice")
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("validate-coverage", help="Validate experiment catalog coverage against product/research defaults")
+    _catalog_arg(p)
+    p.add_argument("--output-root", type=Path, required=True)
+
+    p = sub.add_parser("validate-results", help="Validate CSV result quality and required metric combinations")
+    p.add_argument("--csv", action="append", type=Path, required=True, dest="csv_paths")
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--zero-is-fail", action="store_true")
+    p.add_argument("--no-core-combos", action="store_true")
+
+    p = sub.add_parser("stats-summary", help="Compute statistical sanity summaries for result CSV files")
+    p.add_argument("--csv", action="append", type=Path, required=True, dest="csv_paths")
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--min-samples", type=int, default=3)
+    p.add_argument("--cv-warn-threshold", type=float, default=0.10)
+
+    p = sub.add_parser("paper-report", help="Aggregate validator outputs into a compact paper evidence report")
+    p.add_argument("--output-root", type=Path, required=True)
+    p.add_argument("--reproducibility-report", type=Path)
+    p.add_argument("--coverage-report", type=Path)
+    p.add_argument("--baseline-report", type=Path)
+    p.add_argument("--regression-report", type=Path)
+    p.add_argument("--quality-report", type=Path)
+    p.add_argument("--statistics-report", type=Path)
+
     p = sub.add_parser("environment", help="Capture reproducibility metadata")
     p.add_argument("--output", type=Path)
 
@@ -196,6 +225,60 @@ def cmd_environment(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
     return 0 if snapshot.passed() else 1
 
 
+def _status_exit(payload: dict[str, object]) -> int:
+    return 1 if payload.get("status") == "FAIL" or payload.get("passed") is False else 0
+
+
+def cmd_compare_runs(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.compare_runs(packs=args.pack, output_root=args.output_root)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_validate_coverage(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.validate_coverage(output_root=args.output_root, catalog_path=args.catalog)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_validate_results(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.validate_results(
+        csv_paths=args.csv_paths,
+        output_root=args.output_root,
+        zero_is_fail=args.zero_is_fail,
+        require_core_combos=not args.no_core_combos,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_stats_summary(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.statistical_sanity(
+        csv_paths=args.csv_paths,
+        output_root=args.output_root,
+        min_samples=args.min_samples,
+        cv_warn_threshold=args.cv_warn_threshold,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
+def cmd_paper_report(api: ProductEvidenceApi, args: argparse.Namespace) -> int:
+    payload = api.paper_evidence_report(
+        output_root=args.output_root,
+        reports={
+            "reproducibility": args.reproducibility_report,
+            "coverage": args.coverage_report,
+            "baseline": args.baseline_report,
+            "regression": args.regression_report,
+            "quality": args.quality_report,
+            "statistics": args.statistics_report,
+        },
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return _status_exit(payload)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -217,6 +300,16 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_compare(api, args)
         if args.command == "readiness-matrix":
             return cmd_readiness_matrix(api, args)
+        if args.command == "compare-runs":
+            return cmd_compare_runs(api, args)
+        if args.command == "validate-coverage":
+            return cmd_validate_coverage(api, args)
+        if args.command == "validate-results":
+            return cmd_validate_results(api, args)
+        if args.command == "stats-summary":
+            return cmd_stats_summary(api, args)
+        if args.command == "paper-report":
+            return cmd_paper_report(api, args)
         if args.command == "environment":
             return cmd_environment(api, args)
         parser.error(f"unhandled command: {args.command}")
