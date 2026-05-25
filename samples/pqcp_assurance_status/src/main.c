@@ -9,6 +9,7 @@
 #include <zephyr/sys/printk.h>
 
 #include <pqcp_zephyr/assurance.h>
+#include <pqcp_zephyr/provider.h>
 
 #include <pqcp_assurance_digest_generated.h>
 
@@ -38,6 +39,10 @@ int main(void)
 
 	pqcp_sample_populate_artifacts();
 
+	if (pqcp_provider_emit_contract() != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
 	if (pqcp_assurance_emit_status(&manifest) != 0) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;

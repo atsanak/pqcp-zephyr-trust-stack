@@ -33,6 +33,9 @@ APIs unless explicitly documented by the header.
   `PQCP_ASSURANCE_*` / `PQCP_DEVICE_EVIDENCE` marker emission. This is a
   device-evidence reporting API, not a cryptographic attestation or signing
   protocol.
+- `provider.h`: firmware-side provider contract reporting. It exposes the
+  compiled provider family, native implementation source, backend selector, and
+  external-provider policy for release transcript binding.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -123,6 +126,18 @@ exact signatures and parameter contracts; this section answers
   by release-pack replay tools. These helpers bind firmware output to an
   already-generated hash manifest; they do not sign evidence or prove hardware
   identity.
+
+### Reporting provider contract evidence (`provider.h`)
+
+- Call `pqcp_provider_contract_get()` to inspect the build-time provider
+  contract compiled into the firmware image.
+- Call `pqcp_provider_contract_validate()` before consuming or reporting the
+  contract. Enabled ML-KEM must report `mlkem-native`; enabled ML-DSA must
+  report `mldsa-native`; external providers are not allowed for those native
+  families.
+- Call `pqcp_provider_emit_contract()` to emit a stable
+  `PQCP_PROVIDER_CONTRACT` marker that release tooling can bind into QEMU or
+  device transcripts.
 
 ### Running the offline TLS / PSA self-test (`tls_selftest.h`)
 
