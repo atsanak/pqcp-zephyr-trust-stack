@@ -18,6 +18,7 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/atomic.h>
 #include <pqcp_zephyr/bench.h>
+#include <pqcp_zephyr/provider.h>
 #include <pqcp_zephyr/rng.h>
 #include <pqcp_zephyr/tls_selftest.h>
 
@@ -108,6 +109,9 @@ static void protocol_bench_print_metadata_once(void)
     PQCP_LOG_METRIC("build", "metadata", "distribution", 0,
                     "sample_cap", ARRAY_SIZE(bench_ctx.latency_samples),
                     "count");
+#if defined(CONFIG_PQCP_PROVIDER_CONTRACT)
+    (void)pqcp_provider_emit_contract();
+#endif
 }
 
 #if defined(CONFIG_PQCP_BENCH_PROTOCOL_RTOS_METRICS)

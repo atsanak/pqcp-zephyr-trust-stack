@@ -11,6 +11,7 @@
 #include <pqcp_zephyr/bench.h>
 #include <pqcp_zephyr/mlkem.h>
 #include <pqcp_zephyr/mldsa.h>
+#include <pqcp_zephyr/provider.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -264,6 +265,9 @@ static void pqcp_bench_print_metadata_once(void)
     PQCP_LOG_METRIC("build", "metadata", "distribution", 0,
                     "sample_cap", CONFIG_PQCP_BENCH_DISTRIBUTION_SAMPLES,
                     "count");
+#if defined(CONFIG_PQCP_PROVIDER_CONTRACT)
+    (void)pqcp_provider_emit_contract();
+#endif
 }
 
 int pqcp_bench_init(void)
