@@ -90,6 +90,10 @@ endif()
 # Common RNG interface
 zephyr_library_sources(${PQCP_SRC}/rng_common.c)
 
+if(CONFIG_PQCP_ASSURANCE_STATUS)
+    zephyr_library_sources(${PQCP_SRC}/assurance_status.c)
+endif()
+
 # =============================================================================
 # ML-KEM Library
 # =============================================================================
