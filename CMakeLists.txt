@@ -94,6 +94,10 @@ if(CONFIG_PQCP_ASSURANCE_STATUS)
     zephyr_library_sources(${PQCP_SRC}/assurance_status.c)
 endif()
 
+if(CONFIG_PQCP_PROVIDER_CONTRACT)
+    zephyr_library_sources(${PQCP_SRC}/provider_contract.c)
+endif()
+
 # =============================================================================
 # ML-KEM Library
 # =============================================================================

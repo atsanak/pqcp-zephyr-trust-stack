@@ -283,6 +283,25 @@ config PQCP_REDUCE_RAM
 endmenu
 
 # =============================================================================
+# Provider Contract Reporting
+# =============================================================================
+menu "Provider Contract Reporting"
+
+config PQCP_PROVIDER_CONTRACT
+	bool "Enable provider contract reporting"
+	default y
+	help
+	  Enable firmware-visible provider contract helpers. These helpers report
+	  which provider family and backend selector were compiled into the image
+	  and validate that native ML-KEM and ML-DSA families are still bound to
+	  the PQ Code Package native sources.
+
+	  This option is evidence plumbing only. It does not select an
+	  implementation, import external code, or change cryptographic behavior.
+
+endmenu
+
+# =============================================================================
 # Firmware Assurance Status
 # =============================================================================
 menu "Firmware Assurance Status"
