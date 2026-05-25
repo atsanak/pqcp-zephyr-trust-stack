@@ -5,28 +5,51 @@
  */
 
 #include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/sys/printk.h>
+
+#include <pqcp_zephyr/assurance.h>
 
 #include <pqcp_assurance_digest_generated.h>
 
+static struct pqcp_assurance_artifact
+	pqcp_sample_artifacts[ARRAY_SIZE(pqcp_assurance_digest_artifact_names)];
+
+static void pqcp_sample_populate_artifacts(void)
+{
+	for (size_t i = 0; i < PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT; ++i) {
+		pqcp_sample_artifacts[i].name =
+			pqcp_assurance_digest_artifact_names[i];
+		pqcp_sample_artifacts[i].sha256 =
+			pqcp_assurance_digest_artifact_sha256[i];
+	}
+}
+
 int main(void)
 {
-    printk("PQCP_ASSURANCE_STATUS version=%s digest=%s artifact_count=%d schema=%d\n",
-           PQCP_ASSURANCE_DIGEST_VERSION,
-           PQCP_ASSURANCE_DIGEST_ROOT_SHA256,
-           PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT,
-           PQCP_ASSURANCE_DIGEST_SCHEMA_VERSION);
-    for (int i = 0; i < PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT; ++i) {
-        printk("PQCP_ASSURANCE_ARTIFACT name=%s sha256=%s\n",
-               pqcp_assurance_digest_artifact_names[i],
-               pqcp_assurance_digest_artifact_sha256[i]);
-    }
-    printk("PQCP_DEVICE_EVIDENCE nonce=%s digest=%s artifact_count=%d schema=%d transcript_sha256=%s\n",
-           PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE,
-           PQCP_ASSURANCE_DIGEST_ROOT_SHA256,
-           PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT,
-           PQCP_ASSURANCE_DIGEST_SCHEMA_VERSION,
-           PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256);
-    printk("PROJECT EXECUTION SUCCESSFUL\n");
-    return 0;
+	const struct pqcp_assurance_manifest manifest = {
+		.version = PQCP_ASSURANCE_DIGEST_VERSION,
+		.digest_sha256 = PQCP_ASSURANCE_DIGEST_ROOT_SHA256,
+		.schema_version = PQCP_ASSURANCE_DIGEST_SCHEMA_VERSION,
+		.artifacts = PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT > 0 ?
+			pqcp_sample_artifacts : NULL,
+		.artifact_count = PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT,
+	};
+
+	pqcp_sample_populate_artifacts();
+
+	if (pqcp_assurance_emit_status(&manifest) != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	if (pqcp_assurance_emit_device_evidence(
+		    &manifest,
+		    PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE,
+		    PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256) != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+
+	printk("PROJECT EXECUTION SUCCESSFUL\n");
+	return 0;
 }

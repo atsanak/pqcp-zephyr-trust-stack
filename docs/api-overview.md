@@ -29,6 +29,10 @@ APIs unless explicitly documented by the header.
 - `acvp_cmd.h`: lab/test-oriented ACVP command parser, formatter, and serial
   line-state helpers. The wire grammar is stable, but this is not a production
   transport protocol.
+- `assurance.h`: firmware-side assurance manifest validation and stable
+  `PQCP_ASSURANCE_*` / `PQCP_DEVICE_EVIDENCE` marker emission. This is a
+  device-evidence reporting API, not a cryptographic attestation or signing
+  protocol.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -105,6 +109,20 @@ exact signatures and parameter contracts; this section answers
   depend on it.
 - New benchmarks should reuse the existing emission helpers rather than
   inventing their own format string.
+
+### Reporting firmware-visible assurance evidence (`assurance.h`)
+
+- Release tooling can generate a digest manifest header for
+  `samples/pqcp_assurance_status`. Firmware code maps that generated data into
+  `struct pqcp_assurance_manifest`.
+- Call `pqcp_assurance_manifest_validate()` before reporting evidence. It
+  rejects malformed root hashes, artifact hashes, empty versions, missing
+  artifact names, and zero schema versions.
+- Call `pqcp_assurance_emit_status()` and
+  `pqcp_assurance_emit_device_evidence()` to print the stable markers consumed
+  by release-pack replay tools. These helpers bind firmware output to an
+  already-generated hash manifest; they do not sign evidence or prove hardware
+  identity.
 
 ### Running the offline TLS / PSA self-test (`tls_selftest.h`)
 
