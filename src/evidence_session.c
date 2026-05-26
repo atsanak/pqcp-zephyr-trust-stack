@@ -24,6 +24,8 @@ const char *pqcp_evidence_event_name(uint32_t event)
 		return "assurance_artifacts";
 	case PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE:
 		return "device_evidence";
+	case PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY:
+		return "firmware_policy";
 	default:
 		return "unknown";
 	}
