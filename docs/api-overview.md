@@ -36,6 +36,9 @@ APIs unless explicitly documented by the header.
 - `provider.h`: firmware-side provider contract reporting. It exposes the
   compiled provider family, native implementation source, backend selector, and
   external-provider policy for release transcript binding.
+- `build_manifest.h`: firmware-side build manifest reporting. It exposes the
+  PQCP version, Zephyr version, board, enabled algorithm-level masks, active
+  profile flags, RNG mode, and provider-contract availability.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -138,6 +141,15 @@ exact signatures and parameter contracts; this section answers
 - Call `pqcp_provider_emit_contract()` to emit a stable
   `PQCP_PROVIDER_CONTRACT` marker that release tooling can bind into QEMU or
   device transcripts.
+
+### Reporting build manifest evidence (`build_manifest.h`)
+
+- Call `pqcp_build_manifest_get()` to inspect firmware-visible build facts
+  derived from Kconfig and Zephyr build metadata.
+- Call `pqcp_build_manifest_validate()` before consuming a manifest. It rejects
+  empty version/board/RNG fields and unknown profile or algorithm-level bits.
+- Call `pqcp_build_manifest_emit()` to emit the stable
+  `PQCP_BUILD_MANIFEST` marker consumed by release evidence transcripts.
 
 ### Running the offline TLS / PSA self-test (`tls_selftest.h`)
 

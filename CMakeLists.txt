@@ -98,6 +98,10 @@ if(CONFIG_PQCP_PROVIDER_CONTRACT)
     zephyr_library_sources(${PQCP_SRC}/provider_contract.c)
 endif()
 
+if(CONFIG_PQCP_BUILD_MANIFEST)
+    zephyr_library_sources(${PQCP_SRC}/build_manifest.c)
+endif()
+
 # =============================================================================
 # ML-KEM Library
 # =============================================================================
