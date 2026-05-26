@@ -417,15 +417,15 @@ config PQCP_FIRMWARE_EVIDENCE
 	bool "Enable reusable firmware evidence runner"
 	depends on PQCP_ASSURANCE_STATUS && PQCP_BUILD_MANIFEST
 	depends on PQCP_PROVIDER_CONTRACT && PQCP_FIRMWARE_POLICY
-	depends on PQCP_EVIDENCE_SESSION
+	depends on PQCP_CAPABILITY_DESCRIPTOR && PQCP_EVIDENCE_SESSION
 	default y
 	help
 	  Enable a reusable C runner that emits the complete firmware evidence
 	  transcript in a fixed order: evidence-session begin, build manifest,
-	  provider contract, firmware policy, assurance status, optional artifact
-	  event, device evidence, and evidence-session end. Samples and downstream
-	  firmware can use this helper instead of hand-assembling evidence marker
-	  sequences.
+	  provider contract, firmware policy, capability descriptor, assurance
+	  status, optional artifact event, device evidence, and evidence-session
+	  end. Samples and downstream firmware can use this helper instead of
+	  hand-assembling evidence marker sequences.
 
 	  This option is evidence plumbing only. It does not select cryptographic
 	  algorithms and does not change ACVP, benchmark, or public crypto API
