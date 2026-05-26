@@ -46,6 +46,9 @@ APIs unless explicitly documented by the header.
 - `firmware_policy.h`: firmware-side policy/readiness reporting. It evaluates
   the build manifest and provider contract against profile-specific level,
   RNG, and native-provider requirements, then emits a blocker mask for replay.
+- `firmware_evidence.h`: firmware-side evidence runner. It emits the complete
+  build manifest, provider contract, firmware policy, assurance status, and
+  device-evidence sequence inside one evidence session.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -182,6 +185,18 @@ exact signatures and parameter contracts; this section answers
   `PQCP_FIRMWARE_POLICY` marker consumed by release transcripts. A nonzero
   blocker mask means the marker was emitted but the image should not be treated
   as passing the selected firmware policy.
+
+### Emitting a complete firmware evidence transcript (`firmware_evidence.h`)
+
+- Use `pqcp_firmware_evidence_run_default()` when an application wants the same
+  fixed marker sequence as `samples/pqcp_assurance_status`: session begin,
+  build manifest, provider contract, firmware policy, assurance status,
+  optional artifact event, device evidence, and session end.
+- Use `pqcp_firmware_evidence_run()` with custom hooks in tests or specialized
+  samples that need to prove failure handling without replacing global build
+  state.
+- Inspect `struct pqcp_firmware_evidence_result` after the call to see required,
+  observed, failed, and missing event masks plus the first failing event.
 
 ### Running the offline TLS / PSA self-test (`tls_selftest.h`)
 
