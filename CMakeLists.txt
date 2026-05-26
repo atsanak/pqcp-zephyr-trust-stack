@@ -102,6 +102,10 @@ if(CONFIG_PQCP_BUILD_MANIFEST)
     zephyr_library_sources(${PQCP_SRC}/build_manifest.c)
 endif()
 
+if(CONFIG_PQCP_EVIDENCE_SESSION)
+    zephyr_library_sources(${PQCP_SRC}/evidence_session.c)
+endif()
+
 # =============================================================================
 # ML-KEM Library
 # =============================================================================

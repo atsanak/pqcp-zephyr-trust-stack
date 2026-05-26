@@ -39,6 +39,10 @@ APIs unless explicitly documented by the header.
 - `build_manifest.h`: firmware-side build manifest reporting. It exposes the
   PQCP version, Zephyr version, board, enabled algorithm-level masks, active
   profile flags, RNG mode, and provider-contract availability.
+- `evidence_session.h`: firmware-side evidence-session reporting. It wraps
+  build manifest, provider contract, assurance status, and device-evidence
+  markers with begin/event/end records so transcript replay can detect missing,
+  failed, or duplicate evidence markers.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -150,6 +154,18 @@ exact signatures and parameter contracts; this section answers
   empty version/board/RNG fields and unknown profile or algorithm-level bits.
 - Call `pqcp_build_manifest_emit()` to emit the stable
   `PQCP_BUILD_MANIFEST` marker consumed by release evidence transcripts.
+
+### Checking transcript completeness (`evidence_session.h`)
+
+- Call `pqcp_evidence_session_begin()` with the high-level evidence markers a
+  firmware sample must emit, such as build manifest, provider contract,
+  assurance status, and device evidence.
+- After each evidence helper returns, call `pqcp_evidence_session_record()` with
+  the matching event bit and return code. The session rejects duplicate events
+  and records failed helper calls.
+- Call `pqcp_evidence_session_end()` before reporting success. It emits a
+  `PQCP_EVIDENCE_SESSION_END` marker that includes required, observed, failed,
+  and missing event masks for transcript replay.
 
 ### Running the offline TLS / PSA self-test (`tls_selftest.h`)
 
