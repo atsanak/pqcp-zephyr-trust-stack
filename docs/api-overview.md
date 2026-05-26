@@ -219,6 +219,8 @@ exact signatures and parameter contracts; this section answers
   summary, backend selector, RNG mode, policy blockers, production allowance,
   compiled evidence capabilities, and a deterministic 0-100 evidence-readiness
   score.
+- `pqcp_firmware_evidence_run_default()` emits this marker inside the evidence
+  session so replay can bind the capability summary to a required session event.
 - The readiness score is an evidence-completeness signal, not a certification
   or formal security claim. Production interpretation still depends on the
   firmware policy result, provider contract, and external review context.
@@ -227,8 +229,8 @@ exact signatures and parameter contracts; this section answers
 
 - Use `pqcp_firmware_evidence_run_default()` when an application wants the same
   fixed marker sequence as `samples/pqcp_assurance_status`: session begin,
-  build manifest, provider contract, firmware policy, assurance status,
-  optional artifact event, device evidence, and session end.
+  build manifest, provider contract, firmware policy, capability descriptor,
+  assurance status, optional artifact event, device evidence, and session end.
 - Use `pqcp_firmware_evidence_run()` with custom hooks in tests or specialized
   samples that need to prove failure handling without replacing global build
   state.

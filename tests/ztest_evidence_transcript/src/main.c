@@ -25,6 +25,10 @@
 	"PQCP_FIRMWARE_POLICY schema=1 profile=evidence_lab status=PASS production_allowed=0 blockers=0x00000000 required_mlkem=0x00000000 observed_mlkem=0x00000000 required_mldsa=0x00000000 observed_mldsa=0x00000000 rng_allowed=1 provider_contract=1 native_provider=1"
 #define POLICY_FAIL_LINE \
 	"PQCP_FIRMWARE_POLICY schema=1 profile=gateway status=FAIL production_allowed=1 blockers=0x00000020 required_mlkem=0x00000002 observed_mlkem=0x00000002 required_mldsa=0x00000002 observed_mldsa=0x00000002 rng_allowed=0 provider_contract=1 native_provider=1"
+#define CAPABILITY_PASS_LINE \
+	"PQCP_CAPABILITY_DESCRIPTOR schema=1 profile=evidence_lab status=PASS production_allowed=0 provider=disabled backend=auto mlkem_levels=0x00000000 mldsa_levels=0x00000000 rng=custom evidence=0x0000007f blockers=0x00000000 readiness=90"
+#define CAPABILITY_FAIL_LINE \
+	"PQCP_CAPABILITY_DESCRIPTOR schema=1 profile=gateway status=FAIL production_allowed=1 provider=invalid backend=auto mlkem_levels=0x00000002 mldsa_levels=0x00000002 rng=deterministic evidence=0x0000007f blockers=0x00000021 readiness=40"
 #define STATUS_NO_ARTIFACT_LINE \
 	"PQCP_ASSURANCE_STATUS version=1.0.0 digest=" GOOD_SHA " artifact_count=0 schema=7"
 #define STATUS_ONE_ARTIFACT_LINE \
@@ -81,30 +85,34 @@ ZTEST(pqcp_evidence_transcript, test_valid_transcript_with_artifact_passes)
 {
 	static const char *const lines[] = {
 		"*** Booting Zephyr OS build v4.4.0 ***",
-		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x0000003f",
+		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x0000007f",
 		BUILD_LINE,
 		"PQCP_EVIDENCE_EVENT idx=0 name=build_manifest status=PASS code=0 observed=0x00000001 failed=0x00000000",
 		PROVIDER_LINE,
 		"PQCP_EVIDENCE_EVENT idx=1 name=provider_contract status=PASS code=0 observed=0x00000003 failed=0x00000000",
 		POLICY_PASS_LINE,
 		"PQCP_EVIDENCE_EVENT idx=2 name=firmware_policy status=PASS code=0 observed=0x00000023 failed=0x00000000",
+		CAPABILITY_PASS_LINE,
+		"PQCP_EVIDENCE_EVENT idx=3 name=capability_descriptor status=PASS code=0 observed=0x00000063 failed=0x00000000",
 		STATUS_ONE_ARTIFACT_LINE,
 		ARTIFACT_LINE,
-		"PQCP_EVIDENCE_EVENT idx=3 name=assurance_status status=PASS code=0 observed=0x00000027 failed=0x00000000",
-		"PQCP_EVIDENCE_EVENT idx=4 name=assurance_artifacts status=PASS code=0 observed=0x0000002f failed=0x00000000",
+		"PQCP_EVIDENCE_EVENT idx=4 name=assurance_status status=PASS code=0 observed=0x00000067 failed=0x00000000",
+		"PQCP_EVIDENCE_EVENT idx=5 name=assurance_artifacts status=PASS code=0 observed=0x0000006f failed=0x00000000",
 		DEVICE_ONE_ARTIFACT_LINE,
-		"PQCP_EVIDENCE_EVENT idx=5 name=device_evidence status=PASS code=0 observed=0x0000003f failed=0x00000000",
-		"PQCP_EVIDENCE_SESSION_END events=6 required=0x0000003f observed=0x0000003f failed=0x00000000 missing=0x00000000 status=PASS",
+		"PQCP_EVIDENCE_EVENT idx=6 name=device_evidence status=PASS code=0 observed=0x0000007f failed=0x00000000",
+		"PQCP_EVIDENCE_SESSION_END events=7 required=0x0000007f observed=0x0000007f failed=0x00000000 missing=0x00000000 status=PASS",
 	};
 	struct pqcp_evidence_transcript_result result;
 
 	zassert_equal(replay_lines(lines, ARRAY_SIZE(lines), &result), 0);
 	zassert_true(result.passed);
-	zassert_equal(result.required_events, 0x0000003fU);
-	zassert_equal(result.observed_events, 0x0000003fU);
+	zassert_equal(result.required_events, 0x0000007fU);
+	zassert_equal(result.observed_events, 0x0000007fU);
 	zassert_equal(result.failed_events, 0U);
 	zassert_equal(result.declared_artifact_count, 1U);
 	zassert_equal(result.observed_artifact_count, 1U);
+	zassert_true((result.marker_mask &
+		      PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR) != 0U);
 	zassert_true((result.marker_mask &
 		      PQCP_EVIDENCE_TRANSCRIPT_MARKER_DEVICE_EVIDENCE) != 0U);
 }
@@ -114,26 +122,28 @@ ZTEST(pqcp_evidence_transcript, test_valid_transcript_without_artifacts_passes)
 	static const char *const lines[] = {
 		"noise before evidence",
 		"PQCP_METRIC,driver,keygen,MLKEM,768,time,1,us",
-		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x00000037",
+		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x00000077",
 		BUILD_LINE,
 		"PQCP_EVIDENCE_EVENT idx=0 name=build_manifest status=PASS code=0 observed=0x00000001 failed=0x00000000",
 		PROVIDER_LINE,
 		"PQCP_EVIDENCE_EVENT idx=1 name=provider_contract status=PASS code=0 observed=0x00000003 failed=0x00000000",
 		POLICY_PASS_LINE,
 		"PQCP_EVIDENCE_EVENT idx=2 name=firmware_policy status=PASS code=0 observed=0x00000023 failed=0x00000000",
+		CAPABILITY_PASS_LINE,
+		"PQCP_EVIDENCE_EVENT idx=3 name=capability_descriptor status=PASS code=0 observed=0x00000063 failed=0x00000000",
 		STATUS_NO_ARTIFACT_LINE,
-		"PQCP_EVIDENCE_EVENT idx=3 name=assurance_status status=PASS code=0 observed=0x00000027 failed=0x00000000",
+		"PQCP_EVIDENCE_EVENT idx=4 name=assurance_status status=PASS code=0 observed=0x00000067 failed=0x00000000",
 		DEVICE_NO_ARTIFACT_LINE,
-		"PQCP_EVIDENCE_EVENT idx=4 name=device_evidence status=PASS code=0 observed=0x00000037 failed=0x00000000",
-		"PQCP_EVIDENCE_SESSION_END events=5 required=0x00000037 observed=0x00000037 failed=0x00000000 missing=0x00000000 status=PASS",
+		"PQCP_EVIDENCE_EVENT idx=5 name=device_evidence status=PASS code=0 observed=0x00000077 failed=0x00000000",
+		"PQCP_EVIDENCE_SESSION_END events=6 required=0x00000077 observed=0x00000077 failed=0x00000000 missing=0x00000000 status=PASS",
 		"PROJECT EXECUTION SUCCESSFUL",
 	};
 	struct pqcp_evidence_transcript_result result;
 
 	zassert_equal(replay_lines(lines, ARRAY_SIZE(lines), &result), 0);
 	zassert_true(result.passed);
-	zassert_equal(result.required_events, 0x00000037U);
-	zassert_equal(result.event_count, 5U);
+	zassert_equal(result.required_events, 0x00000077U);
+	zassert_equal(result.event_count, 6U);
 	zassert_equal(result.declared_artifact_count, 0U);
 	zassert_equal(result.observed_artifact_count, 0U);
 }
@@ -163,17 +173,19 @@ ZTEST(pqcp_evidence_transcript, test_event_without_concrete_marker_fails)
 ZTEST(pqcp_evidence_transcript, test_bad_artifact_count_fails)
 {
 	static const char *const lines[] = {
-		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x0000003f",
+		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x0000007f",
 		BUILD_LINE,
 		"PQCP_EVIDENCE_EVENT idx=0 name=build_manifest status=PASS code=0 observed=0x00000001 failed=0x00000000",
 		PROVIDER_LINE,
 		"PQCP_EVIDENCE_EVENT idx=1 name=provider_contract status=PASS code=0 observed=0x00000003 failed=0x00000000",
 		POLICY_PASS_LINE,
 		"PQCP_EVIDENCE_EVENT idx=2 name=firmware_policy status=PASS code=0 observed=0x00000023 failed=0x00000000",
+		CAPABILITY_PASS_LINE,
+		"PQCP_EVIDENCE_EVENT idx=3 name=capability_descriptor status=PASS code=0 observed=0x00000063 failed=0x00000000",
 		STATUS_TWO_ARTIFACTS_LINE,
 		ARTIFACT_LINE,
-		"PQCP_EVIDENCE_EVENT idx=3 name=assurance_status status=PASS code=0 observed=0x00000027 failed=0x00000000",
-		"PQCP_EVIDENCE_EVENT idx=4 name=assurance_artifacts status=PASS code=0 observed=0x0000002f failed=0x00000000",
+		"PQCP_EVIDENCE_EVENT idx=4 name=assurance_status status=PASS code=0 observed=0x00000067 failed=0x00000000",
+		"PQCP_EVIDENCE_EVENT idx=5 name=assurance_artifacts status=PASS code=0 observed=0x0000006f failed=0x00000000",
 	};
 
 	assert_replay_error(lines, ARRAY_SIZE(lines),
@@ -215,6 +227,17 @@ ZTEST(pqcp_evidence_transcript, test_policy_fail_marker_fails)
 	static const char *const lines[] = {
 		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x00000020",
 		POLICY_FAIL_LINE,
+	};
+
+	assert_replay_error(lines, ARRAY_SIZE(lines),
+			    PQCP_EVIDENCE_TRANSCRIPT_ERROR_STATUS_FAIL);
+}
+
+ZTEST(pqcp_evidence_transcript, test_capability_fail_marker_fails)
+{
+	static const char *const lines[] = {
+		"PQCP_EVIDENCE_SESSION_BEGIN schema=1 required=0x00000040",
+		CAPABILITY_FAIL_LINE,
 	};
 
 	assert_replay_error(lines, ARRAY_SIZE(lines),

@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/evidence_transcript.h>
 
 #define FIELD_VALUE_MAX 96U
@@ -234,6 +235,9 @@ static uint32_t event_for_name(const char *name)
 	if (strcmp(name, "firmware_policy") == 0) {
 		return PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY;
 	}
+	if (strcmp(name, "capability_descriptor") == 0) {
+		return PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR;
+	}
 
 	return 0U;
 }
@@ -253,6 +257,8 @@ static uint32_t marker_for_event(uint32_t event)
 		return PQCP_EVIDENCE_TRANSCRIPT_MARKER_DEVICE_EVIDENCE;
 	case PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY:
 		return PQCP_EVIDENCE_TRANSCRIPT_MARKER_FIRMWARE_POLICY;
+	case PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR:
+		return PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR;
 	default:
 		return 0U;
 	}
@@ -611,6 +617,65 @@ static int ingest_assurance_status(
 	return 0;
 }
 
+static int ingest_capability_descriptor(
+	struct pqcp_evidence_transcript_state *state,
+	const char *line)
+{
+	char profile[FIELD_VALUE_MAX];
+	char status[FIELD_VALUE_MAX];
+	char provider[FIELD_VALUE_MAX];
+	char backend[FIELD_VALUE_MAX];
+	char rng[FIELD_VALUE_MAX];
+	uint32_t schema;
+	uint32_t production_allowed;
+	uint32_t mlkem_levels;
+	uint32_t mldsa_levels;
+	uint32_t evidence;
+	uint32_t blockers;
+	uint32_t readiness;
+	int ret = set_marker(
+		state, PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if ((get_u32_dec(line, "schema", &schema) != 0) ||
+	    (get_field(line, "profile", profile, sizeof(profile)) != 0) ||
+	    (get_field(line, "status", status, sizeof(status)) != 0) ||
+	    (get_u32_dec(line, "production_allowed",
+			 &production_allowed) != 0) ||
+	    (get_field(line, "provider", provider, sizeof(provider)) != 0) ||
+	    (get_field(line, "backend", backend, sizeof(backend)) != 0) ||
+	    (get_u32_hex(line, "mlkem_levels", &mlkem_levels) != 0) ||
+	    (get_u32_hex(line, "mldsa_levels", &mldsa_levels) != 0) ||
+	    (get_field(line, "rng", rng, sizeof(rng)) != 0) ||
+	    (get_u32_hex(line, "evidence", &evidence) != 0) ||
+	    (get_u32_hex(line, "blockers", &blockers) != 0) ||
+	    (get_u32_dec(line, "readiness", &readiness) != 0)) {
+		return transcript_fail(
+			state,
+			PQCP_EVIDENCE_TRANSCRIPT_ERROR_MALFORMED_FIELD);
+	}
+	(void)mlkem_levels;
+	(void)mldsa_levels;
+
+	if ((schema != PQCP_CAPABILITY_DESCRIPTOR_SCHEMA_VERSION) ||
+	    (production_allowed > 1U) || (readiness > 100U) ||
+	    (profile[0] == '\0') || (provider[0] == '\0') ||
+	    (backend[0] == '\0') || (rng[0] == '\0') ||
+	    ((evidence & ~PQCP_CAPABILITY_EVIDENCE_KNOWN_MASK) != 0U)) {
+		return transcript_fail(
+			state,
+			PQCP_EVIDENCE_TRANSCRIPT_ERROR_MALFORMED_FIELD);
+	}
+	if ((strcmp(status, "PASS") != 0) || (blockers != 0U)) {
+		return transcript_fail(
+			state, PQCP_EVIDENCE_TRANSCRIPT_ERROR_STATUS_FAIL);
+	}
+
+	return 0;
+}
+
 static int ingest_assurance_artifact(
 	struct pqcp_evidence_transcript_state *state,
 	const char *line)
@@ -736,6 +801,9 @@ int pqcp_evidence_transcript_ingest_line(
 	if (starts_with(line, "PQCP_FIRMWARE_POLICY ")) {
 		return ingest_firmware_policy(state, line);
 	}
+	if (starts_with(line, "PQCP_CAPABILITY_DESCRIPTOR ")) {
+		return ingest_capability_descriptor(state, line);
+	}
 	if (starts_with(line, "PQCP_ASSURANCE_STATUS ")) {
 		return ingest_assurance_status(state, line);
 	}
@@ -746,7 +814,8 @@ int pqcp_evidence_transcript_ingest_line(
 		return ingest_device_evidence(state, line);
 	}
 	if (starts_with(line, "PQCP_EVIDENCE_") ||
-	    starts_with(line, "PQCP_ASSURANCE_")) {
+	    starts_with(line, "PQCP_ASSURANCE_") ||
+	    starts_with(line, "PQCP_CAPABILITY_")) {
 		return transcript_fail(
 			state,
 			PQCP_EVIDENCE_TRANSCRIPT_ERROR_MALFORMED_FIELD);
