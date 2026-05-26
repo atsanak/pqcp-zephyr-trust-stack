@@ -387,6 +387,28 @@ config PQCP_FIRMWARE_POLICY
 endmenu
 
 # =============================================================================
+# Firmware Capability Descriptor
+# =============================================================================
+menu "Firmware Capability Descriptor"
+
+config PQCP_CAPABILITY_DESCRIPTOR
+	bool "Enable firmware capability descriptor"
+	depends on PQCP_BUILD_MANIFEST && PQCP_PROVIDER_CONTRACT
+	depends on PQCP_FIRMWARE_POLICY
+	default y
+	help
+	  Enable a compact C descriptor that summarizes firmware-visible PQC
+	  capability, provider-family policy, profile readiness, and compiled
+	  evidence plumbing in a stable PQCP_CAPABILITY_DESCRIPTOR marker. This is
+	  intended for QEMU/device transcripts and partner review; it is not a
+	  certification claim and it does not select cryptographic providers.
+
+	  This option is evidence plumbing only. It does not change public crypto
+	  APIs, ACVP wire formats, or benchmark row ordering.
+
+endmenu
+
+# =============================================================================
 # Firmware Evidence Runner
 # =============================================================================
 menu "Firmware Evidence Runner"
