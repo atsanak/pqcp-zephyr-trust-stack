@@ -110,6 +110,10 @@ if(CONFIG_PQCP_FIRMWARE_POLICY)
     zephyr_library_sources(${PQCP_SRC}/firmware_policy.c)
 endif()
 
+if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
+    zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
+endif()
+
 # =============================================================================
 # ML-KEM Library
 # =============================================================================
