@@ -302,6 +302,26 @@ config PQCP_PROVIDER_CONTRACT
 endmenu
 
 # =============================================================================
+# Firmware Build Manifest
+# =============================================================================
+menu "Firmware Build Manifest"
+
+config PQCP_BUILD_MANIFEST
+	bool "Enable firmware build manifest reporting"
+	default y
+	help
+	  Enable C helpers that report the firmware-visible build manifest:
+	  PQCP version, Zephyr version, board, enabled PQC level masks, selected
+	  profiles, RNG mode, and provider-contract availability. The emitted
+	  PQCP_BUILD_MANIFEST marker is intended for QEMU/device transcripts and
+	  release evidence binding.
+
+	  This option does not select cryptographic algorithms and does not change
+	  ACVP, benchmark, or public crypto API behavior.
+
+endmenu
+
+# =============================================================================
 # Firmware Assurance Status
 # =============================================================================
 menu "Firmware Assurance Status"
