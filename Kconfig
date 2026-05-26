@@ -343,6 +343,28 @@ config PQCP_EVIDENCE_SESSION
 endmenu
 
 # =============================================================================
+# Firmware Evidence Transcript Replay
+# =============================================================================
+menu "Firmware Evidence Transcript Replay"
+
+config PQCP_EVIDENCE_TRANSCRIPT
+	bool "Enable firmware evidence transcript replay verifier"
+	depends on PQCP_ASSURANCE_STATUS && PQCP_EVIDENCE_SESSION
+	default n
+	help
+	  Enable a small C replay verifier for the stable firmware evidence
+	  transcript grammar. The verifier consumes captured UART/QEMU transcript
+	  lines, validates hashes and nonce fields, and cross-checks
+	  PQCP_EVIDENCE_SESSION_* summaries against the concrete evidence markers
+	  that actually appeared in the transcript.
+
+	  This option is evidence plumbing only. It does not select cryptographic
+	  algorithms and does not change ACVP, benchmark, or public crypto API
+	  behavior.
+
+endmenu
+
+# =============================================================================
 # Firmware Policy Evidence
 # =============================================================================
 menu "Firmware Policy Evidence"
