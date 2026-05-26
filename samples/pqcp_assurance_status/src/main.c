@@ -11,6 +11,7 @@
 #include <pqcp_zephyr/assurance.h>
 #include <pqcp_zephyr/build_manifest.h>
 #include <pqcp_zephyr/evidence_session.h>
+#include <pqcp_zephyr/firmware_policy.h>
 #include <pqcp_zephyr/provider.h>
 
 #include <pqcp_assurance_digest_generated.h>
@@ -42,6 +43,7 @@ int main(void)
 	const uint32_t required_events =
 		PQCP_EVIDENCE_EVENT_BUILD_MANIFEST |
 		PQCP_EVIDENCE_EVENT_PROVIDER_CONTRACT |
+		PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY |
 		PQCP_EVIDENCE_EVENT_ASSURANCE_STATUS |
 		PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE;
 	int ret;
@@ -64,6 +66,14 @@ int main(void)
 	ret = pqcp_provider_emit_contract();
 	if ((pqcp_evidence_session_record(
 		     &session, PQCP_EVIDENCE_EVENT_PROVIDER_CONTRACT, ret) != 0) ||
+	    (ret != 0)) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+
+	ret = pqcp_firmware_policy_emit_current();
+	if ((pqcp_evidence_session_record(
+		     &session, PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY, ret) != 0) ||
 	    (ret != 0)) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;

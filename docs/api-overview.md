@@ -43,6 +43,9 @@ APIs unless explicitly documented by the header.
   build manifest, provider contract, assurance status, and device-evidence
   markers with begin/event/end records so transcript replay can detect missing,
   failed, or duplicate evidence markers.
+- `firmware_policy.h`: firmware-side policy/readiness reporting. It evaluates
+  the build manifest and provider contract against profile-specific level,
+  RNG, and native-provider requirements, then emits a blocker mask for replay.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -166,6 +169,19 @@ exact signatures and parameter contracts; this section answers
 - Call `pqcp_evidence_session_end()` before reporting success. It emits a
   `PQCP_EVIDENCE_SESSION_END` marker that includes required, observed, failed,
   and missing event masks for transcript replay.
+
+### Reporting firmware policy readiness (`firmware_policy.h`)
+
+- Use `pqcp_firmware_policy_profile_from_manifest()` to derive the policy
+  profile from Kconfig-backed build facts, or call
+  `pqcp_firmware_policy_default()` when a sample needs an explicit policy.
+- Call `pqcp_firmware_policy_evaluate()` to check required ML-KEM/ML-DSA level
+  masks, RNG mode, provider-contract availability, and native-provider
+  constraints.
+- Call `pqcp_firmware_policy_emit_current()` to emit the stable
+  `PQCP_FIRMWARE_POLICY` marker consumed by release transcripts. A nonzero
+  blocker mask means the marker was emitted but the image should not be treated
+  as passing the selected firmware policy.
 
 ### Running the offline TLS / PSA self-test (`tls_selftest.h`)
 

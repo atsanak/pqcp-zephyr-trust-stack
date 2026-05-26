@@ -343,6 +343,28 @@ config PQCP_EVIDENCE_SESSION
 endmenu
 
 # =============================================================================
+# Firmware Policy Evidence
+# =============================================================================
+menu "Firmware Policy Evidence"
+
+config PQCP_FIRMWARE_POLICY
+	bool "Enable firmware policy/readiness evidence"
+	depends on PQCP_BUILD_MANIFEST && PQCP_PROVIDER_CONTRACT
+	default y
+	help
+	  Enable C helpers that evaluate firmware-visible profile, provider,
+	  algorithm-level, and RNG constraints and emit a stable
+	  PQCP_FIRMWARE_POLICY marker. The marker records whether the local image
+	  satisfies its derived firmware policy and, on failure, exposes a blocker
+	  bit mask for transcript replay.
+
+	  This option is evidence plumbing only. It does not select cryptographic
+	  algorithms and does not change ACVP, benchmark, or public crypto API
+	  behavior.
+
+endmenu
+
+# =============================================================================
 # Firmware Assurance Status
 # =============================================================================
 menu "Firmware Assurance Status"
