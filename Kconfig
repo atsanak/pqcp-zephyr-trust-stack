@@ -322,6 +322,27 @@ config PQCP_BUILD_MANIFEST
 endmenu
 
 # =============================================================================
+# Firmware Evidence Session
+# =============================================================================
+menu "Firmware Evidence Session"
+
+config PQCP_EVIDENCE_SESSION
+	bool "Enable firmware evidence session markers"
+	default y
+	help
+	  Enable C helpers that wrap firmware-visible evidence output in a
+	  begin/event/end session. The session records which high-level evidence
+	  markers were required, which were observed, and whether any marker failed
+	  or appeared twice. The emitted PQCP_EVIDENCE_SESSION_* markers make QEMU
+	  or device transcripts easier to replay for completeness.
+
+	  This option is evidence plumbing only. It does not select cryptographic
+	  algorithms and does not change ACVP, benchmark, or public crypto API
+	  behavior.
+
+endmenu
+
+# =============================================================================
 # Firmware Assurance Status
 # =============================================================================
 menu "Firmware Assurance Status"

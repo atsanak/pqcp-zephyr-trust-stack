@@ -10,6 +10,7 @@
 
 #include <pqcp_zephyr/assurance.h>
 #include <pqcp_zephyr/build_manifest.h>
+#include <pqcp_zephyr/evidence_session.h>
 #include <pqcp_zephyr/provider.h>
 
 #include <pqcp_assurance_digest_generated.h>
@@ -29,6 +30,7 @@ static void pqcp_sample_populate_artifacts(void)
 
 int main(void)
 {
+	struct pqcp_evidence_session session;
 	const struct pqcp_assurance_manifest manifest = {
 		.version = PQCP_ASSURANCE_DIGEST_VERSION,
 		.digest_sha256 = PQCP_ASSURANCE_DIGEST_ROOT_SHA256,
@@ -37,25 +39,64 @@ int main(void)
 			pqcp_sample_artifacts : NULL,
 		.artifact_count = PQCP_ASSURANCE_DIGEST_ARTIFACT_COUNT,
 	};
+	const uint32_t required_events =
+		PQCP_EVIDENCE_EVENT_BUILD_MANIFEST |
+		PQCP_EVIDENCE_EVENT_PROVIDER_CONTRACT |
+		PQCP_EVIDENCE_EVENT_ASSURANCE_STATUS |
+		PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE;
+	int ret;
 
 	pqcp_sample_populate_artifacts();
 
-	if (pqcp_build_manifest_emit() != 0) {
+	if (pqcp_evidence_session_begin(&session, required_events) != 0) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}
-	if (pqcp_provider_emit_contract() != 0) {
+
+	ret = pqcp_build_manifest_emit();
+	if ((pqcp_evidence_session_record(
+		     &session, PQCP_EVIDENCE_EVENT_BUILD_MANIFEST, ret) != 0) ||
+	    (ret != 0)) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}
-	if (pqcp_assurance_emit_status(&manifest) != 0) {
+
+	ret = pqcp_provider_emit_contract();
+	if ((pqcp_evidence_session_record(
+		     &session, PQCP_EVIDENCE_EVENT_PROVIDER_CONTRACT, ret) != 0) ||
+	    (ret != 0)) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}
-	if (pqcp_assurance_emit_device_evidence(
-		    &manifest,
-		    PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE,
-		    PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256) != 0) {
+
+	ret = pqcp_assurance_emit_status(&manifest);
+	if ((pqcp_evidence_session_record(
+		     &session, PQCP_EVIDENCE_EVENT_ASSURANCE_STATUS, ret) != 0) ||
+	    (ret != 0)) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	if (manifest.artifact_count > 0U) {
+		ret = pqcp_evidence_session_record(
+			&session, PQCP_EVIDENCE_EVENT_ASSURANCE_ARTIFACTS, 0);
+		if (ret != 0) {
+			printk("PROJECT EXECUTION FAILED\n");
+			return 1;
+		}
+	}
+
+	ret = pqcp_assurance_emit_device_evidence(
+		&manifest,
+		PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE,
+		PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256);
+	if ((pqcp_evidence_session_record(
+		     &session, PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE, ret) != 0) ||
+	    (ret != 0)) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+
+	if (pqcp_evidence_session_end(&session) != 0) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}
