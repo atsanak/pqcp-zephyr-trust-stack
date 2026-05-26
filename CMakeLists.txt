@@ -106,6 +106,10 @@ if(CONFIG_PQCP_EVIDENCE_SESSION)
     zephyr_library_sources(${PQCP_SRC}/evidence_session.c)
 endif()
 
+if(CONFIG_PQCP_EVIDENCE_TRANSCRIPT)
+    zephyr_library_sources(${PQCP_SRC}/evidence_transcript.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_POLICY)
     zephyr_library_sources(${PQCP_SRC}/firmware_policy.c)
 endif()

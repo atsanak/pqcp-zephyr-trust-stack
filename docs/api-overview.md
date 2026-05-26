@@ -43,6 +43,10 @@ APIs unless explicitly documented by the header.
   build manifest, provider contract, assurance status, and device-evidence
   markers with begin/event/end records so transcript replay can detect missing,
   failed, or duplicate evidence markers.
+- `evidence_transcript.h`: firmware-side replay verifier for captured evidence
+  transcripts. It parses the stable marker grammar, validates hashes and nonce
+  fields, and checks that session summaries match the concrete markers present
+  in the transcript.
 - `firmware_policy.h`: firmware-side policy/readiness reporting. It evaluates
   the build manifest and provider contract against profile-specific level,
   RNG, and native-provider requirements, then emits a blocker mask for replay.
@@ -172,6 +176,20 @@ exact signatures and parameter contracts; this section answers
 - Call `pqcp_evidence_session_end()` before reporting success. It emits a
   `PQCP_EVIDENCE_SESSION_END` marker that includes required, observed, failed,
   and missing event masks for transcript replay.
+
+### Replaying firmware evidence transcripts (`evidence_transcript.h`)
+
+- Initialize `struct pqcp_evidence_transcript_state` with
+  `pqcp_evidence_transcript_init()`, then feed captured QEMU/UART lines through
+  `pqcp_evidence_transcript_ingest_line()`.
+- The replay verifier ignores unrelated boot logs and `PQCP_METRIC` rows, but
+  evidence markers are strict: malformed hashes, nonce fields, event indexes,
+  artifact counts, failed firmware policy markers, or missing marker lines make
+  replay fail.
+- Call `pqcp_evidence_transcript_finish()` after the final transcript line. The
+  resulting `struct pqcp_evidence_transcript_result` reports required,
+  observed, failed, missing, and concrete marker masks so downstream firmware
+  or tests can explain why a transcript passed or failed.
 
 ### Reporting firmware policy readiness (`firmware_policy.h`)
 
