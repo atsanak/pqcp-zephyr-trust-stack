@@ -9,6 +9,7 @@
 #include <zephyr/sys/printk.h>
 
 #include <pqcp_zephyr/assurance.h>
+#include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/firmware_evidence.h>
 
 #include <pqcp_assurance_digest_generated.h>
@@ -45,6 +46,11 @@ int main(void)
 		PQCP_ASSURANCE_DEVICE_EVIDENCE_NONCE,
 		PQCP_ASSURANCE_DEVICE_EVIDENCE_TRANSCRIPT_SHA256,
 		&result) != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+
+	if (pqcp_capability_descriptor_emit_current() != 0) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}

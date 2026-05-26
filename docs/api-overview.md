@@ -47,6 +47,10 @@ APIs unless explicitly documented by the header.
   transcripts. It parses the stable marker grammar, validates hashes and nonce
   fields, and checks that session summaries match the concrete markers present
   in the transcript.
+- `capability_descriptor.h`: firmware-side capability descriptor reporting. It
+  summarizes enabled PQC level masks, provider-family scope, policy blockers,
+  production interpretation, evidence plumbing, and a bounded evidence
+  readiness score in one transcript marker.
 - `firmware_policy.h`: firmware-side policy/readiness reporting. It evaluates
   the build manifest and provider contract against profile-specific level,
   RNG, and native-provider requirements, then emits a blocker mask for replay.
@@ -203,6 +207,21 @@ exact signatures and parameter contracts; this section answers
   `PQCP_FIRMWARE_POLICY` marker consumed by release transcripts. A nonzero
   blocker mask means the marker was emitted but the image should not be treated
   as passing the selected firmware policy.
+
+### Reporting firmware capability summary (`capability_descriptor.h`)
+
+- Call `pqcp_capability_descriptor_current()` to build a compact descriptor
+  from the current build manifest, provider contract, and derived firmware
+  policy result.
+- Call `pqcp_capability_descriptor_emit_current()` to print the stable
+  `PQCP_CAPABILITY_DESCRIPTOR` marker. The marker is designed for partner
+  review transcripts: it shows enabled ML-KEM/ML-DSA level masks, provider
+  summary, backend selector, RNG mode, policy blockers, production allowance,
+  compiled evidence capabilities, and a deterministic 0-100 evidence-readiness
+  score.
+- The readiness score is an evidence-completeness signal, not a certification
+  or formal security claim. Production interpretation still depends on the
+  firmware policy result, provider contract, and external review context.
 
 ### Emitting a complete firmware evidence transcript (`firmware_evidence.h`)
 
