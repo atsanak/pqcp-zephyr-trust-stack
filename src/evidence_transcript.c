@@ -12,6 +12,7 @@
 
 #include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/evidence_transcript.h>
+#include <pqcp_zephyr/firmware_scorecard.h>
 
 #define FIELD_VALUE_MAX 96U
 
@@ -238,6 +239,9 @@ static uint32_t event_for_name(const char *name)
 	if (strcmp(name, "capability_descriptor") == 0) {
 		return PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR;
 	}
+	if (strcmp(name, "firmware_scorecard") == 0) {
+		return PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD;
+	}
 
 	return 0U;
 }
@@ -259,6 +263,8 @@ static uint32_t marker_for_event(uint32_t event)
 		return PQCP_EVIDENCE_TRANSCRIPT_MARKER_FIRMWARE_POLICY;
 	case PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR:
 		return PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR;
+	case PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD:
+		return PQCP_EVIDENCE_TRANSCRIPT_MARKER_FIRMWARE_SCORECARD;
 	default:
 		return 0U;
 	}
@@ -613,6 +619,12 @@ static int ingest_assurance_status(
 
 	memcpy(state->assurance_digest, digest, sizeof(state->assurance_digest));
 	state->declared_artifact_count = artifact_count;
+	if (state->scorecard_seen &&
+	    (state->scorecard_artifact_count != artifact_count)) {
+		return transcript_fail(
+			state,
+			PQCP_EVIDENCE_TRANSCRIPT_ERROR_ARTIFACT_COUNT);
+	}
 	state->assurance_schema = schema;
 	return 0;
 }
@@ -674,6 +686,63 @@ static int ingest_capability_descriptor(
 	}
 
 	return 0;
+}
+
+static int ingest_firmware_scorecard(
+	struct pqcp_evidence_transcript_state *state,
+	const char *line)
+{
+	char profile[FIELD_VALUE_MAX];
+	char status[FIELD_VALUE_MAX];
+	uint32_t schema;
+	uint32_t production_allowed;
+	uint32_t blockers;
+	uint32_t warnings;
+	uint32_t readiness;
+	uint32_t required_events;
+	uint32_t artifacts;
+	int ret = set_marker(
+		state, PQCP_EVIDENCE_TRANSCRIPT_MARKER_FIRMWARE_SCORECARD);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if ((get_u32_dec(line, "schema", &schema) != 0) ||
+	    (get_field(line, "profile", profile, sizeof(profile)) != 0) ||
+	    (get_field(line, "status", status, sizeof(status)) != 0) ||
+	    (get_u32_dec(line, "production_allowed",
+			 &production_allowed) != 0) ||
+	    (get_u32_hex(line, "blockers", &blockers) != 0) ||
+	    (get_u32_hex(line, "warnings", &warnings) != 0) ||
+	    (get_u32_dec(line, "readiness", &readiness) != 0) ||
+	    (get_u32_hex(line, "required_events", &required_events) != 0) ||
+	    (get_u32_dec(line, "artifacts", &artifacts) != 0)) {
+		return transcript_fail(
+			state,
+			PQCP_EVIDENCE_TRANSCRIPT_ERROR_MALFORMED_FIELD);
+	}
+	if ((schema != PQCP_FIRMWARE_SCORECARD_SCHEMA_VERSION) ||
+	    (profile[0] == '\0') || (production_allowed > 1U) ||
+	    (readiness > 100U) ||
+	    ((blockers & ~PQCP_FIRMWARE_SCORECARD_BLOCKER_KNOWN_MASK) != 0U) ||
+	    ((warnings & ~PQCP_FIRMWARE_SCORECARD_WARNING_KNOWN_MASK) != 0U) ||
+	    (required_events != state->required_events)) {
+		return transcript_fail(
+			state,
+			PQCP_EVIDENCE_TRANSCRIPT_ERROR_MALFORMED_FIELD);
+	}
+	if ((strcmp(status, "PASS") == 0) && (blockers == 0U)) {
+		state->scorecard_artifact_count = artifacts;
+		state->scorecard_seen = true;
+		return 0;
+	}
+	if ((strcmp(status, "FAIL") == 0) && (blockers != 0U)) {
+		return transcript_fail(
+			state, PQCP_EVIDENCE_TRANSCRIPT_ERROR_STATUS_FAIL);
+	}
+
+	return transcript_fail(
+		state, PQCP_EVIDENCE_TRANSCRIPT_ERROR_MALFORMED_FIELD);
 }
 
 static int ingest_assurance_artifact(
@@ -804,6 +873,9 @@ int pqcp_evidence_transcript_ingest_line(
 	if (starts_with(line, "PQCP_CAPABILITY_DESCRIPTOR ")) {
 		return ingest_capability_descriptor(state, line);
 	}
+	if (starts_with(line, "PQCP_FIRMWARE_SCORECARD ")) {
+		return ingest_firmware_scorecard(state, line);
+	}
 	if (starts_with(line, "PQCP_ASSURANCE_STATUS ")) {
 		return ingest_assurance_status(state, line);
 	}
@@ -815,6 +887,7 @@ int pqcp_evidence_transcript_ingest_line(
 	}
 	if (starts_with(line, "PQCP_EVIDENCE_") ||
 	    starts_with(line, "PQCP_ASSURANCE_") ||
+	    starts_with(line, "PQCP_FIRMWARE_") ||
 	    starts_with(line, "PQCP_CAPABILITY_")) {
 		return transcript_fail(
 			state,

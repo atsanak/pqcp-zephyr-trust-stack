@@ -51,12 +51,17 @@ APIs unless explicitly documented by the header.
   summarizes enabled PQC level masks, provider-family scope, policy blockers,
   production interpretation, evidence plumbing, and a bounded evidence
   readiness score in one transcript marker.
+- `firmware_scorecard.h`: firmware-side evidence scorecard reporting. It
+  appraises build manifest, provider contract, firmware policy, capability,
+  assurance manifest, device inputs, and required evidence-session coverage in
+  one replayable marker.
 - `firmware_policy.h`: firmware-side policy/readiness reporting. It evaluates
   the build manifest and provider contract against profile-specific level,
   RNG, and native-provider requirements, then emits a blocker mask for replay.
 - `firmware_evidence.h`: firmware-side evidence runner. It emits the complete
-  build manifest, provider contract, firmware policy, assurance status, and
-  device-evidence sequence inside one evidence session.
+  build manifest, provider contract, firmware policy, capability descriptor,
+  scorecard, assurance status, and device-evidence sequence inside one evidence
+  session.
 - `bench.h`: benchmark result structures and stable `PQCP_METRIC` emission
   helpers used by samples, release tooling, and cost-of-assurance analysis.
 - `tls_selftest.h`: offline TLS/PSA/PQCP self-test harness shared by samples,
@@ -225,12 +230,27 @@ exact signatures and parameter contracts; this section answers
   or formal security claim. Production interpretation still depends on the
   firmware policy result, provider contract, and external review context.
 
+### Reporting firmware evidence scorecard (`firmware_scorecard.h`)
+
+- Call `pqcp_firmware_scorecard_evaluate()` to compute a compact appraisal from
+  the current build manifest, provider contract, firmware policy, capability
+  descriptor, assurance manifest, nonce, transcript hash, and required session
+  event mask.
+- Call `pqcp_firmware_scorecard_emit_current()` to print the stable
+  `PQCP_FIRMWARE_SCORECARD` marker. A nonzero blocker mask means replay should
+  reject the session; warning bits are reviewer-visible but do not block the
+  evidence run.
+- The scorecard is a firmware-side consistency check, not certification. It
+  helps catch mismatches before the host-side passport/replay tooling sees the
+  transcript.
+
 ### Emitting a complete firmware evidence transcript (`firmware_evidence.h`)
 
 - Use `pqcp_firmware_evidence_run_default()` when an application wants the same
   fixed marker sequence as `samples/pqcp_assurance_status`: session begin,
   build manifest, provider contract, firmware policy, capability descriptor,
-  assurance status, optional artifact event, device evidence, and session end.
+  scorecard, assurance status, optional artifact event, device evidence, and
+  session end.
 - Use `pqcp_firmware_evidence_run()` with custom hooks in tests or specialized
   samples that need to prove failure handling without replacing global build
   state.

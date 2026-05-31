@@ -28,6 +28,7 @@ extern "C" {
 	 PQCP_EVIDENCE_EVENT_PROVIDER_CONTRACT | \
 	 PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY | \
 	 PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR | \
+	 PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD | \
 	 PQCP_EVIDENCE_EVENT_ASSURANCE_STATUS | \
 	 PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE)
 
@@ -46,6 +47,11 @@ struct pqcp_firmware_evidence_hooks {
 	int (*emit_firmware_policy)(void);
 	/** Emit PQCP_CAPABILITY_DESCRIPTOR. */
 	int (*emit_capability_descriptor)(void);
+	/** Emit PQCP_FIRMWARE_SCORECARD. */
+	int (*emit_firmware_scorecard)(
+		const struct pqcp_assurance_manifest *manifest,
+		const char *nonce_hex,
+		const char *transcript_sha256);
 	/** Emit PQCP_ASSURANCE_STATUS and PQCP_ASSURANCE_ARTIFACT records. */
 	int (*emit_assurance_status)(
 		const struct pqcp_assurance_manifest *manifest);
@@ -117,9 +123,9 @@ uint32_t pqcp_firmware_evidence_required_events(
  *
  * The transcript order is fixed:
  * evidence-session begin, build manifest, provider contract, firmware policy,
- * capability descriptor, assurance status, optional artifact event, device
- * evidence, evidence-session end. On the first failure the runner records the
- * failed event, closes the session, and returns a nonzero status.
+ * capability descriptor, scorecard, assurance status, optional artifact event,
+ * device evidence, evidence-session end. On the first failure the runner
+ * records the failed event, closes the session, and returns a nonzero status.
  *
  * @param config Evidence run configuration.
  * @param result Optional caller-owned result; may be NULL.

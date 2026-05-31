@@ -15,6 +15,7 @@
 	 PQCP_EVIDENCE_EVENT_PROVIDER_CONTRACT | \
 	 PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY | \
 	 PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR | \
+	 PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD | \
 	 PQCP_EVIDENCE_EVENT_ASSURANCE_STATUS | \
 	 PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE)
 
@@ -42,6 +43,10 @@ ZTEST(pqcp_evidence_session, test_event_names_are_stable)
 		pqcp_evidence_event_name(
 			PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR),
 		"capability_descriptor");
+	zassert_str_equal(
+		pqcp_evidence_event_name(
+			PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD),
+		"firmware_scorecard");
 	zassert_str_equal(pqcp_evidence_event_name(0x80000000U), "unknown");
 }
 
@@ -88,6 +93,11 @@ ZTEST(pqcp_evidence_session, test_session_records_required_events)
 		      0);
 	zassert_equal(pqcp_evidence_session_record(
 			      &session,
+			      PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD,
+			      0),
+		      0);
+	zassert_equal(pqcp_evidence_session_record(
+			      &session,
 			      PQCP_EVIDENCE_EVENT_ASSURANCE_STATUS,
 			      0),
 		      0);
@@ -99,7 +109,7 @@ ZTEST(pqcp_evidence_session, test_session_records_required_events)
 
 	zassert_equal(session.observed_events, REQUIRED_CORE_EVENTS);
 	zassert_equal(session.failed_events, 0U);
-	zassert_equal(session.event_count, 6U);
+	zassert_equal(session.event_count, 7U);
 	zassert_equal(pqcp_evidence_session_end(&session), 0);
 	zassert_false(session.active);
 }

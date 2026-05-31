@@ -79,6 +79,9 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 	if (IS_ENABLED(CONFIG_PQCP_EVIDENCE_TRANSCRIPT)) {
 		capabilities |= PQCP_CAPABILITY_EVIDENCE_TRANSCRIPT_REPLAY;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_FIRMWARE_SCORECARD)) {
+		capabilities |= PQCP_CAPABILITY_EVIDENCE_SCORECARD;
+	}
 
 	return capabilities;
 }

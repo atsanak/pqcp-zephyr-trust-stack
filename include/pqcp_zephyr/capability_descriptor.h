@@ -39,6 +39,8 @@ extern "C" {
 #define PQCP_CAPABILITY_EVIDENCE_RUNNER             (1U << 5)
 /** C transcript replay verifier is compiled into this image. */
 #define PQCP_CAPABILITY_EVIDENCE_TRANSCRIPT_REPLAY  (1U << 6)
+/** Firmware scorecard appraisal is compiled into this image. */
+#define PQCP_CAPABILITY_EVIDENCE_SCORECARD          (1U << 7)
 
 /** All evidence capability bits known by this API version. */
 #define PQCP_CAPABILITY_EVIDENCE_KNOWN_MASK \
@@ -48,7 +50,8 @@ extern "C" {
 	 PQCP_CAPABILITY_EVIDENCE_ASSURANCE_STATUS | \
 	 PQCP_CAPABILITY_EVIDENCE_SESSION | \
 	 PQCP_CAPABILITY_EVIDENCE_RUNNER | \
-	 PQCP_CAPABILITY_EVIDENCE_TRANSCRIPT_REPLAY)
+	 PQCP_CAPABILITY_EVIDENCE_TRANSCRIPT_REPLAY | \
+	 PQCP_CAPABILITY_EVIDENCE_SCORECARD)
 
 /**
  * @brief Provider summary for enabled ML-KEM/ML-DSA families.

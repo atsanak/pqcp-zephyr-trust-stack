@@ -39,6 +39,8 @@ extern "C" {
 #define PQCP_EVIDENCE_TRANSCRIPT_MARKER_DEVICE_EVIDENCE  (1U << 5)
 /** Capability descriptor line was observed. */
 #define PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR (1U << 6)
+/** Firmware scorecard line was observed. */
+#define PQCP_EVIDENCE_TRANSCRIPT_MARKER_FIRMWARE_SCORECARD (1U << 7)
 
 /** All marker bits known by this API version. */
 #define PQCP_EVIDENCE_TRANSCRIPT_MARKER_KNOWN_MASK \
@@ -48,7 +50,8 @@ extern "C" {
 	 PQCP_EVIDENCE_TRANSCRIPT_MARKER_ASSURANCE_STATUS | \
 	 PQCP_EVIDENCE_TRANSCRIPT_MARKER_ASSURANCE_ARTIFACT | \
 	 PQCP_EVIDENCE_TRANSCRIPT_MARKER_DEVICE_EVIDENCE | \
-	 PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR)
+	 PQCP_EVIDENCE_TRANSCRIPT_MARKER_CAPABILITY_DESCRIPTOR | \
+	 PQCP_EVIDENCE_TRANSCRIPT_MARKER_FIRMWARE_SCORECARD)
 
 /**
  * @brief Replay error reason for firmware evidence transcripts.
@@ -100,6 +103,8 @@ struct pqcp_evidence_transcript_state {
 	uint32_t next_event_index;
 	/** Number of artifact records declared by PQCP_ASSURANCE_STATUS. */
 	uint32_t declared_artifact_count;
+	/** Artifact count declared by PQCP_FIRMWARE_SCORECARD. */
+	uint32_t scorecard_artifact_count;
 	/** Number of PQCP_ASSURANCE_ARTIFACT lines observed. */
 	uint32_t observed_artifact_count;
 	/** Assurance schema parsed from PQCP_ASSURANCE_STATUS. */
@@ -110,6 +115,8 @@ struct pqcp_evidence_transcript_state {
 	bool active;
 	/** True after PQCP_EVIDENCE_SESSION_END was replayed. */
 	bool closed;
+	/** True after PQCP_FIRMWARE_SCORECARD was replayed. */
+	bool scorecard_seen;
 	/** True when the end marker reports status=PASS. */
 	bool end_status_passed;
 	/** Digest parsed from PQCP_ASSURANCE_STATUS. */

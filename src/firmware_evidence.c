@@ -11,6 +11,7 @@
 #include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/firmware_evidence.h>
 #include <pqcp_zephyr/firmware_policy.h>
+#include <pqcp_zephyr/firmware_scorecard.h>
 #include <pqcp_zephyr/provider.h>
 
 static const struct pqcp_firmware_evidence_hooks default_hooks = {
@@ -18,6 +19,7 @@ static const struct pqcp_firmware_evidence_hooks default_hooks = {
 	.emit_provider_contract = pqcp_provider_emit_contract,
 	.emit_firmware_policy = pqcp_firmware_policy_emit_current,
 	.emit_capability_descriptor = pqcp_capability_descriptor_emit_current,
+	.emit_firmware_scorecard = pqcp_firmware_scorecard_emit_current,
 	.emit_assurance_status = pqcp_assurance_emit_status,
 	.emit_device_evidence = pqcp_assurance_emit_device_evidence,
 };
@@ -48,6 +50,7 @@ static int pqcp_firmware_evidence_hooks_validate(
 	    (hooks->emit_provider_contract == NULL) ||
 	    (hooks->emit_firmware_policy == NULL) ||
 	    (hooks->emit_capability_descriptor == NULL) ||
+	    (hooks->emit_firmware_scorecard == NULL) ||
 	    (hooks->emit_assurance_status == NULL) ||
 	    (hooks->emit_device_evidence == NULL)) {
 		return -EINVAL;
@@ -194,6 +197,17 @@ int pqcp_firmware_evidence_run(
 	ret = hooks->emit_capability_descriptor();
 	if (pqcp_firmware_evidence_record_step(
 		    &session, PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR, ret,
+		    &first_error, &first_failed_event) != 0) {
+		return pqcp_firmware_evidence_finish(
+			&session, result, first_error, first_failed_event);
+	}
+
+	ret = hooks->emit_firmware_scorecard(
+		config->manifest,
+		config->device_nonce_hex,
+		config->transcript_sha256);
+	if (pqcp_firmware_evidence_record_step(
+		    &session, PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD, ret,
 		    &first_error, &first_failed_event) != 0) {
 		return pqcp_firmware_evidence_finish(
 			&session, result, first_error, first_failed_event);
