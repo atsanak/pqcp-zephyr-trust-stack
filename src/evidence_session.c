@@ -28,6 +28,8 @@ const char *pqcp_evidence_event_name(uint32_t event)
 		return "firmware_policy";
 	case PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR:
 		return "capability_descriptor";
+	case PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD:
+		return "firmware_scorecard";
 	default:
 		return "unknown";
 	}

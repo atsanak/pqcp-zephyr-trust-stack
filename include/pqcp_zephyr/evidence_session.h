@@ -31,6 +31,8 @@ extern "C" {
 #define PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY  (1u << 5)
 /** Capability descriptor marker was emitted. */
 #define PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR (1u << 6)
+/** Firmware scorecard marker was emitted. */
+#define PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD (1u << 7)
 
 /** All event bits known by this API version. */
 #define PQCP_EVIDENCE_EVENT_KNOWN_MASK \
@@ -40,7 +42,8 @@ extern "C" {
 	 PQCP_EVIDENCE_EVENT_ASSURANCE_ARTIFACTS | \
 	 PQCP_EVIDENCE_EVENT_DEVICE_EVIDENCE | \
 	 PQCP_EVIDENCE_EVENT_FIRMWARE_POLICY | \
-	 PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR)
+	 PQCP_EVIDENCE_EVENT_CAPABILITY_DESCRIPTOR | \
+	 PQCP_EVIDENCE_EVENT_FIRMWARE_SCORECARD)
 
 /**
  * @brief Firmware evidence session state.
