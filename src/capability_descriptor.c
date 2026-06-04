@@ -88,6 +88,9 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_ROBUSTNESS)) {
 		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_CAMPAIGN)) {
+		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN;
+	}
 
 	return capabilities;
 }

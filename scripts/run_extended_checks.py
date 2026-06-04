@@ -35,6 +35,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/acvp_cmd.h",
     "include/pqcp_zephyr/bench.h",
     "include/pqcp_zephyr/deployment_advisor.h",
+    "include/pqcp_zephyr/deployment_campaign.h",
     "include/pqcp_zephyr/deployment_robustness.h",
     "include/pqcp_zephyr/mlkem.h",
     "include/pqcp_zephyr/mldsa.h",
@@ -45,6 +46,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/bench_primitive.c",
     "src/bench_protocol.c",
     "src/deployment_advisor.c",
+    "src/deployment_campaign.c",
     "src/deployment_robustness.c",
     "src/mlkem_zephyr.c",
     "src/mldsa_streaming.c",
@@ -64,6 +66,7 @@ DEFAULT_COMPATIBILITY_TARGETS = [
     "tests/ztest_acvp_serial",
     "tests/ztest_tls_selftest",
     "tests/ztest_deployment_advisor",
+    "tests/ztest_deployment_campaign",
     "tests/ztest_deployment_robustness",
 ]
 

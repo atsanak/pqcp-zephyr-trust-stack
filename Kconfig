@@ -466,6 +466,21 @@ config PQCP_DEPLOYMENT_ROBUSTNESS
 	  This prevents a high-scoring but fragile or dominated candidate from
 	  being presented as a robust deployment recommendation.
 
+config PQCP_DEPLOYMENT_CAMPAIGN
+	bool "Enable deployment measurement campaign accumulator"
+	depends on PQCP_DEPLOYMENT_ROBUSTNESS
+	default n
+	help
+	  Enable an allocation-free repeated-measurement accumulator for
+	  deployment decision inputs. Callers provide observation storage; the
+	  module summarizes latency, cycles, footprint, and energy samples using
+	  integer min/median/p90/p99/MAD/CV statistics, emits stable campaign
+	  markers, and projects conservative candidate facts for the deployment
+	  advisor.
+
+	  This is intended for QEMU and board benchmark harnesses that need to
+	  preserve variance and quality concerns before producing a recommendation.
+
 endmenu
 
 # =============================================================================
