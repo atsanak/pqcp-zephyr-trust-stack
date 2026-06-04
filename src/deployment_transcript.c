@@ -237,8 +237,15 @@ static void fill_result(
 	result->lines_seen = state->lines_seen;
 	result->marker_mask = state->marker_mask;
 	result->candidate_count = state->candidate_count;
+	result->accepted_count = state->accepted_count;
+	result->conditional_count = state->conditional_count;
+	result->rejected_count = state->rejected_count;
+	result->feasible_count = state->decision_feasible_count;
 	result->robustness_candidate_count = state->robustness_candidate_count;
+	result->pareto_frontier_count = state->pareto_frontier_count;
 	result->campaign_metric_count = state->campaign_metric_count;
+	result->campaign_observations = state->campaign_observations;
+	result->campaign_quality_mask = state->campaign_quality_mask;
 	result->gap_count = state->gap_count;
 	result->first_error_line = state->first_error_line;
 	result->first_error = state->first_error;
