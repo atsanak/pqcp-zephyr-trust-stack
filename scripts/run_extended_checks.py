@@ -37,6 +37,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/deployment_advisor.h",
     "include/pqcp_zephyr/deployment_campaign.h",
     "include/pqcp_zephyr/deployment_robustness.h",
+    "include/pqcp_zephyr/deployment_transcript.h",
     "include/pqcp_zephyr/mlkem.h",
     "include/pqcp_zephyr/mldsa.h",
     "include/pqcp_zephyr/rng.h",
@@ -48,6 +49,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/deployment_advisor.c",
     "src/deployment_campaign.c",
     "src/deployment_robustness.c",
+    "src/deployment_transcript.c",
     "src/mlkem_zephyr.c",
     "src/mldsa_streaming.c",
     "src/mldsa_zephyr.c",
@@ -68,6 +70,7 @@ DEFAULT_COMPATIBILITY_TARGETS = [
     "tests/ztest_deployment_advisor",
     "tests/ztest_deployment_campaign",
     "tests/ztest_deployment_robustness",
+    "tests/ztest_deployment_transcript",
 ]
 
 VERSION_STRING_RE = re.compile(r'^#define\s+PQCP_VERSION_STRING\s+"([^"]+)"$', re.MULTILINE)

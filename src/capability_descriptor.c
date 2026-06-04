@@ -91,6 +91,9 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_CAMPAIGN)) {
 		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_TRANSCRIPT)) {
+		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_TRANSCRIPT;
+	}
 
 	return capabilities;
 }
