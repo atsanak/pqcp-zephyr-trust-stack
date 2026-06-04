@@ -47,6 +47,8 @@ extern "C" {
 #define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS (1U << 9)
 /** Deployment repeated-measurement campaign support is compiled in. */
 #define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN (1U << 10)
+/** Deployment transcript replay support is compiled in. */
+#define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_TRANSCRIPT (1U << 11)
 
 /** All evidence capability bits known by this API version. */
 #define PQCP_CAPABILITY_EVIDENCE_KNOWN_MASK \
@@ -60,7 +62,8 @@ extern "C" {
 	 PQCP_CAPABILITY_EVIDENCE_SCORECARD | \
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ADVISOR | \
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS | \
-	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN)
+	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN | \
+	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_TRANSCRIPT)
 
 /**
  * @brief Provider summary for enabled ML-KEM/ML-DSA families.

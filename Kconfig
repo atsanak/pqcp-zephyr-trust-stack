@@ -481,6 +481,19 @@ config PQCP_DEPLOYMENT_CAMPAIGN
 	  This is intended for QEMU and board benchmark harnesses that need to
 	  preserve variance and quality concerns before producing a recommendation.
 
+config PQCP_DEPLOYMENT_TRANSCRIPT
+	bool "Enable deployment transcript replay verifier"
+	depends on PQCP_DEPLOYMENT_CAMPAIGN
+	default n
+	help
+	  Enable a compact C replay verifier for PQCP_DEPLOYMENT_* transcript
+	  markers. The verifier consumes captured QEMU/UART lines and checks that
+	  campaign metrics, projected candidates, advisor decisions, robustness
+	  summaries, and gap rows agree on counts and top-candidate identity.
+
+	  This is intended for local replay and partner-review harnesses that need
+	  to detect tampered or internally inconsistent deployment evidence.
+
 endmenu
 
 # =============================================================================
