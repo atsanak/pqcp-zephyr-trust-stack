@@ -34,6 +34,8 @@ from local_workflow import (  # noqa: E402
 DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/acvp_cmd.h",
     "include/pqcp_zephyr/bench.h",
+    "include/pqcp_zephyr/deployment_advisor.h",
+    "include/pqcp_zephyr/deployment_robustness.h",
     "include/pqcp_zephyr/mlkem.h",
     "include/pqcp_zephyr/mldsa.h",
     "include/pqcp_zephyr/rng.h",
@@ -42,6 +44,8 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/acvp_cmd.c",
     "src/bench_primitive.c",
     "src/bench_protocol.c",
+    "src/deployment_advisor.c",
+    "src/deployment_robustness.c",
     "src/mlkem_zephyr.c",
     "src/mldsa_streaming.c",
     "src/mldsa_zephyr.c",
@@ -59,6 +63,8 @@ DEFAULT_COMPATIBILITY_TARGETS = [
     "tests/ztest_primitive",
     "tests/ztest_acvp_serial",
     "tests/ztest_tls_selftest",
+    "tests/ztest_deployment_advisor",
+    "tests/ztest_deployment_robustness",
 ]
 
 VERSION_STRING_RE = re.compile(r'^#define\s+PQCP_VERSION_STRING\s+"([^"]+)"$', re.MULTILINE)

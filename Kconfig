@@ -433,6 +433,42 @@ config PQCP_FIRMWARE_SCORECARD
 endmenu
 
 # =============================================================================
+# On-Device Deployment Advisor
+# =============================================================================
+menu "On-Device PQC Deployment Advisor"
+
+config PQCP_DEPLOYMENT_ADVISOR
+	bool "Enable allocation-free PQC deployment advisor"
+	default n
+	help
+	  Enable a deterministic C decision-support engine that evaluates
+	  caller-supplied PQC benchmark and evidence facts against a constrained
+	  deployment scenario. The advisor preserves rejected candidates with
+	  explicit blocker masks, distinguishes hard feasibility from evidence
+	  maturity, ranks accepted or conditional candidates, and emits a
+	  prioritized missing-experiment plan.
+
+	  The advisor does not select providers, execute cryptographic operations,
+	  alter ACVP or benchmark formats, or claim certification. It is intended
+	  for device-side policy demonstrations, QEMU experiments, and partner
+	  review flows that need the recommendation logic to be replayable in C.
+
+config PQCP_DEPLOYMENT_ROBUSTNESS
+	bool "Enable deployment Pareto and sensitivity analysis"
+	depends on PQCP_DEPLOYMENT_ADVISOR
+	default n
+	help
+	  Enable allocation-free analysis of deployment recommendation
+	  robustness. The analyzer calculates per-budget headroom, binding
+	  constraints, Pareto-frontier membership, uniform budget-tightening
+	  tolerance, and recommendation stability across ranking preferences.
+
+	  This prevents a high-scoring but fragile or dominated candidate from
+	  being presented as a robust deployment recommendation.
+
+endmenu
+
+# =============================================================================
 # Firmware Evidence Runner
 # =============================================================================
 menu "Firmware Evidence Runner"
