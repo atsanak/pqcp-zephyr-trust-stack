@@ -494,6 +494,21 @@ config PQCP_DEPLOYMENT_TRANSCRIPT
 	  This is intended for local replay and partner-review harnesses that need
 	  to detect tampered or internally inconsistent deployment evidence.
 
+config PQCP_DEPLOYMENT_APPRAISAL
+	bool "Enable deployment evidence appraisal scorecard"
+	depends on PQCP_DEPLOYMENT_TRANSCRIPT
+	default n
+	help
+	  Enable a profile-specific deployment evidence appraisal layer. The
+	  scorecard consumes a replayed PQCP_DEPLOYMENT_* transcript result and
+	  classifies it for lab, paper, product, partner-review, or hardware-review
+	  use with explicit blockers, warnings, readiness score, and a stable
+	  PQCP_DEPLOYMENT_APPRAISAL marker.
+
+	  This option does not run benchmarks or select algorithms. It turns
+	  already-replayed deployment evidence into a reviewer-visible policy
+	  decision.
+
 endmenu
 
 # =============================================================================

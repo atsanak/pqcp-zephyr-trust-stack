@@ -157,10 +157,24 @@ struct pqcp_deployment_transcript_result {
 	uint32_t marker_mask;
 	/** Candidate row count. */
 	uint32_t candidate_count;
+	/** Accepted candidate row count. */
+	uint32_t accepted_count;
+	/** Conditional candidate row count. */
+	uint32_t conditional_count;
+	/** Rejected candidate row count. */
+	uint32_t rejected_count;
+	/** Feasible candidate count from the decision marker. */
+	uint32_t feasible_count;
 	/** Robustness candidate row count. */
 	uint32_t robustness_candidate_count;
+	/** Pareto-frontier count from robustness rows. */
+	uint32_t pareto_frontier_count;
 	/** Campaign metric row count. */
 	uint32_t campaign_metric_count;
+	/** Campaign observations declared by the campaign summary. */
+	uint32_t campaign_observations;
+	/** Campaign quality mask from the campaign summary. */
+	uint32_t campaign_quality_mask;
 	/** Evidence-gap row count. */
 	uint32_t gap_count;
 	/** First failing line, or zero. */
