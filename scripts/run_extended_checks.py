@@ -37,6 +37,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "include/pqcp_zephyr/deployment_advisor.h",
     "include/pqcp_zephyr/deployment_appraisal.h",
     "include/pqcp_zephyr/deployment_campaign.h",
+    "include/pqcp_zephyr/deployment_claims.h",
     "include/pqcp_zephyr/deployment_robustness.h",
     "include/pqcp_zephyr/deployment_transcript.h",
     "include/pqcp_zephyr/mlkem.h",
@@ -50,6 +51,7 @@ DEFAULT_ANALYSIS_PATHS = [
     "src/deployment_advisor.c",
     "src/deployment_appraisal.c",
     "src/deployment_campaign.c",
+    "src/deployment_claims.c",
     "src/deployment_robustness.c",
     "src/deployment_transcript.c",
     "src/mlkem_zephyr.c",
@@ -72,6 +74,7 @@ DEFAULT_COMPATIBILITY_TARGETS = [
     "tests/ztest_deployment_advisor",
     "tests/ztest_deployment_appraisal",
     "tests/ztest_deployment_campaign",
+    "tests/ztest_deployment_claims",
     "tests/ztest_deployment_robustness",
     "tests/ztest_deployment_transcript",
 ]

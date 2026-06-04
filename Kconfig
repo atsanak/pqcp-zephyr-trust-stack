@@ -509,6 +509,20 @@ config PQCP_DEPLOYMENT_APPRAISAL
 	  already-replayed deployment evidence into a reviewer-visible policy
 	  decision.
 
+config PQCP_DEPLOYMENT_CLAIMS
+	bool "Enable deployment claim support matrix"
+	depends on PQCP_DEPLOYMENT_APPRAISAL
+	default n
+	help
+	  Enable a compact C claim-support matrix for deployment evidence. The
+	  matrix consumes advisor, robustness, transcript replay, and appraisal
+	  results and emits stable PQCP_DEPLOYMENT_CLAIM markers classifying
+	  deployment claims as supported, partial, or unsupported.
+
+	  This option does not add crypto algorithms or change benchmark, ACVP, or
+	  public crypto API behavior. It makes firmware-visible deployment claims
+	  explicit enough for replay and partner review.
+
 endmenu
 
 # =============================================================================

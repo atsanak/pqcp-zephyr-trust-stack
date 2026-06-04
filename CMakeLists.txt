@@ -142,6 +142,10 @@ if(CONFIG_PQCP_DEPLOYMENT_APPRAISAL)
     zephyr_library_sources(${PQCP_SRC}/deployment_appraisal.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_CLAIMS)
+    zephyr_library_sources(${PQCP_SRC}/deployment_claims.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
