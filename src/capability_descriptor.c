@@ -82,6 +82,12 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 	if (IS_ENABLED(CONFIG_PQCP_FIRMWARE_SCORECARD)) {
 		capabilities |= PQCP_CAPABILITY_EVIDENCE_SCORECARD;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_ADVISOR)) {
+		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ADVISOR;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_ROBUSTNESS)) {
+		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS;
+	}
 
 	return capabilities;
 }
