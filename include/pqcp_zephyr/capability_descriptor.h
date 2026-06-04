@@ -45,6 +45,8 @@ extern "C" {
 #define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ADVISOR (1U << 8)
 /** Deployment Pareto and sensitivity analysis is compiled into this image. */
 #define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS (1U << 9)
+/** Deployment repeated-measurement campaign support is compiled in. */
+#define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN (1U << 10)
 
 /** All evidence capability bits known by this API version. */
 #define PQCP_CAPABILITY_EVIDENCE_KNOWN_MASK \
@@ -57,7 +59,8 @@ extern "C" {
 	 PQCP_CAPABILITY_EVIDENCE_TRANSCRIPT_REPLAY | \
 	 PQCP_CAPABILITY_EVIDENCE_SCORECARD | \
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ADVISOR | \
-	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS)
+	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_ROBUSTNESS | \
+	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CAMPAIGN)
 
 /**
  * @brief Provider summary for enabled ML-KEM/ML-DSA families.
