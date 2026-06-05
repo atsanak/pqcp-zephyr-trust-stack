@@ -640,6 +640,21 @@ config PQCP_DEPLOYMENT_DEVICE_TOKEN
 	  execute cryptographic operations, alter public APIs, change ACVP wire
 	  formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_DEVICE_TOKEN_REPLAY
+	bool "Enable deployment device-token transcript replay"
+	depends on PQCP_DEPLOYMENT_DEVICE_TOKEN
+	default n
+	help
+	  Enable allocation-free replay verification for captured deployment
+	  device-token transcripts. The verifier parses capability descriptor,
+	  release-gate, device-token, and device-token verification markers,
+	  recomputes the token digest, rejects duplicate or missing markers, and
+	  detects nonce, capability, gate, digest, and verification drift.
+
+	  This option verifies evidence text only. It does not select providers,
+	  execute cryptographic operations, alter public APIs, change ACVP wire
+	  formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
