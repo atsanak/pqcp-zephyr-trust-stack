@@ -7,7 +7,9 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <pqcp_zephyr/deployment_experiment_plan.h>
+#include <errno.h>
+
+#include <pqcp_zephyr/deployment_review_packet.h>
 
 #define PRODUCT_EVIDENCE \
 	(PQCP_DEPLOYMENT_EVIDENCE_KAT | \
@@ -183,7 +185,9 @@ static struct pqcp_deployment_budget_report budget_report;
 static struct pqcp_deployment_experiment_row experiment_rows[
 	PQCP_DEPLOYMENT_EXPERIMENT_PLAN_MAX_ROWS];
 static struct pqcp_deployment_experiment_plan experiment_plan;
+static struct pqcp_deployment_review_packet review_packet;
 static char trace_buffer[12288];
+static char review_buffer[3072];
 
 static struct pqcp_deployment_candidate campaign_template(void)
 {
@@ -266,6 +270,16 @@ int main(void)
 		(void)pqcp_deployment_experiment_row_emit(&experiment_rows[i]);
 	}
 	(void)pqcp_deployment_experiment_plan_emit(&experiment_plan);
+	ret = pqcp_deployment_review_packet_build(
+		&config, &result, &budget_report, &experiment_plan,
+		review_buffer, sizeof(review_buffer), &review_packet);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_review_packet_emit_facts(
+		review_buffer, &review_packet);
+	(void)pqcp_deployment_review_packet_emit(&review_packet);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
