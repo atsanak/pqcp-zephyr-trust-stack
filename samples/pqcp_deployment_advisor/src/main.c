@@ -9,6 +9,7 @@
 
 #include <errno.h>
 
+#include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
 #include <pqcp_zephyr/deployment_review_packet.h>
 #include <pqcp_zephyr/deployment_review_verifier.h>
@@ -191,6 +192,8 @@ static struct pqcp_deployment_review_packet review_packet;
 static struct pqcp_deployment_review_verifier_result review_replay;
 static struct pqcp_deployment_review_audit_policy review_audit_policy;
 static struct pqcp_deployment_review_audit_report review_audit;
+static struct pqcp_deployment_release_gate_policy release_gate_policy;
+static struct pqcp_deployment_release_gate_report release_gate;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 
@@ -305,6 +308,22 @@ int main(void)
 		return 1;
 	}
 	(void)pqcp_deployment_review_audit_emit(&review_audit);
+	ret = pqcp_deployment_release_gate_default_policy(
+		PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
+		&release_gate_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_release_gate_evaluate(
+		&result, &budget_report, &experiment_plan, &review_packet,
+		&review_replay, &review_audit, &release_gate_policy,
+		&release_gate);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_release_gate_emit(&release_gate);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
