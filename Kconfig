@@ -578,6 +578,19 @@ config PQCP_DEPLOYMENT_EXPERIMENT_PLAN
 	  select providers, change crypto APIs, alter ACVP wire formats, or alter
 	  benchmark marker field ordering.
 
+config PQCP_DEPLOYMENT_REVIEW_PACKET
+	bool "Enable deployment review packet digest evidence"
+	depends on PQCP_DEPLOYMENT_EXPERIMENT_PLAN
+	default n
+	help
+	  Enable a compact firmware review packet that binds deployment pipeline,
+	  budget, and experiment-plan summaries into caller-owned canonical fact
+	  lines plus a final PQCP_DEPLOYMENT_REVIEW_PACKET digest marker.
+
+	  This option summarizes existing evidence only. It does not execute
+	  experiments, select providers, change crypto APIs, alter ACVP wire
+	  formats, or alter benchmark marker field ordering.
+
 endmenu
 
 # =============================================================================
