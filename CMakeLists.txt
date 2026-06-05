@@ -166,6 +166,10 @@ if(CONFIG_PQCP_DEPLOYMENT_REVIEW_PACKET)
     zephyr_library_sources(${PQCP_SRC}/deployment_review_packet.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_REVIEW_VERIFIER)
+    zephyr_library_sources(${PQCP_SRC}/deployment_review_verifier.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()

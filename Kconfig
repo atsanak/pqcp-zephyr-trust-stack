@@ -591,6 +591,16 @@ config PQCP_DEPLOYMENT_REVIEW_PACKET
 	  experiments, select providers, change crypto APIs, alter ACVP wire
 	  formats, or alter benchmark marker field ordering.
 
+config PQCP_DEPLOYMENT_REVIEW_VERIFIER
+	bool "Enable deployment review packet replay verifier"
+	depends on PQCP_DEPLOYMENT_REVIEW_PACKET
+	default n
+	help
+	  Enable allocation-free replay verification for deployment review
+	  packet markers. The verifier parses PQCP_DEPLOYMENT_REVIEW_FACT and
+	  PQCP_DEPLOYMENT_REVIEW_PACKET lines, recomputes the packet digest, and
+	  rejects duplicate, missing, tampered, or inconsistent review evidence.
+
 endmenu
 
 # =============================================================================
