@@ -601,6 +601,17 @@ config PQCP_DEPLOYMENT_REVIEW_VERIFIER
 	  PQCP_DEPLOYMENT_REVIEW_PACKET lines, recomputes the packet digest, and
 	  rejects duplicate, missing, tampered, or inconsistent review evidence.
 
+config PQCP_DEPLOYMENT_REVIEW_AUDIT
+	bool "Enable deployment review replay audit aggregation"
+	depends on PQCP_DEPLOYMENT_REVIEW_VERIFIER
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  deployment review packets. The audit detects replay failures, packet
+	  status drift, top-candidate drift, trace digest drift, packet digest
+	  diversity, and low review/claim scores, then emits one stable
+	  PQCP_DEPLOYMENT_REVIEW_AUDIT marker.
+
 endmenu
 
 # =============================================================================

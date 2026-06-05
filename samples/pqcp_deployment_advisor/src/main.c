@@ -9,6 +9,7 @@
 
 #include <errno.h>
 
+#include <pqcp_zephyr/deployment_review_audit.h>
 #include <pqcp_zephyr/deployment_review_packet.h>
 #include <pqcp_zephyr/deployment_review_verifier.h>
 
@@ -188,6 +189,8 @@ static struct pqcp_deployment_experiment_row experiment_rows[
 static struct pqcp_deployment_experiment_plan experiment_plan;
 static struct pqcp_deployment_review_packet review_packet;
 static struct pqcp_deployment_review_verifier_result review_replay;
+static struct pqcp_deployment_review_audit_policy review_audit_policy;
+static struct pqcp_deployment_review_audit_report review_audit;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 
@@ -289,6 +292,19 @@ int main(void)
 		return 1;
 	}
 	(void)pqcp_deployment_review_verifier_emit_result(&review_replay);
+	ret = pqcp_deployment_review_audit_default_policy(
+		&review_audit_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_review_audit_run(
+		&review_replay, 1U, &review_audit_policy, &review_audit);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_review_audit_emit(&review_audit);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
