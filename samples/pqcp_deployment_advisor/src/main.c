@@ -7,7 +7,7 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <pqcp_zephyr/deployment_budget.h>
+#include <pqcp_zephyr/deployment_experiment_plan.h>
 
 #define PRODUCT_EVIDENCE \
 	(PQCP_DEPLOYMENT_EVIDENCE_KAT | \
@@ -180,6 +180,9 @@ static struct pqcp_deployment_pipeline_result result;
 static struct pqcp_deployment_budget_candidate budget_rows[
 	PQCP_DEPLOYMENT_MAX_CANDIDATES];
 static struct pqcp_deployment_budget_report budget_report;
+static struct pqcp_deployment_experiment_row experiment_rows[
+	PQCP_DEPLOYMENT_EXPERIMENT_PLAN_MAX_ROWS];
+static struct pqcp_deployment_experiment_plan experiment_plan;
 static char trace_buffer[12288];
 
 static struct pqcp_deployment_candidate campaign_template(void)
@@ -252,6 +255,17 @@ int main(void)
 		(void)pqcp_deployment_budget_candidate_emit(&budget_rows[i]);
 	}
 	(void)pqcp_deployment_budget_report_emit(&budget_report);
+	ret = pqcp_deployment_experiment_plan_generate(
+		&config, &workspace, &result, budget_rows, &budget_report,
+		experiment_rows, ARRAY_SIZE(experiment_rows), &experiment_plan);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	for (size_t i = 0U; i < experiment_plan.row_count; ++i) {
+		(void)pqcp_deployment_experiment_row_emit(&experiment_rows[i]);
+	}
+	(void)pqcp_deployment_experiment_plan_emit(&experiment_plan);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
