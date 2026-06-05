@@ -122,6 +122,10 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 		capabilities |=
 			PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_REVIEW_VERIFIER;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_REVIEW_AUDIT)) {
+		capabilities |=
+			PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_REVIEW_AUDIT;
+	}
 
 	return capabilities;
 }
