@@ -57,6 +57,8 @@ extern "C" {
 #define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_TRACE_BUILDER (1U << 14)
 /** End-to-end deployment evidence pipeline is compiled in. */
 #define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_PIPELINE (1U << 15)
+/** Deployment budget evidence verdicts are compiled in. */
+#define PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_BUDGET (1U << 16)
 
 /** All evidence capability bits known by this API version. */
 #define PQCP_CAPABILITY_EVIDENCE_KNOWN_MASK \
@@ -75,7 +77,8 @@ extern "C" {
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_APPRAISAL | \
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_CLAIMS | \
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_TRACE_BUILDER | \
-	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_PIPELINE)
+	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_PIPELINE | \
+	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_BUDGET)
 
 /**
  * @brief Provider summary for enabled ML-KEM/ML-DSA families.

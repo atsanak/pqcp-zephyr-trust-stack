@@ -7,7 +7,7 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <pqcp_zephyr/deployment_pipeline.h>
+#include <pqcp_zephyr/deployment_budget.h>
 
 #define PRODUCT_EVIDENCE \
 	(PQCP_DEPLOYMENT_EVIDENCE_KAT | \
@@ -177,6 +177,9 @@ static const struct pqcp_deployment_campaign_observation campaign_observations[]
 
 static struct pqcp_deployment_pipeline_workspace workspace;
 static struct pqcp_deployment_pipeline_result result;
+static struct pqcp_deployment_budget_candidate budget_rows[
+	PQCP_DEPLOYMENT_MAX_CANDIDATES];
+static struct pqcp_deployment_budget_report budget_report;
 static char trace_buffer[12288];
 
 static struct pqcp_deployment_candidate campaign_template(void)
@@ -206,6 +209,7 @@ static struct pqcp_deployment_candidate campaign_template(void)
 
 int main(void)
 {
+	struct pqcp_deployment_budget_policy budget_policy;
 	const struct pqcp_deployment_pipeline_campaign campaign = {
 		.campaign_id = "m7_onboarding_campaign",
 		.candidate_template = campaign_template(),
@@ -231,6 +235,23 @@ int main(void)
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}
+	ret = pqcp_deployment_budget_default_policy(
+		config.appraisal_profile, &budget_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_budget_evaluate(
+		&config, &workspace, &result, &budget_policy, budget_rows,
+		ARRAY_SIZE(budget_rows), &budget_report);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	for (size_t i = 0U; i < budget_report.candidate_count; ++i) {
+		(void)pqcp_deployment_budget_candidate_emit(&budget_rows[i]);
+	}
+	(void)pqcp_deployment_budget_report_emit(&budget_report);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;

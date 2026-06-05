@@ -107,6 +107,9 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_PIPELINE)) {
 		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_PIPELINE;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_BUDGET)) {
+		capabilities |= PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_BUDGET;
+	}
 
 	return capabilities;
 }
