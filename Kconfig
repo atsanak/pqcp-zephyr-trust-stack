@@ -623,6 +623,23 @@ config PQCP_DEPLOYMENT_RELEASE_GATE
 	  audit summaries, then emits one stable PQCP_DEPLOYMENT_RELEASE_GATE
 	  marker for local partner review transcripts.
 
+config PQCP_DEPLOYMENT_DEVICE_TOKEN
+	bool "Enable deployment device evidence token"
+	depends on PQCP_DEPLOYMENT_RELEASE_GATE
+	depends on PQCP_CAPABILITY_DESCRIPTOR
+	default n
+	help
+	  Enable allocation-free generation and replay checking of a compact
+	  nonce-bound PQCP_DEPLOYMENT_DEVICE_TOKEN marker. The token binds the
+	  firmware capability descriptor to the deployment release gate result so
+	  a captured QEMU/UART transcript can prove which firmware capabilities,
+	  provider policy, release decision, top candidate, and evidence digests
+	  were present for one review nonce.
+
+	  This option is evidence plumbing only. It does not select providers,
+	  execute cryptographic operations, alter public APIs, change ACVP wire
+	  formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================

@@ -178,6 +178,10 @@ if(CONFIG_PQCP_DEPLOYMENT_RELEASE_GATE)
     zephyr_library_sources(${PQCP_SRC}/deployment_release_gate.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_DEVICE_TOKEN)
+    zephyr_library_sources(${PQCP_SRC}/deployment_device_token.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
