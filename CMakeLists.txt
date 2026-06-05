@@ -154,6 +154,10 @@ if(CONFIG_PQCP_DEPLOYMENT_PIPELINE)
     zephyr_library_sources(${PQCP_SRC}/deployment_pipeline.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_BUDGET)
+    zephyr_library_sources(${PQCP_SRC}/deployment_budget.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()

@@ -550,6 +550,19 @@ config PQCP_DEPLOYMENT_PIPELINE
 	  scenario/candidate facts and does not execute crypto operations or
 	  select runtime providers.
 
+config PQCP_DEPLOYMENT_BUDGET
+	bool "Enable deployment budget evidence verdicts"
+	depends on PQCP_DEPLOYMENT_PIPELINE
+	default n
+	help
+	  Enable firmware-side budget and evidence verdicts over an executed
+	  deployment pipeline. The evaluator converts candidate measurements,
+	  scenario budgets, pipeline replay/appraisal/claim status, and required
+	  evidence flags into stable PQCP_DEPLOYMENT_BUDGET_* markers.
+
+	  This option is evidence plumbing only. It does not alter public crypto
+	  APIs, ACVP behavior, benchmark metric formats, or provider selection.
+
 endmenu
 
 # =============================================================================
