@@ -8,9 +8,12 @@
 #include <zephyr/sys/util.h>
 
 #include <errno.h>
+#include <stdarg.h>
+#include <string.h>
 
 #include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/deployment_device_token.h>
+#include <pqcp_zephyr/deployment_device_token_replay.h>
 #include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
 #include <pqcp_zephyr/deployment_review_packet.h>
@@ -202,8 +205,131 @@ static struct pqcp_capability_descriptor capability_descriptor;
 static struct pqcp_deployment_device_token_policy device_token_policy;
 static struct pqcp_deployment_device_token device_token;
 static struct pqcp_deployment_device_token_verification device_token_verify;
+static struct pqcp_deployment_device_token_replay_result device_token_replay;
 static char trace_buffer[12288];
 static char review_buffer[3072];
+static char device_token_replay_buffer[4096];
+
+static int append_replay_line(char *buffer, size_t buffer_size,
+			      size_t *offset, const char *fmt, ...)
+{
+	va_list args;
+	int written;
+
+	if (buffer == NULL || offset == NULL || fmt == NULL ||
+	    *offset >= buffer_size) {
+		return -EINVAL;
+	}
+
+	va_start(args, fmt);
+	written = vsnprintk(&buffer[*offset], buffer_size - *offset, fmt,
+			    args);
+	va_end(args);
+	if (written < 0 || (size_t)written >= buffer_size - *offset) {
+		return -ENOSPC;
+	}
+	*offset += (size_t)written;
+	return 0;
+}
+
+static int build_device_token_replay_transcript(char *buffer,
+						size_t buffer_size)
+{
+	size_t offset = 0U;
+	int ret;
+
+	if (buffer == NULL || buffer_size == 0U) {
+		return -EINVAL;
+	}
+	memset(buffer, 0, buffer_size);
+
+	ret = append_replay_line(
+		buffer, buffer_size, &offset,
+		"PQCP_CAPABILITY_DESCRIPTOR schema=%u profile=%s status=%s production_allowed=%u provider=%s backend=%s mlkem_levels=0x%08x mldsa_levels=0x%08x rng=%s evidence=0x%08x blockers=0x%08x readiness=%u\n",
+		capability_descriptor.schema_version,
+		pqcp_firmware_policy_profile_str(capability_descriptor.profile),
+		capability_descriptor.policy_passed ? "PASS" : "FAIL",
+		capability_descriptor.production_allowed ? 1U : 0U,
+		pqcp_capability_provider_summary_str(
+			capability_descriptor.provider_summary),
+		capability_descriptor.backend_selector,
+		capability_descriptor.mlkem_level_mask,
+		capability_descriptor.mldsa_level_mask,
+		capability_descriptor.rng_mode,
+		capability_descriptor.evidence_capabilities,
+		capability_descriptor.policy_blockers,
+		capability_descriptor.evidence_readiness_score);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = append_replay_line(
+		buffer, buffer_size, &offset,
+		"PQCP_DEPLOYMENT_RELEASE_GATE schema=%u profile=%s status=%s errors=0x%08x warnings=0x%08x candidates=%u gaps=%u experiments=%u blocking=%u readiness=%u claim_score=%u review_score=%u gate_score=%u top_consistent=%u digest_bound=%u pipeline=%s budget=%s experiment_plan=%s packet=%s replay=%s audit=%s top=%s trace_digest=%s packet_digest=%s\n",
+		release_gate.schema_version,
+		pqcp_deployment_release_gate_profile_str(release_gate.profile),
+		pqcp_deployment_release_gate_status_str(release_gate.status),
+		release_gate.error_mask,
+		release_gate.warning_mask,
+		release_gate.candidate_count,
+		release_gate.gap_count,
+		release_gate.experiment_count,
+		release_gate.blocking_experiment_count,
+		release_gate.readiness_score,
+		release_gate.claim_score,
+		release_gate.review_score,
+		release_gate.gate_score,
+		release_gate.top_consistent ? 1U : 0U,
+		release_gate.digest_bound ? 1U : 0U,
+		release_gate.pipeline_passed ? "PASS" : "FAIL",
+		release_gate.budget_passed ? "PASS" : "FAIL",
+		release_gate.experiment_plan_passed ? "PASS" : "FAIL",
+		release_gate.packet_passed ? "PASS" : "FAIL",
+		release_gate.replay_passed ? "PASS" : "FAIL",
+		release_gate.audit_passed ? "PASS" : "FAIL",
+		release_gate.top_candidate_id,
+		release_gate.trace_digest_hex,
+		release_gate.packet_digest_hex);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = append_replay_line(
+		buffer, buffer_size, &offset,
+		"PQCP_DEPLOYMENT_DEVICE_TOKEN schema=%u profile=%s status=%s nonce=%s errors=0x%08x warnings=0x%08x evidence=0x%08x cap_readiness=%u gate_score=%u gate_status=%s capability_policy=%u production_allowed=%u native_provider=%u gate_digest_bound=%u top=%s trace_digest=%s packet_digest=%s token_digest=%s\n",
+		device_token.schema_version,
+		pqcp_deployment_release_gate_profile_str(device_token.profile),
+		pqcp_deployment_device_token_status_str(device_token.status),
+		device_token.nonce_hex,
+		device_token.error_mask,
+		device_token.warning_mask,
+		device_token.evidence_capabilities,
+		device_token.capability_readiness_score,
+		device_token.gate_score,
+		pqcp_deployment_release_gate_status_str(
+			device_token.gate_status),
+		device_token.capability_policy_passed ? 1U : 0U,
+		device_token.production_allowed ? 1U : 0U,
+		device_token.native_provider ? 1U : 0U,
+		device_token.gate_digest_bound ? 1U : 0U,
+		device_token.top_candidate_id,
+		device_token.trace_digest_hex,
+		device_token.packet_digest_hex,
+		device_token.token_digest_hex);
+	if (ret != 0) {
+		return ret;
+	}
+	return append_replay_line(
+		buffer, buffer_size, &offset,
+		"PQCP_DEPLOYMENT_DEVICE_TOKEN_VERIFY schema=%u status=%s errors=0x%08x expected_status=%s observed_status=%s expected_digest=%s observed_digest=%s\n",
+		device_token_verify.schema_version,
+		device_token_verify.passed ? "PASS" : "FAIL",
+		device_token_verify.error_mask,
+		pqcp_deployment_device_token_status_str(
+			device_token_verify.expected_status),
+		pqcp_deployment_device_token_status_str(
+			device_token_verify.observed_status),
+		device_token_verify.expected_digest_hex,
+		device_token_verify.observed_digest_hex);
+}
 
 static struct pqcp_deployment_candidate campaign_template(void)
 {
@@ -337,6 +463,7 @@ int main(void)
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
 	}
+	(void)pqcp_capability_descriptor_emit(&capability_descriptor);
 	ret = pqcp_deployment_device_token_default_policy(
 		PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
 		&device_token_policy);
@@ -361,6 +488,21 @@ int main(void)
 	}
 	(void)pqcp_deployment_device_token_verification_emit(
 		&device_token_verify);
+	ret = build_device_token_replay_transcript(
+		device_token_replay_buffer, sizeof(device_token_replay_buffer));
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_device_token_replay_verify_transcript(
+		device_token_replay_buffer, DEMO_REVIEW_NONCE,
+		&device_token_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_device_token_replay_emit_result(
+		&device_token_replay);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
