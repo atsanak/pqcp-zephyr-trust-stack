@@ -563,6 +563,21 @@ config PQCP_DEPLOYMENT_BUDGET
 	  This option is evidence plumbing only. It does not alter public crypto
 	  APIs, ACVP behavior, benchmark metric formats, or provider selection.
 
+config PQCP_DEPLOYMENT_EXPERIMENT_PLAN
+	bool "Enable deployment next-experiment planning evidence"
+	depends on PQCP_DEPLOYMENT_BUDGET
+	default n
+	help
+	  Enable allocation-free firmware-side next-experiment planning over
+	  deployment pipeline and budget evidence. The planner emits stable
+	  PQCP_DEPLOYMENT_EXPERIMENT* markers that identify missing benchmark,
+	  hardware, validation, reproducibility, baseline, policy, transcript,
+	  and claim-review work.
+
+	  This option proposes experiments only. It does not execute experiments,
+	  select providers, change crypto APIs, alter ACVP wire formats, or alter
+	  benchmark marker field ordering.
+
 endmenu
 
 # =============================================================================
