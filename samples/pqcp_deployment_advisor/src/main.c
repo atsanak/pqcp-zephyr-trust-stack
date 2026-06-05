@@ -9,10 +9,14 @@
 
 #include <errno.h>
 
+#include <pqcp_zephyr/capability_descriptor.h>
+#include <pqcp_zephyr/deployment_device_token.h>
 #include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
 #include <pqcp_zephyr/deployment_review_packet.h>
 #include <pqcp_zephyr/deployment_review_verifier.h>
+
+#define DEMO_REVIEW_NONCE "00112233445566778899aabbccddeeff"
 
 #define PRODUCT_EVIDENCE \
 	(PQCP_DEPLOYMENT_EVIDENCE_KAT | \
@@ -194,6 +198,10 @@ static struct pqcp_deployment_review_audit_policy review_audit_policy;
 static struct pqcp_deployment_review_audit_report review_audit;
 static struct pqcp_deployment_release_gate_policy release_gate_policy;
 static struct pqcp_deployment_release_gate_report release_gate;
+static struct pqcp_capability_descriptor capability_descriptor;
+static struct pqcp_deployment_device_token_policy device_token_policy;
+static struct pqcp_deployment_device_token device_token;
+static struct pqcp_deployment_device_token_verification device_token_verify;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 
@@ -324,6 +332,35 @@ int main(void)
 		return 1;
 	}
 	(void)pqcp_deployment_release_gate_emit(&release_gate);
+	ret = pqcp_capability_descriptor_current(&capability_descriptor);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_device_token_default_policy(
+		PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
+		&device_token_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_device_token_build(
+		&capability_descriptor, &release_gate, DEMO_REVIEW_NONCE,
+		&device_token_policy, &device_token);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_device_token_emit(&device_token);
+	ret = pqcp_deployment_device_token_verify(
+		&device_token, &capability_descriptor, &release_gate,
+		DEMO_REVIEW_NONCE, &device_token_policy, &device_token_verify);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_device_token_verification_emit(
+		&device_token_verify);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
