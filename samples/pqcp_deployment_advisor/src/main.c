@@ -10,6 +10,7 @@
 #include <errno.h>
 
 #include <pqcp_zephyr/deployment_review_packet.h>
+#include <pqcp_zephyr/deployment_review_verifier.h>
 
 #define PRODUCT_EVIDENCE \
 	(PQCP_DEPLOYMENT_EVIDENCE_KAT | \
@@ -186,6 +187,7 @@ static struct pqcp_deployment_experiment_row experiment_rows[
 	PQCP_DEPLOYMENT_EXPERIMENT_PLAN_MAX_ROWS];
 static struct pqcp_deployment_experiment_plan experiment_plan;
 static struct pqcp_deployment_review_packet review_packet;
+static struct pqcp_deployment_review_verifier_result review_replay;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 
@@ -280,6 +282,13 @@ int main(void)
 	(void)pqcp_deployment_review_packet_emit_facts(
 		review_buffer, &review_packet);
 	(void)pqcp_deployment_review_packet_emit(&review_packet);
+	ret = pqcp_deployment_review_verifier_verify_packet(
+		review_buffer, &review_packet, &review_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_review_verifier_emit_result(&review_replay);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
