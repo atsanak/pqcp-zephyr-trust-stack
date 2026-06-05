@@ -612,6 +612,17 @@ config PQCP_DEPLOYMENT_REVIEW_AUDIT
 	  diversity, and low review/claim scores, then emits one stable
 	  PQCP_DEPLOYMENT_REVIEW_AUDIT marker.
 
+config PQCP_DEPLOYMENT_RELEASE_GATE
+	bool "Enable deployment release gate evidence"
+	depends on PQCP_DEPLOYMENT_REVIEW_AUDIT
+	default n
+	help
+	  Enable allocation-free release/deployment gate evaluation over the
+	  complete firmware evidence chain. The gate applies an explicit profile
+	  policy to pipeline, budget, experiment-plan, review-packet, replay, and
+	  audit summaries, then emits one stable PQCP_DEPLOYMENT_RELEASE_GATE
+	  marker for local partner review transcripts.
+
 endmenu
 
 # =============================================================================
