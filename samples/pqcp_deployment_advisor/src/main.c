@@ -1,18 +1,13 @@
 /*
  * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
  *
- * Demonstrates an allocation-free constrained-device deployment decision.
+ * Demonstrates an allocation-free deployment evidence pipeline.
  */
-
-#include <errno.h>
-#include <string.h>
 
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <pqcp_zephyr/deployment_advisor.h>
-#include <pqcp_zephyr/deployment_campaign.h>
-#include <pqcp_zephyr/deployment_robustness.h>
+#include <pqcp_zephyr/deployment_pipeline.h>
 
 #define PRODUCT_EVIDENCE \
 	(PQCP_DEPLOYMENT_EVIDENCE_KAT | \
@@ -57,7 +52,6 @@ static const struct pqcp_deployment_candidate candidates[] = {
 		.flash_bytes = 42000U,
 		.evidence_mask = PRODUCT_EVIDENCE |
 				 PQCP_DEPLOYMENT_EVIDENCE_SIMULATION,
-		.independent_evidence = false,
 		.policy_allowed = true,
 		.native_provider = true,
 	},
@@ -121,10 +115,8 @@ static const struct pqcp_deployment_candidate candidates[] = {
 		.stack_bytes = 8500U,
 		.heap_bytes = 3400U,
 		.flash_bytes = 205000U,
-		.energy_uj = 0U,
 		.evidence_mask = PRODUCT_EVIDENCE |
 				 PQCP_DEPLOYMENT_EVIDENCE_SIMULATION,
-		.independent_evidence = false,
 		.policy_allowed = true,
 		.native_provider = true,
 	},
@@ -183,16 +175,9 @@ static const struct pqcp_deployment_campaign_observation campaign_observations[]
 	},
 };
 
-static struct pqcp_deployment_candidate
-	working_candidates[ARRAY_SIZE(candidates) + 1U];
-static struct pqcp_deployment_candidate_result
-	results[ARRAY_SIZE(working_candidates)];
-static struct pqcp_deployment_candidate_robustness
-	robustness[ARRAY_SIZE(working_candidates)];
-static struct pqcp_deployment_gap_plan_entry
-	gaps[PQCP_DEPLOYMENT_MAX_GAPS];
-static struct pqcp_deployment_report report;
-static struct pqcp_deployment_robustness_report robustness_report;
+static struct pqcp_deployment_pipeline_workspace workspace;
+static struct pqcp_deployment_pipeline_result result;
+static char trace_buffer[12288];
 
 static struct pqcp_deployment_candidate campaign_template(void)
 {
@@ -219,107 +204,32 @@ static struct pqcp_deployment_candidate campaign_template(void)
 	};
 }
 
-static int build_campaign_candidate(
-	struct pqcp_deployment_candidate *candidate)
+int main(void)
 {
-	struct pqcp_deployment_campaign_observation
-		storage[ARRAY_SIZE(campaign_observations)];
-	struct pqcp_deployment_campaign_state state;
-	struct pqcp_deployment_campaign_summary summary;
-	struct pqcp_deployment_campaign_config config = {
+	const struct pqcp_deployment_pipeline_campaign campaign = {
 		.campaign_id = "m7_onboarding_campaign",
 		.candidate_template = campaign_template(),
+		.observations = campaign_observations,
+		.observation_count = ARRAY_SIZE(campaign_observations),
 		.projection = PQCP_DEPLOYMENT_CAMPAIGN_PROJECT_P90,
 		.min_samples = ARRAY_SIZE(campaign_observations),
 		.cv_warn_bps = 1000U,
 		.static_drift_warn_permille = 10U,
 	};
-	int ret;
+	const struct pqcp_deployment_pipeline_config config = {
+		.scenario = &scenario,
+		.candidates = candidates,
+		.candidate_count = ARRAY_SIZE(candidates),
+		.campaign = &campaign,
+		.appraisal_profile = PQCP_DEPLOYMENT_APPRAISAL_PROFILE_PRODUCT,
+		.emit_markers = true,
+	};
+	int ret = pqcp_deployment_pipeline_run(
+		&config, &workspace, trace_buffer, sizeof(trace_buffer), &result);
 
-	if (candidate == NULL) {
-		return -EINVAL;
-	}
-	ret = pqcp_deployment_campaign_init(
-		&state, &config, storage, ARRAY_SIZE(storage));
-	if (ret != 0) {
-		return ret;
-	}
-	for (size_t i = 0U; i < ARRAY_SIZE(campaign_observations); ++i) {
-		ret = pqcp_deployment_campaign_add(
-			&state, &campaign_observations[i]);
-		if (ret != 0) {
-			return ret;
-		}
-	}
-	ret = pqcp_deployment_campaign_summarize(&state, &summary);
-	if (ret != 0) {
-		return ret;
-	}
-	ret = pqcp_deployment_campaign_summary_emit(&summary);
-	if (ret != 0 || !summary.projected_candidate_valid) {
-		return ret != 0 ? ret : -ENODATA;
-	}
-
-	*candidate = summary.projected_candidate;
-	return 0;
-}
-
-int main(void)
-{
-	size_t gap_count = 0U;
-	int ret;
-
-	memcpy(working_candidates, candidates, sizeof(candidates));
-	ret = build_campaign_candidate(&working_candidates[ARRAY_SIZE(candidates)]);
 	if (ret != 0) {
 		printk("PROJECT EXECUTION FAILED\n");
 		return 1;
-	}
-
-	ret = pqcp_deployment_robustness_analyze(
-		&scenario, working_candidates, ARRAY_SIZE(working_candidates), results,
-		robustness, &report, &robustness_report);
-	if (ret != 0 || pqcp_deployment_scenario_emit(&scenario) != 0) {
-		printk("PROJECT EXECUTION FAILED\n");
-		return 1;
-	}
-
-	for (size_t i = 0U; i < ARRAY_SIZE(working_candidates); ++i) {
-		if (pqcp_deployment_candidate_result_emit(
-			    &scenario, &working_candidates[i], &results[i]) != 0) {
-			printk("PROJECT EXECUTION FAILED\n");
-			return 1;
-		}
-		if (pqcp_deployment_candidate_robustness_emit(
-			    &robustness[i]) != 0) {
-			printk("PROJECT EXECUTION FAILED\n");
-			return 1;
-		}
-	}
-
-	ret = pqcp_deployment_report_emit(&report, results);
-	if (ret != 0) {
-		printk("PROJECT EXECUTION FAILED\n");
-		return 1;
-	}
-	if (pqcp_deployment_robustness_report_emit(
-	    &robustness_report, robustness) != 0) {
-		printk("PROJECT EXECUTION FAILED\n");
-		return 1;
-	}
-
-	ret = pqcp_deployment_plan_gaps(
-		&scenario, working_candidates, results, ARRAY_SIZE(working_candidates),
-		gaps, ARRAY_SIZE(gaps), &gap_count);
-	if (ret != 0 && ret != -ENOSPC) {
-		printk("PROJECT EXECUTION FAILED\n");
-		return 1;
-	}
-	for (size_t i = 0U; i < gap_count; ++i) {
-		if (pqcp_deployment_gap_plan_entry_emit(&gaps[i]) != 0) {
-			printk("PROJECT EXECUTION FAILED\n");
-			return 1;
-		}
 	}
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");

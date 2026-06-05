@@ -146,6 +146,14 @@ if(CONFIG_PQCP_DEPLOYMENT_CLAIMS)
     zephyr_library_sources(${PQCP_SRC}/deployment_claims.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_TRACE_BUILDER)
+    zephyr_library_sources(${PQCP_SRC}/deployment_trace_builder.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_PIPELINE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_pipeline.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()

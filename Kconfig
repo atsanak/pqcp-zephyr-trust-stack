@@ -523,6 +523,33 @@ config PQCP_DEPLOYMENT_CLAIMS
 	  public crypto API behavior. It makes firmware-visible deployment claims
 	  explicit enough for replay and partner review.
 
+config PQCP_DEPLOYMENT_TRACE_BUILDER
+	bool "Enable deployment trace builder"
+	depends on PQCP_DEPLOYMENT_CLAIMS
+	default n
+	help
+	  Enable an allocation-free trace builder that formats stable
+	  PQCP_DEPLOYMENT_* markers into caller-owned memory, feeds the same
+	  lines into the deployment replay verifier, and emits a stable digest
+	  marker. This lets firmware demos bind advisor, campaign, robustness,
+	  decision, and gap evidence without heap allocation.
+
+	  This option does not alter marker field ordering, ACVP behavior,
+	  benchmark output, or public cryptographic APIs.
+
+config PQCP_DEPLOYMENT_PIPELINE
+	bool "Enable end-to-end deployment evidence pipeline"
+	depends on PQCP_DEPLOYMENT_TRACE_BUILDER
+	default n
+	help
+	  Enable a deterministic orchestration layer that runs campaign
+	  projection, advisor ranking, robustness analysis, trace replay,
+	  profile appraisal, and claim scoring from one firmware API call.
+
+	  The pipeline is evidence plumbing only. It uses caller-supplied
+	  scenario/candidate facts and does not execute crypto operations or
+	  select runtime providers.
+
 endmenu
 
 # =============================================================================
