@@ -14,6 +14,7 @@
 #include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/deployment_device_gate.h>
 #include <pqcp_zephyr/deployment_device_packet.h>
+#include <pqcp_zephyr/deployment_device_packet_replay.h>
 #include <pqcp_zephyr/deployment_device_token.h>
 #include <pqcp_zephyr/deployment_device_token_audit.h>
 #include <pqcp_zephyr/deployment_device_token_replay.h>
@@ -214,6 +215,7 @@ static struct pqcp_deployment_device_token_audit_report device_token_audit;
 static struct pqcp_deployment_device_gate_policy device_gate_policy;
 static struct pqcp_deployment_device_gate_report device_gate;
 static struct pqcp_deployment_device_packet device_packet;
+static struct pqcp_deployment_device_packet_replay_result device_packet_replay;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 static char device_token_replay_buffer[4096];
@@ -554,6 +556,14 @@ int main(void)
 	(void)pqcp_deployment_device_packet_emit_facts(
 		device_packet_buffer, &device_packet);
 	(void)pqcp_deployment_device_packet_emit(&device_packet);
+	ret = pqcp_deployment_device_packet_replay_verify_packet(
+		device_packet_buffer, &device_packet, &device_packet_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_device_packet_replay_emit_result(
+		&device_packet_replay);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
