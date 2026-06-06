@@ -206,6 +206,10 @@ if(CONFIG_PQCP_DEPLOYMENT_DEVICE_PACKET_AUDIT)
     zephyr_library_sources(${PQCP_SRC}/deployment_device_packet_audit.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_VERDICT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_verdict.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
