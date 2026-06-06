@@ -198,6 +198,10 @@ if(CONFIG_PQCP_DEPLOYMENT_DEVICE_PACKET)
     zephyr_library_sources(${PQCP_SRC}/deployment_device_packet.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_DEVICE_PACKET_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_device_packet_replay.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()

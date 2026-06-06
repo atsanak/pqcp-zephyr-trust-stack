@@ -700,6 +700,21 @@ config PQCP_DEPLOYMENT_DEVICE_PACKET
 	  execute cryptographic operations, alter public APIs, change ACVP wire
 	  formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_DEVICE_PACKET_REPLAY
+	bool "Enable deployment device-packet replay verifier"
+	depends on PQCP_DEPLOYMENT_DEVICE_PACKET
+	default n
+	help
+	  Enable allocation-free replay verification for deployment device
+	  packets. The verifier parses PQCP_DEPLOYMENT_DEVICE_FACT and
+	  PQCP_DEPLOYMENT_DEVICE_PACKET markers, recomputes the packet digest,
+	  and rejects duplicate, missing, tampered, or inconsistent final device
+	  evidence.
+
+	  This option verifies existing evidence text only. It does not select
+	  providers, execute cryptographic operations, alter public APIs, change
+	  ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
