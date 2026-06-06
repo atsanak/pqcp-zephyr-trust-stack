@@ -158,6 +158,10 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 		capabilities |=
 			PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_DEVICE_PACKET_AUDIT;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_VERDICT)) {
+		capabilities |=
+			PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_EVIDENCE_VERDICT;
+	}
 
 	return capabilities;
 }

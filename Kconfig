@@ -729,6 +729,22 @@ config PQCP_DEPLOYMENT_DEVICE_PACKET_AUDIT
 	  providers, execute cryptographic operations, alter public APIs, change
 	  ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_EVIDENCE_VERDICT
+	bool "Enable final deployment evidence verdict"
+	depends on PQCP_DEPLOYMENT_DEVICE_PACKET_AUDIT
+	default n
+	help
+	  Enable a final allocation-free verdict over the full firmware
+	  deployment evidence chain. The verdict consumes capability, pipeline,
+	  budget, experiment-plan, review, release, device-token, device-gate,
+	  device-packet, replay, and audit summaries, checks that identities and
+	  digests agree, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_VERDICT marker.
+
+	  This option appraises existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs, change
+	  ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
