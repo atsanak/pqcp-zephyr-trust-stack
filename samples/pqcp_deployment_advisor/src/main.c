@@ -13,6 +13,7 @@
 
 #include <pqcp_zephyr/capability_descriptor.h>
 #include <pqcp_zephyr/deployment_device_token.h>
+#include <pqcp_zephyr/deployment_device_token_audit.h>
 #include <pqcp_zephyr/deployment_device_token_replay.h>
 #include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
@@ -206,6 +207,8 @@ static struct pqcp_deployment_device_token_policy device_token_policy;
 static struct pqcp_deployment_device_token device_token;
 static struct pqcp_deployment_device_token_verification device_token_verify;
 static struct pqcp_deployment_device_token_replay_result device_token_replay;
+static struct pqcp_deployment_device_token_audit_policy device_token_audit_policy;
+static struct pqcp_deployment_device_token_audit_report device_token_audit;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 static char device_token_replay_buffer[4096];
@@ -503,6 +506,20 @@ int main(void)
 	}
 	(void)pqcp_deployment_device_token_replay_emit_result(
 		&device_token_replay);
+	ret = pqcp_deployment_device_token_audit_default_policy(
+		&device_token_audit_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_device_token_audit_run(
+		&device_token_replay, 1U, &device_token_audit_policy,
+		&device_token_audit);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_device_token_audit_emit(&device_token_audit);
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
