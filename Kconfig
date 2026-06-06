@@ -655,6 +655,21 @@ config PQCP_DEPLOYMENT_DEVICE_TOKEN_REPLAY
 	  execute cryptographic operations, alter public APIs, change ACVP wire
 	  formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT
+	bool "Enable deployment device-token replay audit aggregation"
+	depends on PQCP_DEPLOYMENT_DEVICE_TOKEN_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed deployment
+	  device-token transcripts. The audit detects replay failure, nonce drift,
+	  top-candidate drift, token-digest drift, release-gate status drift, token
+	  status weakness, gate status weakness, and score-floor weakness, then
+	  emits one stable PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT marker.
+
+	  This option appraises replayed evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs, change
+	  ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================

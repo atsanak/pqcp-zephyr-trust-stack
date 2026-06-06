@@ -138,6 +138,10 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 		capabilities |=
 			PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_DEVICE_TOKEN_REPLAY;
 	}
+	if (IS_ENABLED(CONFIG_PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT)) {
+		capabilities |=
+			PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_DEVICE_TOKEN_AUDIT;
+	}
 
 	return capabilities;
 }
