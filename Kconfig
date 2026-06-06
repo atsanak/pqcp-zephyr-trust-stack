@@ -670,6 +670,22 @@ config PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT
 	  providers, execute cryptographic operations, alter public APIs, change
 	  ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_DEVICE_GATE
+	bool "Enable deployment device evidence gate"
+	depends on PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT
+	default n
+	help
+	  Enable allocation-free device-level appraisal over the complete
+	  deployment evidence chain: capability descriptor, release gate, device
+	  token, token verification, transcript replay, and replay audit. The gate
+	  applies an explicit profile policy and emits one stable
+	  PQCP_DEPLOYMENT_DEVICE_GATE marker with exact blockers and consistency
+	  flags.
+
+	  This option appraises existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs, change
+	  ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================

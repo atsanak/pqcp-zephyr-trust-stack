@@ -190,6 +190,10 @@ if(CONFIG_PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT)
     zephyr_library_sources(${PQCP_SRC}/deployment_device_token_audit.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_DEVICE_GATE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_device_gate.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
