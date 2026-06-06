@@ -715,6 +715,20 @@ config PQCP_DEPLOYMENT_DEVICE_PACKET_REPLAY
 	  providers, execute cryptographic operations, alter public APIs, change
 	  ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_DEVICE_PACKET_AUDIT
+	bool "Enable deployment device-packet replay audit"
+	depends on PQCP_DEPLOYMENT_DEVICE_PACKET_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed deployment
+	  device packets. The audit detects replay failure, packet status weakness,
+	  top/nonce/digest drift, capability drift, score-floor weakness, and emits
+	  one stable PQCP_DEPLOYMENT_DEVICE_PACKET_AUDIT marker.
+
+	  This option audits existing replay results only. It does not select
+	  providers, execute cryptographic operations, alter public APIs, change
+	  ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
