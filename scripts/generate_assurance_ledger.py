@@ -1374,6 +1374,9 @@ def evaluate_ct_instruction_count(
         "transcript_sha256": transcript_sha,
     }
     if ("PQCP_CT_INSTRUCTION_COUNT PASS" not in transcript_body or
+            "loads_per_region=" not in transcript_body or
+            "stores_per_region=" not in transcript_body or
+            "identical guest memory-access count" not in transcript_body or
             "[ct-insn] PASS:" not in transcript_body):
         return fail_claim(
             spec,

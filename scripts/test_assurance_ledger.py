@@ -1290,7 +1290,8 @@ class AssuranceLedgerTests(unittest.TestCase):
             root = Path(tmp)
             body = (
                 "PQCP_CT_INSTR alg=MLKEM-768 iterations=8 regions=16\n"
-                "PQCP_CT_INSTRUCTION_COUNT PASS regions=16 insns_per_region=814304 alg=MLKEM-768\n"
+                "PQCP_CT_INSTRUCTION_COUNT PASS regions=16 insns_per_region=814304 loads_per_region=133443 stores_per_region=106992 alg=MLKEM-768\n"
+                "[ct-insn] PASS: valid and corrupted decapsulation execute an identical guest-instruction count and an identical guest memory-access count\n"
                 "[ct-insn] PASS: valid and corrupted decapsulation execute an identical guest-instruction count\n"
             )
             manifest = self._write_ct_instr_transcript(root, body)

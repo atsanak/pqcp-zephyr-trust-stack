@@ -78,19 +78,21 @@ median bound. Compilers and tools like `binsec/rel` reason about
 constant-timeness statically.
 
 **What is new (incremental).** A QEMU TCG plugin (`tools/tcg_ct_plugin`)
-counts guest instructions executed between two marker addresses resolved
-from the ELF symbol table, and `scripts/run_ct_instruction_checks.py`
-requires every valid-ciphertext and every corrupted-ciphertext ML-KEM-768
-decapsulation region to share one instruction count (measured: 814304
-instructions per region, identical across both classes). This is
-instruction-granularity input-independence of the decapsulation control
-flow — one rung above the wall-clock bound.
+counts guest instructions AND guest data memory accesses (loads and stores
+separately) executed between two marker addresses resolved from the ELF
+symbol table, and `scripts/run_ct_instruction_checks.py` requires every
+valid-ciphertext and every corrupted-ciphertext ML-KEM-768 decapsulation
+region to share one exact (insns, loads, stores) tuple (measured: 814304
+instructions, 133443 loads, 106992 stores per region, identical across
+both classes). This is input-independence of both the decapsulation
+control flow and its memory-operation counts — two rungs above the
+wall-clock bound.
 
 **Non-claims.** This is **not** a formal constant-time proof. It does not
-observe data-dependent memory *addresses* (only instruction count), nor
+observe data-dependent memory *addresses* (only operation counts), nor
 microarchitectural timing (caches, ports, prefetch). The project does not
 claim ML-KEM is constant-time; it claims a measured, reproducible
-instruction-count equality under one emulator.
+instruction-count and memory-access-count equality under one emulator.
 
 ## Claim 4 — The evidence grammar is a fuzzed security surface
 
