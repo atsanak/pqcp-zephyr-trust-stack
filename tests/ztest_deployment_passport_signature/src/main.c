@@ -286,6 +286,12 @@ ZTEST(pqcp_deployment_passport_signature, test_emit_produces_chunked_markers)
 		      0);
 	zassert_equal(PQCP_DEPLOYMENT_PASSPORT_SIGNATURE_PK_CHUNKS, 16U);
 	zassert_equal(PQCP_DEPLOYMENT_PASSPORT_SIGNATURE_SIG_CHUNKS, 26U);
+	/* Emit the passport too so a captured transcript carries the full
+	 * signature binding chain for the host verifier.
+	 */
+	zassert_equal(pqcp_deployment_assurance_passport_emit(
+			      &fixture.passport),
+		      0);
 	zassert_equal(pqcp_deployment_passport_signature_emit(&signature), 0);
 }
 

@@ -18,6 +18,7 @@ from pathlib import Path
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 TOOL_DIR = MODULE_ROOT / "tools" / "evidence_verifier"
 FIXTURE = TOOL_DIR / "testdata" / "advisor_qemu_transcript.log"
+SIGNED_FIXTURE = TOOL_DIR / "testdata" / "signed_passport_transcript.log"
 
 
 def build_tool(build_dir: Path) -> Path:
@@ -137,7 +138,55 @@ def main() -> int:
         result = run_tool(binary, noise, "--quiet")
         check("marker-free transcript rejected", result.returncode == 1)
 
-        # 7. Usage errors exit 2, not 0/1.
+        # 7. Signed-passport transcript: signature reassembles and verifies.
+        signed_text = SIGNED_FIXTURE.read_text()
+        json_path = workdir / "signed.json"
+        result = run_tool(binary, SIGNED_FIXTURE, "--lenient",
+                          "--require-signature", "--json", str(json_path))
+        check("signed transcript verifies with signature required",
+              result.returncode == 0, result.stdout + result.stderr)
+        summary = json.loads(json_path.read_text())
+        check("json reports signature verified",
+              summary["signature"]["present"] is True
+              and summary["signature"]["complete"] is True
+              and summary["signature"]["digest_bound"] is True
+              and summary["signature"]["verified"] is True)
+
+        # 8. One flipped hex digit in a signature chunk must be rejected.
+        idx = signed_text.find("SIG_CHUNK idx=12")
+        idx = signed_text.find("data=", idx) + len("data=")
+        flipped = "0" if signed_text[idx] != "0" else "1"
+        tampered = write_variant(
+            workdir, "sig_tampered.log",
+            signed_text[:idx] + flipped + signed_text[idx + 1:])
+        result = run_tool(binary, tampered, "--lenient", "--quiet")
+        check("tampered signature chunk rejected", result.returncode == 1)
+
+        # 9. A header claiming a different digest must be rejected.
+        idx = signed_text.find("passport_digest=") + len("passport_digest=")
+        flipped = "0" if signed_text[idx] != "0" else "1"
+        tampered = write_variant(
+            workdir, "sig_digest_tampered.log",
+            signed_text[:idx] + flipped + signed_text[idx + 1:])
+        result = run_tool(binary, tampered, "--lenient", "--quiet")
+        check("tampered signature digest binding rejected",
+              result.returncode == 1)
+
+        # 10. Dropping one chunk leaves the capture incomplete.
+        no_chunk = write_variant(
+            workdir, "sig_missing_chunk.log",
+            "\n".join(line for line in signed_text.splitlines()
+                      if "SIG_CHUNK idx=7 " not in line) + "\n")
+        result = run_tool(binary, no_chunk, "--lenient", "--quiet")
+        check("missing signature chunk rejected", result.returncode == 1)
+
+        # 11. The plain advisor transcript has no signature: required mode
+        # fails, default mode still passes.
+        result = run_tool(binary, FIXTURE, "--require-signature", "--quiet")
+        check("unsigned transcript fails when signature required",
+              result.returncode == 1)
+
+        # 12. Usage errors exit 2, not 0/1.
         result = subprocess.run([str(binary)], capture_output=True, text=True)
         check("missing argument exits 2", result.returncode == 2)
         result = run_tool(binary, workdir / "does_not_exist.log")
