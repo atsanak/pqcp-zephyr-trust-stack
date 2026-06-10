@@ -16,3 +16,7 @@ results/*.md
 # IDE / editor metadata (should not live in a public security repo)
 .vscode/
 .idea/
+
+# Built TCG plugin shared objects (rebuilt by scripts/run_ct_instruction_checks.py)
+tools/tcg_ct_plugin/*.so
+tools/tcg_ct_plugin/*.dylib

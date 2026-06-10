@@ -46,6 +46,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "boot KAT self-verify ztest run",
     "evidence chain host replay",
     "evidence parser fuzz",
+    "ct instruction-count",
     "ct smoke ztest run",
     "ct instruction policy",
     "benchmark_csv",
@@ -583,6 +584,7 @@ def main() -> int:
     boot_verify_build_dir = output_root / "ztest_kat_boot_verify_qemu"
     evidence_chain_output_dir = output_root / "evidence_chain_replay"
     evidence_fuzz_build_dir = output_root / "evidence_fuzz"
+    ct_instruction_output_dir = output_root / "ct_instruction"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
@@ -1924,6 +1926,23 @@ def main() -> int:
             success_markers=(
                 "PQCP_FUZZ PASS",
                 "[fuzz] PASS:",
+            ),
+        ),
+        Step(
+            name="ct instruction-count",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_ct_instruction_checks.py"),
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(ct_instruction_output_dir),
+            ],
+            cwd=module_path,
+            timeout=900,
+            success_markers=(
+                "PQCP_CT_INSTRUCTION_COUNT PASS",
+                "[ct-insn] PASS:",
             ),
         ),
         Step(
