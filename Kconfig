@@ -777,6 +777,54 @@ config PQCP_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT
 	  providers, execute cryptographic operations, alter public APIs,
 	  change ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_EVIDENCE_SEAL
+	bool "Enable terminal deployment evidence seal"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT
+	default n
+	help
+	  Enable the terminal allocation-free seal over the deployment
+	  evidence chain. The seal consumes the final evidence verdict, its
+	  replay verification, and the replay audit, checks that the three
+	  terminal summaries agree on identity, digests, capabilities, and
+	  status, and emits one stable PQCP_DEPLOYMENT_EVIDENCE_SEAL marker
+	  binding the chain end-to-end.
+
+	  This option seals existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY
+	bool "Enable deployment evidence seal replay verifier"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_SEAL
+	default n
+	help
+	  Enable an allocation-free replay verifier for captured
+	  PQCP_DEPLOYMENT_EVIDENCE_SEAL markers. The verifier re-parses one
+	  seal marker (or consumes an already-built seal struct), recomputes
+	  the canonical seal digest with the identical algorithm used by the
+	  seal generator, rejects malformed, duplicate, or internally
+	  inconsistent seal evidence, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY marker.
+
+	  This option verifies existing seal evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT
+	bool "Enable deployment evidence seal replay audit"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  deployment evidence seals. The audit detects replay failure, seal
+	  status weakness, top/nonce/digest drift, capability drift, profile
+	  drift, and score-floor weakness, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT marker.
+
+	  This option audits existing replay results only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
