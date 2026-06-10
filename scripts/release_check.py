@@ -44,6 +44,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP serial negative ztest run",
     "ACVP KAT ztest run",
     "boot KAT self-verify ztest run",
+    "evidence chain host replay",
     "ct smoke ztest run",
     "ct instruction policy",
     "benchmark_csv",
@@ -579,6 +580,7 @@ def main() -> int:
     ztest_negative_build_dir = output_root / "ztest_acvp_serial_negative_qemu"
     kat_build_dir = output_root / "ztest_acvp_kat_qemu"
     boot_verify_build_dir = output_root / "ztest_kat_boot_verify_qemu"
+    evidence_chain_output_dir = output_root / "evidence_chain_replay"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
@@ -1888,6 +1890,23 @@ def main() -> int:
             success_markers=(
                 "TESTSUITE pqcp_kat_boot_verify succeeded",
                 "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="evidence chain host replay",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_evidence_chain_replay.py"),
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(evidence_chain_output_dir),
+            ],
+            cwd=module_path,
+            timeout=900,
+            success_markers=(
+                "pqcp-evidence-verify: CHAIN OK",
+                "[evidence-chain] PASS: device evidence chain replayed on host",
             ),
         ),
         Step(

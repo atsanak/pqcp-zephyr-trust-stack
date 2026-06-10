@@ -1152,6 +1152,105 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("PQCP_KAT_BOOT_VERIFY", result["failure_reason"])
 
+    def _write_evidence_chain_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-evidence-chain.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-06-10T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["evidence chain host replay"],
+                    "transcripts": [
+                        {
+                            "step": "evidence chain host replay",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_evidence_chain_replay_passes_with_all_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_DEPLOYMENT_EVIDENCE_VERDICT schema=1 status=FAIL\n"
+                "PQCP_DEPLOYMENT_EVIDENCE_SEAL schema=1 status=FAIL\n"
+                "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT schema=1 status=FAIL\n"
+                "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY schema=1 passed=PASS\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+                "pqcp-evidence-verify: CHAIN OK\n"
+                "  verdict->seal_binding=true seal->passport_binding=true\n"
+                "[evidence-chain] PASS: device evidence chain replayed on host\n"
+            )
+            manifest = self._write_evidence_chain_transcript(root, body)
+            spec = {
+                "id": "firmware.evidence_chain_replay",
+                "category": "firmware",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_firmware_evidence_chain_replay(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_evidence_chain_replay_fails_without_chain_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_DEPLOYMENT_EVIDENCE_VERDICT schema=1 status=FAIL\n"
+                "PQCP_DEPLOYMENT_EVIDENCE_SEAL schema=1 status=FAIL\n"
+                "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT schema=1 status=FAIL\n"
+                "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY schema=1 passed=PASS\n"
+                "PROJECT EXECUTION SUCCESSFUL\n"
+                "pqcp-evidence-verify: CHAIN BROKEN\n"
+            )
+            manifest = self._write_evidence_chain_transcript(root, body)
+            spec = {
+                "id": "firmware.evidence_chain_replay",
+                "category": "firmware",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_firmware_evidence_chain_replay(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("CHAIN OK", result["failure_reason"])
+
+    def test_evidence_chain_replay_fails_without_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "transcripts" / "evidence_transcript_manifest.json"
+            spec = {
+                "id": "firmware.evidence_chain_replay",
+                "category": "firmware",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_firmware_evidence_chain_replay(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("missing or empty", result["failure_reason"])
+
     def _write_ct_smoke_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
