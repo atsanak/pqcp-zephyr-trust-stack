@@ -825,6 +825,37 @@ config PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT
 	  providers, execute cryptographic operations, alter public APIs,
 	  change ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_ASSURANCE_PASSPORT
+	bool "Enable firmware-native deployment assurance passport"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT
+	default n
+	help
+	  Enable the firmware-native deployment assurance passport. The
+	  passport binds the capability descriptor build identity to the
+	  terminal seal, seal replay, and seal audit summaries, cross-checks
+	  identity, digests, capabilities, and status, and emits one stable
+	  PQCP_DEPLOYMENT_ASSURANCE_PASSPORT marker. The passport is
+	  hash-bound and replay-checkable, not signed.
+
+	  This option renders existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY
+	bool "Enable deployment assurance passport replay verifier"
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT
+	default n
+	help
+	  Enable an allocation-free replay verifier for the deployment
+	  assurance passport. The verifier recomputes the canonical passport
+	  digest with the identical algorithm used by the passport generator,
+	  rejects malformed or internally inconsistent passport evidence, and
+	  emits one stable PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY marker.
+
+	  This option verifies existing passport evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
