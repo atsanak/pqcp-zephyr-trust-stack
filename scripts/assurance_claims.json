@@ -361,6 +361,13 @@
       "claim": "The firmware deployment evidence chain emitted by samples/pqcp_deployment_advisor on qemu_x86_64 (verdict, seal, and assurance passport markers) replays bit-for-bit on the host: scripts/run_evidence_chain_replay.py captures the live device transcript, compiles the UNMODIFIED firmware replay-verifier C (src/deployment_evidence_verdict_replay.c, src/deployment_evidence_seal_replay.c, src/deployment_assurance_passport_replay.c) into tools/evidence_verifier, recomputes every terminal digest, and requires the verdict-to-seal and seal-to-passport digest bindings to hold. Proven by the captured step transcript containing the device markers and the host verifier's CHAIN OK verdict.",
       "required": true,
       "schema_version_added": 8
+    },
+    {
+      "id": "security.evidence_parser_fuzzed",
+      "category": "security",
+      "claim": "Every transcript-facing evidence parser (the firmware verdict and seal replay-verifier line parsers compiled unmodified for host, plus the host passport line adapter and ML-DSA signature chunk reassembler) survives a deterministic mutational fuzz campaign driven by scripts/run_fuzz_checks.py and tools/evidence_fuzzer under ASan+UBSan with -fno-sanitize-recover=all: multiple seeded campaigns over corpus lines from real captured device transcripts complete with zero memory errors or undefined behavior. Proven by the captured step transcript containing one PQCP_FUZZ PASS marker per seed.",
+      "required": true,
+      "schema_version_added": 8
     }
   ]
 }

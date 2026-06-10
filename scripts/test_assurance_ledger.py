@@ -1251,6 +1251,77 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("missing or empty", result["failure_reason"])
 
+    def _write_fuzz_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-evidence-fuzz.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-06-10T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["evidence parser fuzz"],
+                    "transcripts": [
+                        {
+                            "step": "evidence parser fuzz",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_evidence_parser_fuzzed_passes_with_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_FUZZ PASS targets=4 corpus_lines=193 iterations=200000 seed=0x1\n"
+                "PQCP_FUZZ PASS targets=4 corpus_lines=193 iterations=200000 seed=0xdeadbeef\n"
+                "[fuzz] PASS: 2 campaign(s) x 200000 iterations, no sanitizer findings\n"
+            )
+            manifest = self._write_fuzz_transcript(root, body)
+            spec = {
+                "id": "security.evidence_parser_fuzzed",
+                "category": "security",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_evidence_parser_fuzzed(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+            self.assertEqual(result["details"]["fuzz_pass_markers"], 2)
+
+    def test_evidence_parser_fuzzed_fails_without_aggregate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = "PQCP_FUZZ PASS targets=4 iterations=200000 seed=0x1\n"
+            manifest = self._write_fuzz_transcript(root, body)
+            spec = {
+                "id": "security.evidence_parser_fuzzed",
+                "category": "security",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_evidence_parser_fuzzed(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "fail")
+
     def _write_ct_smoke_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
