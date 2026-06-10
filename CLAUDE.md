@@ -1053,6 +1053,45 @@ Risks: printk marker length for signature chunks; mldsa-native host build
 effort; TCG plugin ABI vs QEMU 10.0.2; nucleo availability; GitHub Actions
 billing still blocked (local-first validation remains authoritative).
 
+## Patch set 12 — waves 7-10: integration, signed chain, deeper CT, guided fuzz (2026-06-10)
+
+All pushed as atsana01. Validation state at end: every assurance test
+suite OK, scripts/run_extended_checks.py --strict exit 0, all three new
+required gate steps executed verbatim and passing.
+
+- Wave 7 (no diff needed): integration validation of the three new
+  required release_check steps. Each step command was executed exactly
+  as the gate invokes it: 'evidence parser fuzz' PASS, 'ct
+  instruction-count' PASS (814304 insns/region, equal valid-vs-corrupt),
+  'evidence chain host replay' CHAIN OK. Step success_markers and ledger
+  evaluator required_markers cross-checked against the real outputs -
+  all match. tools/tcg_ct_plugin dylib confirmed untracked.
+- `6dac2fb` Wave 8: samples/pqcp_deployment_advisor/overlay-signed.conf
+  + CONFIG-guarded signing stage. ONE device transcript (133 markers)
+  now carries the full 25-stage chain AND its ML-DSA-65 signature;
+  run_evidence_chain_replay.py --signed proves the loop live (QEMU ->
+  transcript -> host digest replay -> mldsa-native signature verify,
+  strict). Signed fixture refreshed to the full-chain profile;
+  test_evidence_verifier 19/19 strict.
+- `be90c2e` Wave 9: TCG plugin now counts guest loads/stores via
+  qemu_plugin_register_vcpu_mem_cb; runner requires exact
+  (insns, loads, stores) tuple equality. Measured (16 regions):
+  814304 insns, 133443 loads, 106992 stores - identical across valid
+  and corrupted decap. Evaluator + claim text + novelty doc updated.
+- `c5a1760` Wave 10: pqcp-evidence-fuzz is coverage-guided without a
+  fuzzer runtime - SanitizerCoverage trace-pc-guard on the target TUs,
+  harness-implemented callbacks, new-edge inputs promoted into the
+  corpus. Deterministic per seed (verified). Measured: 785 edges
+  instrumented, ~449 covered, 165 evolved entries per 200k campaign.
+  Harness + mldsa backend deliberately uninstrumented.
+
+Open follow-ups (unchanged): full release_check.py end-to-end run on a
+fresh output root (long on local QEMU; new steps individually
+validated); nucleo_h743zi hardware capture for Wave 5's device half;
+GitHub Actions billing blocker; gate currently runs the UNSIGNED chain
+profile - flipping to --signed is a one-flag decision once footprint
+and runtime are accepted.
+
 ## Final rule
 
 Do not confuse motion with progress.
