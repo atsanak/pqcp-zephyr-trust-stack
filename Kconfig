@@ -856,6 +856,26 @@ config PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY
 	  select providers, execute cryptographic operations, alter public
 	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
+	bool "Enable ML-DSA-signed deployment assurance passport"
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT
+	depends on PQCP_MLDSA && PQCP_MLDSA_LEVEL_65
+	default n
+	help
+	  Sign the deployment assurance passport digest with a demo-grade
+	  boot-ephemeral ML-DSA-65 key and emit the public key and signature
+	  as chunked PQCP_DEPLOYMENT_PASSPORT_SIGNATURE /
+	  PQCP_DEPLOYMENT_PASSPORT_PK_CHUNK / PQCP_DEPLOYMENT_PASSPORT_SIG_CHUNK
+	  markers. The custody profile is fixed to demo and documented in
+	  docs/passport-signing-custody.md: the key proves passport integrity
+	  at the moment of signing, not device identity, and the secret key
+	  signs exactly one message before being zeroized.
+
+	  Unlike the other evidence options this option DOES execute
+	  cryptographic operations (one ML-DSA-65 keygen, sign, and verify).
+	  It does not alter public APIs, change ACVP wire formats, or alter
+	  benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
