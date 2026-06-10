@@ -972,6 +972,87 @@ Open follow-ups:
 - Keep signing, hardware attestation, and device trust-root policy out of scope
   until key custody and device measurement semantics are defined.
 
+## Patch set 11 — NOVELTY-FIRST roadmap (planned 2026-06-10)
+
+Mission: evolve from "evidence-rich PQC stack" to **the first self-attesting,
+independently verifiable PQC trust stack**: every firmware claim third-party
+replayable with zero Zephyr tooling, and the firmware signs its own assurance
+passport with the ML-DSA it ships.
+
+Verified starting facts (audited 2026-06-10 at cbc3083):
+- The entire deployment evidence chain (src/deployment_*.c,
+  capability_descriptor.c) includes ONLY zephyr/sys/printk.h and
+  zephyr/sys/util.h → host-portable behind a ~40-line shim.
+- scripts/assurance_claims.json is schema 7 / 57 claims and binds ZERO
+  firmware PQCP_DEPLOYMENT_* markers. Host passport and firmware chain are
+  disjoint trust systems. Closing this is Wave 1's purpose.
+- SDK QEMU is 10.0.2 with TCG plugin support (-plugin works) → Wave 3 viable.
+- pqcp_mldsa_keypair/sign/verify/sign_hash exist → Wave 2 viable.
+- No tools/ dir, no fuzz infra → Waves 1/4 are greenfield.
+
+### Wave 1 — Evidence SDK: verify a device with zero Zephyr (enabler)
+- tools/evidence_verifier/: host CMake target compiling the UNMODIFIED
+  replay-verifier .c files (verdict/seal/passport replay + their parsers)
+  against a printk→stdio shim header. Single-source verifier: no
+  reimplementation drift by construction.
+- CLI `pqcp-evidence-verify <transcript.log>`: ingests a captured device
+  transcript, replays every marker, emits JSON summary + exit code.
+- New claim `firmware.evidence_chain_replay`: release gate captures the
+  advisor sample QEMU transcript and requires the host CLI verdict PASS,
+  finally binding firmware markers into the host ledger.
+- Novelty claim: first embedded PQC stack whose runtime evidence replays
+  bit-for-bit on host using the same C that generated it.
+
+### Wave 2 — ML-DSA-signed assurance passport (headline)
+- PREREQ: docs/passport-signing-custody.md decides key custody FIRST
+  (demo-grade boot-ephemeral key, generated only after KAT boot POST
+  passes; pubkey emitted as marker; explicitly NOT production custody;
+  threat model and non-claims stated).
+- New module deployment_passport_signature: canonical passport marker bytes
+  → pqcp_mldsa_sign (ML-DSA-65). Signature is 3309 B → chunked
+  PQCP_DEPLOYMENT_PASSPORT_SIG_CHUNK markers (printk line limits); verifier
+  reassembles and checks chunk indices/counts.
+- Host CLI --verify-signature via host-built mldsa-native.
+- Novelty claim: the stack signs its own assurance evidence with the PQC it
+  ships, gated by its own boot self-test (eat-your-own-dogfood attestation).
+
+### Wave 3 — Instruction-count CT evidence (QEMU TCG plugin)
+- tools/tcg_ct_plugin/: insn-count plugin; run ztest_ct_smoke under it;
+  assert exact instruction-count equality valid-vs-corrupt decap (vs the
+  current 50% wall-clock bound). New claim security.ct_instruction_count;
+  keep wall-clock smoke as fallback. Honest framing: still not a CT proof.
+
+### Wave 4 — Fuzz the evidence grammar
+- Host libFuzzer harnesses for every marker parser (field_value/ingest_line
+  of all replay verifiers + acvp_validate_line), ASan+UBSan, corpus seeded
+  from real transcripts. scripts/run_fuzz_checks.py + CI smoke budget.
+- New claim security.evidence_parser_fuzzed.
+
+### Wave 5 — Hardware passport + fleet drift audit
+- Run the full advisor chain on nucleo_h743zi; capture serial transcript;
+  host-verify it (Wave 1 CLI); record measured chain ROM/RAM in
+  resource_budgets.json as status=measured.
+- Fleet pattern: audit N=3 device passports through the existing ≤16-result
+  audit modules; demonstrate cross-device drift detection.
+- Combined novelty: first MCU-emitted, host-replayable, ML-DSA-signed PQC
+  assurance passport.
+
+### Wave 6 — Publication + strict-gate hygiene
+- docs/novelty-claims.md: each first stated precisely with prior-art
+  comparison (in-toto, CycloneDX CBOM, dudect, PSA/DICE attestation) and
+  explicit non-claims.
+- Fix the 4 pre-existing cppcheck nullPointerRedundantCheck findings so
+  --strict is clean on modern cppcheck; refresh publications brief,
+  CITATION.cff, evidence graph (add firmware-chain nodes).
+
+Rules: one module/tool per conventional commit; measured numbers only;
+release_check stays green per wave; signing stays demo-custody until a real
+custody decision; hardware attestation claims stay out of scope.
+
+Risks: printk marker length for signature chunks; mldsa-native host build
+effort; TCG plugin ABI vs QEMU 10.0.2; nucleo availability; GitHub Actions
+billing still blocked (local-first validation remains authoritative).
+
 ## Final rule
 
 Do not confuse motion with progress.
