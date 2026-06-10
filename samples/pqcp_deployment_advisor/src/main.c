@@ -21,6 +21,8 @@
 #include <pqcp_zephyr/deployment_device_token_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_audit.h>
+#include <pqcp_zephyr/deployment_assurance_passport.h>
+#include <pqcp_zephyr/deployment_assurance_passport_replay.h>
 #include <pqcp_zephyr/deployment_evidence_seal.h>
 #include <pqcp_zephyr/deployment_evidence_seal_audit.h>
 #include <pqcp_zephyr/deployment_evidence_seal_replay.h>
@@ -235,6 +237,9 @@ static struct pqcp_deployment_evidence_seal evidence_seal;
 static struct pqcp_deployment_evidence_seal_replay_result evidence_seal_replay;
 static struct pqcp_deployment_evidence_seal_audit_policy evidence_seal_audit_policy;
 static struct pqcp_deployment_evidence_seal_audit_report evidence_seal_audit;
+static struct pqcp_deployment_assurance_passport_policy assurance_passport_policy;
+static struct pqcp_deployment_assurance_passport assurance_passport;
+static struct pqcp_deployment_assurance_passport_replay_result assurance_passport_replay;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 static char device_token_replay_buffer[4096];
@@ -678,6 +683,31 @@ int main(void)
 		return 1;
 	}
 	(void)pqcp_deployment_evidence_seal_audit_emit(&evidence_seal_audit);
+	ret = pqcp_deployment_assurance_passport_default_policy(
+		PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
+		&assurance_passport_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_assurance_passport_run(
+		&capability_descriptor, &evidence_seal,
+		&evidence_seal_replay, &evidence_seal_audit,
+		&assurance_passport_policy, &assurance_passport);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_assurance_passport_emit(&assurance_passport);
+	ret = pqcp_deployment_assurance_passport_replay_verify(
+		&assurance_passport, &assurance_passport_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_assurance_passport_replay_emit_result(
+		&assurance_passport_replay);
+
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
 }

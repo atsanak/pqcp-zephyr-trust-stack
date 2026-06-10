@@ -230,6 +230,14 @@ if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT)
     zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal_audit.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_ASSURANCE_PASSPORT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_assurance_passport.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_assurance_passport_replay.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
