@@ -20,6 +20,8 @@
 #include <pqcp_zephyr/deployment_device_token_audit.h>
 #include <pqcp_zephyr/deployment_device_token_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict.h>
+#include <pqcp_zephyr/deployment_evidence_verdict_audit.h>
+#include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
 #include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
 #include <pqcp_zephyr/deployment_review_packet.h>
@@ -222,6 +224,9 @@ static struct pqcp_deployment_device_packet_audit_policy device_packet_audit_pol
 static struct pqcp_deployment_device_packet_audit_report device_packet_audit;
 static struct pqcp_deployment_evidence_verdict_policy evidence_verdict_policy;
 static struct pqcp_deployment_evidence_verdict evidence_verdict;
+static struct pqcp_deployment_evidence_verdict_replay_result evidence_verdict_replay;
+static struct pqcp_deployment_evidence_verdict_audit_policy evidence_verdict_audit_policy;
+static struct pqcp_deployment_evidence_verdict_audit_report evidence_verdict_audit;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 static char device_token_replay_buffer[4096];
@@ -604,7 +609,29 @@ int main(void)
 		return 1;
 	}
 	(void)pqcp_deployment_evidence_verdict_emit(&evidence_verdict);
-
+	ret = pqcp_deployment_evidence_verdict_replay_verify(
+		&evidence_verdict, &evidence_verdict_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_verdict_replay_emit_result(
+		&evidence_verdict_replay);
+	ret = pqcp_deployment_evidence_verdict_audit_default_policy(
+		&evidence_verdict_audit_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_evidence_verdict_audit_run(
+		&evidence_verdict_replay, 1U, &evidence_verdict_audit_policy,
+		&evidence_verdict_audit);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_verdict_audit_emit(
+		&evidence_verdict_audit);
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
 }
