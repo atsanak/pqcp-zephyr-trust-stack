@@ -105,12 +105,18 @@ attacker-visible surface they are: `tools/evidence_fuzzer` drives the
 signature reassembler with mutated lines from real device transcripts,
 under ASan+UBSan with `-fno-sanitize-recover=all`. It is a self-contained
 deterministic C driver (not libFuzzer), so it runs identically on any host
-with a C compiler and a fixed seed reproduces any run. 2M mutated inputs
-across four seeds produced zero findings.
+with a C compiler and a fixed seed reproduces any run — and it is
+coverage-guided without a fuzzer runtime: the target parsers carry
+SanitizerCoverage edge instrumentation, the harness implements the
+`trace_pc_guard` callbacks itself, and any input reaching a new edge is
+promoted into the corpus (measured: 785 instrumented edges, ~449 covered,
+165 evolved corpus entries per 200k-iteration campaign). Multi-campaign
+runs produced zero findings.
 
-**Non-claims.** Deterministic mutational fuzzing with a fixed corpus is
-weaker than coverage-guided fuzzing; absence of findings is not absence of
-bugs.
+**Non-claims.** Coverage-guided evolution explores deeper parser states
+than a fixed corpus, but absence of findings is still not absence of
+bugs; the crypto backend is deliberately uninstrumented and is not the
+fuzz target.
 
 ## Combined novelty
 

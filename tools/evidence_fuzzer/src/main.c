@@ -15,6 +15,15 @@
  * Deliberately not libFuzzer: a self-contained C driver runs identically
  * on any host with a C compiler (Apple clang ships no fuzzer runtime),
  * and a fixed seed makes every run reproducible by construction.
+ *
+ * Coverage-guided: the target translation units are compiled with
+ * -fsanitize-coverage=trace-pc-guard (clang) or trace-pc (gcc), and the
+ * callbacks below maintain an edge map. Any mutated input that reaches a
+ * never-before-seen edge is promoted into the in-memory corpus, so later
+ * mutations explore progressively deeper parser states. The harness
+ * itself is NOT instrumented, and the mldsa backend is deliberately left
+ * uninstrumented so coverage pressure stays on the parsers under test.
+ * Evolution is deterministic for a fixed seed and build.
  */
 
 #include <stdbool.h>
@@ -37,6 +46,70 @@ static size_t corpus_lengths[MAX_CORPUS_LINES];
 static size_t corpus_count;
 
 static uint64_t rng_state;
+
+/* ------------------------------------------------------------------ */
+/* Edge coverage (SanitizerCoverage callbacks)                          */
+/*                                                                      */
+/* Only the target TUs are instrumented; these callbacks fire from      */
+/* parser code. edge_seen is sized generously and ids saturate at the   */
+/* array bound, so an oversized build degrades gracefully instead of    */
+/* corrupting memory.                                                   */
+/* ------------------------------------------------------------------ */
+
+#define EDGE_MAP_SLOTS 262144U
+
+static uint8_t edge_seen[EDGE_MAP_SLOTS];
+static uint32_t edge_guards_total;
+static uint32_t edges_covered;
+static volatile int new_edge_this_run;
+
+void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop);
+void __sanitizer_cov_trace_pc_guard(uint32_t *guard);
+void __sanitizer_cov_trace_pc(void);
+
+void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop)
+{
+	static uint32_t next_id = 1U;
+
+	if (start == stop || *start != 0U) {
+		return;
+	}
+	for (uint32_t *guard = start; guard < stop; ++guard) {
+		*guard = next_id < EDGE_MAP_SLOTS ? next_id++ : 0U;
+	}
+	edge_guards_total = next_id;
+}
+
+void __sanitizer_cov_trace_pc_guard(uint32_t *guard)
+{
+	const uint32_t id = *guard;
+
+	if (id == 0U || id >= EDGE_MAP_SLOTS) {
+		return;
+	}
+	if (edge_seen[id] == 0U) {
+		edge_seen[id] = 1U;
+		edges_covered++;
+		new_edge_this_run = 1;
+	}
+}
+
+/* gcc fallback (-fsanitize-coverage=trace-pc): hash the call site. */
+void __sanitizer_cov_trace_pc(void)
+{
+	const uintptr_t pc =
+		(uintptr_t)__builtin_return_address(0);
+	const uint32_t id = (uint32_t)((pc >> 4) % (EDGE_MAP_SLOTS - 1U)) + 1U;
+
+	if (edge_seen[id] == 0U) {
+		edge_seen[id] = 1U;
+		edges_covered++;
+		new_edge_this_run = 1;
+	}
+	if (edge_guards_total == 0U) {
+		edge_guards_total = EDGE_MAP_SLOTS;
+	}
+}
 
 static uint64_t rng_next(void)
 {
@@ -300,17 +373,29 @@ int main(int argc, char **argv)
 		exercise_all(corpus[i]);
 	}
 
-	/* Mutation pass. */
+	/* Mutation pass with coverage-guided corpus evolution: inputs that
+	 * reach a new edge are promoted so later mutations build on them.
+	 */
+	size_t seed_corpus_count = corpus_count;
+
 	for (unsigned long i = 0UL; i < iterations; ++i) {
 		uint32_t pick = rng_below((uint32_t)corpus_count);
 		size_t len = corpus_lengths[pick];
 
 		memcpy(buffer, corpus[pick], len + 1U);
-		(void)mutate(buffer, len);
+		len = mutate(buffer, len);
+		new_edge_this_run = 0;
 		exercise_all(buffer);
+		if (new_edge_this_run && corpus_count < MAX_CORPUS_LINES) {
+			memcpy(corpus[corpus_count], buffer, len + 1U);
+			corpus_lengths[corpus_count] = len;
+			corpus_count++;
+		}
 	}
 
-	printf("PQCP_FUZZ PASS targets=4 corpus_lines=%zu iterations=%lu seed=0x%llx\n",
-	       corpus_count, iterations, (unsigned long long)seed);
+	printf("PQCP_FUZZ PASS targets=4 corpus_lines=%zu evolved=%zu edges_covered=%u edge_guards=%u iterations=%lu seed=0x%llx\n",
+	       seed_corpus_count, corpus_count - seed_corpus_count,
+	       edges_covered, edge_guards_total, iterations,
+	       (unsigned long long)seed);
 	return 0;
 }
