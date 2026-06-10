@@ -23,6 +23,7 @@
 #include <pqcp_zephyr/deployment_assurance_passport_replay.h>
 #include <pqcp_zephyr/deployment_evidence_seal_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
+#include "signature_check.h"
 
 #define LINE_MAX_CHARS 4096U
 #define FIELD_MAX_CHARS 96U
@@ -39,6 +40,10 @@ struct transcript_summary {
 	bool passport_passed;
 	bool verdict_seal_bound;
 	bool seal_passport_bound;
+	bool signature_present;
+	bool signature_complete;
+	bool signature_digest_bound;
+	bool signature_verified;
 	struct pqcp_deployment_evidence_verdict_replay_result verdict;
 	struct pqcp_deployment_evidence_seal_replay_result seal;
 	struct pqcp_deployment_assurance_passport_replay_result passport;
@@ -288,12 +293,14 @@ static const char *bool_token(bool value)
 }
 
 static int process_transcript(FILE *input, bool lenient,
+			      bool require_signature,
 			      struct transcript_summary *summary)
 {
 	static char line[LINE_MAX_CHARS];
 	struct pqcp_deployment_evidence_verdict_replay_state verdict_state;
 	struct pqcp_deployment_evidence_seal_replay_state seal_state;
 	struct pqcp_deployment_assurance_passport passport;
+	struct signature_capture sig_capture;
 	bool passport_parse_failed = false;
 	int ret;
 
@@ -303,6 +310,7 @@ static int process_transcript(FILE *input, bool lenient,
 		return -EINVAL;
 	}
 	memset(&passport, 0, sizeof(passport));
+	signature_capture_init(&sig_capture);
 
 	while (fgets(line, sizeof(line), input) != NULL) {
 		summary->total_lines++;
@@ -317,6 +325,8 @@ static int process_transcript(FILE *input, bool lenient,
 			}
 			continue;
 		}
+
+		(void)signature_capture_ingest_line(&sig_capture, line);
 
 		/* Both replay state machines ignore non-matching lines. */
 		(void)pqcp_deployment_evidence_verdict_replay_ingest_line(
@@ -353,6 +363,26 @@ static int process_transcript(FILE *input, bool lenient,
 		summary->seal_passed && summary->passport_passed &&
 		strcmp(passport.seal_digest_hex,
 		       summary->seal.computed_digest_hex) == 0;
+
+	summary->signature_present = sig_capture.present;
+	summary->signature_complete = signature_capture_complete(&sig_capture);
+	if (summary->signature_complete && summary->passport_passed) {
+		summary->signature_digest_bound =
+			strcmp(sig_capture.passport_digest_hex,
+			       summary->passport.computed_digest_hex) == 0;
+		summary->signature_verified =
+			summary->signature_digest_bound &&
+			signature_capture_verify(
+				&sig_capture,
+				summary->passport.computed_digest_hex) == 0;
+	}
+
+	if (require_signature && !summary->signature_present) {
+		return -EBADMSG;
+	}
+	if (summary->signature_present && !summary->signature_verified) {
+		return -EBADMSG;
+	}
 
 	if (lenient) {
 		bool any_layer_present = summary->verdict_markers != 0U ||
@@ -412,6 +442,12 @@ static void print_summary(FILE *out, const struct transcript_summary *summary,
 	fprintf(out, "  verdict->seal_binding=%s seal->passport_binding=%s\n",
 		bool_token(summary->verdict_seal_bound),
 		bool_token(summary->seal_passport_bound));
+	fprintf(out,
+		"  signature_present=%s complete=%s digest_bound=%s verified=%s\n",
+		bool_token(summary->signature_present),
+		bool_token(summary->signature_complete),
+		bool_token(summary->signature_digest_bound),
+		bool_token(summary->signature_verified));
 }
 
 static int write_json(const char *path,
@@ -447,9 +483,14 @@ static int write_json(const char *path,
 			summary->passport.first_error),
 		summary->passport.computed_digest_hex,
 		summary->passport.board);
-	fprintf(out, "  \"bindings\": {\"verdict_to_seal\": %s, \"seal_to_passport\": %s}\n",
+	fprintf(out, "  \"bindings\": {\"verdict_to_seal\": %s, \"seal_to_passport\": %s},\n",
 		bool_token(summary->verdict_seal_bound),
 		bool_token(summary->seal_passport_bound));
+	fprintf(out, "  \"signature\": {\"present\": %s, \"complete\": %s, \"digest_bound\": %s, \"verified\": %s}\n",
+		bool_token(summary->signature_present),
+		bool_token(summary->signature_complete),
+		bool_token(summary->signature_digest_bound),
+		bool_token(summary->signature_verified));
 	fprintf(out, "}\n");
 
 	return fclose(out) == 0 ? 0 : -EIO;
@@ -458,7 +499,7 @@ static int write_json(const char *path,
 static void usage(const char *argv0)
 {
 	fprintf(stderr,
-		"usage: %s [--lenient] [--quiet] [--json <path>] <transcript.log>\n"
+		"usage: %s [--lenient] [--require-signature] [--quiet] [--json <path>] <transcript.log>\n"
 		"\n"
 		"Replays the firmware deployment evidence chain from a captured\n"
 		"device transcript using the unmodified firmware verifier code.\n"
@@ -467,6 +508,8 @@ static void usage(const char *argv0)
 		"\n"
 		"  --lenient  verify only the layers present instead of\n"
 		"             requiring the full verdict+seal+passport chain\n"
+		"  --require-signature  fail unless an ML-DSA-65 passport\n"
+		"             signature is present and verifies\n"
 		"  --quiet    suppress the human-readable summary\n"
 		"  --json     also write a machine-readable JSON summary\n",
 		argv0);
@@ -478,6 +521,7 @@ int main(int argc, char **argv)
 	const char *transcript_path = NULL;
 	const char *json_path = NULL;
 	bool lenient = false;
+	bool require_signature = false;
 	bool quiet = false;
 	bool chain_ok;
 	FILE *input;
@@ -486,6 +530,8 @@ int main(int argc, char **argv)
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "--lenient") == 0) {
 			lenient = true;
+		} else if (strcmp(argv[i], "--require-signature") == 0) {
+			require_signature = true;
 		} else if (strcmp(argv[i], "--quiet") == 0) {
 			quiet = true;
 		} else if (strcmp(argv[i], "--json") == 0 && i + 1 < argc) {
@@ -517,7 +563,8 @@ int main(int argc, char **argv)
 		return 2;
 	}
 
-	ret = process_transcript(input, lenient, &summary);
+	ret = process_transcript(input, lenient, require_signature,
+				 &summary);
 	(void)fclose(input);
 	if (ret == -EINVAL) {
 		fprintf(stderr, "pqcp-evidence-verify: internal init error\n");
