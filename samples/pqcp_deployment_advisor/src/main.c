@@ -21,6 +21,9 @@
 #include <pqcp_zephyr/deployment_device_token_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_audit.h>
+#include <pqcp_zephyr/deployment_evidence_seal.h>
+#include <pqcp_zephyr/deployment_evidence_seal_audit.h>
+#include <pqcp_zephyr/deployment_evidence_seal_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
 #include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
@@ -227,6 +230,11 @@ static struct pqcp_deployment_evidence_verdict evidence_verdict;
 static struct pqcp_deployment_evidence_verdict_replay_result evidence_verdict_replay;
 static struct pqcp_deployment_evidence_verdict_audit_policy evidence_verdict_audit_policy;
 static struct pqcp_deployment_evidence_verdict_audit_report evidence_verdict_audit;
+static struct pqcp_deployment_evidence_seal_policy evidence_seal_policy;
+static struct pqcp_deployment_evidence_seal evidence_seal;
+static struct pqcp_deployment_evidence_seal_replay_result evidence_seal_replay;
+static struct pqcp_deployment_evidence_seal_audit_policy evidence_seal_audit_policy;
+static struct pqcp_deployment_evidence_seal_audit_report evidence_seal_audit;
 static char trace_buffer[12288];
 static char review_buffer[3072];
 static char device_token_replay_buffer[4096];
@@ -632,6 +640,44 @@ int main(void)
 	}
 	(void)pqcp_deployment_evidence_verdict_audit_emit(
 		&evidence_verdict_audit);
+	ret = pqcp_deployment_evidence_seal_default_policy(
+		PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
+		&evidence_seal_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_evidence_seal_run(
+		&evidence_verdict, &evidence_verdict_replay,
+		&evidence_verdict_audit, &evidence_seal_policy,
+		&evidence_seal);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_seal_emit(&evidence_seal);
+	ret = pqcp_deployment_evidence_seal_replay_verify(
+		&evidence_seal, &evidence_seal_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_seal_replay_emit_result(
+		&evidence_seal_replay);
+	ret = pqcp_deployment_evidence_seal_audit_default_policy(
+		&evidence_seal_audit_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_evidence_seal_audit_run(
+		&evidence_seal_replay, 1U, &evidence_seal_audit_policy,
+		&evidence_seal_audit);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_seal_audit_emit(&evidence_seal_audit);
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
 }

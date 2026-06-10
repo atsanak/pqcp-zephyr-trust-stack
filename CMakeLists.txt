@@ -218,6 +218,18 @@ if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT)
     zephyr_library_sources(${PQCP_SRC}/deployment_evidence_verdict_audit.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal_audit.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
