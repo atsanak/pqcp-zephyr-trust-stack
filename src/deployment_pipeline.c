@@ -36,7 +36,7 @@ static bool has_campaign(const struct pqcp_deployment_pipeline_config *config)
 
 static int validate_config(
 	const struct pqcp_deployment_pipeline_config *config,
-	char *trace_buffer,
+	const char *trace_buffer,
 	size_t trace_buffer_size)
 {
 	if (config == NULL ||

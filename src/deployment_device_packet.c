@@ -362,7 +362,7 @@ static int validate_inputs(
 	const struct pqcp_deployment_device_token_replay_result *replay,
 	const struct pqcp_deployment_device_token_audit_report *audit,
 	const struct pqcp_deployment_device_gate_report *device_gate,
-	char *buffer,
+	const char *buffer,
 	size_t buffer_size,
 	struct pqcp_deployment_device_packet *packet)
 {
