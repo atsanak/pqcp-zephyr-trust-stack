@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -354,6 +354,13 @@
       "claim": "Release reference values replay against backend-contract, provider-scope, release manifest, and CBOM metadata so provider-family drift cannot pass silently.",
       "required": true,
       "schema_version_added": 7
+    },
+    {
+      "id": "firmware.evidence_chain_replay",
+      "category": "firmware",
+      "claim": "The firmware deployment evidence chain emitted by samples/pqcp_deployment_advisor on qemu_x86_64 (verdict, seal, and assurance passport markers) replays bit-for-bit on the host: scripts/run_evidence_chain_replay.py captures the live device transcript, compiles the UNMODIFIED firmware replay-verifier C (src/deployment_evidence_verdict_replay.c, src/deployment_evidence_seal_replay.c, src/deployment_assurance_passport_replay.c) into tools/evidence_verifier, recomputes every terminal digest, and requires the verdict-to-seal and seal-to-passport digest bindings to hold. Proven by the captured step transcript containing the device markers and the host verifier's CHAIN OK verdict.",
+      "required": true,
+      "schema_version_added": 8
     }
   ]
 }

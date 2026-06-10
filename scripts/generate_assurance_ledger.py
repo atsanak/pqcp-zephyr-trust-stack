@@ -42,7 +42,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1202,6 +1202,79 @@ def evaluate_boot_kat_self_verify(
     )
 
 
+def evaluate_firmware_evidence_chain_replay(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind firmware.evidence_chain_replay to the captured host replay step.
+
+    scripts/run_evidence_chain_replay.py echoes the full captured device
+    transcript into its own stdout and then prints the host verifier
+    verdict, so one hash-bound step transcript carries both the device
+    evidence markers and the independent host CHAIN OK decision made by
+    the firmware verifier C compiled for host.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/evidence_verifier::pqcp-evidence-verify",
+        "scripts/run_evidence_chain_replay.py",
+    ]
+    commands = [
+        "python3 scripts/run_evidence_chain_replay.py",
+    ]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "evidence chain host replay"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence chain host replay transcript missing or empty in "
+                f"transcript manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="evidence chain host replay transcript"))
+
+    required_markers = (
+        "PQCP_DEPLOYMENT_EVIDENCE_VERDICT schema=",
+        "PQCP_DEPLOYMENT_EVIDENCE_SEAL schema=",
+        "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT schema=",
+        "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY",
+        "PROJECT EXECUTION SUCCESSFUL",
+        "pqcp-evidence-verify: CHAIN OK",
+        "verdict->seal_binding=true seal->passport_binding=true",
+        "[evidence-chain] PASS: device evidence chain replayed on host",
+    )
+    missing = [m for m in required_markers if m not in transcript_body]
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "required_markers": list(required_markers),
+    }
+    if missing:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence chain host replay transcript missing required "
+                "marker(s): " + ", ".join(missing)
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def evaluate_asan_clean(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2020,6 +2093,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "boot.kat_self_verify": lambda spec: evaluate_boot_kat_self_verify(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "firmware.evidence_chain_replay": lambda spec: evaluate_firmware_evidence_chain_replay(
             spec, transcript_manifest=transcript_manifest,
         ),
         "security.ct_smoke": lambda spec: evaluate_ct_smoke(
