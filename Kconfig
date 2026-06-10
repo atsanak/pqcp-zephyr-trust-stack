@@ -745,6 +745,38 @@ config PQCP_DEPLOYMENT_EVIDENCE_VERDICT
 	  providers, execute cryptographic operations, alter public APIs, change
 	  ACVP wire formats, or alter benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY
+	bool "Enable deployment evidence verdict replay verifier"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_VERDICT
+	default n
+	help
+	  Enable an allocation-free replay verifier for captured
+	  PQCP_DEPLOYMENT_EVIDENCE_VERDICT markers. The verifier re-parses one
+	  verdict marker (or consumes an already-built verdict struct),
+	  recomputes the canonical verdict digest with the identical algorithm
+	  used by the verdict evaluator, rejects malformed, duplicate, or
+	  internally inconsistent verdict evidence, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY marker.
+
+	  This option verifies existing verdict evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT
+	bool "Enable deployment evidence verdict replay audit"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  deployment evidence verdicts. The audit detects replay failure,
+	  verdict status weakness, top/nonce/digest drift, capability drift,
+	  profile drift, and score-floor weakness, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT marker.
+
+	  This option audits existing replay results only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
 endmenu
 
 # =============================================================================
