@@ -34,6 +34,7 @@ target_compile_definitions(mldsa65_host PUBLIC
 add_executable(pqcp-evidence-verify
     src/main.c
     src/host_tokens.c
+    src/passport_parse.c
     src/signature_check.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_verdict_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_seal_replay.c

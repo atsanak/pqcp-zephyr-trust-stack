@@ -1275,6 +1275,67 @@ def evaluate_firmware_evidence_chain_replay(
     )
 
 
+def evaluate_evidence_parser_fuzzed(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind security.evidence_parser_fuzzed to the captured fuzz step.
+
+    The fuzzer aborts under ASan/UBSan on any finding, so the step
+    transcript containing the per-seed PQCP_FUZZ PASS markers plus the
+    final aggregate PASS line proves every campaign completed clean.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/evidence_fuzzer::pqcp-evidence-fuzz",
+        "scripts/run_fuzz_checks.py",
+    ]
+    commands = [
+        "python3 scripts/run_fuzz_checks.py",
+    ]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "evidence parser fuzz"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence parser fuzz transcript missing or empty in "
+                f"transcript manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="evidence parser fuzz transcript"))
+
+    pass_markers = transcript_body.count("PQCP_FUZZ PASS")
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "fuzz_pass_markers": pass_markers,
+    }
+    if pass_markers < 1 or "[fuzz] PASS:" not in transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence parser fuzz transcript lacks PQCP_FUZZ PASS "
+                "markers or the aggregate [fuzz] PASS line"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def evaluate_asan_clean(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2096,6 +2157,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "firmware.evidence_chain_replay": lambda spec: evaluate_firmware_evidence_chain_replay(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(
             spec, transcript_manifest=transcript_manifest,
         ),
         "security.ct_smoke": lambda spec: evaluate_ct_smoke(
