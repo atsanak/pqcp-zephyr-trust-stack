@@ -213,11 +213,14 @@ def main() -> int:
         print("[ct-insn] FAIL: plugin produced no region outfile")
         return 1
 
-    counts: list[int] = []
+    counts: list[tuple[int, int, int]] = []
     for line in outfile.read_text().splitlines():
-        m = re.match(r"PQCP_CT_INSN region=(\d+) insns=(\d+)", line)
+        m = re.match(
+            r"PQCP_CT_INSN region=(\d+) insns=(\d+) loads=(\d+) stores=(\d+)",
+            line)
         if m:
-            counts.append(int(m.group(2)))
+            counts.append((int(m.group(2)), int(m.group(3)),
+                           int(m.group(4))))
     print(f"[ct-insn] captured {len(counts)} region counts")
 
     half = len(counts) // 2
@@ -229,20 +232,25 @@ def main() -> int:
     valid_counts = counts[:half]
     corrupt_counts = counts[half:]
     unique = sorted(set(counts))
-    print(f"[ct-insn] valid-region insns: {sorted(set(valid_counts))}")
-    print(f"[ct-insn] corrupt-region insns: {sorted(set(corrupt_counts))}")
+    print(f"[ct-insn] valid-region (insns, loads, stores): "
+          f"{sorted(set(valid_counts))}")
+    print(f"[ct-insn] corrupt-region (insns, loads, stores): "
+          f"{sorted(set(corrupt_counts))}")
 
     if len(unique) != 1:
-        print("[ct-insn] FAIL: instruction counts differ across regions: "
+        print("[ct-insn] FAIL: execution profiles differ across regions: "
               f"{unique}")
         print("[ct-insn] valid vs corrupt decapsulation are distinguishable "
-              "at instruction granularity")
+              "at instruction or memory-access granularity")
         return 1
 
+    insns, loads, stores = unique[0]
     print(f"PQCP_CT_INSTRUCTION_COUNT PASS regions={len(counts)} "
-          f"insns_per_region={unique[0]} alg=MLKEM-768")
+          f"insns_per_region={insns} loads_per_region={loads} "
+          f"stores_per_region={stores} alg=MLKEM-768")
     print("[ct-insn] PASS: valid and corrupted decapsulation execute an "
-          "identical guest-instruction count")
+          "identical guest-instruction count and an identical "
+          "guest memory-access count")
     return 0
 
 
