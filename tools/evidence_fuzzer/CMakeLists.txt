@@ -32,13 +32,34 @@ target_compile_definitions(mldsa65_fuzz PUBLIC
     MLD_CONFIG_PARAMETER_SET=65
 )
 
-add_executable(pqcp-evidence-fuzz
-    src/main.c
+# Edge-coverage instrumentation goes on the TARGET parsers only, so
+# coverage pressure (and corpus evolution) tracks the code under test, not
+# the harness or the crypto backend.
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+    set(PQCP_FUZZ_COV_FLAG -fsanitize-coverage=trace-pc-guard)
+else()
+    set(PQCP_FUZZ_COV_FLAG -fsanitize-coverage=trace-pc)
+endif()
+
+add_library(fuzz_targets OBJECT
     ${PQCP_VERIFIER_DIR}/src/host_tokens.c
     ${PQCP_VERIFIER_DIR}/src/passport_parse.c
     ${PQCP_VERIFIER_DIR}/src/signature_check.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_verdict_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_seal_replay.c
+)
+target_include_directories(fuzz_targets PRIVATE
+    ${PQCP_VERIFIER_DIR}/shim
+    ${PQCP_VERIFIER_DIR}/src
+    ${PQCP_MODULE_ROOT}/include
+)
+target_link_libraries(fuzz_targets PRIVATE mldsa65_fuzz)
+target_compile_options(fuzz_targets PRIVATE -Wall -Wextra -Werror
+                       ${PQCP_FUZZ_COV_FLAG})
+
+add_executable(pqcp-evidence-fuzz
+    src/main.c
+    $<TARGET_OBJECTS:fuzz_targets>
 )
 
 target_include_directories(pqcp-evidence-fuzz PRIVATE
@@ -55,6 +76,7 @@ if(PQCP_FUZZ_SANITIZE)
                             -fno-sanitize-recover=all -g)
     target_compile_options(pqcp-evidence-fuzz PRIVATE ${PQCP_FUZZ_SAN_FLAGS})
     target_link_options(pqcp-evidence-fuzz PRIVATE ${PQCP_FUZZ_SAN_FLAGS})
+    target_compile_options(fuzz_targets PRIVATE ${PQCP_FUZZ_SAN_FLAGS})
     target_compile_options(mldsa65_fuzz PRIVATE ${PQCP_FUZZ_SAN_FLAGS})
     target_link_options(mldsa65_fuzz PRIVATE ${PQCP_FUZZ_SAN_FLAGS})
 endif()
