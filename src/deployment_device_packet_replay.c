@@ -166,12 +166,13 @@ static int clean_line(const char *input, char *out, size_t out_len)
 static int field_value(const char *line, const char *key, char *out,
 		       size_t out_len)
 {
-	const size_t key_len = strlen(key);
+	size_t key_len;
 	const char *p = line;
 
 	if (line == NULL || key == NULL || out == NULL || out_len == 0U) {
 		return -EINVAL;
 	}
+	key_len = strlen(key);
 
 	while (*p != '\0') {
 		if ((p == line || *(p - 1) == ' ') &&

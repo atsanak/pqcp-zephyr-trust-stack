@@ -221,7 +221,7 @@ static int validate_inputs(
 	const struct pqcp_deployment_pipeline_result *pipeline,
 	const struct pqcp_deployment_budget_report *budget,
 	const struct pqcp_deployment_experiment_plan *experiments,
-	char *buffer,
+	const char *buffer,
 	size_t buffer_size,
 	const struct pqcp_deployment_review_packet *packet)
 {

@@ -51,12 +51,13 @@ static int field_value(
 	char *out,
 	size_t out_len)
 {
-	const size_t key_len = strlen(key);
+	size_t key_len;
 	const char *p = line;
 
 	if (line == NULL || key == NULL || out == NULL || out_len == 0U) {
 		return -EINVAL;
 	}
+	key_len = strlen(key);
 
 	while (*p != '\0') {
 		if ((p == line || *(p - 1) == ' ') &&
@@ -351,7 +352,8 @@ static int ingest_campaign_summary(
 			state, PQCP_DEPLOYMENT_TRANSCRIPT_ERROR_STATUS_FAIL);
 	}
 
-	state->campaign_projected = projected == 1U;
+	/* projected is bounded to {0,1} and the == 0U case returned above. */
+	state->campaign_projected = true;
 	state->campaign_seen = true;
 	state->marker_mask |= PQCP_DEPLOYMENT_TRANSCRIPT_MARKER_CAMPAIGN;
 

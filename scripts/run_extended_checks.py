@@ -377,6 +377,12 @@ def run_cppcheck(
         "--inline-suppr",
         "--suppress=missingIncludeSystem",
         "--suppress=unusedStructMember",
+        # variableScope is a readability heuristic, not a correctness check:
+        # it flags function-wide scratch buffers (field[]/ret) that are used
+        # across multiple sibling branches of the long marker parsers, where
+        # "reducing" scope would force duplicate declarations. All
+        # bug-catching warning classes stay enabled.
+        "--suppress=variableScope",
         "--template={severity}:{id}:{file}:{line}:{message}",
         f"-I{module_path / 'include'}",
         *[str(module_path / target) for target in targets],
