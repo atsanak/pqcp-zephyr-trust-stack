@@ -368,6 +368,13 @@
       "claim": "Every transcript-facing evidence parser (the firmware verdict and seal replay-verifier line parsers compiled unmodified for host, plus the host passport line adapter and ML-DSA signature chunk reassembler) survives a deterministic mutational fuzz campaign driven by scripts/run_fuzz_checks.py and tools/evidence_fuzzer under ASan+UBSan with -fno-sanitize-recover=all: multiple seeded campaigns over corpus lines from real captured device transcripts complete with zero memory errors or undefined behavior. Proven by the captured step transcript containing one PQCP_FUZZ PASS marker per seed.",
       "required": true,
       "schema_version_added": 8
+    },
+    {
+      "id": "security.ct_instruction_count",
+      "category": "security",
+      "claim": "Under the pqcp_ct_insn QEMU TCG plugin (tools/tcg_ct_plugin), every ML-KEM-768 decapsulation in tests/ztest_ct_instr executes the identical number of guest instructions for a valid ciphertext and for a corrupted (implicit-rejection) ciphertext: scripts/run_ct_instruction_checks.py brackets each decapsulation between two marker addresses resolved from the ELF symbol table, the plugin counts guest instructions per region, and the runner requires all regions to share one instruction count. This is instruction-granularity input-independence of the decapsulation control flow, one rung above the wall-clock security.ct_smoke bound. It is NOT a formal constant-time proof: data-dependent memory addressing and microarchitectural timing are out of scope. Proven by the captured step transcript containing the PQCP_CT_INSTRUCTION_COUNT PASS marker.",
+      "required": true,
+      "schema_version_added": 8
     }
   ]
 }

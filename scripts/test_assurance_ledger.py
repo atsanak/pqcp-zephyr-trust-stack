@@ -1251,6 +1251,79 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("missing or empty", result["failure_reason"])
 
+    def _write_ct_instr_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-ct-instr.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-06-10T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["ct instruction-count"],
+                    "transcripts": [
+                        {
+                            "step": "ct instruction-count",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    def test_ct_instruction_count_passes_with_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_CT_INSTR alg=MLKEM-768 iterations=8 regions=16\n"
+                "PQCP_CT_INSTRUCTION_COUNT PASS regions=16 insns_per_region=814304 alg=MLKEM-768\n"
+                "[ct-insn] PASS: valid and corrupted decapsulation execute an identical guest-instruction count\n"
+            )
+            manifest = self._write_ct_instr_transcript(root, body)
+            spec = {
+                "id": "security.ct_instruction_count",
+                "category": "security",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_ct_instruction_count(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+
+    def test_ct_instruction_count_fails_without_pass_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = (
+                "PQCP_CT_INSTR alg=MLKEM-768 iterations=8 regions=16\n"
+                "[ct-insn] FAIL: instruction counts differ across regions\n"
+            )
+            manifest = self._write_ct_instr_transcript(root, body)
+            spec = {
+                "id": "security.ct_instruction_count",
+                "category": "security",
+                "claim": "x",
+                "required": True,
+            }
+            result = ledger.evaluate_ct_instruction_count(
+                spec, transcript_manifest=manifest
+            )
+            self.assertEqual(result["status"], "fail")
+
     def _write_fuzz_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)

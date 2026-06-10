@@ -17,3 +17,7 @@ results/*.md
 .cursor/
 .vscode/
 .idea/
+
+# Built TCG plugin shared objects (rebuilt by scripts/run_ct_instruction_checks.py)
+tools/tcg_ct_plugin/*.so
+tools/tcg_ct_plugin/*.dylib
