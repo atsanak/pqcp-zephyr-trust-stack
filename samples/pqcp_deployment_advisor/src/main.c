@@ -27,6 +27,10 @@
 #include <pqcp_zephyr/deployment_evidence_seal_audit.h>
 #include <pqcp_zephyr/deployment_evidence_seal_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
+#ifdef CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
+#include <pqcp_zephyr/deployment_passport_signature.h>
+#include <pqcp_zephyr/rng.h>
+#endif
 #include <pqcp_zephyr/deployment_release_gate.h>
 #include <pqcp_zephyr/deployment_review_audit.h>
 #include <pqcp_zephyr/deployment_review_packet.h>
@@ -240,6 +244,10 @@ static struct pqcp_deployment_evidence_seal_audit_report evidence_seal_audit;
 static struct pqcp_deployment_assurance_passport_policy assurance_passport_policy;
 static struct pqcp_deployment_assurance_passport assurance_passport;
 static struct pqcp_deployment_assurance_passport_replay_result assurance_passport_replay;
+#ifdef CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
+static struct pqcp_deployment_passport_signing_state passport_signing_state;
+static struct pqcp_deployment_passport_signature passport_signature;
+#endif
 static char trace_buffer[12288];
 static char review_buffer[3072];
 static char device_token_replay_buffer[4096];
@@ -707,6 +715,42 @@ int main(void)
 	}
 	(void)pqcp_deployment_assurance_passport_replay_emit_result(
 		&assurance_passport_replay);
+
+#ifdef CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
+	{
+		/* Demo custody profile (docs/passport-signing-custody.md):
+		 * deterministic test RNG, boot-ephemeral single-use key.
+		 */
+		static const uint8_t demo_seed[32] = {
+			0x50, 0x51, 0x43, 0x50, 0x2d, 0x53, 0x49, 0x47,
+			0x4e, 0x45, 0x44, 0x2d, 0x50, 0x41, 0x53, 0x53,
+			0x50, 0x4f, 0x52, 0x54, 0x2d, 0x44, 0x45, 0x4d,
+			0x4f, 0x2d, 0x53, 0x45, 0x45, 0x44, 0x30, 0x31,
+		};
+
+		ret = pqcp_rng_deterministic_seed(demo_seed,
+						  sizeof(demo_seed));
+		if (ret != PQCP_RNG_SUCCESS) {
+			printk("PROJECT EXECUTION FAILED\n");
+			return 1;
+		}
+		ret = pqcp_deployment_passport_signature_create(
+			&assurance_passport, &passport_signing_state,
+			&passport_signature);
+		if (ret != 0) {
+			printk("PROJECT EXECUTION FAILED\n");
+			return 1;
+		}
+		ret = pqcp_deployment_passport_signature_verify(
+			&assurance_passport, &passport_signature);
+		if (ret != 0) {
+			printk("PROJECT EXECUTION FAILED\n");
+			return 1;
+		}
+		(void)pqcp_deployment_passport_signature_emit(
+			&passport_signature);
+	}
+#endif
 
 	printk("PROJECT EXECUTION SUCCESSFUL\n");
 	return 0;
