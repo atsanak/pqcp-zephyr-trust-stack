@@ -70,6 +70,12 @@ def parse_args() -> argparse.Namespace:
         help="Per-command wall-clock timeout in seconds",
     )
     parser.add_argument(
+        "--signed",
+        action="store_true",
+        help="Build the signed-passport profile (overlay-signed.conf) and "
+             "require an ML-DSA passport signature during host replay",
+    )
+    parser.add_argument(
         "--transcript",
         type=Path,
         default=None,
@@ -108,6 +114,8 @@ def main() -> int:
                 str(build_dir),
                 "--",
                 f"-DZEPHYR_EXTRA_MODULES={MODULE_PATH}",
+                *((["-DEXTRA_CONF_FILE=overlay-signed.conf"])
+                  if args.signed else []),
             ],
             cwd=west_root,
             env=env,
@@ -160,8 +168,12 @@ def main() -> int:
 
     print("[evidence-chain] Replaying transcript with the host verifier")
     binary = host_build_dir / "pqcp-evidence-verify"
+    verify_cmd = [str(binary), "--json", str(summary_path)]
+    if args.signed:
+        verify_cmd.append("--require-signature")
+    verify_cmd.append(str(transcript_path))
     result = subprocess.run(
-        [str(binary), "--json", str(summary_path), str(transcript_path)],
+        verify_cmd,
         cwd=str(MODULE_PATH),
         env=env,
         capture_output=True,

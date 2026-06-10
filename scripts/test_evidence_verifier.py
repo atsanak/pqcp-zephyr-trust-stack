@@ -141,10 +141,13 @@ def main() -> int:
         # 7. Signed-passport transcript: signature reassembles and verifies.
         signed_text = SIGNED_FIXTURE.read_text()
         json_path = workdir / "signed.json"
-        result = run_tool(binary, SIGNED_FIXTURE, "--lenient",
+        result = run_tool(binary, SIGNED_FIXTURE,
                           "--require-signature", "--json", str(json_path))
-        check("signed transcript verifies with signature required",
+        check("signed full-chain transcript verifies strictly",
               result.returncode == 0, result.stdout + result.stderr)
+        check("signed fixture carries the full chain",
+              json.loads(json_path.read_text())["bindings"][
+                  "seal_to_passport"] is True)
         summary = json.loads(json_path.read_text())
         check("json reports signature verified",
               summary["signature"]["present"] is True
@@ -159,7 +162,7 @@ def main() -> int:
         tampered = write_variant(
             workdir, "sig_tampered.log",
             signed_text[:idx] + flipped + signed_text[idx + 1:])
-        result = run_tool(binary, tampered, "--lenient", "--quiet")
+        result = run_tool(binary, tampered, "--quiet")
         check("tampered signature chunk rejected", result.returncode == 1)
 
         # 9. A header claiming a different digest must be rejected.
@@ -168,7 +171,7 @@ def main() -> int:
         tampered = write_variant(
             workdir, "sig_digest_tampered.log",
             signed_text[:idx] + flipped + signed_text[idx + 1:])
-        result = run_tool(binary, tampered, "--lenient", "--quiet")
+        result = run_tool(binary, tampered, "--quiet")
         check("tampered signature digest binding rejected",
               result.returncode == 1)
 
