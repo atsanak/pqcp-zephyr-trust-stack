@@ -118,6 +118,10 @@ if(CONFIG_PQCP_CAPABILITY_DESCRIPTOR)
     zephyr_library_sources(${PQCP_SRC}/capability_descriptor.c)
 endif()
 
+if(CONFIG_PQCP_CAPABILITY_EXTENSION)
+    zephyr_library_sources(${PQCP_SRC}/capability_extension.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_SCORECARD)
     zephyr_library_sources(${PQCP_SRC}/firmware_scorecard.c)
 endif()
@@ -625,6 +629,36 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL_MBEDTLS)
         ${PQCP_SRC}/protected_channel_mbedtls.c
         ${PQCP_SRC}/protected_channel_tls.c
     )
+if(CONFIG_PQCP_DEPLOYMENT_MARKER_RENDER)
+    zephyr_library_sources(${PQCP_SRC}/deployment_marker_render.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_ENGINE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_engine.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_audit.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_audit.c)
 endif()
 
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
