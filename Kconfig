@@ -976,6 +976,157 @@ config PQCP_ADAPTIVE_CONTROL
 	  This option does not load implementations dynamically, execute
 	  cryptographic operations by itself, change the selected provider, or
 	  alter the ACVP and PQCP_METRIC wire formats.
+config PQCP_CAPABILITY_EXTENSION
+	bool "Enable extended firmware capability plane"
+	depends on PQCP_CAPABILITY_DESCRIPTOR
+	default n
+	help
+	  Enable the second 32-bit evidence capability word. The base
+	  capability mask in the capability descriptor is fully allocated
+	  (bits 0..31); this option reports evidence modules introduced
+	  after the base mask filled and emits one stable
+	  PQCP_CAPABILITY_EXTENSION marker binding the base word to the
+	  extension word. The base capability descriptor marker is never
+	  altered.
+
+	  This option reports build metadata only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_MARKER_RENDER
+	bool "Enable deployment marker render-to-buffer support"
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT
+	default n
+	help
+	  Enable rendering of the terminal deployment evidence markers
+	  (final verdict, terminal seal, assurance passport) into
+	  caller-owned buffers using exactly the field layout the replay
+	  verifiers parse. This is the substrate for in-image adversarial
+	  self-validation: a rendered marker must replay cleanly and any
+	  mutation of it must be rejected.
+
+	  This option renders existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_ENGINE
+	bool "Enable deterministic evidence tamper engine"
+	default n
+	help
+	  Enable the deterministic single-line tamper engine. The engine
+	  applies one fully described, seed-reproducible mutation (digest
+	  nibble flip, status forge, score inflate, schema bump, nonce swap,
+	  profile swap, field strip, truncation, or value noise) to one
+	  key=value evidence marker line and reports exactly what changed.
+	  It is the attack half of the adversarial self-validation loop and
+	  never runs against live evidence on its own.
+
+	  This option mutates in-memory text buffers only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_MATRIX
+	bool "Enable adversarial evidence tamper detection matrix"
+	depends on PQCP_DEPLOYMENT_MARKER_RENDER
+	depends on PQCP_DEPLOYMENT_TAMPER_ENGINE
+	depends on PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY
+	depends on PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY
+	default n
+	help
+	  Enable the in-image adversarial tamper detection matrix. For each
+	  terminal evidence stage the matrix renders the genuine marker,
+	  applies every tamper class from the tamper engine, feeds the
+	  result back into the unmodified replay verifier, and requires
+	  rejection; one control cell per stage feeds the unmodified marker
+	  and requires acceptance. The aggregated detection matrix is
+	  emitted as PQCP_DEPLOYMENT_TAMPER_CELL and
+	  PQCP_DEPLOYMENT_TAMPER_MATRIX markers digest-bound to the chain
+	  it attacked.
+
+	  This option validates existing verifiers only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY
+	bool "Enable tamper matrix replay verifier"
+	depends on PQCP_DEPLOYMENT_TAMPER_MATRIX
+	default n
+	help
+	  Enable an allocation-free replay verifier for captured
+	  PQCP_DEPLOYMENT_TAMPER_MATRIX markers. The verifier re-parses one
+	  matrix marker (or consumes an already-built matrix report),
+	  recomputes the canonical matrix digest, re-derives the count and
+	  coverage invariants, and emits one stable
+	  PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY marker.
+
+	  This option verifies existing matrix evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT
+	bool "Enable tamper matrix replay audit"
+	depends on PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  tamper matrices. The audit detects replay failure, detection
+	  weakness, coverage drift, digest drift, stage drift, and profile
+	  drift, and emits one stable PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT
+	  marker.
+
+	  This option audits existing replay results only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_TRAIL
+	bool "Enable hash-chained deployment evidence trail"
+	depends on PQCP_DEPLOYMENT_RELEASE_GATE
+	depends on PQCP_DEPLOYMENT_DEVICE_TOKEN
+	default n
+	help
+	  Enable the append-only, hash-chained evidence trail. Every
+	  terminal stage digest (verdict, seal, seal audit, passport,
+	  tamper matrix) is appended as a sequenced entry whose link digest
+	  covers the previous link, so removing, reordering, or splicing
+	  entries breaks the chain head. The trail emits
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL_ENTRY markers and one
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL head marker.
+
+	  This option commits to existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY
+	bool "Enable deployment evidence trail replay verifier"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_TRAIL
+	default n
+	help
+	  Enable an allocation-free replay verifier for captured evidence
+	  trail markers. The verifier re-parses the sequenced entry markers
+	  and the head marker, recomputes the genesis link and every chained
+	  link digest, rejects sequence gaps, reordering, splicing, entry
+	  tampering, head tampering, and count drift, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY marker.
+
+	  This option verifies existing trail evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT
+	bool "Enable deployment evidence trail replay audit"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  evidence trails. The audit detects replay failure, trail status
+	  weakness, head digest drift, entry count drift, stage drift, and
+	  identity drift, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT marker.
+
+	  This option audits existing replay results only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
 
 endmenu
 
