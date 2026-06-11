@@ -271,8 +271,17 @@ ZTEST(pqcp_capability_descriptor, test_validation_rejects_contradictions)
 			      &mcu_manifest, &native_contract,
 			      &policy, &descriptor),
 		      0);
-	descriptor.production_allowed = true;
+	descriptor.policy_blockers = ~PQCP_FIRMWARE_POLICY_REASON_KNOWN_MASK;
+	zassert_equal(pqcp_capability_descriptor_validate(&descriptor),
+		      -EBADMSG);
+
+	/* production_allowed cannot be claimed while policy did not pass. */
+	zassert_equal(pqcp_capability_descriptor_build(
+			      &mcu_manifest, &native_contract,
+			      &policy, &descriptor),
+		      0);
 	descriptor.policy_passed = false;
+	descriptor.production_allowed = true;
 	zassert_equal(pqcp_capability_descriptor_validate(&descriptor),
 		      -EBADMSG);
 }
