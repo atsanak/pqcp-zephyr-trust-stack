@@ -12,7 +12,14 @@
 #include <string.h>
 
 #include <pqcp_zephyr/capability_descriptor.h>
+#include <pqcp_zephyr/capability_extension.h>
 #include <pqcp_zephyr/deployment_device_gate.h>
+#include <pqcp_zephyr/deployment_evidence_trail.h>
+#include <pqcp_zephyr/deployment_evidence_trail_audit.h>
+#include <pqcp_zephyr/deployment_evidence_trail_replay.h>
+#include <pqcp_zephyr/deployment_tamper_matrix.h>
+#include <pqcp_zephyr/deployment_tamper_matrix_audit.h>
+#include <pqcp_zephyr/deployment_tamper_matrix_replay.h>
 #include <pqcp_zephyr/deployment_device_packet.h>
 #include <pqcp_zephyr/deployment_device_packet_audit.h>
 #include <pqcp_zephyr/deployment_device_packet_replay.h>
@@ -244,6 +251,22 @@ static struct pqcp_deployment_evidence_seal_audit_report evidence_seal_audit;
 static struct pqcp_deployment_assurance_passport_policy assurance_passport_policy;
 static struct pqcp_deployment_assurance_passport assurance_passport;
 static struct pqcp_deployment_assurance_passport_replay_result assurance_passport_replay;
+static struct pqcp_capability_extension capability_extension;
+static struct pqcp_deployment_tamper_matrix_policy tamper_matrix_policy;
+static struct pqcp_deployment_tamper_matrix_workspace tamper_matrix_workspace;
+static struct pqcp_deployment_tamper_cell tamper_cells[
+	PQCP_DEPLOYMENT_TAMPER_MATRIX_MAX_CELLS];
+static struct pqcp_deployment_tamper_matrix_report tamper_matrix;
+static struct pqcp_deployment_tamper_matrix_replay_result tamper_matrix_replay;
+static struct pqcp_deployment_tamper_matrix_audit_policy tamper_matrix_audit_policy;
+static struct pqcp_deployment_tamper_matrix_audit_report tamper_matrix_audit;
+static struct pqcp_deployment_evidence_trail evidence_trail;
+static struct pqcp_deployment_evidence_trail_entry evidence_trail_entries[
+	PQCP_DEPLOYMENT_EVIDENCE_TRAIL_MAX_ENTRIES];
+static struct pqcp_deployment_evidence_trail_policy evidence_trail_policy;
+static struct pqcp_deployment_evidence_trail_replay_result evidence_trail_replay;
+static struct pqcp_deployment_evidence_trail_audit_policy evidence_trail_audit_policy;
+static struct pqcp_deployment_evidence_trail_audit_report evidence_trail_audit;
 #ifdef CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
 static struct pqcp_deployment_passport_signing_state passport_signing_state;
 static struct pqcp_deployment_passport_signature passport_signature;
@@ -715,6 +738,138 @@ int main(void)
 	}
 	(void)pqcp_deployment_assurance_passport_replay_emit_result(
 		&assurance_passport_replay);
+
+	ret = pqcp_capability_extension_current(&capability_extension);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_capability_extension_emit(&capability_extension);
+
+	/* Adversarial self-validation: attack the three terminal markers
+	 * in-image and require the unmodified replay verifiers to reject
+	 * every forged variant while accepting the genuine controls.
+	 */
+	ret = pqcp_deployment_tamper_matrix_default_policy(
+		PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
+		&tamper_matrix_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_tamper_matrix_run(
+		&evidence_verdict, &evidence_seal, &assurance_passport,
+		&tamper_matrix_policy, &tamper_matrix_workspace,
+		tamper_cells, ARRAY_SIZE(tamper_cells), &tamper_matrix);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	for (size_t i = 0U; i < tamper_matrix.cell_count; ++i) {
+		(void)pqcp_deployment_tamper_cell_emit(&tamper_cells[i]);
+	}
+	(void)pqcp_deployment_tamper_matrix_emit(&tamper_matrix);
+	ret = pqcp_deployment_tamper_matrix_replay_verify(
+		&tamper_matrix, &tamper_matrix_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_tamper_matrix_replay_emit_result(
+		&tamper_matrix_replay);
+	ret = pqcp_deployment_tamper_matrix_audit_default_policy(
+		&tamper_matrix_audit_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_tamper_matrix_audit_run(
+		&tamper_matrix_replay, 1U, &tamper_matrix_audit_policy,
+		&tamper_matrix_audit);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_tamper_matrix_audit_emit(&tamper_matrix_audit);
+
+	/* Hash-chained commitment over the terminal stage digests: removing,
+	 * reordering, or splicing any terminal artifact breaks the head.
+	 */
+	ret = pqcp_deployment_evidence_trail_init(
+		&evidence_trail, PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT,
+		evidence_verdict.top_candidate_id, evidence_verdict.nonce_hex);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	if (pqcp_deployment_evidence_trail_append(
+		    &evidence_trail, evidence_trail_entries,
+		    ARRAY_SIZE(evidence_trail_entries),
+		    PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_VERDICT,
+		    evidence_verdict.verdict_digest_hex) != 0 ||
+	    pqcp_deployment_evidence_trail_append(
+		    &evidence_trail, evidence_trail_entries,
+		    ARRAY_SIZE(evidence_trail_entries),
+		    PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_SEAL,
+		    evidence_seal.seal_digest_hex) != 0 ||
+	    pqcp_deployment_evidence_trail_append(
+		    &evidence_trail, evidence_trail_entries,
+		    ARRAY_SIZE(evidence_trail_entries),
+		    PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_SEAL_AUDIT,
+		    evidence_seal_audit.audit_digest_hex) != 0 ||
+	    pqcp_deployment_evidence_trail_append(
+		    &evidence_trail, evidence_trail_entries,
+		    ARRAY_SIZE(evidence_trail_entries),
+		    PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_PASSPORT,
+		    assurance_passport.passport_digest_hex) != 0 ||
+	    pqcp_deployment_evidence_trail_append(
+		    &evidence_trail, evidence_trail_entries,
+		    ARRAY_SIZE(evidence_trail_entries),
+		    PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_TAMPER_MATRIX,
+		    tamper_matrix.matrix_digest_hex) != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_evidence_trail_default_policy(
+		&evidence_trail_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_evidence_trail_finish(&evidence_trail,
+						    &evidence_trail_policy);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	for (size_t i = 0U; i < evidence_trail.entry_count; ++i) {
+		(void)pqcp_deployment_evidence_trail_entry_emit(
+			&evidence_trail_entries[i]);
+	}
+	(void)pqcp_deployment_evidence_trail_emit(&evidence_trail);
+	ret = pqcp_deployment_evidence_trail_replay_verify(
+		&evidence_trail, evidence_trail_entries,
+		evidence_trail.entry_count, &evidence_trail_replay);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_trail_replay_emit_result(
+		&evidence_trail_replay);
+	ret = pqcp_deployment_evidence_trail_audit_default_policy(
+		&evidence_trail_audit_policy);
+	if (ret != 0) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	ret = pqcp_deployment_evidence_trail_audit_run(
+		&evidence_trail_replay, 1U, &evidence_trail_audit_policy,
+		&evidence_trail_audit);
+	if (ret != 0 && ret != -EBADMSG) {
+		printk("PROJECT EXECUTION FAILED\n");
+		return 1;
+	}
+	(void)pqcp_deployment_evidence_trail_audit_emit(&evidence_trail_audit);
 
 #ifdef CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
 	{
