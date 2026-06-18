@@ -271,7 +271,8 @@ ZTEST(pqcp_capability_descriptor, test_validation_rejects_contradictions)
 			      &mcu_manifest, &native_contract,
 			      &policy, &descriptor),
 		      0);
-	descriptor.evidence_capabilities = 0x80000000U;
+	descriptor.production_allowed = true;
+	descriptor.policy_passed = false;
 	zassert_equal(pqcp_capability_descriptor_validate(&descriptor),
 		      -EBADMSG);
 }

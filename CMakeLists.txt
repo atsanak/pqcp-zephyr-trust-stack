@@ -242,6 +242,42 @@ if(CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE)
     zephyr_library_sources(${PQCP_SRC}/deployment_passport_signature.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CODEC)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_codec.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CAPSULE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_capsule.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CAPSULE_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_capsule_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_JOURNAL)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_journal.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_journal_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_journal_audit.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_FLEET_CONSENSUS)
+    zephyr_library_sources(${PQCP_SRC}/deployment_fleet_consensus.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_FLEET_POLICY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_fleet_policy.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_ARCHIVE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_archive.c)
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()

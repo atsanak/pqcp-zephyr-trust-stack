@@ -876,6 +876,85 @@ config PQCP_DEPLOYMENT_PASSPORT_SIGNATURE
 	  It does not alter public APIs, change ACVP wire formats, or alter
 	  benchmark marker ordering.
 
+config PQCP_DEPLOYMENT_EVIDENCE_CODEC
+	bool "Enable canonical deployment evidence binary codec"
+	default n
+	help
+	  Enable the allocation-free canonical little-endian codec, TLV record
+	  helpers, strict reader, and deterministic rolling digest used by binary
+	  deployment evidence containers.
+
+config PQCP_DEPLOYMENT_EVIDENCE_CAPSULE
+	bool "Enable binary deployment evidence capsules"
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY
+	depends on PQCP_DEPLOYMENT_EVIDENCE_CODEC
+	default n
+	help
+	  Encode a deployment assurance passport, its replay result, and an
+	  optional signature into a canonical caller-owned binary capsule.
+
+config PQCP_DEPLOYMENT_EVIDENCE_CAPSULE_REPLAY
+	bool "Enable binary deployment evidence capsule replay"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_CAPSULE
+	default n
+	help
+	  Decode and independently verify binary deployment evidence capsules,
+	  record ordering, terminal digests, passport replay, and optional
+	  signature evidence.
+
+config PQCP_DEPLOYMENT_EVIDENCE_JOURNAL
+	bool "Enable append-only deployment evidence journal"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_CAPSULE_REPLAY
+	default n
+	help
+	  Maintain a fixed-capacity, allocation-free journal of replayed
+	  deployment evidence capsules with monotonic boot/time metadata and a
+	  chained entry digest.
+
+config PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_REPLAY
+	bool "Enable deployment evidence journal replay"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_JOURNAL
+	default n
+	help
+	  Independently replay journal sequencing, identity, monotonic counters,
+	  capsule uniqueness, entry-chain digests, summaries, and the final root.
+
+config PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_AUDIT
+	bool "Enable cross-snapshot deployment journal audit"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_REPLAY
+	default n
+	help
+	  Audit repeated journal snapshots for rollback, root reuse, device or
+	  board drift, signature regression, production regression, and score
+	  degradation.
+
+config PQCP_DEPLOYMENT_FLEET_CONSENSUS
+	bool "Enable fleet deployment evidence consensus"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_AUDIT
+	default n
+	help
+	  Compute deterministic candidate, board, and profile consensus across
+	  replayed device journals and their audits, including quorum, coverage,
+	  outlier, and failure accounting.
+
+config PQCP_DEPLOYMENT_FLEET_POLICY
+	bool "Enable fleet deployment policy appraisal"
+	depends on PQCP_DEPLOYMENT_FLEET_CONSENSUS
+	default n
+	help
+	  Appraise fleet consensus against prototype, paper, product, partner,
+	  and hardware evidence policies and emit blockers, warnings,
+	  remediation actions, readiness, and reviewer risk.
+
+config PQCP_DEPLOYMENT_EVIDENCE_ARCHIVE
+	bool "Enable end-to-end deployment evidence archive capture"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_REPLAY
+	default n
+	help
+	  Orchestrate binary capsule construction and replay, append the result
+	  to a journal, finalize and replay a snapshot, verify cross-layer digest
+	  bindings, and emit one deterministic archive result.
+
 endmenu
 
 # =============================================================================
