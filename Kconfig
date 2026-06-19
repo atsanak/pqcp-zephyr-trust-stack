@@ -957,6 +957,28 @@ config PQCP_DEPLOYMENT_EVIDENCE_ARCHIVE
 
 endmenu
 
+menu "Adaptive PQC Deployment Control"
+
+config PQCP_ADAPTIVE_CONTROL
+	bool "Enable firmware-native adaptive PQC deployment control"
+	depends on PQCP_DEPLOYMENT_ADVISOR
+	depends on PQCP_DEPLOYMENT_EVIDENCE_CODEC
+	default n
+	help
+	  Enable the allocation-free runtime control plane for compiled PQC
+	  profiles. The controller ingests bounded telemetry and threat signals,
+	  forecasts resource pressure, ranks compiled ML-KEM, ML-DSA, and hybrid
+	  profiles, enforces downgrade and anti-flapping policy, schedules
+	  sessions and workloads, isolates failed profiles, records a chained
+	  runtime journal, coordinates fleet consensus, and supports canonical
+	  binary state snapshots.
+
+	  This option does not load implementations dynamically, execute
+	  cryptographic operations by itself, change the selected provider, or
+	  alter the ACVP and PQCP_METRIC wire formats.
+
+endmenu
+
 # =============================================================================
 # Firmware Evidence Runner
 # =============================================================================
