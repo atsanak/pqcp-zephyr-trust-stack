@@ -125,6 +125,40 @@ extern "C" {
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY | \
 	 PQCP_CAPABILITY_EVIDENCE_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT)
 
+/** Executable native ML-KEM/ML-DSA runtime is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_EXECUTION            (1U << 0)
+/** Generation-tagged volatile key custody is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_VOLATILE_KEYS         (1U << 1)
+/** Fail-closed persistent PSA adapter is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_PSA_PERSISTENCE       (1U << 2)
+/** Measured observations feed adaptive calibration. */
+#define PQCP_CAPABILITY_RUNTIME_ADAPTIVE_MEASUREMENTS (1U << 3)
+/** Exporter-bound protected channel is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_PROTECTED_CHANNEL     (1U << 4)
+/** Direct mbedTLS exporter transport is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_MBEDTLS_TRANSPORT     (1U << 5)
+/** Mutual ML-DSA channel authentication is allowed. */
+#define PQCP_CAPABILITY_RUNTIME_MUTUAL_AUTH           (1U << 6)
+/** Runtime campaign/statistical evidence is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_CAMPAIGN              (1U << 7)
+/** Runtime admission, rotation, and circuit policy is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_GOVERNANCE            (1U << 8)
+/** Zephyr TCP adapter for direct mbedTLS transport is compiled in. */
+#define PQCP_CAPABILITY_RUNTIME_TCP_TRANSPORT          (1U << 9)
+
+/** All executable-runtime capability bits known by this API version. */
+#define PQCP_CAPABILITY_RUNTIME_KNOWN_MASK \
+	(PQCP_CAPABILITY_RUNTIME_EXECUTION | \
+	 PQCP_CAPABILITY_RUNTIME_VOLATILE_KEYS | \
+	 PQCP_CAPABILITY_RUNTIME_PSA_PERSISTENCE | \
+	 PQCP_CAPABILITY_RUNTIME_ADAPTIVE_MEASUREMENTS | \
+	 PQCP_CAPABILITY_RUNTIME_PROTECTED_CHANNEL | \
+	 PQCP_CAPABILITY_RUNTIME_MBEDTLS_TRANSPORT | \
+	 PQCP_CAPABILITY_RUNTIME_MUTUAL_AUTH | \
+	 PQCP_CAPABILITY_RUNTIME_CAMPAIGN | \
+	 PQCP_CAPABILITY_RUNTIME_GOVERNANCE | \
+	 PQCP_CAPABILITY_RUNTIME_TCP_TRANSPORT)
+
 /**
  * @brief Provider summary for enabled ML-KEM/ML-DSA families.
  */
@@ -170,6 +204,8 @@ struct pqcp_capability_descriptor {
 	const char *backend_selector;
 	/** Compiled evidence capability bit mask. */
 	uint32_t evidence_capabilities;
+	/** Compiled executable-runtime capability bit mask. */
+	uint32_t runtime_capabilities;
 	/** Firmware policy blocker mask. */
 	uint32_t policy_blockers;
 	/** True when firmware policy passed. */
@@ -196,6 +232,13 @@ const char *pqcp_capability_provider_summary_str(
  * @return PQCP_CAPABILITY_EVIDENCE_* bit mask.
  */
 uint32_t pqcp_capability_evidence_capabilities_current(void);
+
+/**
+ * @brief Return compiled executable-runtime capability bits.
+ *
+ * @return PQCP_CAPABILITY_RUNTIME_* bit mask.
+ */
+uint32_t pqcp_capability_runtime_capabilities_current(void);
 
 /**
  * @brief Build a descriptor from already-evaluated firmware facts.

@@ -301,6 +301,64 @@ if(CONFIG_PQCP_ADAPTIVE_CONTROL)
     )
 endif()
 
+if(CONFIG_PQCP_RUNTIME)
+    zephyr_library_sources(
+        ${PQCP_SRC}/runtime_common.c
+        ${PQCP_SRC}/runtime_capability.c
+        ${PQCP_SRC}/runtime_profile.c
+        ${PQCP_SRC}/runtime_key_store.c
+        ${PQCP_SRC}/runtime_key_store_volatile.c
+        ${PQCP_SRC}/runtime_key_store_psa.c
+        ${PQCP_SRC}/runtime_workspace.c
+        ${PQCP_SRC}/runtime_measurement.c
+        ${PQCP_SRC}/runtime_executor.c
+        ${PQCP_SRC}/runtime_executor_mlkem.c
+        ${PQCP_SRC}/runtime_executor_mldsa.c
+        ${PQCP_SRC}/runtime_session.c
+        ${PQCP_SRC}/runtime_snapshot.c
+        ${PQCP_SRC}/runtime_key_policy.c
+        ${PQCP_SRC}/runtime_audit.c
+        ${PQCP_SRC}/runtime_health.c
+        ${PQCP_SRC}/runtime_controller.c
+        ${PQCP_SRC}/runtime_recovery.c
+        ${PQCP_SRC}/runtime_campaign.c
+        ${PQCP_SRC}/runtime_identity.c
+        ${PQCP_SRC}/runtime_admission.c
+        ${PQCP_SRC}/runtime_rotation.c
+        ${PQCP_SRC}/runtime_circuit.c
+        ${PQCP_SRC}/runtime_evidence_summary.c
+        ${PQCP_SRC}/runtime_service.c
+        ${PQCP_SRC}/runtime_selftest.c
+        ${PQCP_SRC}/runtime_transaction.c
+        ${PQCP_SRC}/runtime_migration.c
+        ${PQCP_SRC}/runtime_lease.c
+    )
+endif()
+
+if(CONFIG_PQCP_PROTECTED_CHANNEL)
+    zephyr_library_sources(
+        ${PQCP_SRC}/protected_channel_codec.c
+        ${PQCP_SRC}/protected_channel_transcript.c
+        ${PQCP_SRC}/protected_channel_replay.c
+        ${PQCP_SRC}/protected_channel_transport.c
+        ${PQCP_SRC}/protected_channel_kdf.c
+        ${PQCP_SRC}/protected_channel_record.c
+        ${PQCP_SRC}/protected_channel_handshake.c
+        ${PQCP_SRC}/protected_channel_memory.c
+        ${PQCP_SRC}/protected_channel_fragment.c
+        ${PQCP_SRC}/protected_channel_policy.c
+        ${PQCP_SRC}/protected_channel_journal.c
+        ${PQCP_SRC}/protected_channel_supervisor.c
+    )
+endif()
+
+if(CONFIG_PQCP_PROTECTED_CHANNEL_MBEDTLS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/protected_channel_mbedtls.c
+        ${PQCP_SRC}/protected_channel_tls.c
+    )
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()

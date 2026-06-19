@@ -42,6 +42,13 @@ enum pqcp_adaptive_status {
 	PQCP_ADAPTIVE_STATUS_PASS,
 };
 
+enum pqcp_adaptive_metric_source {
+	PQCP_ADAPTIVE_METRIC_UNKNOWN = 0,
+	PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+	PQCP_ADAPTIVE_METRIC_MEASURED,
+	PQCP_ADAPTIVE_METRIC_CALIBRATED,
+};
+
 enum pqcp_adaptive_mode {
 	PQCP_ADAPTIVE_MODE_SAFE = 0,
 	PQCP_ADAPTIVE_MODE_CONSERVATIVE,
@@ -224,6 +231,11 @@ struct pqcp_adaptive_profile {
 	uint64_t heap_bytes;
 	uint64_t flash_bytes;
 	uint64_t energy_uj;
+	enum pqcp_adaptive_metric_source latency_source;
+	enum pqcp_adaptive_metric_source cycles_source;
+	enum pqcp_adaptive_metric_source memory_source;
+	enum pqcp_adaptive_metric_source energy_source;
+	uint32_t observation_count;
 	uint32_t evidence_mask;
 	uint32_t priority;
 	bool enabled;

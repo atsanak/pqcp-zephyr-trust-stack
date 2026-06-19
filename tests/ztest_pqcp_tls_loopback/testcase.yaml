@@ -1,0 +1,10 @@
+tests:
+  pqcp.tls_loopback:
+    platform_allow:
+      - qemu_x86_64
+    tags:
+      - pqcp
+      - tls
+      - mbedtls
+      - protected-channel
+    timeout: 180

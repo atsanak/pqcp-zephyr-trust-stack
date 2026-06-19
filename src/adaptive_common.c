@@ -314,6 +314,14 @@ bool pqcp_adaptive_internal_profile_valid(
 	    profile->ram_bytes == 0U ||
 	    profile->stack_bytes == 0U ||
 	    profile->flash_bytes == 0U ||
+	    profile->latency_source < PQCP_ADAPTIVE_METRIC_UNKNOWN ||
+	    profile->latency_source > PQCP_ADAPTIVE_METRIC_CALIBRATED ||
+	    profile->cycles_source < PQCP_ADAPTIVE_METRIC_UNKNOWN ||
+	    profile->cycles_source > PQCP_ADAPTIVE_METRIC_CALIBRATED ||
+	    profile->memory_source < PQCP_ADAPTIVE_METRIC_UNKNOWN ||
+	    profile->memory_source > PQCP_ADAPTIVE_METRIC_CALIBRATED ||
+	    profile->energy_source < PQCP_ADAPTIVE_METRIC_UNKNOWN ||
+	    profile->energy_source > PQCP_ADAPTIVE_METRIC_CALIBRATED ||
 	    (profile->evidence_mask &
 	     ~PQCP_DEPLOYMENT_EVIDENCE_KNOWN_MASK) != 0U ||
 	    profile->priority > PQCP_ADAPTIVE_SCORE_MAX) {
@@ -475,6 +483,16 @@ int pqcp_adaptive_internal_digest_profile(
 		digest, profile->flash_bytes);
 	pqcp_deployment_evidence_digest_update_u64(
 		digest, profile->energy_uj);
+	pqcp_deployment_evidence_digest_update_u32(
+		digest, (uint32_t)profile->latency_source);
+	pqcp_deployment_evidence_digest_update_u32(
+		digest, (uint32_t)profile->cycles_source);
+	pqcp_deployment_evidence_digest_update_u32(
+		digest, (uint32_t)profile->memory_source);
+	pqcp_deployment_evidence_digest_update_u32(
+		digest, (uint32_t)profile->energy_source);
+	pqcp_deployment_evidence_digest_update_u32(
+		digest, profile->observation_count);
 	pqcp_deployment_evidence_digest_update_u32(
 		digest, profile->evidence_mask);
 	pqcp_deployment_evidence_digest_update_u32(

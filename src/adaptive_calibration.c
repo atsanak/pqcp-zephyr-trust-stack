@@ -446,6 +446,16 @@ int pqcp_adaptive_calibration_apply(
 		calibration->cycles_ewma;
 	calibrated_profile->energy_uj =
 		calibration->energy_ewma_uj;
+	calibrated_profile->latency_source =
+		PQCP_ADAPTIVE_METRIC_CALIBRATED;
+	calibrated_profile->cycles_source =
+		PQCP_ADAPTIVE_METRIC_CALIBRATED;
+	calibrated_profile->memory_source =
+		PQCP_ADAPTIVE_METRIC_CALIBRATED;
+	calibrated_profile->energy_source =
+		PQCP_ADAPTIVE_METRIC_CALIBRATED;
+	calibrated_profile->observation_count =
+		calibration->accepted_count;
 	if (calibration->ram_high_watermark >
 	    calibrated_profile->ram_bytes) {
 		calibrated_profile->ram_bytes =

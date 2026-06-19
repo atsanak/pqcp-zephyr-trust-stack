@@ -1277,6 +1277,155 @@ config PQCP_ASSERT
 endmenu
 
 # =============================================================================
+# Executable Adaptive Runtime
+# =============================================================================
+menu "Executable Adaptive PQC Runtime"
+
+config PQCP_RUNTIME
+	bool "Enable executable adaptive PQC runtime"
+	depends on PQCP_MLKEM && PQCP_MLDSA
+	depends on PQCP_ADAPTIVE_CONTROL
+	depends on MBEDTLS_PSA_CRYPTO_C
+	select PSA_WANT_ALG_SHA_256
+	select PSA_WANT_ALG_HMAC
+	select PSA_WANT_ALG_HKDF
+	default n
+	help
+	  Enable the allocation-free PQC execution runtime. The runtime discovers
+	  only compiled ML-KEM and ML-DSA levels, owns generation-tagged key
+	  handles, schedules native operations, records measured observations, and
+	  pins active sessions to their negotiated profile.
+
+	  ML-KEM operations continue to use mlkem-native and ML-DSA operations
+	  continue to use mldsa-native through the stable PQCP wrapper APIs.
+
+if PQCP_RUNTIME
+
+config PQCP_RUNTIME_KEY_STORE_VOLATILE
+	bool "Enable volatile caller-owned key store"
+	default y
+	help
+	  Store key material only in fixed-capacity caller-owned RAM arenas.
+	  Destroy, expiry, and rotation paths zeroize occupied slots and stale
+	  generation-tagged handles are rejected.
+
+config PQCP_RUNTIME_KEY_STORE_PSA
+	bool "Enable fail-closed persistent PSA adapter"
+	default n
+	help
+	  Enable the persistent-key adapter for platforms that implement real
+	  provisional PQC key import/open/destroy operations in the PSA application
+	  key-ID range. Unsupported platforms return -ENOTSUP. No file, settings,
+	  or plaintext raw-key persistence fallback is provided.
+
+config PQCP_RUNTIME_ADAPTIVE_INTEGRATION
+	bool "Feed measured operations into adaptive control"
+	default y
+	help
+	  Publish runtime latency, cycles, stack, workspace, queue, and failure
+	  observations to the adaptive calibration and telemetry engines.
+
+config PQCP_RUNTIME_MAX_JOBS
+	int "Maximum queued crypto jobs"
+	range 2 64
+	default 12
+
+config PQCP_RUNTIME_MAX_KEYS
+	int "Maximum volatile key slots"
+	range 4 64
+	default 16
+
+config PQCP_RUNTIME_MAX_SESSIONS
+	int "Maximum pinned runtime sessions"
+	range 2 32
+	default 8
+
+config PQCP_RUNTIME_MAX_IDENTITIES
+	int "Maximum provisioned ML-DSA identities"
+	range 1 16
+	default 4
+
+config PQCP_RUNTIME_WORKSPACE_SLOTS
+	int "Concurrent operation workspace slots"
+	range 1 8
+	default 2
+
+config PQCP_RUNTIME_WORKSPACE_BYTES
+	int "Bytes in each operation workspace slot"
+	range 8192 131072
+	default 49152
+
+config PQCP_RUNTIME_WORKER_STACK_SIZE
+	int "Dedicated runtime worker stack size"
+	range 4096 65536
+	default 24576
+
+config PQCP_RUNTIME_WORKER_PRIORITY
+	int "Dedicated runtime worker priority"
+	range -16 14
+	default 4
+
+endif # PQCP_RUNTIME
+endmenu
+
+# =============================================================================
+# Exporter-Bound Protected Channel
+# =============================================================================
+menu "Exporter-Bound PQC Protected Channel"
+
+config PQCP_PROTECTED_CHANNEL
+	bool "Enable exporter-bound application-layer PQC channel"
+	depends on PQCP_RUNTIME
+	select PSA_WANT_KEY_TYPE_AES
+	select PSA_WANT_ALG_GCM
+	default n
+	help
+	  Enable a bounded application-layer channel that binds ML-KEM key
+	  establishment and pinned ML-DSA authentication to exporter material from
+	  an already established TLS connection. It derives independent finished
+	  and AES-256-GCM traffic keys and enforces frame order, transcript hashes,
+	  replay windows, sequence numbers, and fail-closed alerts.
+
+	  This is an experimental channel binding, not a standardized hybrid TLS
+	  ciphersuite and not a certification claim.
+
+if PQCP_PROTECTED_CHANNEL
+
+config PQCP_PROTECTED_CHANNEL_MUTUAL_AUTH
+	bool "Allow mutual ML-DSA authentication"
+	default n
+	help
+	  Permit deployments to require a pinned ML-DSA identity on both peers.
+	  Server-authenticated operation remains the default.
+
+config PQCP_PROTECTED_CHANNEL_MBEDTLS
+	bool "Enable direct mbedTLS transport adapter"
+	depends on MBEDTLS_SSL_KEYING_MATERIAL_EXPORT
+	select MBEDTLS_SSL_PROTO_TLS1_3
+	select MBEDTLS_SSL_SESSION_TICKETS
+	select MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED
+	select MBEDTLS_CIPHERSUITE_TLS1_3_AES_128_GCM_SHA256
+	default n
+	help
+	  Enable direct mbedTLS client/server contexts and exporter transport.
+	  Applications may provide a bounded custom BIO or enable the separate
+	  Zephyr TCP adapter. Direct contexts are required because Zephyr TLS
+	  sockets do not expose exporter keying material.
+
+config PQCP_PROTECTED_CHANNEL_TCP
+	bool "Enable Zephyr TCP adapter for direct mbedTLS transport"
+	depends on PQCP_PROTECTED_CHANNEL_MBEDTLS
+	depends on NETWORKING && NET_SOCKETS
+	default n
+	help
+	  Enable the Zephyr socket adapter for a direct mbedTLS endpoint. This is
+	  optional so deterministic in-process TLS tests do not require a QEMU
+	  network backend.
+
+endif # PQCP_PROTECTED_CHANNEL
+endmenu
+
+# =============================================================================
 # Extended Validation Support
 # =============================================================================
 menu "Extended Validation Support"
