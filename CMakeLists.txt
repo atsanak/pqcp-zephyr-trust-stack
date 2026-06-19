@@ -278,6 +278,29 @@ if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_ARCHIVE)
     zephyr_library_sources(${PQCP_SRC}/deployment_evidence_archive.c)
 endif()
 
+if(CONFIG_PQCP_ADAPTIVE_CONTROL)
+    zephyr_library_sources(
+        ${PQCP_SRC}/adaptive_common.c
+        ${PQCP_SRC}/adaptive_profile.c
+        ${PQCP_SRC}/adaptive_telemetry.c
+        ${PQCP_SRC}/adaptive_forecast.c
+        ${PQCP_SRC}/adaptive_threat.c
+        ${PQCP_SRC}/adaptive_resource.c
+        ${PQCP_SRC}/adaptive_policy.c
+        ${PQCP_SRC}/adaptive_optimizer.c
+        ${PQCP_SRC}/adaptive_downgrade.c
+        ${PQCP_SRC}/adaptive_transition.c
+        ${PQCP_SRC}/adaptive_session.c
+        ${PQCP_SRC}/adaptive_workload.c
+        ${PQCP_SRC}/adaptive_resilience.c
+        ${PQCP_SRC}/adaptive_event_log.c
+        ${PQCP_SRC}/adaptive_fleet.c
+        ${PQCP_SRC}/adaptive_snapshot.c
+        ${PQCP_SRC}/adaptive_calibration.c
+        ${PQCP_SRC}/adaptive_control.c
+    )
+endif()
+
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
     zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
 endif()
