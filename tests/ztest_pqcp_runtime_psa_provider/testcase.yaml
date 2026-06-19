@@ -1,0 +1,9 @@
+tests:
+  pqcp.runtime.psa_provider:
+    platform_allow:
+      - qemu_x86_64
+    tags:
+      - pqcp
+      - runtime
+      - psa
+    timeout: 120

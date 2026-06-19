@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+
+tests:
+  pqcp.runtime:
+    platform_allow:
+      - qemu_x86_64
+    tags:
+      - pqcp
+      - runtime
+      - crypto
+  pqcp.runtime.all_levels:
+    platform_allow:
+      - qemu_x86_64
+    extra_conf_files:
+      - overlay-all-levels.conf
+    tags:
+      - pqcp
+      - runtime
+      - crypto
+      - multi-level
+    timeout: 240

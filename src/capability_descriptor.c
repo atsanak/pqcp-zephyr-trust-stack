@@ -174,6 +174,41 @@ uint32_t pqcp_capability_evidence_capabilities_current(void)
 	return capabilities;
 }
 
+uint32_t pqcp_capability_runtime_capabilities_current(void)
+{
+	uint32_t capabilities = 0U;
+
+	if (IS_ENABLED(CONFIG_PQCP_RUNTIME)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_EXECUTION |
+				PQCP_CAPABILITY_RUNTIME_CAMPAIGN |
+				PQCP_CAPABILITY_RUNTIME_GOVERNANCE;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_RUNTIME_KEY_STORE_VOLATILE)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_VOLATILE_KEYS;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_RUNTIME_KEY_STORE_PSA)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_PSA_PERSISTENCE;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_RUNTIME_ADAPTIVE_INTEGRATION)) {
+		capabilities |=
+			PQCP_CAPABILITY_RUNTIME_ADAPTIVE_MEASUREMENTS;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_PROTECTED_CHANNEL)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_PROTECTED_CHANNEL;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_PROTECTED_CHANNEL_MBEDTLS)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_MBEDTLS_TRANSPORT;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_PROTECTED_CHANNEL_TCP)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_TCP_TRANSPORT;
+	}
+	if (IS_ENABLED(CONFIG_PQCP_PROTECTED_CHANNEL_MUTUAL_AUTH)) {
+		capabilities |= PQCP_CAPABILITY_RUNTIME_MUTUAL_AUTH;
+	}
+
+	return capabilities;
+}
+
 static bool provider_family_enabled(bool enabled,
 				    enum pqcp_provider_family family)
 {
@@ -317,6 +352,8 @@ int pqcp_capability_descriptor_build(
 		.provider_summary = provider_summary,
 		.backend_selector = contract->backend_selector,
 		.evidence_capabilities = evidence_capabilities,
+		.runtime_capabilities =
+			pqcp_capability_runtime_capabilities_current(),
 		.policy_blockers = policy_result->blocker_mask,
 		.policy_passed = policy_result->passed,
 		.production_allowed = policy_result->production_allowed,
@@ -371,6 +408,8 @@ int pqcp_capability_descriptor_validate(
 	}
 	if ((descriptor->evidence_capabilities &
 	     ~PQCP_CAPABILITY_EVIDENCE_KNOWN_MASK) != 0U ||
+	    (descriptor->runtime_capabilities &
+	     ~PQCP_CAPABILITY_RUNTIME_KNOWN_MASK) != 0U ||
 	    (descriptor->policy_blockers &
 	     ~PQCP_FIRMWARE_POLICY_REASON_KNOWN_MASK) != 0U) {
 		return -EBADMSG;
@@ -396,7 +435,7 @@ int pqcp_capability_descriptor_emit(
 		return ret;
 	}
 
-	printk("PQCP_CAPABILITY_DESCRIPTOR schema=%u profile=%s status=%s production_allowed=%u provider=%s backend=%s mlkem_levels=0x%08x mldsa_levels=0x%08x rng=%s evidence=0x%08x blockers=0x%08x readiness=%u\n",
+	printk("PQCP_CAPABILITY_DESCRIPTOR schema=%u profile=%s status=%s production_allowed=%u provider=%s backend=%s mlkem_levels=0x%08x mldsa_levels=0x%08x rng=%s evidence=0x%08x blockers=0x%08x readiness=%u runtime=0x%08x\n",
 	       descriptor->schema_version,
 	       pqcp_firmware_policy_profile_str(descriptor->profile),
 	       descriptor->policy_passed ? "PASS" : "FAIL",
@@ -409,7 +448,8 @@ int pqcp_capability_descriptor_emit(
 	       descriptor->rng_mode,
 	       descriptor->evidence_capabilities,
 	       descriptor->policy_blockers,
-	       descriptor->evidence_readiness_score);
+	       descriptor->evidence_readiness_score,
+	       descriptor->runtime_capabilities);
 
 	return 0;
 }

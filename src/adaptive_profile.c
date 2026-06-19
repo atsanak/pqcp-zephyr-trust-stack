@@ -8,8 +8,10 @@
 #include <string.h>
 
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
 
 #include <pqcp_zephyr/adaptive_control.h>
+#include <pqcp_zephyr/runtime.h>
 
 #include "adaptive_internal.h"
 
@@ -83,6 +85,11 @@ static struct pqcp_adaptive_profile make_mlkem_profile(
 		.heap_bytes = heap_bytes,
 		.flash_bytes = flash_bytes,
 		.energy_uj = energy_uj,
+		.latency_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.cycles_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.memory_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.energy_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.observation_count = 0U,
 		.evidence_mask = baseline_evidence(),
 		.priority = priority,
 		.enabled = true,
@@ -124,6 +131,11 @@ static struct pqcp_adaptive_profile make_mldsa_profile(
 		.heap_bytes = heap_bytes,
 		.flash_bytes = flash_bytes,
 		.energy_uj = energy_uj,
+		.latency_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.cycles_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.memory_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.energy_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.observation_count = 0U,
 		.evidence_mask = baseline_evidence(),
 		.priority = priority,
 		.enabled = true,
@@ -166,6 +178,11 @@ static struct pqcp_adaptive_profile make_hybrid_profile(
 		.heap_bytes = heap_bytes,
 		.flash_bytes = flash_bytes,
 		.energy_uj = energy_uj,
+		.latency_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.cycles_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.memory_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.energy_source = PQCP_ADAPTIVE_METRIC_BOOTSTRAP_PRIOR,
+		.observation_count = 0U,
 		.evidence_mask = baseline_evidence(),
 		.priority = priority,
 		.enabled = true,
@@ -514,6 +531,9 @@ int pqcp_adaptive_profile_registry_default(
 {
 	int ret;
 
+	if (IS_ENABLED(CONFIG_PQCP_RUNTIME)) {
+		return pqcp_runtime_profile_registry_build(registry);
+	}
 	ret = pqcp_adaptive_profile_registry_init(registry);
 	if (ret != 0) {
 		return ret;
