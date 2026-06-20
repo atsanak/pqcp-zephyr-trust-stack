@@ -64,9 +64,11 @@ for a Zephyr module:
 - **Executable runtime and exporter-bound protected channel.** The module
   includes allocation-free key/session governance, scheduling, checkpoints,
   recovery, multiplexing, flow control, rekeying, resumption, and path
-  migration. Optional generated conformance catalogs expose 3,072 replayable
-  policy witnesses without adding validation-only data to normal production
-  builds. See
+  migration. Composite planners reconcile lifecycle, resource/recovery, path,
+  and fault policy into one executable outcome. Optional generated catalogs
+  add direct witnesses, two-step scenarios, authorization/continuity and
+  epoch/stream guards, and eight-step transition traces without adding
+  validation-only data to normal production builds. See
   [`docs/patch-set-20-runtime-channel.md`](docs/patch-set-20-runtime-channel.md).
 
 For the underlying architecture see
