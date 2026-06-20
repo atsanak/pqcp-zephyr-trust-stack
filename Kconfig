@@ -1429,12 +1429,56 @@ config PQCP_OPERATION_CONFORMANCE_CATALOGS
 	  Compile replayable witnesses for every runtime state/command,
 	  resource/command, recovery/command, channel state/control,
 	  path/control, and fault/control decision. The optional catalogs expose
-	  3,072 stable cases with deterministic identifiers, expected results,
-	  fingerprints, and cross-audits against the executable policy tables.
+	  3,072 direct policy cases plus 2,048 composite runtime/channel planning
+	  cases with deterministic identifiers, expected results, fingerprints,
+	  and cross-audits against the executable policy tables and planners.
 
 	  This option is intended for validation firmware, partner review, and
 	  evidence capture. Leave it disabled in production images that do not
 	  need the additional read-only catalog data.
+
+config PQCP_OPERATION_SCENARIO_CATALOGS
+	bool "Enable stateful operational scenario catalogs"
+	default n
+	help
+	  Compile replayable two-operation scenarios across runtime state,
+	  resource, and recovery policy plus protected-channel state, path, and
+	  fault policy. The scenario engine propagates successful runtime and
+	  channel state transitions into the second operation, preserves the
+	  original condition after a denied transition, and records fail-fast
+	  terminal errors and aggregate reason masks.
+
+	  The optional catalogs expose 3,072 deterministic scenarios and audit
+	  every generated expectation against the executable policy lookup
+	  functions. Leave this disabled in production images that do not need
+	  stateful validation evidence.
+
+config PQCP_RUNTIME_CHANNEL_GUARD_CATALOGS
+	bool "Enable runtime and channel guard catalogs"
+	default n
+	help
+	  Compile exhaustive runtime authorization and continuity policy plus
+	  protected-channel key-epoch and stream-lifecycle policy. Composite
+	  guard evaluators combine these conditions with the existing runtime
+	  and protected-channel lifecycle tables and return one enforceable
+	  verdict, next state, delay, reason mask, and error.
+
+	  The four optional 16 by 32 catalogs are intended for validation
+	  firmware and policy review. Leave them disabled in production images
+	  that provide authorization and continuity policy elsewhere.
+
+config PQCP_OPERATION_TRANSITION_CATALOGS
+	bool "Enable composed operational transition traces"
+	default n
+	help
+	  Compile deterministic eight-step runtime and protected-channel traces.
+	  Runtime traces compose lifecycle, resource, and recovery policy;
+	  channel traces compose lifecycle, path, and fault policy. Replay
+	  verifies policy precedence, effective state propagation, permission
+	  outcomes, errors, and stable fingerprints over 1,024 traces.
+
+	  This validation-only catalog is disabled by default so normal firmware
+	  images do not carry the replay witnesses.
 
 endif # PQCP_PROTECTED_CHANNEL
 endmenu
