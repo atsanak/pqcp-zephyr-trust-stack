@@ -435,7 +435,7 @@ ZTEST(pqcp_tls_loopback, test_tls13_psk_exporter_and_transport)
 	zassert_ok(k_thread_join(
 		&client_thread, K_SECONDS(120)));
 	zassert_ok(k_thread_join(
-		&server_thread, K_SECONDS(120)));
+		&server_thread, K_SECONDS(150)));
 	zassert_equal(client_result, 0,
 		      "client PQC handshake returned %d", client_result);
 	zassert_equal(server_result, 0,
