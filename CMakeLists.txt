@@ -332,6 +332,16 @@ if(CONFIG_PQCP_RUNTIME)
         ${PQCP_SRC}/runtime_transaction.c
         ${PQCP_SRC}/runtime_migration.c
         ${PQCP_SRC}/runtime_lease.c
+        ${PQCP_SRC}/runtime_event_bus.c
+        ${PQCP_SRC}/runtime_scheduler_policy.c
+        ${PQCP_SRC}/runtime_checkpoint_store.c
+        ${PQCP_SRC}/runtime_command_router.c
+        ${PQCP_SRC}/runtime_metrics.c
+        ${PQCP_SRC}/runtime_orchestrator.c
+        ${PQCP_SRC}/runtime_resource_governor.c
+        ${PQCP_SRC}/runtime_policy_catalog.c
+        ${PQCP_SRC}/runtime_resource_policy_catalog.c
+        ${PQCP_SRC}/runtime_recovery_policy_catalog.c
     )
 endif()
 
@@ -349,6 +359,17 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL)
         ${PQCP_SRC}/protected_channel_policy.c
         ${PQCP_SRC}/protected_channel_journal.c
         ${PQCP_SRC}/protected_channel_supervisor.c
+        ${PQCP_SRC}/protected_channel_control_codec.c
+        ${PQCP_SRC}/protected_channel_flow_control.c
+        ${PQCP_SRC}/protected_channel_mux.c
+        ${PQCP_SRC}/protected_channel_rekey.c
+        ${PQCP_SRC}/protected_channel_resumption.c
+        ${PQCP_SRC}/protected_channel_peer_health.c
+        ${PQCP_SRC}/protected_channel_path_manager.c
+        ${PQCP_SRC}/protected_channel_operations.c
+        ${PQCP_SRC}/protected_channel_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_path_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_fault_policy_catalog.c
     )
 endif()
 

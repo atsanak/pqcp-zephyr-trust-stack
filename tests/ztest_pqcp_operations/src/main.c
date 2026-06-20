@@ -1,0 +1,762 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ */
+
+#include <errno.h>
+#include <string.h>
+
+#include <psa/crypto.h>
+
+#include <zephyr/ztest.h>
+
+#include <pqcp_zephyr/protected_channel_operations.h>
+#include <pqcp_zephyr/runtime_operations.h>
+
+#define EVENT_CAPACITY 8U
+#define SUBSCRIPTION_CAPACITY 2U
+#define SCHEDULER_CAPACITY 6U
+#define TENANT_CAPACITY 3U
+#define RESERVATION_CAPACITY 4U
+#define PATH_CAPACITY 4U
+#define SERVICE_KEYS 6U
+#define SERVICE_WORKSPACES 1U
+#define SERVICE_WORKSPACE_BYTES 49152U
+#define SERVICE_JOBS 4U
+#define SERVICE_SESSIONS 2U
+#define SERVICE_PROFILES 4U
+#define SERVICE_AUDIT_ENTRIES 16U
+#define SERVICE_IDENTITIES 2U
+#define SERVICE_QUOTAS 2U
+#define CHECKPOINT_SLOT_BYTES 4096U
+#define COMMAND_HANDLERS 4U
+#define COMMAND_CACHE 4U
+#define TICKET_REPLAY_ENTRIES 4U
+
+static struct pqcp_runtime_event event_entries[EVENT_CAPACITY];
+static struct pqcp_runtime_event_subscription
+	event_subscriptions[SUBSCRIPTION_CAPACITY];
+static struct pqcp_runtime_scheduler_entry
+	scheduler_entries[SCHEDULER_CAPACITY];
+static struct pqcp_runtime_scheduler_tenant
+	scheduler_tenants[TENANT_CAPACITY];
+static struct pqcp_runtime_resource_reservation
+	reservations[RESERVATION_CAPACITY];
+static struct pqcp_channel_path paths[PATH_CAPACITY];
+static struct pqcp_adaptive_control_plane adaptive;
+static struct pqcp_runtime_service service;
+static struct pqcp_runtime_volatile_slot
+	service_key_slots[SERVICE_KEYS];
+static struct pqcp_runtime_workspace_slot
+	service_workspace_slots[SERVICE_WORKSPACES];
+static uint8_t service_workspace_bytes[
+	SERVICE_WORKSPACES * SERVICE_WORKSPACE_BYTES];
+static struct pqcp_runtime_queue_entry
+	service_queue[SERVICE_JOBS];
+static struct pqcp_runtime_session
+	service_sessions[SERVICE_SESSIONS];
+static struct pqcp_runtime_profile_state
+	service_profiles[SERVICE_PROFILES];
+static struct pqcp_runtime_audit_entry
+	service_audit_entries[SERVICE_AUDIT_ENTRIES];
+static struct pqcp_runtime_identity
+	service_identities[SERVICE_IDENTITIES];
+static struct pqcp_runtime_admission_quota
+	service_quotas[SERVICE_QUOTAS];
+static uint8_t checkpoint_buffers[2][CHECKPOINT_SLOT_BYTES];
+
+static const struct pqcp_runtime_service_storage service_storage = {
+	.key_slots = service_key_slots,
+	.key_slot_count = ARRAY_SIZE(service_key_slots),
+	.workspace_slots = service_workspace_slots,
+	.workspace_bytes = service_workspace_bytes,
+	.workspace_slot_count =
+		ARRAY_SIZE(service_workspace_slots),
+	.workspace_bytes_per_slot = SERVICE_WORKSPACE_BYTES,
+	.queue = service_queue,
+	.queue_capacity = ARRAY_SIZE(service_queue),
+	.sessions = service_sessions,
+	.session_capacity = ARRAY_SIZE(service_sessions),
+	.profile_states = service_profiles,
+	.profile_state_capacity = ARRAY_SIZE(service_profiles),
+	.audit_entries = service_audit_entries,
+	.audit_capacity = ARRAY_SIZE(service_audit_entries),
+	.identities = service_identities,
+	.identity_capacity = ARRAY_SIZE(service_identities),
+	.quotas = service_quotas,
+	.quota_capacity = ARRAY_SIZE(service_quotas),
+};
+
+static void reset_service(void)
+{
+	memset(&adaptive, 0, sizeof(adaptive));
+	memset(&service, 0, sizeof(service));
+	zassert_ok(pqcp_adaptive_control_init(
+		&adaptive, "operations-test",
+		PQCP_ADAPTIVE_POLICY_GATEWAY,
+		"hybrid768-65-runtime", 1000U));
+	zassert_ok(pqcp_runtime_service_init(
+		&service, &service_storage,
+		&adaptive, 1000U));
+}
+
+static void initialize_fake_channel(
+	struct pqcp_channel *channel)
+{
+	static const uint8_t transcript_seed[] = {
+		0x50U, 0x51U, 0x43U, 0x50U,
+		0x2dU, 0x4fU, 0x50U, 0x53U,
+	};
+
+	memset(channel, 0, sizeof(*channel));
+	channel->schema_version = PQCP_CHANNEL_SCHEMA_VERSION;
+	channel->config.schema_version =
+		PQCP_CHANNEL_SCHEMA_VERSION;
+	channel->config.role = PQCP_CHANNEL_ROLE_CLIENT;
+	channel->config.session_id =
+		UINT64_C(0x7061746368323030);
+	channel->config.mlkem_level = 768U;
+	channel->config.mldsa_level = 65U;
+	channel->config.max_payload_bytes =
+		PQCP_CHANNEL_MAX_PAYLOAD_BYTES;
+	strcpy(channel->config.profile_id,
+	       "hybrid768-65-runtime");
+	channel->state = PQCP_CHANNEL_STATE_ESTABLISHED;
+	channel->established = true;
+	channel->keys.exporter_ready = true;
+	channel->keys.traffic_keys_ready = true;
+	for (size_t index = 0U;
+	     index < sizeof(channel->keys.exporter); ++index) {
+		channel->keys.exporter[index] =
+			(uint8_t)(0x10U + index);
+	}
+	for (size_t index = 0U;
+	     index < sizeof(channel->keys.client_write_key);
+	     ++index) {
+		channel->keys.client_write_key[index] =
+			(uint8_t)(0x40U + index);
+		channel->keys.server_write_key[index] =
+			(uint8_t)(0x80U + index);
+	}
+	zassert_ok(pqcp_channel_transcript_init(
+		&channel->transcript));
+	zassert_ok(pqcp_channel_transcript_update(
+		&channel->transcript,
+		transcript_seed, sizeof(transcript_seed)));
+	zassert_ok(pqcp_channel_replay_reset(
+		&channel->inbound_replay));
+}
+
+static void event_counter(
+	const struct pqcp_runtime_event *event,
+	void *user_data)
+{
+	uint32_t *count = user_data;
+
+	zassert_not_null(event);
+	(*count)++;
+}
+
+ZTEST(pqcp_operations, test_exhaustive_policy_catalogs)
+{
+	struct pqcp_runtime_resource_policy_decision resource;
+	struct pqcp_runtime_recovery_policy_decision recovery;
+	struct pqcp_channel_path_policy_decision path;
+	struct pqcp_channel_fault_policy_decision fault;
+
+	zassert_ok(pqcp_runtime_policy_catalog_audit());
+	zassert_ok(
+		pqcp_runtime_resource_policy_catalog_audit());
+	zassert_ok(
+		pqcp_runtime_recovery_policy_catalog_audit());
+	zassert_ok(pqcp_channel_policy_catalog_audit());
+	zassert_ok(pqcp_channel_path_policy_catalog_audit());
+	zassert_ok(pqcp_channel_fault_policy_catalog_audit());
+
+	zassert_ok(pqcp_runtime_resource_policy_lookup(
+		PQCP_RUNTIME_RESOURCE_JOBS_EXHAUSTED,
+		PQCP_RUNTIME_COMMAND_SUBMIT_JOB,
+		&resource));
+	zassert_equal(
+		resource.disposition,
+		PQCP_RUNTIME_RESOURCE_DENY);
+	zassert_equal(resource.error, -EDQUOT);
+
+	zassert_ok(pqcp_runtime_recovery_policy_lookup(
+		PQCP_RUNTIME_RECOVERY_AUDIT_INVALID,
+		PQCP_RUNTIME_COMMAND_TICK,
+		&recovery));
+	zassert_equal(
+		recovery.directive,
+		PQCP_RUNTIME_RECOVERY_LOCK_DOWN);
+	zassert_equal(
+		recovery.next_state,
+		PQCP_RUNTIME_POLICY_LOCKDOWN);
+
+	zassert_ok(pqcp_channel_path_policy_lookup(
+		PQCP_CHANNEL_PATH_CONDITION_NO_VALID_PATH,
+		PQCP_CHANNEL_CONTROL_PATH_CHALLENGE,
+		&path));
+	zassert_equal(
+		path.disposition,
+		PQCP_CHANNEL_PATH_ALLOW_PROBE);
+	zassert_equal(
+		path.next_state,
+		PQCP_CHANNEL_POLICY_MIGRATING);
+
+	zassert_ok(pqcp_channel_fault_policy_lookup(
+		PQCP_CHANNEL_FAULT_REPLAY,
+		PQCP_CHANNEL_CONTROL_STREAM_OPEN,
+		&fault));
+	zassert_equal(
+		fault.directive,
+		PQCP_CHANNEL_FAULT_CLOSE_CHANNEL);
+	zassert_equal(
+		fault.next_state,
+		PQCP_CHANNEL_POLICY_CLOSING);
+}
+
+ZTEST(pqcp_operations, test_resource_governor_lifecycle)
+{
+	struct pqcp_runtime_resource_governor governor;
+	struct pqcp_runtime_resource_budget budget;
+	const struct pqcp_runtime_resource_usage one_job = {
+		.jobs = 1U,
+		.workspaces = 1U,
+		.workspace_bytes = 1024U,
+	};
+	uint64_t first;
+	uint64_t second;
+	uint32_t expired;
+
+	zassert_ok(pqcp_runtime_resource_budget_default(&budget));
+	budget.maximum_jobs = 2U;
+	budget.maximum_keys = 2U;
+	budget.maximum_sessions = 2U;
+	budget.maximum_workspaces = 2U;
+	budget.maximum_workspace_bytes = 2048U;
+	budget.elevated_threshold_bps = 5000U;
+	budget.high_threshold_bps = 7500U;
+	budget.critical_threshold_bps = 9000U;
+	zassert_ok(pqcp_runtime_resource_governor_init(
+		&governor, &budget, reservations,
+		ARRAY_SIZE(reservations)));
+
+	zassert_ok(pqcp_runtime_resource_reserve(
+		&governor, 1U, &one_job,
+		1000U, 2000U, &first));
+	zassert_equal(
+		governor.pressure,
+		PQCP_RUNTIME_PRESSURE_ELEVATED);
+	zassert_ok(pqcp_runtime_resource_commit(
+		&governor, first));
+
+	zassert_ok(pqcp_runtime_resource_reserve(
+		&governor, 2U, &one_job,
+		1100U, 1200U, &second));
+	zassert_equal(
+		governor.pressure,
+		PQCP_RUNTIME_PRESSURE_CRITICAL);
+	zassert_equal(pqcp_runtime_resource_reserve(
+		&governor, 3U, &one_job,
+		1100U, 1300U, &second), -EDQUOT);
+
+	zassert_ok(pqcp_runtime_resource_tick(
+		&governor, 1200U, &expired));
+	zassert_equal(expired, 1U);
+	zassert_equal(governor.expired, 1U);
+	zassert_ok(pqcp_runtime_resource_release(
+		&governor, first));
+	zassert_equal(
+		governor.pressure,
+		PQCP_RUNTIME_PRESSURE_NORMAL);
+	zassert_ok(
+		pqcp_runtime_resource_governor_audit(
+			&governor));
+}
+
+ZTEST(pqcp_operations, test_event_chain_and_subscription)
+{
+	struct pqcp_runtime_event_bus bus;
+	struct pqcp_runtime_event_filter filter = {
+		.kind_mask_low =
+			BIT(PQCP_RUNTIME_EVENT_JOB_COMPLETED),
+		.severity_mask =
+			BIT(PQCP_RUNTIME_EVENT_INFO),
+	};
+	struct pqcp_runtime_event event = {
+		.kind = PQCP_RUNTIME_EVENT_JOB_COMPLETED,
+		.severity = PQCP_RUNTIME_EVENT_INFO,
+		.subject_id = 42U,
+		.result = 0,
+		.value = 7U,
+		.profile_id = "hybrid768-65-runtime",
+		.detail = "operation-complete",
+	};
+	struct pqcp_runtime_event read_back;
+	uint64_t sequence;
+	size_t subscription_id;
+	uint32_t callback_count = 0U;
+
+	zassert_ok(pqcp_runtime_event_bus_init(
+		&bus, event_entries, ARRAY_SIZE(event_entries),
+		event_subscriptions,
+		ARRAY_SIZE(event_subscriptions)));
+	zassert_ok(pqcp_runtime_event_subscribe(
+		&bus, &filter, event_counter,
+		&callback_count, &subscription_id));
+	zassert_ok(pqcp_runtime_event_append(
+		&bus, &event, &sequence));
+	zassert_equal(sequence, 1U);
+	event.subject_id++;
+	zassert_ok(pqcp_runtime_event_append(
+		&bus, &event, &sequence));
+	zassert_equal(callback_count, 2U);
+	zassert_ok(pqcp_runtime_event_read(
+		&bus, 1U, &read_back));
+	zassert_equal(read_back.subject_id, 42U);
+	zassert_ok(pqcp_runtime_event_bus_verify(&bus));
+
+	event_entries[1].detail[0] ^= 1;
+	zassert_equal(
+		pqcp_runtime_event_bus_verify(&bus),
+		-EBADMSG);
+	event_entries[1].detail[0] ^= 1;
+	zassert_ok(pqcp_runtime_event_unsubscribe(
+		&bus, subscription_id));
+	zassert_ok(pqcp_runtime_event_bus_verify(&bus));
+}
+
+ZTEST(pqcp_operations, test_scheduler_dispatch_and_deadline)
+{
+	struct pqcp_runtime_scheduler scheduler;
+	struct pqcp_runtime_scheduler_policy policy;
+	struct pqcp_runtime_scheduler_decision decision;
+	struct pqcp_runtime_job expired = {
+		.schema_version = PQCP_RUNTIME_SCHEMA_VERSION,
+		.job_id = 1U,
+		.profile_id = "hybrid768-65-runtime",
+	};
+	struct pqcp_runtime_job ready = {
+		.schema_version = PQCP_RUNTIME_SCHEMA_VERSION,
+		.job_id = 2U,
+		.profile_id = "hybrid768-65-runtime",
+	};
+	uint64_t now_ms = (uint64_t)k_uptime_get();
+
+	if (now_ms == 0U) {
+		now_ms = 1U;
+	}
+	expired.deadline_ms = now_ms;
+	ready.deadline_ms = now_ms + 1000U;
+	zassert_ok(
+		pqcp_runtime_scheduler_policy_default(&policy));
+	zassert_ok(pqcp_runtime_scheduler_init(
+		&scheduler, &policy,
+		scheduler_entries,
+		ARRAY_SIZE(scheduler_entries),
+		scheduler_tenants,
+		ARRAY_SIZE(scheduler_tenants)));
+	zassert_ok(pqcp_runtime_scheduler_configure_tenant(
+		&scheduler, 1U, 1U, true));
+	zassert_ok(pqcp_runtime_scheduler_configure_tenant(
+		&scheduler, 2U, 2U, true));
+	zassert_ok(pqcp_runtime_scheduler_submit(
+		&scheduler, &expired,
+		PQCP_RUNTIME_SCHEDULER_DEFAULT,
+		1U, 1U, 0U));
+	zassert_ok(pqcp_runtime_scheduler_submit(
+		&scheduler, &ready,
+		PQCP_RUNTIME_SCHEDULER_INTERACTIVE,
+		2U, 1U, 0U));
+
+	zassert_ok(pqcp_runtime_scheduler_select(
+		&scheduler, now_ms, &decision));
+	zassert_equal(expired.result, -ETIMEDOUT);
+	zassert_equal(
+		expired.status,
+		PQCP_RUNTIME_STATUS_FAILED);
+	zassert_equal(decision.job, &ready);
+	zassert_equal(
+		decision.reason,
+		PQCP_RUNTIME_SCHEDULER_REASON_SELECTED);
+	zassert_ok(pqcp_runtime_scheduler_complete(
+		&scheduler, &decision, 0, now_ms + 1U));
+	zassert_equal(
+		ready.status,
+		PQCP_RUNTIME_STATUS_COMPLETED);
+	zassert_ok(pqcp_runtime_scheduler_audit(&scheduler));
+}
+
+ZTEST(pqcp_operations, test_control_codec_detects_tampering)
+{
+	struct pqcp_channel_control_message message = {
+		.schema_version =
+			PQCP_CHANNEL_OPERATION_SCHEMA_VERSION,
+		.kind = PQCP_CHANNEL_CONTROL_STREAM_OPEN,
+		.flags = 3U,
+		.message_id = 7U,
+		.timestamp_ms = 1000U,
+		.stream_id = 9U,
+		.value = 4096U,
+		.payload = { 1U, 2U, 3U, 4U },
+		.payload_length = 4U,
+	};
+	struct pqcp_channel_control_message decoded;
+	uint8_t encoded[PQCP_CHANNEL_CONTROL_MAX_BYTES + 128U];
+	size_t encoded_length;
+
+	zassert_ok(pqcp_channel_control_encode(
+		&message, encoded, sizeof(encoded),
+		&encoded_length));
+	zassert_ok(pqcp_channel_control_decode(
+		encoded, encoded_length, &decoded));
+	zassert_equal(decoded.kind, message.kind);
+	zassert_equal(decoded.stream_id, message.stream_id);
+	zassert_mem_equal(
+		decoded.payload, message.payload,
+		message.payload_length);
+
+	encoded[56] ^= 1U;
+	zassert_equal(pqcp_channel_control_decode(
+		encoded, encoded_length, &decoded), -EBADMSG);
+}
+
+ZTEST(pqcp_operations, test_flow_control_updates_windows)
+{
+	struct pqcp_channel_flow_controller controller;
+	struct pqcp_channel_flow_policy policy;
+	struct pqcp_channel_stream stream = {
+		.stream_id = 1U,
+		.state = PQCP_CHANNEL_STREAM_OPEN,
+		.occupied = true,
+	};
+	uint32_t connection_credit;
+	uint32_t stream_credit;
+
+	zassert_ok(pqcp_channel_flow_policy_default(&policy));
+	stream.local_window = policy.initial_stream_window;
+	stream.remote_window = policy.initial_stream_window;
+	zassert_ok(pqcp_channel_flow_init(
+		&controller, &policy));
+	zassert_ok(pqcp_channel_flow_reserve_send(
+		&controller, &stream, 1024U));
+	zassert_equal(
+		stream.remote_window,
+		policy.initial_stream_window - 1024U);
+	zassert_ok(pqcp_channel_flow_consume_receive(
+		&controller, &stream,
+		policy.initial_stream_window -
+			policy.update_threshold + 1U,
+		&connection_credit, &stream_credit));
+	zassert_equal(connection_credit, 0U);
+	zassert_not_equal(stream_credit, 0U);
+	zassert_ok(pqcp_channel_flow_apply_update(
+		&controller, &stream, 1024U, 1024U));
+	zassert_ok(pqcp_channel_flow_audit(&controller));
+}
+
+ZTEST(pqcp_operations, test_path_manager_migrates_to_better_path)
+{
+	struct pqcp_channel_path_manager manager;
+	struct pqcp_channel_path_policy policy;
+	struct pqcp_channel_path *first;
+	struct pqcp_channel_path *second;
+	uint32_t selected;
+
+	zassert_ok(pqcp_channel_path_policy_default(&policy));
+	zassert_ok(pqcp_channel_path_manager_init(
+		&manager, &policy, paths, ARRAY_SIZE(paths)));
+	zassert_ok(pqcp_channel_path_begin_probe(
+		&manager, 11U, 1U, 1000U, &first));
+	zassert_ok(pqcp_channel_path_validate(
+		&manager, first->path_id, 11U,
+		5000U, 1100U));
+	zassert_equal(
+		manager.active_path_id,
+		first->path_id);
+
+	zassert_ok(pqcp_channel_path_begin_probe(
+		&manager, 22U, 1U, 1200U, &second));
+	zassert_ok(pqcp_channel_path_validate(
+		&manager, second->path_id, 22U,
+		1000U, 1300U));
+	zassert_equal(
+		manager.active_path_id,
+		second->path_id);
+	zassert_equal(manager.migrations, 1U);
+	zassert_ok(pqcp_channel_path_record_io(
+		&manager, second->path_id,
+		1400U, 128U, 256U));
+	zassert_ok(pqcp_channel_path_select(
+		&manager, 1500U, &selected));
+	zassert_equal(selected, second->path_id);
+	zassert_ok(
+		pqcp_channel_path_manager_audit(&manager));
+}
+
+ZTEST(pqcp_operations, test_path_manager_selects_without_active_path)
+{
+	struct pqcp_channel_path_manager manager;
+	struct pqcp_channel_path_policy policy;
+	struct pqcp_channel_path *first;
+	struct pqcp_channel_path *second;
+	uint32_t selected;
+
+	zassert_ok(pqcp_channel_path_policy_default(&policy));
+	policy.allow_automatic_migration = false;
+	zassert_ok(pqcp_channel_path_manager_init(
+		&manager, &policy, paths, ARRAY_SIZE(paths)));
+	zassert_ok(pqcp_channel_path_begin_probe(
+		&manager, 31U, 1U, 1000U, &first));
+	zassert_ok(pqcp_channel_path_validate(
+		&manager, first->path_id, 31U,
+		5000U, 1100U));
+	zassert_ok(pqcp_channel_path_begin_probe(
+		&manager, 32U, 1U, 1200U, &second));
+	zassert_ok(pqcp_channel_path_validate(
+		&manager, second->path_id, 32U,
+		1000U, 1300U));
+
+	zassert_equal(
+		pqcp_channel_path_fail(
+			&manager, first->path_id, 1400U),
+		-EHOSTUNREACH);
+	zassert_equal(manager.active_path_id, 0U);
+	manager.policy.allow_automatic_migration = true;
+	zassert_ok(pqcp_channel_path_select(
+		&manager, 1500U, &selected));
+	zassert_equal(selected, second->path_id);
+	zassert_equal(
+		manager.active_path_id,
+		second->path_id);
+	zassert_ok(
+		pqcp_channel_path_manager_audit(&manager));
+}
+
+ZTEST(pqcp_operations, test_peer_health_timeout_and_recovery)
+{
+	struct pqcp_channel_peer_policy policy;
+	struct pqcp_channel_peer_health health;
+
+	zassert_ok(pqcp_channel_peer_policy_default(&policy));
+	zassert_ok(pqcp_channel_peer_health_init(
+		&health, &policy, 1000U));
+	zassert_false(pqcp_channel_peer_probe_due(
+		&health, &policy, 2000U));
+	zassert_true(pqcp_channel_peer_probe_due(
+		&health, &policy,
+		1000U + policy.keepalive_interval_ms));
+	zassert_ok(pqcp_channel_peer_probe_sent(
+		&health,
+		1000U + policy.keepalive_interval_ms));
+	zassert_ok(pqcp_channel_peer_tick(
+		&health, &policy,
+		1000U + policy.keepalive_interval_ms +
+			policy.keepalive_timeout_ms));
+	zassert_equal(
+		health.status,
+		PQCP_CHANNEL_PEER_SUSPECT);
+	zassert_ok(pqcp_channel_peer_record_io(
+		&health,
+		1000U + policy.keepalive_interval_ms +
+			policy.keepalive_timeout_ms + 1U,
+		0U, 64U));
+	zassert_equal(
+		health.status,
+		PQCP_CHANNEL_PEER_HEALTHY);
+	zassert_ok(pqcp_channel_peer_health_audit(
+		&health, &policy));
+}
+
+ZTEST(pqcp_operations,
+      test_checkpoint_command_metrics_and_orchestrator)
+{
+	struct pqcp_runtime_checkpoint_slot slots[2] = {
+		{
+			.buffer = checkpoint_buffers[0],
+			.capacity = sizeof(checkpoint_buffers[0]),
+		},
+		{
+			.buffer = checkpoint_buffers[1],
+			.capacity = sizeof(checkpoint_buffers[1]),
+		},
+	};
+	struct pqcp_runtime_checkpoint_store checkpoints;
+	struct pqcp_runtime_checkpoint_header header;
+	struct pqcp_runtime_checkpoint_header decoded_header;
+	struct pqcp_runtime_event_bus events;
+	struct pqcp_runtime_scheduler scheduler;
+	struct pqcp_runtime_scheduler_policy scheduler_policy;
+	struct pqcp_runtime_command_router router;
+	struct pqcp_runtime_command_handler
+		handlers[COMMAND_HANDLERS];
+	struct pqcp_runtime_command_cache_entry
+		cache[COMMAND_CACHE];
+	struct pqcp_runtime_metrics metrics;
+	struct pqcp_runtime_slo_policy slo_policy;
+	struct pqcp_runtime_slo_report slo_report;
+	struct pqcp_runtime_orchestrator orchestrator;
+	struct pqcp_runtime_command command = {
+		.schema_version =
+			PQCP_RUNTIME_OPERATION_SCHEMA_VERSION,
+		.command_id = 1U,
+		.issued_at_ms = 1U,
+		.kind = PQCP_RUNTIME_COMMAND_READ_SNAPSHOT,
+		.owner = "operations-test",
+		.profile_id = "hybrid768-65-runtime",
+	};
+	struct pqcp_runtime_command_result result;
+	struct pqcp_runtime_metric_sample sample = {
+		.schema_version =
+			PQCP_RUNTIME_OPERATION_SCHEMA_VERSION,
+		.kind = PQCP_RUNTIME_METRIC_QUEUE_WAIT_US,
+		.timestamp_ms = 2000U,
+		.value = 1U,
+		.subject_id = 1U,
+		.profile_id = "hybrid768-65-runtime",
+		.success = true,
+	};
+	uint8_t checkpoint[CHECKPOINT_SLOT_BYTES];
+	size_t checkpoint_length;
+
+	reset_service();
+	zassert_ok(pqcp_runtime_event_bus_init(
+		&events, event_entries, ARRAY_SIZE(event_entries),
+		event_subscriptions,
+		ARRAY_SIZE(event_subscriptions)));
+	zassert_ok(
+		pqcp_runtime_scheduler_policy_default(
+			&scheduler_policy));
+	zassert_ok(pqcp_runtime_scheduler_init(
+		&scheduler, &scheduler_policy,
+		scheduler_entries,
+		ARRAY_SIZE(scheduler_entries),
+		scheduler_tenants,
+		ARRAY_SIZE(scheduler_tenants)));
+	zassert_ok(pqcp_runtime_checkpoint_store_init(
+		&checkpoints, slots, ARRAY_SIZE(slots)));
+	zassert_ok(pqcp_runtime_command_router_init(
+		&router, &service, &events,
+		handlers, ARRAY_SIZE(handlers),
+		cache, ARRAY_SIZE(cache), NULL, NULL));
+	zassert_ok(pqcp_runtime_slo_policy_default(
+		&slo_policy));
+	zassert_ok(pqcp_runtime_metrics_init(
+		&metrics, &slo_policy));
+	zassert_ok(pqcp_runtime_orchestrator_init(
+		&orchestrator, &service, &events,
+		&scheduler, &checkpoints, &router,
+		&metrics, 1000U));
+
+	zassert_ok(pqcp_runtime_command_execute(
+		&router, &command, &result));
+	zassert_false(result.replayed);
+	zassert_ok(pqcp_runtime_command_execute(
+		&router, &command, &result));
+	zassert_true(result.replayed);
+
+	zassert_ok(pqcp_runtime_orchestrator_checkpoint(
+		&orchestrator, 2000U, 0x5aU, &header));
+	zassert_equal(
+		header.header_bytes,
+		PQCP_RUNTIME_CHECKPOINT_HEADER_BYTES);
+	zassert_ok(pqcp_runtime_checkpoint_read(
+		&checkpoints, header.generation,
+		checkpoint, sizeof(checkpoint),
+		&checkpoint_length, &decoded_header));
+	zassert_equal(
+		decoded_header.generation,
+		header.generation);
+	zassert_ok(pqcp_runtime_checkpoint_verify(
+		checkpoint, checkpoint_length,
+		&decoded_header));
+	checkpoint[
+		PQCP_RUNTIME_CHECKPOINT_HEADER_BYTES] ^= 1U;
+	zassert_equal(pqcp_runtime_checkpoint_verify(
+		checkpoint, checkpoint_length,
+		&decoded_header), -EBADMSG);
+
+	for (uint32_t index = 0U; index < 4U; ++index) {
+		sample.subject_id = index + 1U;
+		sample.timestamp_ms += 1U;
+		zassert_ok(pqcp_runtime_metrics_observe(
+			&metrics, &sample));
+	}
+	zassert_ok(pqcp_runtime_metrics_report(
+		&metrics, 3000U, &slo_report));
+	zassert_equal(
+		slo_report.status,
+		PQCP_RUNTIME_SLO_PASS);
+	zassert_ok(pqcp_runtime_orchestrator_audit(
+		&orchestrator));
+}
+
+ZTEST(pqcp_operations, test_rekey_and_resumption_lifecycle)
+{
+	struct pqcp_channel channel;
+	struct pqcp_channel_rekey_policy rekey_policy;
+	struct pqcp_channel_rekey_context rekey = {0};
+	struct pqcp_channel_resumption_store resumption;
+	struct pqcp_channel_ticket_replay_entry
+		replay_entries[TICKET_REPLAY_ENTRIES];
+	struct pqcp_channel_resumption_ticket ticket;
+	struct pqcp_channel_resumption_claims claims;
+	uint8_t salt[PQCP_CHANNEL_REKEY_SALT_BYTES];
+	uint8_t secret[PQCP_CHANNEL_RESUMPTION_SECRET_BYTES];
+	uint8_t peer_digest[PQCP_CHANNEL_HASH_BYTES];
+	uint8_t old_client_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+
+	zassert_equal(psa_crypto_init(), PSA_SUCCESS);
+	initialize_fake_channel(&channel);
+	for (size_t index = 0U; index < sizeof(salt); ++index) {
+		salt[index] = (uint8_t)(0xa0U + index);
+		secret[index] = (uint8_t)(0x20U + index);
+		peer_digest[index] = (uint8_t)(0x60U + index);
+	}
+	memcpy(old_client_key,
+	       channel.keys.client_write_key,
+	       sizeof(old_client_key));
+
+	zassert_ok(pqcp_channel_rekey_policy_default(
+		&rekey_policy));
+	zassert_ok(pqcp_channel_rekey_prepare(
+		&channel, &rekey_policy, &rekey,
+		1000U, 1U, salt, true));
+	zassert_equal(
+		rekey.state,
+		PQCP_CHANNEL_REKEY_PREPARED);
+	zassert_ok(pqcp_channel_rekey_accept(
+		&channel, &rekey,
+		rekey.confirmation, 1100U));
+	zassert_ok(pqcp_channel_rekey_commit(
+		&channel, &rekey, 1200U));
+	zassert_equal(rekey.current_epoch, 1U);
+	zassert_not_equal(memcmp(
+		old_client_key,
+		channel.keys.client_write_key,
+		sizeof(old_client_key)), 0);
+	zassert_ok(pqcp_channel_rekey_audit(
+		&channel, &rekey));
+
+	zassert_ok(pqcp_channel_resumption_store_init(
+		&resumption, secret,
+		replay_entries, ARRAY_SIZE(replay_entries)));
+	zassert_ok(pqcp_channel_resumption_issue(
+		&resumption, &channel, peer_digest,
+		2000U, 5000U, &ticket));
+	zassert_ok(pqcp_channel_resumption_accept(
+		&resumption, &ticket, 2100U, &claims));
+	zassert_equal(
+		claims.original_session_id,
+		channel.config.session_id);
+	zassert_mem_equal(
+		claims.peer_identity_digest,
+		peer_digest, sizeof(peer_digest));
+	zassert_equal(pqcp_channel_resumption_accept(
+		&resumption, &ticket, 2200U, &claims),
+		-EALREADY);
+	zassert_ok(pqcp_channel_resumption_store_audit(
+		&resumption));
+}
+
+ZTEST_SUITE(pqcp_operations, NULL, NULL, NULL, NULL, NULL);
