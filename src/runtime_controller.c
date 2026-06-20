@@ -182,7 +182,7 @@ int pqcp_runtime_controller_close_session(
 	struct pqcp_runtime_controller *controller,
 	uint64_t session_id)
 {
-	struct pqcp_runtime_session *session;
+	const struct pqcp_runtime_session *session;
 	char profile[PQCP_RUNTIME_PROFILE_MAX_CHARS];
 	int ret;
 

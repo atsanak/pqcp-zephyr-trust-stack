@@ -76,7 +76,7 @@ static enum pqcp_runtime_policy_state service_state(
 	return PQCP_RUNTIME_POLICY_STOPPED;
 }
 
-static struct pqcp_runtime_command_cache_entry *cache_find(
+static const struct pqcp_runtime_command_cache_entry *cache_find(
 	struct pqcp_runtime_command_router *router,
 	uint64_t command_id)
 {
@@ -325,7 +325,7 @@ int pqcp_runtime_command_execute(
 	const struct pqcp_runtime_command *command,
 	struct pqcp_runtime_command_result *result)
 {
-	struct pqcp_runtime_command_cache_entry *cached;
+	const struct pqcp_runtime_command_cache_entry *cached;
 	struct pqcp_runtime_command_handler *handler;
 	struct pqcp_runtime_policy_decision policy;
 	uint64_t now_ms;

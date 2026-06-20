@@ -480,7 +480,7 @@ int pqcp_runtime_executor_cancel(
 }
 
 int pqcp_runtime_executor_drain(
-	struct pqcp_runtime_executor *executor,
+	const struct pqcp_runtime_executor *executor,
 	k_timeout_t timeout)
 {
 	const bool wait_forever = K_TIMEOUT_EQ(timeout, K_FOREVER);

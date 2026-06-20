@@ -419,7 +419,7 @@ static uint32_t count_identities(
 static int write_payload(
 	struct checkpoint_writer *writer,
 	const struct pqcp_runtime_service *service,
-	struct pqcp_runtime_checkpoint_header *header)
+	const struct pqcp_runtime_checkpoint_header *header)
 {
 	write_section_header(
 		writer, CHECKPOINT_SECTION_SESSIONS,

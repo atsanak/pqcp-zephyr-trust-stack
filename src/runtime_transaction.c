@@ -475,7 +475,6 @@ int pqcp_runtime_transaction_execute(
 	uint64_t now_ms,
 	struct pqcp_runtime_transaction_result *result)
 {
-	size_t completed_before;
 	int terminal = 0;
 
 	if (transaction == NULL || result == NULL ||
@@ -494,7 +493,8 @@ int pqcp_runtime_transaction_execute(
 	}
 	transaction->state = PQCP_RUNTIME_TRANSACTION_RUNNING;
 	do {
-		completed_before = 0U;
+		size_t completed_before = 0U;
+
 		for (size_t index = 0U;
 		     index < transaction->step_count; ++index) {
 			struct pqcp_runtime_transaction_step *step =

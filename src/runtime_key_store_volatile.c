@@ -305,7 +305,7 @@ static int volatile_metadata(
 	const struct pqcp_runtime_key_handle *handle,
 	struct pqcp_runtime_key_metadata *metadata)
 {
-	struct pqcp_runtime_volatile_slot *slot =
+	const struct pqcp_runtime_volatile_slot *slot =
 		resolve_slot(store, handle);
 
 	if (slot == NULL || metadata == NULL) {
@@ -378,7 +378,7 @@ static int volatile_export_public(
 	size_t output_capacity,
 	size_t *output_length)
 {
-	struct pqcp_runtime_volatile_slot *slot =
+	const struct pqcp_runtime_volatile_slot *slot =
 		resolve_slot(store, handle);
 
 	if (slot == NULL) {
@@ -423,7 +423,7 @@ static int volatile_rotate(
 	const struct pqcp_runtime_key_request *request,
 	struct pqcp_runtime_key_handle *new_handle)
 {
-	struct pqcp_runtime_volatile_slot *old_slot =
+	const struct pqcp_runtime_volatile_slot *old_slot =
 		resolve_slot(store, old_handle);
 	struct pqcp_runtime_key_handle generated;
 	int ret;

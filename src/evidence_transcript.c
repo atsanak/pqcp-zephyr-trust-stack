@@ -41,13 +41,15 @@ static int transcript_fail(struct pqcp_evidence_transcript_state *state,
 static int field_value(const char *line, const char *key,
 		       char *out, size_t out_len)
 {
-	const size_t key_len = strlen(key);
-	const char *p = line;
+	size_t key_len;
+	const char *p;
 
 	if ((line == NULL) || (key == NULL) || (out == NULL) ||
 	    (out_len == 0U)) {
 		return -EINVAL;
 	}
+	key_len = strlen(key);
+	p = line;
 
 	while (*p != '\0') {
 		if (((p == line) || (*(p - 1) == ' ')) &&
@@ -121,7 +123,13 @@ static int parse_i32_dec(const char *value, int32_t *out)
 		return -EINVAL;
 	}
 
-	*out = sign > 0 ? (int32_t)magnitude : -(int32_t)magnitude;
+	if (sign > 0) {
+		*out = (int32_t)magnitude;
+	} else if (magnitude == (uint32_t)INT32_MAX + 1U) {
+		*out = INT32_MIN;
+	} else {
+		*out = -(int32_t)magnitude;
+	}
 	return 0;
 }
 

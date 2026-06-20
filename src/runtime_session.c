@@ -63,7 +63,7 @@ static bool request_valid(
 
 static int generate_key(
 	struct pqcp_runtime_session_manager *manager,
-	struct pqcp_runtime_session *session,
+	const struct pqcp_runtime_session *session,
 	enum pqcp_runtime_job_type type,
 	uint32_t level,
 	const char *label,

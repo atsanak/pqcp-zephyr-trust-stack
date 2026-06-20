@@ -104,7 +104,7 @@ static int write_session(
 		output + 44U, session->jobs_completed);
 	pqcp_runtime_internal_write_u64(
 		output + 52U, session->failures);
-	output[60] = session->active ? 1U : 0U;
+	output[60] = 1U;
 	output[61] = session->draining ? 1U : 0U;
 	output[62] = session->protected_channel ? 1U : 0U;
 	memcpy(output + 64U, session->profile_id,
@@ -354,31 +354,37 @@ int pqcp_runtime_snapshot_read(
 	struct pqcp_runtime_snapshot_info *info)
 {
 	uint8_t digest[PQCP_RUNTIME_DIGEST_BYTES];
-	const uint32_t magic =
-		pqcp_runtime_internal_read_u32(input);
-	const uint32_t schema =
-		pqcp_runtime_internal_read_u32(input + 4U);
-	const uint32_t total =
-		pqcp_runtime_internal_read_u32(input + 8U);
-	const uint32_t session_count =
-		pqcp_runtime_internal_read_u32(input + 12U);
-	const uint32_t profile_count =
-		pqcp_runtime_internal_read_u32(input + 16U);
-	const uint32_t key_references =
-		pqcp_runtime_internal_read_u32(input + 20U);
-	const size_t digest_offset =
-		PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
-		(size_t)session_count *
-			PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES +
-		(size_t)profile_count *
-			PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES;
+	uint32_t magic;
+	uint32_t schema;
+	uint32_t total;
+	uint32_t session_count;
+	uint32_t profile_count;
+	uint32_t key_references;
+	size_t digest_offset;
 	size_t offset = PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES;
 
 	if (input == NULL ||
 	    input_length < PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
 			    PQCP_RUNTIME_DIGEST_BYTES ||
-	    sessions == NULL || profiles == NULL || info == NULL ||
-	    magic != PQCP_RUNTIME_SNAPSHOT_MAGIC ||
+	    sessions == NULL || profiles == NULL || info == NULL) {
+		return -EINVAL;
+	}
+	magic = pqcp_runtime_internal_read_u32(input);
+	schema = pqcp_runtime_internal_read_u32(input + 4U);
+	total = pqcp_runtime_internal_read_u32(input + 8U);
+	session_count =
+		pqcp_runtime_internal_read_u32(input + 12U);
+	profile_count =
+		pqcp_runtime_internal_read_u32(input + 16U);
+	key_references =
+		pqcp_runtime_internal_read_u32(input + 20U);
+	digest_offset =
+		PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
+		(size_t)session_count *
+			PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES +
+		(size_t)profile_count *
+			PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES;
+	if (magic != PQCP_RUNTIME_SNAPSHOT_MAGIC ||
 	    schema != PQCP_RUNTIME_SCHEMA_VERSION ||
 	    total != input_length ||
 	    session_count > session_capacity ||

@@ -762,8 +762,7 @@ static int receive_finished(
 	const uint8_t *received = NULL;
 	size_t received_length = 0U;
 	uint8_t transcript_hash[PQCP_CHANNEL_HASH_BYTES];
-	uint8_t expected[PQCP_CHANNEL_FINISHED_BYTES];
-	size_t frame_length;
+	uint8_t expected[PQCP_CHANNEL_FINISHED_BYTES] = { 0 };
 	int ret;
 
 	ret = pqcp_channel_internal_receive_frame(
@@ -787,8 +786,10 @@ static int receive_finished(
 		ret = -EKEYREJECTED;
 	}
 	if (ret == 0) {
-		frame_length = PQCP_CHANNEL_FRAME_HEADER_BYTES +
-			       received_length;
+		const size_t frame_length =
+			PQCP_CHANNEL_FRAME_HEADER_BYTES +
+			received_length;
+
 		ret = pqcp_channel_transcript_update(
 			&channel->transcript,
 			channel->rx_frame, frame_length);

@@ -207,15 +207,17 @@ int pqcp_channel_mbedtls_receive(
 	}
 }
 
+// cppcheck-suppress constParameterCallback
 int pqcp_channel_mbedtls_export(
 	void *context,
 	const char *label,
 	const uint8_t *export_context,
 	size_t export_context_length,
+	// cppcheck-suppress constParameterCallback
 	uint8_t *output,
 	size_t output_length)
 {
-	struct pqcp_channel_mbedtls_context *adapter =
+	const struct pqcp_channel_mbedtls_context *adapter =
 		adapter_context(context);
 	int ret;
 

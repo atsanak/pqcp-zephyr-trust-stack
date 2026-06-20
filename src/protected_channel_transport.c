@@ -46,7 +46,16 @@ int pqcp_channel_internal_send_frame(
 	size_t payload_length,
 	bool update_transcript)
 {
-	struct pqcp_channel_frame_header header = {
+	struct pqcp_channel_frame_header header;
+	size_t frame_length = 0U;
+	int ret;
+
+	if (channel == NULL ||
+	    channel->transport.send == NULL ||
+	    payload_length > channel->config.max_payload_bytes) {
+		return -EINVAL;
+	}
+	header = (struct pqcp_channel_frame_header) {
 		.magic = PQCP_CHANNEL_MAGIC,
 		.schema_version = PQCP_CHANNEL_SCHEMA_VERSION,
 		.type = type,
@@ -56,14 +65,6 @@ int pqcp_channel_internal_send_frame(
 		.payload_length = payload_length,
 		.reserved = 0U,
 	};
-	size_t frame_length = 0U;
-	int ret;
-
-	if (channel == NULL ||
-	    channel->transport.send == NULL ||
-	    payload_length > channel->config.max_payload_bytes) {
-		return -EINVAL;
-	}
 	ret = pqcp_channel_frame_encode(
 		&header, payload, payload_length,
 		channel->tx_frame, sizeof(channel->tx_frame),

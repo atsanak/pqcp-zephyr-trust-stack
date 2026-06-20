@@ -207,7 +207,7 @@ bool pqcp_channel_rekey_due(
 }
 
 int pqcp_channel_rekey_prepare(
-	struct pqcp_channel *channel,
+	const struct pqcp_channel *channel,
 	const struct pqcp_channel_rekey_policy *policy,
 	struct pqcp_channel_rekey_context *context,
 	uint64_t now_ms,
@@ -260,7 +260,7 @@ int pqcp_channel_rekey_prepare(
 }
 
 int pqcp_channel_rekey_accept(
-	struct pqcp_channel *channel,
+	const struct pqcp_channel *channel,
 	struct pqcp_channel_rekey_context *context,
 	const uint8_t confirmation[PQCP_CHANNEL_FINISHED_BYTES],
 	uint64_t now_ms)

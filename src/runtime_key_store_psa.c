@@ -199,6 +199,7 @@ static int ensure_available(
 		return 0;
 	}
 	ret = pqcp_runtime_psa_provider_probe();
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret == 0) {
 		context->persistence_available = true;
 		return 0;
@@ -235,6 +236,7 @@ static int psa_create(
 		context->key_id_base + (uint32_t)index,
 		request, public_data, public_length,
 		secret_data, secret_length);
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret != 0) {
 		return ret == -ENOTSUP ? -ENOTSUP : -EIO;
 	}
@@ -273,6 +275,7 @@ static int psa_generate(
 	ret = pqcp_runtime_psa_provider_generate(
 		context->key_id_base + (uint32_t)index,
 		request);
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret != 0) {
 		return ret == -ENOTSUP ? -ENOTSUP : -EIO;
 	}
@@ -360,8 +363,8 @@ static int psa_acquire(
 	 * Persistent keys are opaque. Runtime primitive execution must use a
 	 * platform provider operation path, which is not standardized yet.
 	 */
-	return pqcp_runtime_psa_provider_open(
-		key_id, NULL) == 0 ? -ENOTSUP : -ENOTSUP;
+	ARG_UNUSED(key_id);
+	return -ENOTSUP;
 }
 
 static int psa_release(
@@ -404,6 +407,7 @@ static int psa_destroy(
 		return ret;
 	}
 	ret = pqcp_runtime_psa_provider_destroy(key_id);
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret != 0) {
 		return ret == -ENOTSUP ? -ENOTSUP : -EIO;
 	}
@@ -453,7 +457,7 @@ static int psa_expire(
 	}
 	for (uint32_t index = 0U;
 	     index < context->key_id_count; ++index) {
-		struct pqcp_runtime_key_metadata *metadata =
+		const struct pqcp_runtime_key_metadata *metadata =
 			&context->metadata[index];
 		int ret;
 
@@ -465,6 +469,7 @@ static int psa_expire(
 		}
 		ret = pqcp_runtime_psa_provider_destroy(
 			context->key_id_base + index);
+		// cppcheck-suppress knownConditionTrueFalse
 		if (ret != 0) {
 			return ret == -ENOTSUP ? -ENOTSUP : -EIO;
 		}
@@ -572,6 +577,7 @@ int pqcp_runtime_psa_store_init(
 		return ret;
 	}
 	ret = pqcp_runtime_psa_provider_probe();
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret == 0) {
 		context->persistence_available = true;
 		return 0;

@@ -82,7 +82,7 @@ int pqcp_runtime_rotation_tick(
 		return -EIO;
 	}
 	for (size_t index = 0U; index < identities->capacity; ++index) {
-		struct pqcp_runtime_identity *identity =
+		const struct pqcp_runtime_identity *identity =
 			&identities->identities[index];
 		char id[PQCP_RUNTIME_IDENTITY_MAX_ID_CHARS];
 		uint64_t expiry;
