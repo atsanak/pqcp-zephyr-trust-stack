@@ -342,6 +342,7 @@ if(CONFIG_PQCP_RUNTIME)
         ${PQCP_SRC}/runtime_policy_catalog.c
         ${PQCP_SRC}/runtime_resource_policy_catalog.c
         ${PQCP_SRC}/runtime_recovery_policy_catalog.c
+        ${PQCP_SRC}/runtime_operation_planner.c
     )
 endif()
 
@@ -370,6 +371,7 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL)
         ${PQCP_SRC}/protected_channel_policy_catalog.c
         ${PQCP_SRC}/protected_channel_path_policy_catalog.c
         ${PQCP_SRC}/protected_channel_fault_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_operation_planner.c
     )
 endif()
 
@@ -382,6 +384,40 @@ if(CONFIG_PQCP_OPERATION_CONFORMANCE_CATALOGS)
         ${PQCP_SRC}/protected_channel_policy_conformance_catalog.c
         ${PQCP_SRC}/protected_channel_path_conformance_catalog.c
         ${PQCP_SRC}/protected_channel_fault_conformance_catalog.c
+        ${PQCP_SRC}/operation_plan_conformance.c
+        ${PQCP_SRC}/runtime_operation_plan_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_operation_plan_conformance_catalog.c
+    )
+endif()
+
+if(CONFIG_PQCP_OPERATION_SCENARIO_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/operation_scenario.c
+        ${PQCP_SRC}/runtime_policy_scenario_catalog.c
+        ${PQCP_SRC}/runtime_resource_scenario_catalog.c
+        ${PQCP_SRC}/runtime_recovery_scenario_catalog.c
+        ${PQCP_SRC}/protected_channel_policy_scenario_catalog.c
+        ${PQCP_SRC}/protected_channel_path_scenario_catalog.c
+        ${PQCP_SRC}/protected_channel_fault_scenario_catalog.c
+    )
+endif()
+
+if(CONFIG_PQCP_RUNTIME_CHANNEL_GUARD_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/runtime_guard.c
+        ${PQCP_SRC}/runtime_authorization_policy_catalog.c
+        ${PQCP_SRC}/runtime_continuity_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_guard.c
+        ${PQCP_SRC}/protected_channel_epoch_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_stream_policy_catalog.c
+    )
+endif()
+
+if(CONFIG_PQCP_OPERATION_TRANSITION_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/operation_transition.c
+        ${PQCP_SRC}/runtime_transition_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_transition_conformance_catalog.c
     )
 endif()
 
