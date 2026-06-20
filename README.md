@@ -1,7 +1,7 @@
 # PQCP Zephyr Trust Stack
 
-[![CI](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/ci.yml)
-[![Release dry-run](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml/badge.svg?branch=main)](https://github.com/atsana01/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml)
+[![CI](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/ci.yml)
+[![Release dry-run](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml/badge.svg?branch=main)](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml)
 
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
@@ -61,6 +61,13 @@ for a Zephyr module:
   (`acvp.negative_path_rejection`, `acvp.timeout_recovery`) that
   require specific markers in the captured transcript. The same wire
   format runs unmodified on `nucleo_h743zi`-class hardware.
+- **Executable runtime and exporter-bound protected channel.** The module
+  includes allocation-free key/session governance, scheduling, checkpoints,
+  recovery, multiplexing, flow control, rekeying, resumption, and path
+  migration. Optional generated conformance catalogs expose 3,072 replayable
+  policy witnesses without adding validation-only data to normal production
+  builds. See
+  [`docs/patch-set-20-runtime-channel.md`](docs/patch-set-20-runtime-channel.md).
 
 For the underlying architecture see
 [`docs/assurance-model.md`](docs/assurance-model.md). For the Passport
