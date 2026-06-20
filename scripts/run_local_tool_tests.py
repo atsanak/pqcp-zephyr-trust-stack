@@ -71,6 +71,11 @@ TOOL_TESTS = (
     "test_pqcp_product_cross_framework_bridge.py",
 )
 
+GENERATED_CHECKS = (
+    "generate_runtime_channel_policy_catalogs.py",
+    "generate_operation_conformance_catalogs.py",
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -104,9 +109,24 @@ def main() -> int:
         return 1
 
     if args.list:
+        for name in GENERATED_CHECKS:
+            print(f"scripts/{name} --check")
         for path in tests:
             print(path.relative_to(module_path))
         return 0
+
+    for name in GENERATED_CHECKS:
+        path = script_dir / name
+        print(f"\n[RUN ] {name} --check")
+        result = subprocess.run(
+            [sys.executable, str(path), "--check"],
+            cwd=str(module_path),
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"[FAIL] {name} --check exited with {result.returncode}")
+            return result.returncode
+        print(f"[PASS] {name} --check")
 
     for path in tests:
         print(f"\n[RUN ] {path.name}")
