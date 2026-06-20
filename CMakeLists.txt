@@ -373,6 +373,18 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL)
     )
 endif()
 
+if(CONFIG_PQCP_OPERATION_CONFORMANCE_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/operation_conformance.c
+        ${PQCP_SRC}/runtime_policy_conformance_catalog.c
+        ${PQCP_SRC}/runtime_resource_conformance_catalog.c
+        ${PQCP_SRC}/runtime_recovery_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_policy_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_path_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_fault_conformance_catalog.c
+    )
+endif()
+
 if(CONFIG_PQCP_PROTECTED_CHANNEL_MBEDTLS)
     zephyr_library_sources(
         ${PQCP_SRC}/protected_channel_mbedtls.c

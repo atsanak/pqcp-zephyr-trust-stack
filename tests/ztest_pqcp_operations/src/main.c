@@ -9,6 +9,7 @@
 
 #include <zephyr/ztest.h>
 
+#include <pqcp_zephyr/operation_conformance.h>
 #include <pqcp_zephyr/protected_channel_operations.h>
 #include <pqcp_zephyr/runtime_operations.h>
 
@@ -212,6 +213,57 @@ ZTEST(pqcp_operations, test_exhaustive_policy_catalogs)
 		PQCP_CHANNEL_FAULT_CLOSE_CHANNEL);
 	zassert_equal(
 		fault.next_state,
+		PQCP_CHANNEL_POLICY_CLOSING);
+}
+
+ZTEST(pqcp_operations, test_operation_conformance_catalogs)
+{
+	struct pqcp_operation_conformance_case test_case;
+	uint64_t fingerprints[
+		PQCP_OPERATION_CONFORMANCE_DOMAIN_COUNT];
+
+	zassert_ok(pqcp_operation_conformance_audit_all());
+	for (size_t domain = 0U;
+	     domain < ARRAY_SIZE(fingerprints); ++domain) {
+		zassert_equal(
+			pqcp_operation_conformance_count(domain),
+			PQCP_OPERATION_CONFORMANCE_CASES_PER_DOMAIN);
+		zassert_ok(
+			pqcp_operation_conformance_fingerprint(
+				domain, &fingerprints[domain]));
+		zassert_not_equal(fingerprints[domain], 0U);
+		zassert_not_equal(
+			strcmp(
+				pqcp_operation_conformance_domain_str(
+					domain),
+				"unknown"),
+			0);
+	}
+	zassert_not_equal(fingerprints[0], fingerprints[1]);
+	zassert_not_equal(fingerprints[3], fingerprints[4]);
+
+	zassert_ok(pqcp_operation_conformance_find(
+		PQCP_OPERATION_CONFORMANCE_RUNTIME_POLICY,
+		PQCP_RUNTIME_POLICY_RUNNING,
+		PQCP_RUNTIME_COMMAND_TICK,
+		&test_case));
+	zassert_equal(
+		test_case.decision,
+		PQCP_RUNTIME_POLICY_ALLOW_IDEMPOTENT);
+	zassert_equal(
+		test_case.next_state,
+		PQCP_RUNTIME_POLICY_RUNNING);
+
+	zassert_ok(pqcp_operation_conformance_find(
+		PQCP_OPERATION_CONFORMANCE_CHANNEL_FAULT,
+		PQCP_CHANNEL_FAULT_REPLAY,
+		PQCP_CHANNEL_CONTROL_STREAM_OPEN,
+		&test_case));
+	zassert_equal(
+		test_case.decision,
+		PQCP_CHANNEL_FAULT_CLOSE_CHANNEL);
+	zassert_equal(
+		test_case.next_state,
 		PQCP_CHANNEL_POLICY_CLOSING);
 }
 
