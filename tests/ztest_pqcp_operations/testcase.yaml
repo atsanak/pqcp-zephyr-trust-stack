@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+
+tests:
+  pqcp.operations:
+    platform_allow:
+      - qemu_x86_64
+    tags:
+      - pqcp
+      - runtime
+      - channel
+      - operations
+    timeout: 120
