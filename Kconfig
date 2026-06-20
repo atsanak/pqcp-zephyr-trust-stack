@@ -1422,6 +1422,20 @@ config PQCP_PROTECTED_CHANNEL_TCP
 	  optional so deterministic in-process TLS tests do not require a QEMU
 	  network backend.
 
+config PQCP_OPERATION_CONFORMANCE_CATALOGS
+	bool "Enable exhaustive operational conformance catalogs"
+	default n
+	help
+	  Compile replayable witnesses for every runtime state/command,
+	  resource/command, recovery/command, channel state/control,
+	  path/control, and fault/control decision. The optional catalogs expose
+	  3,072 stable cases with deterministic identifiers, expected results,
+	  fingerprints, and cross-audits against the executable policy tables.
+
+	  This option is intended for validation firmware, partner review, and
+	  evidence capture. Leave it disabled in production images that do not
+	  need the additional read-only catalog data.
+
 endif # PQCP_PROTECTED_CHANNEL
 endmenu
 
