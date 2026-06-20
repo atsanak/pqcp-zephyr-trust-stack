@@ -10,7 +10,12 @@
 #include <zephyr/ztest.h>
 
 #include <pqcp_zephyr/operation_conformance.h>
+#include <pqcp_zephyr/operation_plan_conformance.h>
+#include <pqcp_zephyr/operation_scenario.h>
+#include <pqcp_zephyr/operation_transition.h>
+#include <pqcp_zephyr/protected_channel_guard.h>
 #include <pqcp_zephyr/protected_channel_operations.h>
+#include <pqcp_zephyr/runtime_guard.h>
 #include <pqcp_zephyr/runtime_operations.h>
 
 #define EVENT_CAPACITY 8U
@@ -265,6 +270,248 @@ ZTEST(pqcp_operations, test_operation_conformance_catalogs)
 	zassert_equal(
 		test_case.next_state,
 		PQCP_CHANNEL_POLICY_CLOSING);
+}
+
+ZTEST(pqcp_operations, test_operation_plan_conformance_catalogs)
+{
+	struct pqcp_runtime_operation_plan_case runtime_case;
+	struct pqcp_channel_operation_plan_case channel_case;
+	uint64_t runtime_fingerprint;
+	uint64_t channel_fingerprint;
+
+	zassert_ok(pqcp_operation_plan_conformance_audit_all());
+	zassert_equal(
+		pqcp_runtime_operation_plan_conformance_count(),
+		PQCP_RUNTIME_OPERATION_PLAN_CONFORMANCE_CASES);
+	zassert_equal(
+		pqcp_channel_operation_plan_conformance_count(),
+		PQCP_CHANNEL_OPERATION_PLAN_CONFORMANCE_CASES);
+
+	zassert_ok(pqcp_runtime_operation_plan_conformance_find(
+		PQCP_OPERATION_PLAN_SCENARIO_BASELINE,
+		PQCP_RUNTIME_POLICY_RUNNING,
+		PQCP_RUNTIME_COMMAND_SUBMIT_JOB,
+		&runtime_case));
+	zassert_equal(
+		runtime_case.disposition,
+		PQCP_RUNTIME_PLAN_ALLOW);
+	zassert_equal(runtime_case.expected_error, 0);
+
+	zassert_ok(pqcp_channel_operation_plan_conformance_find(
+		PQCP_OPERATION_PLAN_SCENARIO_STRESS,
+		PQCP_CHANNEL_POLICY_ESTABLISHED,
+		PQCP_CHANNEL_CONTROL_STREAM_OPEN,
+		&channel_case));
+	zassert_true(
+		channel_case.disposition >= PQCP_CHANNEL_PLAN_DENY);
+	zassert_true(
+		channel_case.disposition <
+			PQCP_CHANNEL_PLAN_DISPOSITION_COUNT);
+
+	zassert_ok(
+		pqcp_runtime_operation_plan_conformance_fingerprint(
+			&runtime_fingerprint));
+	zassert_ok(
+		pqcp_channel_operation_plan_conformance_fingerprint(
+			&channel_fingerprint));
+	zassert_not_equal(runtime_fingerprint, 0U);
+	zassert_not_equal(channel_fingerprint, 0U);
+	zassert_not_equal(
+		runtime_fingerprint, channel_fingerprint);
+}
+
+ZTEST(pqcp_operations, test_operation_scenario_catalogs)
+{
+	struct pqcp_operation_scenario_case test_case;
+	struct pqcp_operation_scenario_result replay;
+	uint64_t fingerprints[
+		PQCP_OPERATION_SCENARIO_DOMAIN_COUNT];
+
+	zassert_ok(pqcp_operation_scenario_audit_all());
+	for (size_t domain = 0U;
+	     domain < ARRAY_SIZE(fingerprints); ++domain) {
+		zassert_equal(
+			pqcp_operation_scenario_count(domain),
+			PQCP_OPERATION_SCENARIO_CASES_PER_DOMAIN);
+		zassert_ok(
+			pqcp_operation_scenario_fingerprint(
+				domain, &fingerprints[domain]));
+		zassert_not_equal(fingerprints[domain], 0U);
+		zassert_not_equal(
+			strcmp(
+				pqcp_operation_scenario_domain_str(
+					domain),
+				"unknown"),
+			0);
+	}
+	zassert_not_equal(fingerprints[0], fingerprints[1]);
+	zassert_not_equal(fingerprints[3], fingerprints[4]);
+
+	zassert_ok(pqcp_operation_scenario_find(
+		PQCP_OPERATION_SCENARIO_RUNTIME_POLICY,
+		PQCP_RUNTIME_POLICY_INITIALIZED,
+		PQCP_RUNTIME_COMMAND_START,
+		PQCP_RUNTIME_COMMAND_SUBMIT_JOB,
+		&test_case));
+	zassert_equal(
+		test_case.expected.second_condition,
+		PQCP_RUNTIME_POLICY_RUNNING);
+	zassert_equal(
+		test_case.expected.first_decision,
+		PQCP_RUNTIME_POLICY_ALLOW_IDEMPOTENT);
+	zassert_equal(
+		test_case.expected.second_decision,
+		PQCP_RUNTIME_POLICY_ALLOW);
+	zassert_equal(test_case.expected.terminal_error, 0);
+	zassert_ok(pqcp_operation_scenario_replay(
+		&test_case, &replay));
+	zassert_equal(
+		replay.second_condition,
+		PQCP_RUNTIME_POLICY_RUNNING);
+
+	zassert_ok(pqcp_operation_scenario_find(
+		PQCP_OPERATION_SCENARIO_CHANNEL_POLICY,
+		PQCP_CHANNEL_POLICY_ESTABLISHED,
+		PQCP_CHANNEL_CONTROL_REKEY_PREPARE,
+		PQCP_CHANNEL_CONTROL_REKEY_COMMIT,
+		&test_case));
+	zassert_equal(
+		test_case.expected.second_condition,
+		PQCP_CHANNEL_POLICY_REKEY_PREPARED);
+	zassert_equal(
+		test_case.expected.first_decision,
+		PQCP_CHANNEL_POLICY_REQUIRE_REKEY);
+	zassert_equal(
+		test_case.expected.second_decision,
+		PQCP_CHANNEL_POLICY_DENY);
+	zassert_equal(
+		test_case.expected.terminal_error,
+		-EACCES);
+
+	zassert_ok(pqcp_operation_scenario_find(
+		PQCP_OPERATION_SCENARIO_CHANNEL_FAULT,
+		PQCP_CHANNEL_FAULT_REPLAY,
+		PQCP_CHANNEL_CONTROL_STREAM_OPEN,
+		PQCP_CHANNEL_CONTROL_GOAWAY,
+		&test_case));
+	zassert_equal(
+		test_case.expected.first_decision,
+		PQCP_CHANNEL_FAULT_CLOSE_CHANNEL);
+	zassert_equal(
+		test_case.expected.first_next_state,
+		PQCP_CHANNEL_POLICY_CLOSING);
+	zassert_ok(pqcp_operation_scenario_verify(
+		&test_case));
+}
+
+ZTEST(pqcp_operations, test_runtime_and_channel_guards)
+{
+	struct pqcp_runtime_guard_decision runtime;
+	struct pqcp_channel_guard_decision channel;
+
+	zassert_ok(pqcp_runtime_guard_audit());
+	zassert_ok(pqcp_channel_guard_audit());
+
+	zassert_ok(pqcp_runtime_guard_evaluate(
+		PQCP_RUNTIME_POLICY_RUNNING,
+		PQCP_RUNTIME_AUTHORIZATION_AUDITOR,
+		PQCP_RUNTIME_CONTINUITY_HEALTHY,
+		PQCP_RUNTIME_COMMAND_READ_SNAPSHOT,
+		&runtime));
+	zassert_true(runtime.allowed);
+	zassert_equal(
+		runtime.verdict,
+		PQCP_RUNTIME_GUARD_ALLOW_READ_ONLY);
+
+	zassert_ok(pqcp_runtime_guard_evaluate(
+		PQCP_RUNTIME_POLICY_RUNNING,
+		PQCP_RUNTIME_AUTHORIZATION_TOKEN_REVOKED,
+		PQCP_RUNTIME_CONTINUITY_HEALTHY,
+		PQCP_RUNTIME_COMMAND_SUBMIT_JOB,
+		&runtime));
+	zassert_false(runtime.allowed);
+	zassert_equal(runtime.error, -EKEYREJECTED);
+
+	zassert_ok(pqcp_channel_guard_evaluate(
+		PQCP_CHANNEL_POLICY_ESTABLISHED,
+		PQCP_CHANNEL_EPOCH_CURRENT,
+		PQCP_CHANNEL_STREAM_CONDITION_FLOW_BLOCKED_LOCAL,
+		PQCP_CHANNEL_CONTROL_STREAM_OPEN,
+		&channel));
+	zassert_false(channel.allowed);
+	zassert_equal(
+		channel.verdict,
+		PQCP_CHANNEL_GUARD_DEFER);
+	zassert_equal(channel.retry_after_ms, 25U);
+
+	zassert_ok(pqcp_channel_guard_evaluate(
+		PQCP_CHANNEL_POLICY_ESTABLISHED,
+		PQCP_CHANNEL_EPOCH_CONFIRMATION_INVALID,
+		PQCP_CHANNEL_STREAM_CONDITION_OPEN,
+		PQCP_CHANNEL_CONTROL_STREAM_WINDOW,
+		&channel));
+	zassert_false(channel.allowed);
+	zassert_equal(
+		channel.verdict,
+		PQCP_CHANNEL_GUARD_CLOSE);
+	zassert_equal(
+		channel.next_state,
+		PQCP_CHANNEL_POLICY_CLOSING);
+}
+
+ZTEST(pqcp_operations, test_operation_transition_catalogs)
+{
+	struct pqcp_runtime_transition_trace runtime_trace;
+	struct pqcp_channel_transition_trace channel_trace;
+	struct pqcp_runtime_transition_replay_result runtime_result;
+	struct pqcp_channel_transition_replay_result channel_result;
+	uint64_t runtime_fingerprint;
+	uint64_t channel_fingerprint;
+
+	zassert_ok(pqcp_operation_transition_audit_all());
+	zassert_equal(
+		pqcp_runtime_transition_trace_count(),
+		PQCP_OPERATION_TRANSITION_TRACES_PER_DOMAIN);
+	zassert_equal(
+		pqcp_channel_transition_trace_count(),
+		PQCP_OPERATION_TRANSITION_TRACES_PER_DOMAIN);
+
+	zassert_ok(pqcp_runtime_transition_trace_get(
+		0U, &runtime_trace));
+	zassert_ok(pqcp_runtime_transition_trace_replay(
+		&runtime_trace, &runtime_result));
+	zassert_equal(
+		runtime_result.steps_replayed,
+		PQCP_OPERATION_TRANSITION_STEPS_PER_TRACE);
+	zassert_equal(
+		runtime_result.fingerprint,
+		runtime_trace.expected_fingerprint);
+
+	zassert_ok(pqcp_channel_transition_trace_get(
+		0U, &channel_trace));
+	zassert_ok(pqcp_channel_transition_trace_replay(
+		&channel_trace, &channel_result));
+	zassert_equal(
+		channel_result.steps_replayed,
+		PQCP_OPERATION_TRANSITION_STEPS_PER_TRACE);
+	zassert_equal(
+		channel_result.fingerprint,
+		channel_trace.expected_fingerprint);
+
+	zassert_ok(pqcp_runtime_transition_trace_fingerprint(
+		&runtime_fingerprint));
+	zassert_ok(pqcp_channel_transition_trace_fingerprint(
+		&channel_fingerprint));
+	zassert_not_equal(runtime_fingerprint, 0U);
+	zassert_not_equal(channel_fingerprint, 0U);
+	zassert_not_equal(
+		runtime_fingerprint, channel_fingerprint);
+	zassert_not_equal(
+		strcmp(
+			pqcp_operation_transition_domain_str(
+				PQCP_OPERATION_TRANSITION_RUNTIME),
+			"unknown"),
+		0);
 }
 
 ZTEST(pqcp_operations, test_resource_governor_lifecycle)
