@@ -204,7 +204,6 @@ int pqcp_tls_endpoint_handshake_bio(
 	uint32_t timeout_ms)
 {
 	const int64_t deadline = k_uptime_get() + timeout_ms;
-	int ret;
 
 	if (endpoint == NULL || !endpoint->configured ||
 	    bio_context == NULL || send_callback == NULL ||
@@ -219,7 +218,8 @@ int pqcp_tls_endpoint_handshake_bio(
 	mbedtls_ssl_conf_read_timeout(
 		&endpoint->config, timeout_ms);
 	for (;;) {
-		ret = mbedtls_ssl_handshake(&endpoint->ssl);
+		int ret = mbedtls_ssl_handshake(&endpoint->ssl);
+
 		if (ret == 0) {
 			endpoint->handshake_complete = true;
 			return 0;

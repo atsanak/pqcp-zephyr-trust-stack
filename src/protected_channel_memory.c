@@ -51,12 +51,13 @@ int pqcp_channel_memory_pipe_init(
 }
 
 static int memory_send(
+	// cppcheck-suppress constParameterCallback
 	void *context,
 	const uint8_t *buffer,
 	size_t length,
 	uint32_t timeout_ms)
 {
-	struct pqcp_channel_memory_endpoint *endpoint = context;
+	const struct pqcp_channel_memory_endpoint *endpoint = context;
 	struct pqcp_channel_memory_pipe *pipe;
 	size_t offset = 0U;
 	int64_t deadline;
@@ -109,13 +110,14 @@ static int memory_send(
 }
 
 static int memory_receive(
+	// cppcheck-suppress constParameterCallback
 	void *context,
 	uint8_t *buffer,
 	size_t capacity,
 	size_t *received,
 	uint32_t timeout_ms)
 {
-	struct pqcp_channel_memory_endpoint *endpoint = context;
+	const struct pqcp_channel_memory_endpoint *endpoint = context;
 	struct pqcp_channel_memory_pipe *pipe;
 	int64_t deadline;
 
@@ -171,6 +173,7 @@ static int memory_receive(
 }
 
 static int memory_export(
+	// cppcheck-suppress constParameterCallback
 	void *context,
 	const char *label,
 	const uint8_t *export_context,
@@ -178,7 +181,7 @@ static int memory_export(
 	uint8_t *output,
 	size_t output_length)
 {
-	struct pqcp_channel_memory_endpoint *endpoint = context;
+	const struct pqcp_channel_memory_endpoint *endpoint = context;
 	uint8_t context_hash[PQCP_CHANNEL_HASH_BYTES];
 	uint8_t input[PQCP_CHANNEL_EXPORTER_BYTES +
 		      PQCP_CHANNEL_HASH_BYTES];

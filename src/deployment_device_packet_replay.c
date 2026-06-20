@@ -1261,7 +1261,6 @@ int pqcp_deployment_device_packet_replay_ingest_line(
 	const char *line)
 {
 	char clean[DEVICE_PACKET_REPLAY_LINE_MAX];
-	char field[FIELD_VALUE_MAX];
 
 	if (state == NULL || line == NULL) {
 		return -EINVAL;
@@ -1275,6 +1274,8 @@ int pqcp_deployment_device_packet_replay_ingest_line(
 
 	state->lines_seen++;
 	if (starts_with(clean, "PQCP_DEPLOYMENT_DEVICE_FACT ")) {
+		char field[FIELD_VALUE_MAX];
+
 		if (get_field(clean, "field", field, sizeof(field)) != 0) {
 			return fail_once(
 				state,

@@ -202,7 +202,6 @@ int pqcp_runtime_measurement_publish(
 	struct pqcp_runtime_executor *executor,
 	struct pqcp_runtime_job *job)
 {
-	struct pqcp_runtime_profile_state *state;
 	int telemetry_ret = 0;
 	int calibration_ret = 0;
 	int state_ret = 0;
@@ -217,8 +216,10 @@ int pqcp_runtime_measurement_publish(
 	    pqcp_runtime_internal_text_valid(
 		    job->measurement.profile_id,
 		    sizeof(job->measurement.profile_id))) {
-		state = find_profile_state(
+		struct pqcp_runtime_profile_state *state =
+			find_profile_state(
 			executor, job->measurement.profile_id);
+
 		if (state == NULL) {
 			state_ret = -ENOSPC;
 		} else {

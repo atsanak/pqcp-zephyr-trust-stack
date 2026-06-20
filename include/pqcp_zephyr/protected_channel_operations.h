@@ -545,7 +545,7 @@ bool pqcp_channel_rekey_due(
 	uint64_t now_ms,
 	uint64_t epoch_started_at_ms);
 int pqcp_channel_rekey_prepare(
-	struct pqcp_channel *channel,
+	const struct pqcp_channel *channel,
 	const struct pqcp_channel_rekey_policy *policy,
 	struct pqcp_channel_rekey_context *context,
 	uint64_t now_ms,
@@ -553,7 +553,7 @@ int pqcp_channel_rekey_prepare(
 	const uint8_t salt[PQCP_CHANNEL_REKEY_SALT_BYTES],
 	bool initiator);
 int pqcp_channel_rekey_accept(
-	struct pqcp_channel *channel,
+	const struct pqcp_channel *channel,
 	struct pqcp_channel_rekey_context *context,
 	const uint8_t confirmation[PQCP_CHANNEL_FINISHED_BYTES],
 	uint64_t now_ms);

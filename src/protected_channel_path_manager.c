@@ -366,7 +366,7 @@ int pqcp_channel_path_validate(
 	uint64_t now_ms)
 {
 	struct pqcp_channel_path *path;
-	struct pqcp_channel_path *active = NULL;
+	const struct pqcp_channel_path *active = NULL;
 	int ret;
 
 	if (manager == NULL || !manager->initialized ||
@@ -534,9 +534,9 @@ int pqcp_channel_path_select(
 	uint64_t now_ms,
 	uint32_t *path_id)
 {
-	struct pqcp_channel_path *current = NULL;
+	const struct pqcp_channel_path *current = NULL;
 	struct pqcp_channel_path *candidate;
-	struct pqcp_channel_path *selected;
+	const struct pqcp_channel_path *selected;
 	int ret;
 
 	if (manager == NULL || !manager->initialized ||

@@ -452,12 +452,18 @@ void pqcp_runtime_internal_write_u64(uint8_t *output, uint64_t value)
 
 uint16_t pqcp_runtime_internal_read_u16(const uint8_t *input)
 {
+	if (input == NULL) {
+		return 0U;
+	}
 	return ((uint16_t)input[0] << 8U) |
 	       (uint16_t)input[1];
 }
 
 uint32_t pqcp_runtime_internal_read_u32(const uint8_t *input)
 {
+	if (input == NULL) {
+		return 0U;
+	}
 	return ((uint32_t)input[0] << 24U) |
 	       ((uint32_t)input[1] << 16U) |
 	       ((uint32_t)input[2] << 8U) |
@@ -468,6 +474,9 @@ uint64_t pqcp_runtime_internal_read_u64(const uint8_t *input)
 {
 	uint64_t value = 0U;
 
+	if (input == NULL) {
+		return 0U;
+	}
 	for (size_t index = 0U; index < 8U; ++index) {
 		value = (value << 8U) | input[index];
 	}

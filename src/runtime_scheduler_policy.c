@@ -431,7 +431,7 @@ int pqcp_runtime_scheduler_select(
 	for (size_t index = 0U; index < scheduler->capacity; ++index) {
 		struct pqcp_runtime_scheduler_entry *entry =
 			&scheduler->entries[index];
-		struct pqcp_runtime_scheduler_tenant *tenant;
+		const struct pqcp_runtime_scheduler_tenant *tenant;
 		uint64_t score;
 
 		if (!entry->occupied) {

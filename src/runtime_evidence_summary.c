@@ -25,7 +25,7 @@ static int summary_digest(
 
 int pqcp_runtime_evidence_summary_build(
 	struct pqcp_runtime_controller *controller,
-	struct pqcp_runtime_identity_store *identities,
+	const struct pqcp_runtime_identity_store *identities,
 	struct pqcp_runtime_evidence_summary *summary)
 {
 	int ret;

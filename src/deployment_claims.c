@@ -275,11 +275,13 @@ static void evaluate_feasible_recommendation(
 {
 	uint32_t blockers = 0U;
 	uint32_t warnings = 0U;
-	const struct pqcp_deployment_report *report = inputs->advisor_report;
 
 	if (!advisor_present(inputs)) {
 		blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_MISSING_INPUT;
 	} else {
+		const struct pqcp_deployment_report *report =
+			inputs->advisor_report;
+
 		if (report->feasible_count == 0U) {
 			blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_NO_FEASIBLE;
 		}
@@ -301,12 +303,13 @@ static void evaluate_replayable_evidence(
 	struct pqcp_deployment_claim_row *row)
 {
 	uint32_t blockers = 0U;
-	const struct pqcp_deployment_transcript_result *result =
-		inputs->transcript_result;
 
 	if (!transcript_present(inputs)) {
 		blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_MISSING_INPUT;
 	} else {
+		const struct pqcp_deployment_transcript_result *result =
+			inputs->transcript_result;
+
 		if (!result->passed ||
 		    result->first_error != PQCP_DEPLOYMENT_TRANSCRIPT_ERROR_NONE) {
 			blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_REPLAY_FAILED;
@@ -328,12 +331,13 @@ static void evaluate_reproducible_campaign(
 {
 	uint32_t blockers = 0U;
 	uint32_t warnings = 0U;
-	const struct pqcp_deployment_transcript_result *result =
-		inputs->transcript_result;
 
 	if (!transcript_present(inputs)) {
 		blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_MISSING_INPUT;
 	} else {
+		const struct pqcp_deployment_transcript_result *result =
+			inputs->transcript_result;
+
 		if ((result->marker_mask & required_campaign_markers()) !=
 		    required_campaign_markers() ||
 		    result->campaign_observations <
@@ -358,14 +362,15 @@ static void evaluate_robust_recommendation(
 {
 	uint32_t blockers = 0U;
 	uint32_t warnings = 0U;
-	const struct pqcp_deployment_robustness_report *report =
-		inputs->robustness_report;
 	const struct pqcp_deployment_transcript_result *transcript =
 		inputs->transcript_result;
 
 	if (!robustness_present(inputs)) {
 		blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_MISSING_INPUT;
 	} else {
+		const struct pqcp_deployment_robustness_report *report =
+			inputs->robustness_report;
+
 		if (report->top_candidate_index == UINT32_MAX ||
 		    !report->recommendation_robust) {
 			blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_NOT_ROBUST;
@@ -391,11 +396,13 @@ static void evaluate_profile_appraisal(
 {
 	uint32_t blockers = 0U;
 	uint32_t warnings = 0U;
-	const struct pqcp_deployment_appraisal *appraisal = inputs->appraisal;
 
 	if (!appraisal_present(inputs)) {
 		blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_MISSING_INPUT;
 	} else {
+		const struct pqcp_deployment_appraisal *appraisal =
+			inputs->appraisal;
+
 		if (!appraisal->passed) {
 			blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_APPRAISAL_FAILED;
 		}
@@ -424,11 +431,13 @@ static void evaluate_gap_free_review(
 {
 	uint32_t blockers = 0U;
 	uint32_t warnings = 0U;
-	const struct pqcp_deployment_appraisal *appraisal = inputs->appraisal;
 
 	if (!appraisal_present(inputs)) {
 		blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_MISSING_INPUT;
 	} else {
+		const struct pqcp_deployment_appraisal *appraisal =
+			inputs->appraisal;
+
 		if (!appraisal->passed) {
 			blockers |= PQCP_DEPLOYMENT_CLAIM_BLOCKER_APPRAISAL_FAILED;
 		}

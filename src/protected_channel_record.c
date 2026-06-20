@@ -98,7 +98,7 @@ static int import_aead_key(
 }
 
 int pqcp_channel_internal_encrypt_record(
-	struct pqcp_channel *channel,
+	const struct pqcp_channel *channel,
 	const uint8_t *plaintext,
 	size_t plaintext_length,
 	uint8_t *output,

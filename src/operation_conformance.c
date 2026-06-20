@@ -174,14 +174,14 @@ int pqcp_operation_conformance_find(
 		catalog_for(domain);
 	struct pqcp_operation_conformance_case candidate;
 	size_t count;
-	int ret;
 
 	if (catalog == NULL || test_case == NULL) {
 		return -EINVAL;
 	}
 	count = catalog->count();
 	for (size_t index = 0U; index < count; ++index) {
-		ret = catalog->get(index, &candidate);
+		int ret = catalog->get(index, &candidate);
+
 		if (ret != 0) {
 			return ret;
 		}
@@ -203,14 +203,14 @@ int pqcp_operation_conformance_fingerprint(
 	struct pqcp_operation_conformance_case test_case;
 	uint64_t value = FNV1A_OFFSET_BASIS;
 	size_t count;
-	int ret;
 
 	if (catalog == NULL || fingerprint == NULL) {
 		return -EINVAL;
 	}
 	count = catalog->count();
 	for (size_t index = 0U; index < count; ++index) {
-		ret = catalog->get(index, &test_case);
+		int ret = catalog->get(index, &test_case);
+
 		if (ret != 0) {
 			return ret;
 		}
@@ -235,13 +235,13 @@ int pqcp_operation_conformance_audit(
 int pqcp_operation_conformance_audit_all(void)
 {
 	size_t total = 0U;
-	int ret;
 
 	for (size_t domain = 0U;
 	     domain < ARRAY_SIZE(catalogs); ++domain) {
-		ret = pqcp_operation_conformance_audit(
+		int ret = pqcp_operation_conformance_audit(
 			(enum pqcp_operation_conformance_domain)
 				domain);
+
 		if (ret != 0) {
 			return ret;
 		}

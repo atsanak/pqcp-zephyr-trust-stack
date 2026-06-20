@@ -125,7 +125,7 @@ int pqcp_runtime_executor_cancel(
 	struct pqcp_runtime_executor *executor,
 	uint64_t job_id);
 int pqcp_runtime_executor_drain(
-	struct pqcp_runtime_executor *executor,
+	const struct pqcp_runtime_executor *executor,
 	k_timeout_t timeout);
 int pqcp_runtime_executor_audit(
 	struct pqcp_runtime_executor *executor);

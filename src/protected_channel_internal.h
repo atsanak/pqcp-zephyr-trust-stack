@@ -37,7 +37,7 @@ int pqcp_channel_internal_finished(
 	const uint8_t transcript_hash[PQCP_CHANNEL_HASH_BYTES],
 	uint8_t output[PQCP_CHANNEL_FINISHED_BYTES]);
 int pqcp_channel_internal_encrypt_record(
-	struct pqcp_channel *channel,
+	const struct pqcp_channel *channel,
 	const uint8_t *plaintext,
 	size_t plaintext_length,
 	uint8_t *output,

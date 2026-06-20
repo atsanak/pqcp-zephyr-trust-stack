@@ -185,10 +185,11 @@ static int read_reserved_zeros(
 	size_t count)
 {
 	uint8_t value;
-	int ret;
 
 	for (size_t index = 0U; index < count; ++index) {
-		ret = pqcp_deployment_evidence_codec_read_u8(reader, &value);
+		int ret = pqcp_deployment_evidence_codec_read_u8(
+			reader, &value);
+
 		if (ret != 0) {
 			return ret;
 		}
