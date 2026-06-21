@@ -1052,7 +1052,7 @@ ZTEST(pqcp_operations, test_rekey_and_resumption_lifecycle)
 		PQCP_CHANNEL_REKEY_PREPARED);
 	zassert_ok(pqcp_channel_rekey_accept(
 		&channel, &rekey,
-		rekey.confirmation, 1100U));
+		rekey.expected_peer_confirmation, 1100U));
 	zassert_ok(pqcp_channel_rekey_commit(
 		&channel, &rekey, 1200U));
 	zassert_equal(rekey.current_epoch, 1U);
