@@ -149,15 +149,11 @@ struct pqcp_channel_replay_state {
 
 struct pqcp_channel_keys {
 	uint8_t exporter[PQCP_CHANNEL_EXPORTER_BYTES];
-	uint8_t shared_secret[PQCP_MLKEM_SS_SIZE];
-	uint8_t client_finished[PQCP_CHANNEL_FINISHED_BYTES];
-	uint8_t server_finished[PQCP_CHANNEL_FINISHED_BYTES];
-	uint8_t client_write_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
-	uint8_t server_write_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	struct pqcp_runtime_key_handle client_write_key;
+	struct pqcp_runtime_key_handle server_write_key;
 	uint8_t client_nonce_base[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	uint8_t server_nonce_base[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	bool exporter_ready;
-	bool shared_secret_ready;
 	bool traffic_keys_ready;
 };
 

@@ -1034,6 +1034,18 @@ int pqcp_channel_close(struct pqcp_channel *channel)
 			channel->key_store,
 			&channel->ephemeral_kem_key);
 	}
+	if (pqcp_runtime_key_handle_is_valid(
+		    &channel->keys.client_write_key)) {
+		(void)pqcp_runtime_key_store_destroy(
+			channel->key_store,
+			&channel->keys.client_write_key);
+	}
+	if (pqcp_runtime_key_handle_is_valid(
+		    &channel->keys.server_write_key)) {
+		(void)pqcp_runtime_key_store_destroy(
+			channel->key_store,
+			&channel->keys.server_write_key);
+	}
 	pqcp_runtime_secure_zero(
 		&channel->keys, sizeof(channel->keys));
 	pqcp_runtime_secure_zero(
@@ -1086,6 +1098,10 @@ int pqcp_channel_audit(const struct pqcp_channel *channel)
 	    (channel->state !=
 		     PQCP_CHANNEL_STATE_ESTABLISHED ||
 	     !channel->keys.traffic_keys_ready ||
+	     !pqcp_runtime_key_handle_is_valid(
+		     &channel->keys.client_write_key) ||
+	     !pqcp_runtime_key_handle_is_valid(
+		     &channel->keys.server_write_key) ||
 	     (peer_authentication_required &&
 	      !channel->peer_authenticated) ||
 	     (local_authentication_required &&

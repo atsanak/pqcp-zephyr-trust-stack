@@ -1289,6 +1289,8 @@ config PQCP_RUNTIME
 	select PSA_WANT_ALG_SHA_256
 	select PSA_WANT_ALG_HMAC
 	select PSA_WANT_ALG_HKDF
+	select PSA_WANT_KEY_TYPE_AES
+	select PSA_WANT_ALG_GCM
 	default n
 	help
 	  Enable the allocation-free PQC execution runtime. The runtime discovers
@@ -1366,6 +1368,56 @@ config PQCP_RUNTIME_WORKER_PRIORITY
 	default 4
 
 endif # PQCP_RUNTIME
+endmenu
+
+# =============================================================================
+# Policy-Bound PQC Crypto Broker
+# =============================================================================
+menu "Policy-Bound PQC Crypto Broker"
+
+config PQCP_CRYPTO_BROKER
+	bool "Enable policy-bound PQC crypto broker"
+	depends on PQCP_RUNTIME
+	default n
+	help
+	  Enable the allocation-free multi-tenant crypto broker. The broker
+	  exposes opaque ML-KEM, ML-DSA, HKDF, HMAC, and AES-GCM operations through
+	  generation-tagged handles while enforcing principal quotas, grants,
+	  attenuable capabilities, deadlines, custody constraints, exact
+	  idempotency, cancellation, and chained execution receipts.
+
+config PQCP_CRYPTO_BROKER_CHANNEL
+	bool "Enable protected-channel broker protocol"
+	depends on PQCP_CRYPTO_BROKER && PQCP_PROTECTED_CHANNEL
+	default n
+	help
+	  Carry broker requests over protected-channel multiplexed streams using
+	  bounded BEGIN, CHUNK, COMMIT, RESULT, ERROR, and CANCEL messages.
+
+config PQCP_CRYPTO_BROKER_MAX_PRINCIPALS
+	int "Maximum broker principals"
+	depends on PQCP_CRYPTO_BROKER
+	range 1 64
+	default 8
+
+config PQCP_CRYPTO_BROKER_MAX_GRANTS
+	int "Maximum broker grants"
+	depends on PQCP_CRYPTO_BROKER
+	range 1 128
+	default 16
+
+config PQCP_CRYPTO_BROKER_MAX_CAPABILITIES
+	int "Maximum broker capabilities"
+	depends on PQCP_CRYPTO_BROKER
+	range 1 256
+	default 32
+
+config PQCP_CRYPTO_BROKER_MAX_TRANSACTIONS
+	int "Maximum retained broker transactions"
+	depends on PQCP_CRYPTO_BROKER
+	range 2 64
+	default 8
+
 endmenu
 
 # =============================================================================
@@ -1481,6 +1533,37 @@ config PQCP_OPERATION_TRANSITION_CATALOGS
 	  images do not carry the replay witnesses.
 
 endif # PQCP_PROTECTED_CHANNEL
+endmenu
+
+# =============================================================================
+# PQC Fleet Trust Fabric
+# =============================================================================
+menu "PQC Fleet Trust Fabric"
+
+config PQCP_FLEET_TRUST
+	bool "Enable device enrollment and fleet credential lifecycle"
+	depends on PQCP_PROTECTED_CHANNEL
+	default n
+	help
+	  Enable the allocation-free device enrollment and gateway registrar
+	  implementation. Devices authenticate a factory ML-DSA identity, generate
+	  operational keys locally, receive signed credentials and policy bundles,
+	  rotate or revoke identities, authorize managed firmware updates, and bind
+	  the resulting identity to the exporter-bound protected channel.
+
+	  Protocol messages use bounded canonical CBOR and ML-DSA-65 signatures.
+	  Firmware installation remains platform-owned. Fleet metadata is committed
+	  through a two-slot store so interruption restores either the previous
+	  complete state or the new complete state.
+
+config PQCP_FLEET_STORE_ITS
+	bool "Enable PSA Internal Trusted Storage fleet backend"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Store the two fleet metadata slots through PSA Internal Trusted Storage.
+	  Enable this only on targets that provide the ITS client API and service.
+
 endmenu
 
 # =============================================================================

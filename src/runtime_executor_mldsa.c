@@ -83,56 +83,12 @@ int pqcp_runtime_execute_mldsa_keygen(
 	return ensure_profile_id(job);
 }
 
-static int acquire_key(
-	struct pqcp_runtime_executor *executor,
-	struct pqcp_runtime_job *job,
-	uint32_t usage,
-	const uint8_t **public_key,
-	size_t *public_key_length,
-	const uint8_t **secret_key,
-	size_t *secret_key_length)
-{
-	int ret = pqcp_runtime_key_store_acquire(
-		executor->key_store, &job->primary_key,
-		usage, pqcp_runtime_internal_now_ms(),
-		public_key, public_key_length,
-		secret_key, secret_key_length);
-
-	if (ret != 0) {
-		return ret;
-	}
-	if (*public_key == NULL ||
-	    *public_key_length !=
-		    pqcp_mldsa_pk_size(
-			    (pqcp_mldsa_level_t)job->level)) {
-		(void)pqcp_runtime_key_store_release(
-			executor->key_store,
-			&job->primary_key);
-		return -EBADMSG;
-	}
-	if (usage == PQCP_RUNTIME_USAGE_SIGN &&
-	    (*secret_key == NULL ||
-	     *secret_key_length !=
-		     pqcp_mldsa_sk_size(
-			     (pqcp_mldsa_level_t)job->level))) {
-		(void)pqcp_runtime_key_store_release(
-			executor->key_store,
-			&job->primary_key);
-		return -EBADMSG;
-	}
-	return 0;
-}
-
 int pqcp_runtime_execute_mldsa_sign(
 	struct pqcp_runtime_executor *executor,
 	struct pqcp_runtime_job *job,
 	uint8_t *workspace,
 	size_t workspace_capacity)
 {
-	const uint8_t *public_key = NULL;
-	const uint8_t *secret_key = NULL;
-	size_t public_key_length = 0U;
-	size_t secret_key_length = 0U;
 	size_t signature_length;
 	int ret;
 
@@ -151,24 +107,15 @@ int pqcp_runtime_execute_mldsa_sign(
 	    job->output_capacity < signature_length) {
 		return -EINVAL;
 	}
-	ret = acquire_key(
-		executor, job, PQCP_RUNTIME_USAGE_SIGN,
-		&public_key, &public_key_length,
-		&secret_key, &secret_key_length);
+	ret = pqcp_runtime_key_store_sign(
+		executor->key_store, &job->primary_key,
+		job->input, job->input_length, job->context,
+		job->context_length, workspace,
+		workspace_capacity, &signature_length);
 	if (ret != 0) {
-		return ret;
-	}
-	ret = pqcp_mldsa_sign(
-		(pqcp_mldsa_level_t)job->level,
-		secret_key, job->input, job->input_length,
-		job->context, job->context_length,
-		workspace);
-	(void)pqcp_runtime_key_store_release(
-		executor->key_store, &job->primary_key);
-	if (ret != PQCP_MLDSA_SUCCESS) {
 		pqcp_runtime_secure_zero(
 			workspace, workspace_capacity);
-		return -EIO;
+		return ret;
 	}
 	memcpy(job->output, workspace, signature_length);
 	job->output_length = signature_length;
@@ -183,10 +130,6 @@ int pqcp_runtime_execute_mldsa_verify(
 	uint8_t *workspace,
 	size_t workspace_capacity)
 {
-	const uint8_t *public_key = NULL;
-	const uint8_t *secret_key = NULL;
-	size_t public_key_length = 0U;
-	size_t secret_key_length = 0U;
 	size_t signature_length;
 	int ret;
 
@@ -205,25 +148,13 @@ int pqcp_runtime_execute_mldsa_verify(
 	    job->aux_input_length != signature_length) {
 		return -EINVAL;
 	}
-	ret = acquire_key(
-		executor, job, PQCP_RUNTIME_USAGE_VERIFY,
-		&public_key, &public_key_length,
-		&secret_key, &secret_key_length);
+	ret = pqcp_runtime_key_store_verify(
+		executor->key_store, &job->primary_key,
+		job->input, job->input_length, job->context,
+		job->context_length, job->aux_input,
+		job->aux_input_length);
 	if (ret != 0) {
 		return ret;
-	}
-	ret = pqcp_mldsa_verify(
-		(pqcp_mldsa_level_t)job->level,
-		public_key, job->input, job->input_length,
-		job->context, job->context_length,
-		job->aux_input);
-	(void)pqcp_runtime_key_store_release(
-		executor->key_store, &job->primary_key);
-	if (ret == PQCP_MLDSA_ERR_VERIFY) {
-		return -EBADMSG;
-	}
-	if (ret != PQCP_MLDSA_SUCCESS) {
-		return -EIO;
 	}
 	return ensure_profile_id(job);
 }

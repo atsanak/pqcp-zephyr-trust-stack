@@ -70,6 +70,26 @@ for a Zephyr module:
   epoch/stream guards, and eight-step transition traces without adding
   validation-only data to normal production builds. See
   [`docs/patch-set-20-runtime-channel.md`](docs/patch-set-20-runtime-channel.md).
+- **Policy-bound multi-tenant crypto broker.** Principals receive bounded
+  quotas, grants, and attenuable capabilities over opaque ML-KEM, ML-DSA,
+  HKDF, HMAC, and AES-GCM key handles. The broker provides exact idempotency,
+  cancellation, deadline and custody enforcement, chained execution receipts,
+  and optional ML-DSA receipt signatures without exposing private key
+  material.
+- **Live PQC fleet trust fabric.** Factory ML-DSA identities authorize local
+  operational-key generation, ownership vouchers, short-lived credentials,
+  signed policy, revocation, key rotation, firmware authorization, and
+  decommissioning. Its operations plane adds idempotent commands, deterministic
+  device policy, firmware probation and rollback, tamper-evident audit,
+  telemetry summaries, signed attestation, secure-time uncertainty, offline
+  leases, exact revocations, health circuit breaking, admission control,
+  correlated risk scoring, recovery evidence, and conflict-aware maintenance.
+  Canonical CBOR artifacts are shared with an offline-first Rust coordinator
+  that provides SQLite inventory, deterministic canaries, measured rollout
+  decisions, signed revocation publication, a durable anti-replay sequence
+  allocator, REST/SSE, and an operator CLI. See
+  [`samples/pqcp_fleet_trust`](samples/pqcp_fleet_trust) and
+  [`tools/pqcp_fleet_coordinator`](tools/pqcp_fleet_coordinator).
 
 For the underlying architecture see
 [`docs/assurance-model.md`](docs/assurance-model.md). For the Passport
@@ -399,6 +419,12 @@ west build -t run
 **TLS Sample (with PSA Crypto):**
 ```bash
 west build -p always -b qemu_x86_64 samples/pqcp_tls_mbedtls_psa -- -DOVERLAY_CONFIG=overlay-mbedtls.conf
+west build -t run
+```
+
+**PQC Fleet Trust Fabric:**
+```bash
+west build -p always -b qemu_x86_64 samples/pqcp_fleet_trust
 west build -t run
 ```
 
