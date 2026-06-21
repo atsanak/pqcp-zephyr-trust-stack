@@ -415,6 +415,58 @@ if(CONFIG_PQCP_FLEET_TRUST)
     )
 endif()
 
+if(CONFIG_PQCP_EDGE_SECURITY)
+    zephyr_library_sources(
+        ${PQCP_SRC}/edge_security_common.c
+        ${PQCP_SRC}/edge_identity_directory.c
+        ${PQCP_SRC}/edge_service_registry.c
+        ${PQCP_SRC}/edge_access_engine.c
+        ${PQCP_SRC}/edge_route_table.c
+        ${PQCP_SRC}/edge_session_registry.c
+        ${PQCP_SRC}/edge_traffic_governor.c
+        ${PQCP_SRC}/edge_circuit_breaker.c
+        ${PQCP_SRC}/edge_message_queue.c
+        ${PQCP_SRC}/edge_replay_guard.c
+        ${PQCP_SRC}/edge_fragment_manager.c
+        ${PQCP_SRC}/edge_message_ratchet.c
+        ${PQCP_SRC}/edge_topic_registry.c
+        ${PQCP_SRC}/edge_group_manager.c
+        ${PQCP_SRC}/edge_delivery_manager.c
+        ${PQCP_SRC}/edge_vault_store.c
+        ${PQCP_SRC}/edge_vault_acl.c
+        ${PQCP_SRC}/edge_vault_version.c
+        ${PQCP_SRC}/edge_vault_lease.c
+        ${PQCP_SRC}/edge_vault_journal.c
+        ${PQCP_SRC}/edge_replication_manager.c
+        ${PQCP_SRC}/edge_snapshot_manager.c
+        ${PQCP_SRC}/edge_signal_engine.c
+        ${PQCP_SRC}/edge_incident_manager.c
+        ${PQCP_SRC}/edge_playbook_engine.c
+        ${PQCP_SRC}/edge_evidence_store.c
+        ${PQCP_SRC}/edge_containment_manager.c
+        ${PQCP_SRC}/edge_continuity_manager.c
+        ${PQCP_SRC}/edge_posture_engine.c
+        ${PQCP_SRC}/edge_attestation_manager.c
+        ${PQCP_SRC}/edge_policy_distributor.c
+        ${PQCP_SRC}/edge_rotation_manager.c
+        ${PQCP_SRC}/edge_anomaly_engine.c
+        ${PQCP_SRC}/edge_resource_monitor.c
+        ${PQCP_SRC}/edge_audit_exporter.c
+        ${PQCP_SRC}/edge_recovery_coordinator.c
+        ${PQCP_SRC}/edge_dlp_engine.c
+        ${PQCP_SRC}/edge_trust_federation.c
+        ${PQCP_SRC}/edge_credential_cache.c
+        ${PQCP_SRC}/edge_isolation_manager.c
+        ${PQCP_SRC}/edge_provenance_ledger.c
+        ${PQCP_SRC}/edge_workload_scheduler.c
+        ${PQCP_SRC}/edge_sla_monitor.c
+        ${PQCP_SRC}/edge_config_manager.c
+        ${PQCP_SRC}/edge_compliance.c
+        ${PQCP_SRC}/edge_runtime_admission.c
+        ${PQCP_SRC}/edge_security_runtime.c
+    )
+endif()
+
 if(CONFIG_PQCP_FLEET_STORE_ITS)
     zephyr_library_sources(
         ${PQCP_SRC}/fleet_store_its.c

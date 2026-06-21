@@ -1567,6 +1567,28 @@ config PQCP_FLEET_STORE_ITS
 endmenu
 
 # =============================================================================
+# Zero-Trust Edge Security Plane
+# =============================================================================
+menu "Zero-Trust Edge Security Plane"
+
+config PQCP_EDGE_SECURITY
+	bool "Enable allocation-free edge security runtime"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable the bounded zero-trust edge runtime. The runtime composes service
+	  identity, policy admission, durable messaging, confidential object
+	  storage, incident response, attestation, policy distribution, workload
+	  scheduling, provenance, isolation, SLA monitoring, and transactional
+	  configuration without dynamic allocation.
+
+	  Applications provide every storage array during initialization, making
+	  maximum memory use explicit and suitable for constrained Zephyr targets.
+	  The public API is experimental.
+
+endmenu
+
+# =============================================================================
 # Extended Validation Support
 # =============================================================================
 menu "Extended Validation Support"

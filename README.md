@@ -428,6 +428,15 @@ west build -p always -b qemu_x86_64 samples/pqcp_fleet_trust
 west build -t run
 ```
 
+The fleet sample also enables `CONFIG_PQCP_EDGE_SECURITY`, compiling the
+allocation-free zero-trust edge plane. Applications include
+`<pqcp_zephyr/edge_security.h>`, provide fixed-capacity arrays through
+`pqcp_edge_runtime_storage`, and initialize the composed runtime with
+`pqcp_edge_runtime_init()`. The runtime integrates service identity and
+routing, policy admission, messaging, vault storage, incident response,
+attestation, provenance, isolation, scheduling, SLA, configuration, and
+compliance reporting without heap allocation.
+
 **Running Tests:**
 ```bash
 # Base tests (13 tests)
