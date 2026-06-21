@@ -314,6 +314,7 @@ if(CONFIG_PQCP_RUNTIME)
         ${PQCP_SRC}/runtime_executor.c
         ${PQCP_SRC}/runtime_executor_mlkem.c
         ${PQCP_SRC}/runtime_executor_mldsa.c
+        ${PQCP_SRC}/runtime_executor_symmetric.c
         ${PQCP_SRC}/runtime_session.c
         ${PQCP_SRC}/runtime_snapshot.c
         ${PQCP_SRC}/runtime_key_policy.c
@@ -346,6 +347,16 @@ if(CONFIG_PQCP_RUNTIME)
     )
 endif()
 
+if(CONFIG_PQCP_CRYPTO_BROKER)
+    zephyr_library_sources(
+        ${PQCP_SRC}/crypto_broker.c
+        ${PQCP_SRC}/crypto_broker_authorization.c
+        ${PQCP_SRC}/crypto_broker_dispatch.c
+        ${PQCP_SRC}/crypto_broker_ledger.c
+        ${PQCP_SRC}/crypto_broker_receipt.c
+    )
+endif()
+
 if(CONFIG_PQCP_PROTECTED_CHANNEL)
     zephyr_library_sources(
         ${PQCP_SRC}/protected_channel_codec.c
@@ -372,6 +383,41 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL)
         ${PQCP_SRC}/protected_channel_path_policy_catalog.c
         ${PQCP_SRC}/protected_channel_fault_policy_catalog.c
         ${PQCP_SRC}/protected_channel_operation_planner.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_TRUST)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_cbor.c
+        ${PQCP_SRC}/fleet_sha256.c
+        ${PQCP_SRC}/fleet_protocol.c
+        ${PQCP_SRC}/fleet_store.c
+        ${PQCP_SRC}/fleet_enrollment.c
+        ${PQCP_SRC}/fleet_registrar.c
+        ${PQCP_SRC}/fleet_policy_engine.c
+        ${PQCP_SRC}/fleet_command_engine.c
+        ${PQCP_SRC}/fleet_update_manager.c
+        ${PQCP_SRC}/fleet_audit_ledger.c
+        ${PQCP_SRC}/fleet_telemetry.c
+        ${PQCP_SRC}/fleet_attestation.c
+        ${PQCP_SRC}/fleet_reconciliation.c
+        ${PQCP_SRC}/fleet_operations.c
+        ${PQCP_SRC}/fleet_secure_time.c
+        ${PQCP_SRC}/fleet_revocation_index.c
+        ${PQCP_SRC}/fleet_rollout.c
+        ${PQCP_SRC}/fleet_health_monitor.c
+        ${PQCP_SRC}/fleet_lease_manager.c
+        ${PQCP_SRC}/fleet_recovery_manager.c
+        ${PQCP_SRC}/fleet_peer_registry.c
+        ${PQCP_SRC}/fleet_admission_controller.c
+        ${PQCP_SRC}/fleet_risk_engine.c
+        ${PQCP_SRC}/fleet_maintenance_scheduler.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_STORE_ITS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_store_its.c
     )
 endif()
 

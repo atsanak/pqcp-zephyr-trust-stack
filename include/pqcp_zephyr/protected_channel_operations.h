@@ -292,6 +292,7 @@ struct pqcp_channel_rekey_context {
 	uint8_t salt[PQCP_CHANNEL_REKEY_SALT_BYTES];
 	uint8_t confirmation[PQCP_CHANNEL_FINISHED_BYTES];
 	struct pqcp_channel_keys pending_keys;
+	struct pqcp_runtime_key_store *key_store;
 	bool initiator;
 };
 

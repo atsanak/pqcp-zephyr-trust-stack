@@ -7,27 +7,25 @@
 #include <errno.h>
 #include <string.h>
 
-#include <psa/crypto.h>
-
 #include <pqcp_zephyr/protected_channel.h>
 
 #include "protected_channel_internal.h"
 #include "runtime_internal.h"
 
-static const uint8_t *write_key(
+static const struct pqcp_runtime_key_handle *write_key(
 	const struct pqcp_channel *channel)
 {
 	return channel->config.role == PQCP_CHANNEL_ROLE_CLIENT ?
-		channel->keys.client_write_key :
-		channel->keys.server_write_key;
+		&channel->keys.client_write_key :
+		&channel->keys.server_write_key;
 }
 
-static const uint8_t *read_key(
+static const struct pqcp_runtime_key_handle *read_key(
 	const struct pqcp_channel *channel)
 {
 	return channel->config.role == PQCP_CHANNEL_ROLE_CLIENT ?
-		channel->keys.server_write_key :
-		channel->keys.client_write_key;
+		&channel->keys.server_write_key :
+		&channel->keys.client_write_key;
 }
 
 static const uint8_t *write_nonce_base(
@@ -76,27 +74,6 @@ static void build_aad(
 		aad + 24U, plaintext_length);
 }
 
-static int import_aead_key(
-	const uint8_t key[PQCP_CHANNEL_AEAD_KEY_BYTES],
-	uint32_t usage,
-	psa_key_id_t *key_id)
-{
-	psa_key_attributes_t attributes =
-		PSA_KEY_ATTRIBUTES_INIT;
-	psa_status_t status;
-
-	psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
-	psa_set_key_bits(
-		&attributes, PQCP_CHANNEL_AEAD_KEY_BYTES * 8U);
-	psa_set_key_usage_flags(&attributes, usage);
-	psa_set_key_algorithm(&attributes, PSA_ALG_GCM);
-	status = psa_import_key(
-		&attributes, key,
-		PQCP_CHANNEL_AEAD_KEY_BYTES, key_id);
-	psa_reset_key_attributes(&attributes);
-	return status == PSA_SUCCESS ? 0 : -EIO;
-}
-
 int pqcp_channel_internal_encrypt_record(
 	const struct pqcp_channel *channel,
 	const uint8_t *plaintext,
@@ -107,9 +84,7 @@ int pqcp_channel_internal_encrypt_record(
 {
 	uint8_t nonce[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	uint8_t aad[28];
-	psa_key_id_t key_id = 0U;
 	size_t produced = 0U;
-	psa_status_t status;
 	int ret;
 
 	if (channel == NULL ||
@@ -129,19 +104,12 @@ int pqcp_channel_internal_encrypt_record(
 	build_aad(
 		channel, channel->send_sequence,
 		(uint32_t)plaintext_length, aad);
-	ret = import_aead_key(
-		write_key(channel), PSA_KEY_USAGE_ENCRYPT,
-		&key_id);
-	if (ret != 0) {
-		goto cleanup;
-	}
-	status = psa_aead_encrypt(
-		key_id, PSA_ALG_GCM,
+	ret = pqcp_runtime_key_store_aead_encrypt(
+		channel->key_store, write_key(channel),
 		nonce, sizeof(nonce),
 		aad, sizeof(aad),
 		plaintext, plaintext_length,
 		output, output_capacity, &produced);
-	ret = status == PSA_SUCCESS ? 0 : -EIO;
 	if (ret == 0 &&
 	    produced != plaintext_length +
 			PQCP_CHANNEL_AEAD_TAG_BYTES) {
@@ -151,10 +119,6 @@ int pqcp_channel_internal_encrypt_record(
 		*output_length = produced;
 	}
 
-cleanup:
-	if (key_id != 0U) {
-		(void)psa_destroy_key(key_id);
-	}
 	pqcp_runtime_secure_zero(nonce, sizeof(nonce));
 	pqcp_runtime_secure_zero(aad, sizeof(aad));
 	if (ret != 0) {
@@ -175,10 +139,8 @@ int pqcp_channel_internal_decrypt_record(
 {
 	uint8_t nonce[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	uint8_t aad[28];
-	psa_key_id_t key_id = 0U;
 	size_t produced = 0U;
 	size_t plaintext_length;
-	psa_status_t status;
 	int ret;
 
 	if (channel == NULL ||
@@ -195,39 +157,27 @@ int pqcp_channel_internal_decrypt_record(
 		    channel->config.max_payload_bytes) {
 		return -ENOSPC;
 	}
-	ret = pqcp_channel_replay_accept(
-		&channel->inbound_replay, sequence);
-	if (ret != 0) {
-		return ret;
-	}
 	build_nonce(read_nonce_base(channel), sequence, nonce);
 	build_aad(
 		channel, sequence,
 		(uint32_t)plaintext_length, aad);
-	ret = import_aead_key(
-		read_key(channel), PSA_KEY_USAGE_DECRYPT,
-		&key_id);
-	if (ret != 0) {
-		goto cleanup;
-	}
-	status = psa_aead_decrypt(
-		key_id, PSA_ALG_GCM,
+	ret = pqcp_runtime_key_store_aead_decrypt(
+		channel->key_store, read_key(channel),
 		nonce, sizeof(nonce),
 		aad, sizeof(aad),
 		ciphertext, ciphertext_length,
 		output, output_capacity, &produced);
-	ret = status == PSA_SUCCESS ? 0 : -EBADMSG;
 	if (ret == 0 && produced != plaintext_length) {
 		ret = -EBADMSG;
+	}
+	if (ret == 0) {
+		ret = pqcp_channel_replay_accept(
+			&channel->inbound_replay, sequence);
 	}
 	if (ret == 0) {
 		*output_length = produced;
 	}
 
-cleanup:
-	if (key_id != 0U) {
-		(void)psa_destroy_key(key_id);
-	}
 	pqcp_runtime_secure_zero(nonce, sizeof(nonce));
 	pqcp_runtime_secure_zero(aad, sizeof(aad));
 	if (ret != 0) {

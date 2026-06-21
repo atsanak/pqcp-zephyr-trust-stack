@@ -112,6 +112,21 @@ static void initialize_fake_channel(
 		0x50U, 0x51U, 0x43U, 0x50U,
 		0x2dU, 0x4fU, 0x50U, 0x53U,
 	};
+	uint8_t client_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	uint8_t server_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	struct pqcp_runtime_key_request request = {
+		.family = PQCP_RUNTIME_KEY_AEAD,
+		.level = 256U,
+		.usage = PQCP_RUNTIME_USAGE_ENCRYPT |
+			 PQCP_RUNTIME_USAGE_DECRYPT |
+			 PQCP_RUNTIME_USAGE_MAC |
+			 PQCP_RUNTIME_USAGE_DERIVE |
+			 PQCP_RUNTIME_USAGE_DESTROY,
+		.now_ms = 1000U,
+		.owner = "operations-test",
+		.persistent = false,
+		.exportable_public = false,
+	};
 
 	memset(channel, 0, sizeof(*channel));
 	channel->schema_version = PQCP_CHANNEL_SCHEMA_VERSION;
@@ -128,6 +143,8 @@ static void initialize_fake_channel(
 	       "hybrid768-65-runtime");
 	channel->state = PQCP_CHANNEL_STATE_ESTABLISHED;
 	channel->established = true;
+	channel->executor = &service.executor;
+	channel->key_store = &service.key_store;
 	channel->keys.exporter_ready = true;
 	channel->keys.traffic_keys_ready = true;
 	for (size_t index = 0U;
@@ -136,13 +153,23 @@ static void initialize_fake_channel(
 			(uint8_t)(0x10U + index);
 	}
 	for (size_t index = 0U;
-	     index < sizeof(channel->keys.client_write_key);
+	     index < sizeof(client_key);
 	     ++index) {
-		channel->keys.client_write_key[index] =
-			(uint8_t)(0x40U + index);
-		channel->keys.server_write_key[index] =
-			(uint8_t)(0x80U + index);
+		client_key[index] = (uint8_t)(0x40U + index);
+		server_key[index] = (uint8_t)(0x80U + index);
 	}
+	request.label = "client-write";
+	zassert_ok(pqcp_runtime_key_store_create(
+		channel->key_store, &request, NULL, 0U,
+		client_key, sizeof(client_key),
+		&channel->keys.client_write_key));
+	request.label = "server-write";
+	zassert_ok(pqcp_runtime_key_store_create(
+		channel->key_store, &request, NULL, 0U,
+		server_key, sizeof(server_key),
+		&channel->keys.server_write_key));
+	pqcp_runtime_secure_zero(client_key, sizeof(client_key));
+	pqcp_runtime_secure_zero(server_key, sizeof(server_key));
 	zassert_ok(pqcp_channel_transcript_init(
 		&channel->transcript));
 	zassert_ok(pqcp_channel_transcript_update(
@@ -1003,18 +1030,17 @@ ZTEST(pqcp_operations, test_rekey_and_resumption_lifecycle)
 	uint8_t salt[PQCP_CHANNEL_REKEY_SALT_BYTES];
 	uint8_t secret[PQCP_CHANNEL_RESUMPTION_SECRET_BYTES];
 	uint8_t peer_digest[PQCP_CHANNEL_HASH_BYTES];
-	uint8_t old_client_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	struct pqcp_runtime_key_handle old_client_key;
 
 	zassert_equal(psa_crypto_init(), PSA_SUCCESS);
+	reset_service();
 	initialize_fake_channel(&channel);
 	for (size_t index = 0U; index < sizeof(salt); ++index) {
 		salt[index] = (uint8_t)(0xa0U + index);
 		secret[index] = (uint8_t)(0x20U + index);
 		peer_digest[index] = (uint8_t)(0x60U + index);
 	}
-	memcpy(old_client_key,
-	       channel.keys.client_write_key,
-	       sizeof(old_client_key));
+	old_client_key = channel.keys.client_write_key;
 
 	zassert_ok(pqcp_channel_rekey_policy_default(
 		&rekey_policy));
@@ -1030,10 +1056,9 @@ ZTEST(pqcp_operations, test_rekey_and_resumption_lifecycle)
 	zassert_ok(pqcp_channel_rekey_commit(
 		&channel, &rekey, 1200U));
 	zassert_equal(rekey.current_epoch, 1U);
-	zassert_not_equal(memcmp(
-		old_client_key,
-		channel.keys.client_write_key,
-		sizeof(old_client_key)), 0);
+	zassert_false(pqcp_runtime_key_handle_equal(
+		&old_client_key,
+		&channel.keys.client_write_key));
 	zassert_ok(pqcp_channel_rekey_audit(
 		&channel, &rekey));
 

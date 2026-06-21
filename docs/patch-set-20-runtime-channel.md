@@ -93,7 +93,7 @@ top-level `src/*.c` files and 103,307 lines. Commit
 lines, proving 22,342 net-new lines for the original conformance milestone.
 
 The continuation in this document starts from
-`11d47350dd2204b6c870a8201a88925fae4c2598`, which also contains 152 files and
+`fb49304eb7bed4e01cc5de5ec666d7c9803e2e81`, which also contains 152 files and
 125,650 lines. After committing the completed planner, guard, scenario, and
 transition implementation, verify both growth boundaries with:
 
@@ -103,7 +103,7 @@ python3 scripts/check_src_c_growth.py \
   --minimum 20000
 
 python3 scripts/check_src_c_growth.py \
-  --baseline 11d47350dd2204b6c870a8201a88925fae4c2598 \
+  --baseline fb49304eb7bed4e01cc5de5ec666d7c9803e2e81 \
   --minimum 20000
 ```
 

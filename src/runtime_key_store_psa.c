@@ -71,6 +71,172 @@ __weak int pqcp_runtime_psa_provider_export_public(
 	return -ENOTSUP;
 }
 
+__weak int pqcp_runtime_psa_provider_sign(
+	uint32_t key_id,
+	uint32_t level,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	uint8_t *signature,
+	size_t signature_capacity,
+	size_t *signature_length)
+{
+	ARG_UNUSED(key_id);
+	ARG_UNUSED(level);
+	ARG_UNUSED(message);
+	ARG_UNUSED(message_length);
+	ARG_UNUSED(context);
+	ARG_UNUSED(context_length);
+	ARG_UNUSED(signature);
+	ARG_UNUSED(signature_capacity);
+	ARG_UNUSED(signature_length);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_verify(
+	uint32_t key_id,
+	uint32_t level,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	const uint8_t *signature,
+	size_t signature_length)
+{
+	ARG_UNUSED(key_id);
+	ARG_UNUSED(level);
+	ARG_UNUSED(message);
+	ARG_UNUSED(message_length);
+	ARG_UNUSED(context);
+	ARG_UNUSED(context_length);
+	ARG_UNUSED(signature);
+	ARG_UNUSED(signature_length);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_encapsulate(
+	uint32_t public_key_id,
+	uint32_t level,
+	uint32_t secret_key_id,
+	const struct pqcp_runtime_key_request *secret_request,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length)
+{
+	ARG_UNUSED(public_key_id);
+	ARG_UNUSED(level);
+	ARG_UNUSED(secret_key_id);
+	ARG_UNUSED(secret_request);
+	ARG_UNUSED(ciphertext);
+	ARG_UNUSED(ciphertext_capacity);
+	ARG_UNUSED(ciphertext_length);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_decapsulate(
+	uint32_t private_key_id,
+	uint32_t level,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	uint32_t secret_key_id,
+	const struct pqcp_runtime_key_request *secret_request)
+{
+	ARG_UNUSED(private_key_id);
+	ARG_UNUSED(level);
+	ARG_UNUSED(ciphertext);
+	ARG_UNUSED(ciphertext_length);
+	ARG_UNUSED(secret_key_id);
+	ARG_UNUSED(secret_request);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_derive(
+	uint32_t source_key_id,
+	const uint8_t *salt,
+	size_t salt_length,
+	const uint8_t *info,
+	size_t info_length,
+	uint32_t derived_key_id,
+	const struct pqcp_runtime_key_request *derived_request)
+{
+	ARG_UNUSED(source_key_id);
+	ARG_UNUSED(salt);
+	ARG_UNUSED(salt_length);
+	ARG_UNUSED(info);
+	ARG_UNUSED(info_length);
+	ARG_UNUSED(derived_key_id);
+	ARG_UNUSED(derived_request);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_mac(
+	uint32_t key_id,
+	const uint8_t *message,
+	size_t message_length,
+	uint8_t *tag,
+	size_t tag_capacity,
+	size_t *tag_length)
+{
+	ARG_UNUSED(key_id);
+	ARG_UNUSED(message);
+	ARG_UNUSED(message_length);
+	ARG_UNUSED(tag);
+	ARG_UNUSED(tag_capacity);
+	ARG_UNUSED(tag_length);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_aead_encrypt(
+	uint32_t key_id,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *plaintext,
+	size_t plaintext_length,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length)
+{
+	ARG_UNUSED(key_id);
+	ARG_UNUSED(nonce);
+	ARG_UNUSED(nonce_length);
+	ARG_UNUSED(aad);
+	ARG_UNUSED(aad_length);
+	ARG_UNUSED(plaintext);
+	ARG_UNUSED(plaintext_length);
+	ARG_UNUSED(ciphertext);
+	ARG_UNUSED(ciphertext_capacity);
+	ARG_UNUSED(ciphertext_length);
+	return -ENOTSUP;
+}
+
+__weak int pqcp_runtime_psa_provider_aead_decrypt(
+	uint32_t key_id,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	uint8_t *plaintext,
+	size_t plaintext_capacity,
+	size_t *plaintext_length)
+{
+	ARG_UNUSED(key_id);
+	ARG_UNUSED(nonce);
+	ARG_UNUSED(nonce_length);
+	ARG_UNUSED(aad);
+	ARG_UNUSED(aad_length);
+	ARG_UNUSED(ciphertext);
+	ARG_UNUSED(ciphertext_length);
+	ARG_UNUSED(plaintext);
+	ARG_UNUSED(plaintext_capacity);
+	ARG_UNUSED(plaintext_length);
+	return -ENOTSUP;
+}
+
 __weak int pqcp_runtime_psa_provider_destroy(uint32_t key_id)
 {
 	ARG_UNUSED(key_id);
@@ -162,6 +328,8 @@ static int initialize_metadata(
 	metadata->secret_bytes =
 		pqcp_runtime_internal_secret_size(
 			request->family, request->level);
+	metadata->custody =
+		PQCP_RUNTIME_CUSTODY_PLATFORM_OPAQUE;
 	metadata->active = true;
 	metadata->persistent = true;
 	metadata->exportable_public =
@@ -335,17 +503,13 @@ static int psa_acquire(
 	uint32_t required_usage,
 	uint64_t now_ms,
 	const uint8_t **public_data,
-	size_t *public_length,
-	const uint8_t **secret_data,
-	size_t *secret_length)
+	size_t *public_length)
 {
 	uint32_t key_id;
 	int ret;
 
 	ARG_UNUSED(public_data);
 	ARG_UNUSED(public_length);
-	ARG_UNUSED(secret_data);
-	ARG_UNUSED(secret_length);
 	ret = validate_handle(store, handle, &key_id);
 	if (ret != 0) {
 		return ret;
@@ -357,7 +521,7 @@ static int psa_acquire(
 	}
 	if (metadata->expires_at_ms != 0U &&
 	    metadata->expires_at_ms <= now_ms) {
-		return -EKEYEXPIRED;
+		return -ETIMEDOUT;
 	}
 	/*
 	 * Persistent keys are opaque. Runtime primitive execution must use a
@@ -391,6 +555,347 @@ static int psa_export_public(
 	}
 	ret = pqcp_runtime_psa_provider_export_public(
 		key_id, output, output_capacity, output_length);
+	return ret == -ENOTSUP ? -ENOTSUP : ret;
+}
+
+static int psa_authorize(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	uint32_t required_usage,
+	uint64_t now_ms,
+	uint32_t *key_id);
+
+static int psa_sign(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	uint8_t *signature,
+	size_t signature_capacity,
+	size_t *signature_length)
+{
+	uint32_t key_id;
+	int ret;
+
+	if (handle == NULL ||
+	    handle->family != PQCP_RUNTIME_KEY_MLDSA_KEYPAIR) {
+		return -EACCES;
+	}
+	ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_SIGN,
+		pqcp_runtime_internal_now_ms(), &key_id);
+
+	if (ret != 0) {
+		return ret;
+	}
+	ret = pqcp_runtime_psa_provider_sign(
+		key_id, handle->level, message, message_length,
+		context, context_length, signature,
+		signature_capacity, signature_length);
+	return ret == -ENOTSUP ? -ENOTSUP : ret;
+}
+
+static int psa_authorize(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	uint32_t required_usage,
+	uint64_t now_ms,
+	uint32_t *key_id)
+{
+	struct pqcp_runtime_key_metadata *metadata;
+	int ret = validate_handle(store, handle, key_id);
+
+	if (ret != 0) {
+		return ret;
+	}
+	metadata = &psa_context(store)->metadata[handle->slot];
+	if ((metadata->usage & required_usage) != required_usage) {
+		return -EACCES;
+	}
+	if (metadata->expires_at_ms != 0U &&
+	    metadata->expires_at_ms <= now_ms) {
+		return -ETIMEDOUT;
+	}
+	metadata->last_used_at_ms = now_ms;
+	metadata->use_count++;
+	return 0;
+}
+
+static int psa_verify(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	const uint8_t *signature,
+	size_t signature_length)
+{
+	uint32_t key_id;
+	int ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_VERIFY,
+		pqcp_runtime_internal_now_ms(), &key_id);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_MLDSA_PUBLIC &&
+	    handle->family != PQCP_RUNTIME_KEY_MLDSA_KEYPAIR) {
+		return -EACCES;
+	}
+	ret = pqcp_runtime_psa_provider_verify(
+		key_id, handle->level, message, message_length,
+		context, context_length, signature,
+		signature_length);
+	return ret == -ENOTSUP ? -ENOTSUP : ret;
+}
+
+static int psa_initialize_derived(
+	struct pqcp_runtime_key_store *store,
+	uint32_t slot,
+	const struct pqcp_runtime_key_request *request,
+	struct pqcp_runtime_key_handle *handle)
+{
+	struct pqcp_runtime_psa_context *context =
+		psa_context(store);
+	int ret = initialize_metadata(
+		context, slot, request, handle);
+
+	if (ret == 0) {
+		bitmap_set(context, slot);
+	}
+	return ret;
+}
+
+static int psa_encapsulate(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const struct pqcp_runtime_key_request *secret_request,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length,
+	struct pqcp_runtime_key_handle *secret_handle)
+{
+	struct pqcp_runtime_psa_context *context =
+		psa_context(store);
+	uint32_t key_id;
+	int destination;
+	int ret;
+
+	ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_ENCAPSULATE,
+		secret_request->now_ms, &key_id);
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_MLKEM_PUBLIC &&
+	    handle->family != PQCP_RUNTIME_KEY_MLKEM_KEYPAIR) {
+		return -EACCES;
+	}
+	destination = first_free_id(context);
+	if (destination < 0) {
+		return -ENOSPC;
+	}
+	ret = pqcp_runtime_psa_provider_encapsulate(
+		key_id, handle->level,
+		context->key_id_base + (uint32_t)destination,
+		secret_request, ciphertext, ciphertext_capacity,
+		ciphertext_length);
+	if (ret != 0) {
+		return ret == -ENOTSUP ? -ENOTSUP : ret;
+	}
+	ret = psa_initialize_derived(
+		store, (uint32_t)destination,
+		secret_request, secret_handle);
+	if (ret != 0) {
+		(void)pqcp_runtime_psa_provider_destroy(
+			context->key_id_base +
+			(uint32_t)destination);
+	}
+	return ret;
+}
+
+static int psa_decapsulate(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	const struct pqcp_runtime_key_request *secret_request,
+	struct pqcp_runtime_key_handle *secret_handle)
+{
+	struct pqcp_runtime_psa_context *context =
+		psa_context(store);
+	uint32_t key_id;
+	int destination;
+	int ret;
+
+	ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_DECAPSULATE,
+		secret_request->now_ms, &key_id);
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_MLKEM_KEYPAIR) {
+		return -EACCES;
+	}
+	destination = first_free_id(context);
+	if (destination < 0) {
+		return -ENOSPC;
+	}
+	ret = pqcp_runtime_psa_provider_decapsulate(
+		key_id, handle->level, ciphertext,
+		ciphertext_length,
+		context->key_id_base + (uint32_t)destination,
+		secret_request);
+	if (ret != 0) {
+		return ret == -ENOTSUP ? -ENOTSUP : ret;
+	}
+	ret = psa_initialize_derived(
+		store, (uint32_t)destination,
+		secret_request, secret_handle);
+	if (ret != 0) {
+		(void)pqcp_runtime_psa_provider_destroy(
+			context->key_id_base +
+			(uint32_t)destination);
+	}
+	return ret;
+}
+
+static int psa_derive(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *salt,
+	size_t salt_length,
+	const uint8_t *info,
+	size_t info_length,
+	const struct pqcp_runtime_key_request *derived_request,
+	struct pqcp_runtime_key_handle *derived_handle)
+{
+	struct pqcp_runtime_psa_context *context =
+		psa_context(store);
+	uint32_t key_id;
+	int destination;
+	int ret;
+
+	ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_DERIVE,
+		derived_request->now_ms, &key_id);
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_SHARED_SECRET &&
+	    handle->family != PQCP_RUNTIME_KEY_AEAD) {
+		return -EACCES;
+	}
+	destination = first_free_id(context);
+	if (destination < 0) {
+		return -ENOSPC;
+	}
+	ret = pqcp_runtime_psa_provider_derive(
+		key_id, salt, salt_length, info, info_length,
+		context->key_id_base + (uint32_t)destination,
+		derived_request);
+	if (ret != 0) {
+		return ret == -ENOTSUP ? -ENOTSUP : ret;
+	}
+	ret = psa_initialize_derived(
+		store, (uint32_t)destination,
+		derived_request, derived_handle);
+	if (ret != 0) {
+		(void)pqcp_runtime_psa_provider_destroy(
+			context->key_id_base +
+			(uint32_t)destination);
+	}
+	return ret;
+}
+
+static int psa_mac(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	uint8_t *tag,
+	size_t tag_capacity,
+	size_t *tag_length)
+{
+	uint32_t key_id;
+	int ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_MAC,
+		pqcp_runtime_internal_now_ms(), &key_id);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_AEAD) {
+		return -EACCES;
+	}
+	ret = pqcp_runtime_psa_provider_mac(
+		key_id, message, message_length,
+		tag, tag_capacity, tag_length);
+	return ret == -ENOTSUP ? -ENOTSUP : ret;
+}
+
+static int psa_aead_encrypt(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *plaintext,
+	size_t plaintext_length,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length)
+{
+	uint32_t key_id;
+	int ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_ENCRYPT,
+		pqcp_runtime_internal_now_ms(), &key_id);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_AEAD) {
+		return -EACCES;
+	}
+	ret = pqcp_runtime_psa_provider_aead_encrypt(
+		key_id, nonce, nonce_length, aad, aad_length,
+		plaintext, plaintext_length, ciphertext,
+		ciphertext_capacity, ciphertext_length);
+	return ret == -ENOTSUP ? -ENOTSUP : ret;
+}
+
+static int psa_aead_decrypt(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	uint8_t *plaintext,
+	size_t plaintext_capacity,
+	size_t *plaintext_length)
+{
+	uint32_t key_id;
+	int ret = psa_authorize(
+		store, handle, PQCP_RUNTIME_USAGE_DECRYPT,
+		pqcp_runtime_internal_now_ms(), &key_id);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (handle->family != PQCP_RUNTIME_KEY_AEAD) {
+		return -EACCES;
+	}
+	ret = pqcp_runtime_psa_provider_aead_decrypt(
+		key_id, nonce, nonce_length, aad, aad_length,
+		ciphertext, ciphertext_length, plaintext,
+		plaintext_capacity, plaintext_length);
 	return ret == -ENOTSUP ? -ENOTSUP : ret;
 }
 
@@ -530,6 +1035,14 @@ static const struct pqcp_runtime_key_store_ops psa_ops = {
 	.acquire = psa_acquire,
 	.release = psa_release,
 	.export_public = psa_export_public,
+	.sign = psa_sign,
+	.verify = psa_verify,
+	.encapsulate = psa_encapsulate,
+	.decapsulate = psa_decapsulate,
+	.derive = psa_derive,
+	.mac = psa_mac,
+	.aead_encrypt = psa_aead_encrypt,
+	.aead_decrypt = psa_aead_decrypt,
 	.rotate = psa_rotate,
 	.destroy = psa_destroy,
 	.expire = psa_expire,

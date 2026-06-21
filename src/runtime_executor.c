@@ -84,10 +84,9 @@ static size_t workspace_requirement(
 		return PQCP_MLKEM_PK_SIZE_MAX +
 		       PQCP_MLKEM_SK_SIZE_MAX;
 	case PQCP_RUNTIME_JOB_MLKEM_ENCAPSULATE:
-		return PQCP_MLKEM_CT_SIZE_MAX +
-		       PQCP_MLKEM_SS_SIZE;
+		return PQCP_MLKEM_CT_SIZE_MAX;
 	case PQCP_RUNTIME_JOB_MLKEM_DECAPSULATE:
-		return PQCP_MLKEM_SS_SIZE;
+		return 256U;
 	case PQCP_RUNTIME_JOB_MLDSA_KEYGEN:
 		return PQCP_MLDSA_PK_SIZE_MAX +
 		       PQCP_MLDSA_SK_SIZE_MAX;
@@ -95,6 +94,11 @@ static size_t workspace_requirement(
 		return PQCP_MLDSA_SIG_SIZE_MAX;
 	case PQCP_RUNTIME_JOB_MLDSA_VERIFY:
 		return 256U;
+	case PQCP_RUNTIME_JOB_HKDF_DERIVE:
+		return 256U;
+	case PQCP_RUNTIME_JOB_AEAD_ENCRYPT:
+	case PQCP_RUNTIME_JOB_AEAD_DECRYPT:
+		return PQCP_RUNTIME_MAX_OUTPUT_BYTES;
 	default:
 		return 0U;
 	}
@@ -129,6 +133,18 @@ static int execute_primitive(
 			workspace_capacity);
 	case PQCP_RUNTIME_JOB_MLDSA_VERIFY:
 		return pqcp_runtime_execute_mldsa_verify(
+			executor, job, workspace,
+			workspace_capacity);
+	case PQCP_RUNTIME_JOB_HKDF_DERIVE:
+		return pqcp_runtime_execute_hkdf_derive(
+			executor, job, workspace,
+			workspace_capacity);
+	case PQCP_RUNTIME_JOB_AEAD_ENCRYPT:
+		return pqcp_runtime_execute_aead_encrypt(
+			executor, job, workspace,
+			workspace_capacity);
+	case PQCP_RUNTIME_JOB_AEAD_DECRYPT:
+		return pqcp_runtime_execute_aead_decrypt(
 			executor, job, workspace,
 			workspace_capacity);
 	default:

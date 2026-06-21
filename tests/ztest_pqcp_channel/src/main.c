@@ -127,9 +127,38 @@ static void server_handshake_entry(
 		pqcp_channel_handshake(first);
 }
 
+static void install_record_key(
+	struct pqcp_runtime_service *service,
+	const uint8_t key[PQCP_CHANNEL_AEAD_KEY_BYTES],
+	const char *label,
+	struct pqcp_runtime_key_handle *handle)
+{
+	const struct pqcp_runtime_key_request request = {
+		.family = PQCP_RUNTIME_KEY_AEAD,
+		.level = 256U,
+		.usage = PQCP_RUNTIME_USAGE_ENCRYPT |
+			 PQCP_RUNTIME_USAGE_DECRYPT |
+			 PQCP_RUNTIME_USAGE_MAC |
+			 PQCP_RUNTIME_USAGE_DERIVE |
+			 PQCP_RUNTIME_USAGE_DESTROY,
+		.now_ms = 1000U,
+		.owner = "channel-test",
+		.label = label,
+		.persistent = false,
+		.exportable_public = false,
+	};
+
+	zassert_ok(pqcp_runtime_key_store_create(
+		&service->key_store, &request,
+		NULL, 0U, key, PQCP_CHANNEL_AEAD_KEY_BYTES,
+		handle));
+}
+
 static void initialize_record_pair(void)
 {
 	uint8_t exporter[PQCP_CHANNEL_EXPORTER_BYTES];
+	uint8_t client_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	uint8_t server_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
 
 	for (size_t index = 0U; index < sizeof(exporter); ++index) {
 		exporter[index] = (uint8_t)(0xa0U + index);
@@ -163,6 +192,16 @@ static void initialize_record_pair(void)
 	server.config.max_payload_bytes = PQCP_CHANNEL_MAX_PAYLOAD_BYTES;
 	client.transport = client_transport;
 	server.transport = server_transport;
+	initialize_runtime_service(
+		&client_runtime, &client_adaptive,
+		&client_runtime_storage, "record-client");
+	initialize_runtime_service(
+		&server_runtime, &server_adaptive,
+		&server_runtime_storage, "record-server");
+	client.executor = &client_runtime.executor;
+	client.key_store = &client_runtime.key_store;
+	server.executor = &server_runtime.executor;
+	server.key_store = &server_runtime.key_store;
 	client.state = PQCP_CHANNEL_STATE_ESTABLISHED;
 	server.state = PQCP_CHANNEL_STATE_ESTABLISHED;
 	client.established = true;
@@ -171,15 +210,23 @@ static void initialize_record_pair(void)
 	server.keys.traffic_keys_ready = true;
 	for (size_t index = 0U;
 	     index < PQCP_CHANNEL_AEAD_KEY_BYTES; ++index) {
-		client.keys.client_write_key[index] =
-			(uint8_t)(0x10U + index);
-		server.keys.client_write_key[index] =
-			client.keys.client_write_key[index];
-		client.keys.server_write_key[index] =
-			(uint8_t)(0x80U + index);
-		server.keys.server_write_key[index] =
-			client.keys.server_write_key[index];
+		client_key[index] = (uint8_t)(0x10U + index);
+		server_key[index] = (uint8_t)(0x80U + index);
 	}
+	install_record_key(
+		&client_runtime, client_key, "client-write",
+		&client.keys.client_write_key);
+	install_record_key(
+		&client_runtime, server_key, "server-read",
+		&client.keys.server_write_key);
+	install_record_key(
+		&server_runtime, client_key, "client-read",
+		&server.keys.client_write_key);
+	install_record_key(
+		&server_runtime, server_key, "server-write",
+		&server.keys.server_write_key);
+	pqcp_runtime_secure_zero(client_key, sizeof(client_key));
+	pqcp_runtime_secure_zero(server_key, sizeof(server_key));
 	for (size_t index = 0U;
 	     index < PQCP_CHANNEL_AEAD_NONCE_BYTES; ++index) {
 		client.keys.client_nonce_base[index] =
