@@ -157,8 +157,6 @@ static void apply_action(
 	const struct pqcp_adaptive_transition_controller *transition,
 	const struct pqcp_adaptive_profile_registry *registry)
 {
-	const char *safe_profile;
-
 	state->action = failure_action(policy, signal);
 	state->isolated_profile_mask |= signal->profile_fault_mask;
 	state->transitions_permitted = true;
@@ -220,11 +218,12 @@ static void apply_action(
 	    state->action == PQCP_ADAPTIVE_RESILIENCE_PIN_PROFILE) {
 		pqcp_adaptive_internal_set_text(
 			state->pinned_profile_id,
-			sizeof(state->pinned_profile_id),
-			transition->current_profile_id);
+		    sizeof(state->pinned_profile_id),
+		    transition->current_profile_id);
 	} else {
-		safe_profile = select_safe_profile(
+		const char *safe_profile = select_safe_profile(
 			registry, state->isolated_profile_mask);
+
 		if (safe_profile != NULL) {
 			pqcp_adaptive_internal_set_text(
 				state->pinned_profile_id,

@@ -208,12 +208,14 @@ int pqcp_channel_mbedtls_receive(
 }
 
 // cppcheck-suppress constParameterCallback
+// cppcheck-suppress constParameter
 int pqcp_channel_mbedtls_export(
 	void *context,
 	const char *label,
 	const uint8_t *export_context,
 	size_t export_context_length,
 	// cppcheck-suppress constParameterCallback
+	// cppcheck-suppress constParameter
 	uint8_t *output,
 	size_t output_length)
 {
