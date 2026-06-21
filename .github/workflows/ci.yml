@@ -1,5 +1,9 @@
 name: CI
 
+permissions:
+  contents: read
+  checks: write
+
 on:
   push:
   pull_request:
@@ -222,7 +226,7 @@ jobs:
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         run: |
           python "$GITHUB_WORKSPACE/scripts/run_benchmarks.py" \
-            --benchmark-matrix \
+            --matrix \
             --board qemu_x86_64 \
             --profile MCU_MINIMAL \
             --sample pqcp_basic_kem \
