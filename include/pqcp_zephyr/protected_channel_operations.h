@@ -288,11 +288,19 @@ struct pqcp_channel_rekey_context {
 	uint64_t pending_epoch;
 	uint64_t prepared_at_ms;
 	uint64_t expires_at_ms;
+	uint64_t committed_at_ms;
 	uint64_t bytes_at_prepare;
 	uint8_t salt[PQCP_CHANNEL_REKEY_SALT_BYTES];
 	uint8_t confirmation[PQCP_CHANNEL_FINISHED_BYTES];
+	uint8_t expected_peer_confirmation[PQCP_CHANNEL_FINISHED_BYTES];
 	struct pqcp_channel_keys pending_keys;
+	struct pqcp_channel_keys retired_keys;
 	struct pqcp_runtime_key_store *key_store;
+	enum pqcp_channel_role initiator_role;
+	int last_cleanup_error;
+	uint32_t cleanup_failures;
+	bool cleanup_pending;
+	bool pending_cleanup;
 	bool initiator;
 };
 
@@ -406,8 +414,10 @@ struct pqcp_channel_operations {
 	struct pqcp_channel_resumption_store *resumption;
 	struct pqcp_channel_peer_health *peer;
 	struct pqcp_channel_peer_policy peer_policy;
+	struct pqcp_channel_rekey_policy rekey_policy;
 	enum pqcp_channel_policy_state state;
 	uint64_t epoch_started_at_ms;
+	uint64_t epoch_started_bytes;
 	uint64_t next_control_id;
 	uint64_t controls_sent;
 	uint64_t controls_received;
@@ -544,7 +554,8 @@ bool pqcp_channel_rekey_due(
 	const struct pqcp_channel *channel,
 	const struct pqcp_channel_rekey_policy *policy,
 	uint64_t now_ms,
-	uint64_t epoch_started_at_ms);
+	uint64_t epoch_started_at_ms,
+	uint64_t epoch_started_bytes);
 int pqcp_channel_rekey_prepare(
 	const struct pqcp_channel *channel,
 	const struct pqcp_channel_rekey_policy *policy,
@@ -562,6 +573,8 @@ int pqcp_channel_rekey_commit(
 	struct pqcp_channel *channel,
 	struct pqcp_channel_rekey_context *context,
 	uint64_t now_ms);
+int pqcp_channel_rekey_cleanup(
+	struct pqcp_channel_rekey_context *context);
 int pqcp_channel_rekey_abort(
 	struct pqcp_channel_rekey_context *context);
 int pqcp_channel_rekey_audit(
