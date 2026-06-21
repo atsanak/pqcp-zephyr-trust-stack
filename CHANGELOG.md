@@ -36,6 +36,14 @@ release tag to the validation and provider surface it introduced.
   secure time, exact bounded revocations, rollout cohorts, health circuit
   breaking, offline leases, evidence-chained recovery, peer trust, admission
   control, correlated risk scoring, and maintenance conflict scheduling.
+- Allocation-free zero-trust edge security plane with bounded service mesh
+  identity and routing, composite admission, durable authenticated messaging,
+  confidential versioned object storage, incident response, evidence,
+  containment, continuity, posture and attestation, policy distribution,
+  secret rotation, anomaly and resource controls, DLP, trust federation,
+  credential caching, isolation zones, tamper-evident provenance, deadline
+  scheduling, SLA monitoring, transactional configuration, and canonical
+  compliance summaries.
 - Assurance claims catalog now exposes per-primitive KAT claims
   (`kat.mlkem_512/768/1024`, `kat.mldsa_44/65/87`), per-primitive
   benchmark claims (`benchmark.mlkem_throughput`,
