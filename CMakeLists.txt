@@ -415,6 +415,25 @@ if(CONFIG_PQCP_FLEET_TRUST)
     )
 endif()
 
+if(CONFIG_PQCP_FLEET_TRANSPARENCY)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_transparency_merkle.c
+        ${PQCP_SRC}/fleet_transparency_log.c
+        ${PQCP_SRC}/fleet_transparency_proof.c
+        ${PQCP_SRC}/fleet_transparency_checkpoint.c
+        ${PQCP_SRC}/fleet_transparency_witness.c
+        ${PQCP_SRC}/fleet_transparency_gossip.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_APPROVAL)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_approval_policy.c
+        ${PQCP_SRC}/fleet_approval_session.c
+        ${PQCP_SRC}/fleet_approval_receipt.c
+    )
+endif()
+
 if(CONFIG_PQCP_EDGE_SECURITY)
     zephyr_library_sources(
         ${PQCP_SRC}/edge_security_common.c

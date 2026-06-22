@@ -1564,6 +1564,34 @@ config PQCP_FLEET_STORE_ITS
 	  Store the two fleet metadata slots through PSA Internal Trusted Storage.
 	  Enable this only on targets that provide the ITS client API and service.
 
+config PQCP_FLEET_TRANSPARENCY
+	bool "Enable witnessed fleet transparency services"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable the host-portable, allocation-free append-only Merkle log,
+	  inclusion and consistency proofs, signed monotonic checkpoints,
+	  independent witness quorum, and signed checkpoint gossip.
+
+	  The implementation follows the RFC 9162 Merkle tree shape and domain
+	  separation. Applications provide hashing, signature, persistence,
+	  storage, and workspace callbacks so the same semantic core can be used
+	  by Zephyr firmware and hosted coordinators.
+
+config PQCP_FLEET_APPROVAL
+	bool "Enable multi-party fleet action authorization"
+	depends on PQCP_FLEET_TRANSPARENCY
+	default n
+	help
+	  Enable versioned authority sets, role and weight quorum policies,
+	  context-bound approval sessions, deterministic approval certificates,
+	  witnessed-checkpoint requirements, and fail-closed replay consumption
+	  for high-risk fleet operations.
+
+	  Sessions bind the authority-set generation, policy and revocation
+	  epochs, target, artifact digest, nonce, deadline, and transparency
+	  checkpoint so stale or cross-context approvals cannot be reused.
+
 endmenu
 
 # =============================================================================
