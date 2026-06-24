@@ -56,7 +56,8 @@ static bool mode_accepts_step(
 {
 	switch (mode) {
 	case PQCP_SOVEREIGN_RECOVERY_MODE_FAILOVER:
-		return kind != PQCP_SOVEREIGN_STEP_ROLLBACK;
+		return kind != PQCP_SOVEREIGN_STEP_REJOIN &&
+		       kind != PQCP_SOVEREIGN_STEP_ROLLBACK;
 	case PQCP_SOVEREIGN_RECOVERY_MODE_REJOIN:
 		return kind != PQCP_SOVEREIGN_STEP_PROMOTE &&
 		       kind != PQCP_SOVEREIGN_STEP_ROLLBACK;
@@ -250,6 +251,159 @@ int pqcp_sovereign_recovery_plan_order(
 	return emitted == valid_mask ? 0 : -ELOOP;
 }
 
+static int dependency_closure(
+	const struct pqcp_sovereign_recovery_plan *plan,
+	const uint8_t order[PQCP_SOVEREIGN_CONTINUITY_MAX_STEPS],
+	uint32_t closure[PQCP_SOVEREIGN_CONTINUITY_MAX_STEPS])
+{
+	uint32_t emitted = 0U;
+
+	memset(closure, 0,
+	       sizeof(uint32_t) *
+		       PQCP_SOVEREIGN_CONTINUITY_MAX_STEPS);
+	for (uint32_t position = 0U;
+	     position < plan->step_count; ++position) {
+		uint32_t index = order[position];
+		uint32_t dependencies;
+
+		if (index >= plan->step_count) {
+			return -EBADMSG;
+		}
+		dependencies =
+			plan->steps[index].dependency_mask;
+		if ((dependencies & ~emitted) != 0U) {
+			return -ELOOP;
+		}
+		closure[index] = dependencies;
+		for (uint32_t dependency = 0U;
+		     dependency < plan->step_count;
+		     ++dependency) {
+			if ((dependencies &
+			     (1U << dependency)) != 0U) {
+				closure[index] |=
+					closure[dependency];
+			}
+		}
+		emitted |= 1U << index;
+	}
+	return 0;
+}
+
+static int validate_dependency_contract(
+	const struct pqcp_sovereign_recovery_plan *plan,
+	const uint8_t order[PQCP_SOVEREIGN_CONTINUITY_MAX_STEPS])
+{
+	uint32_t closure[PQCP_SOVEREIGN_CONTINUITY_MAX_STEPS];
+	uint32_t select_mask = 0U;
+	uint32_t fence_mask = 0U;
+	uint32_t restore_mask = 0U;
+	uint32_t validate_mask = 0U;
+	uint32_t mode_mask = 0U;
+	uint32_t release_mask = 0U;
+	uint32_t complete_mask = 0U;
+	uint32_t fence_protected_mask = 0U;
+	uint32_t valid_mask =
+		pqcp_sovereign_continuity_step_mask(
+			plan->step_count);
+	int ret;
+
+	ret = dependency_closure(plan, order, closure);
+	if (ret != 0) {
+		return ret;
+	}
+	for (uint32_t index = 0U;
+	     index < plan->step_count; ++index) {
+		uint32_t bit = 1U << index;
+		const struct pqcp_sovereign_recovery_step *step =
+			&plan->steps[index];
+
+		switch (step->kind) {
+		case PQCP_SOVEREIGN_STEP_SELECT_POINT:
+			select_mask |= bit;
+			break;
+		case PQCP_SOVEREIGN_STEP_FENCE:
+			fence_mask |= bit;
+			break;
+		case PQCP_SOVEREIGN_STEP_RESTORE:
+			restore_mask |= bit;
+			break;
+		case PQCP_SOVEREIGN_STEP_VALIDATE:
+			validate_mask |= bit;
+			break;
+		case PQCP_SOVEREIGN_STEP_PROMOTE:
+		case PQCP_SOVEREIGN_STEP_REJOIN:
+		case PQCP_SOVEREIGN_STEP_ROLLBACK:
+			mode_mask |= bit;
+			break;
+		case PQCP_SOVEREIGN_STEP_RELEASE_FENCE:
+			release_mask |= bit;
+			break;
+		case PQCP_SOVEREIGN_STEP_COMPLETE:
+			complete_mask |= bit;
+			break;
+		default:
+			break;
+		}
+		if (step->fence_required &&
+		    step->kind != PQCP_SOVEREIGN_STEP_FENCE &&
+		    step->kind !=
+			    PQCP_SOVEREIGN_STEP_RELEASE_FENCE) {
+			fence_protected_mask |= bit;
+		}
+	}
+	if (__builtin_popcount(complete_mask) != 1 ||
+	    __builtin_popcount(mode_mask) == 0 ||
+	    (restore_mask == 0U) || (validate_mask == 0U)) {
+		return -EPERM;
+	}
+	if ((fence_mask != 0U || fence_protected_mask != 0U) &&
+	    (__builtin_popcount(fence_mask) != 1 ||
+	     __builtin_popcount(release_mask) != 1)) {
+		return -EPERM;
+	}
+	for (uint32_t index = 0U;
+	     index < plan->step_count; ++index) {
+		uint32_t ancestors = closure[index];
+		uint32_t bit = 1U << index;
+		const struct pqcp_sovereign_recovery_step *step =
+			&plan->steps[index];
+
+		if (step->point_required &&
+		    step->kind !=
+			    PQCP_SOVEREIGN_STEP_SELECT_POINT &&
+		    (ancestors & select_mask) == 0U) {
+			return -EPERM;
+		}
+		if (step->fence_required &&
+		    step->kind != PQCP_SOVEREIGN_STEP_FENCE &&
+		    (ancestors & fence_mask) == 0U) {
+			return -EPERM;
+		}
+		if (step->kind == PQCP_SOVEREIGN_STEP_VALIDATE &&
+		    (ancestors & restore_mask) == 0U) {
+			return -EPERM;
+		}
+		if ((bit & mode_mask) != 0U &&
+		    (ancestors & validate_mask) == 0U) {
+			return -EPERM;
+		}
+		if (step->kind ==
+			    PQCP_SOVEREIGN_STEP_RELEASE_FENCE &&
+		    ((ancestors & fence_mask) != fence_mask ||
+		     (ancestors & fence_protected_mask) !=
+			     fence_protected_mask ||
+		     (ancestors & mode_mask) != mode_mask)) {
+			return -EPERM;
+		}
+		if (step->kind ==
+			    PQCP_SOVEREIGN_STEP_COMPLETE &&
+		    ancestors != (valid_mask & ~bit)) {
+			return -EPERM;
+		}
+	}
+	return 0;
+}
+
 static int validate_plan(
 	const struct pqcp_sovereign_recovery_plan *plan,
 	uint8_t order[PQCP_SOVEREIGN_CONTINUITY_MAX_STEPS])
@@ -283,12 +437,15 @@ static int validate_plan(
 	}
 	if (!required_mode_step_present(plan) ||
 	    !complete_present ||
-	    (operation_mask &
-	     ~plan->required_operation_mask) != 0U) {
+	    operation_mask != plan->required_operation_mask) {
 		return -EPERM;
 	}
 	ret = pqcp_sovereign_recovery_plan_order(
 		plan, order);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = validate_dependency_contract(plan, order);
 	if (ret != 0) {
 		return ret;
 	}
