@@ -1592,6 +1592,34 @@ config PQCP_FLEET_APPROVAL
 	  epochs, target, artifact digest, nonce, deadline, and transparency
 	  checkpoint so stale or cross-context approvals cannot be reused.
 
+config PQCP_FLEET_ARTIFACT_CORE
+	bool "Enable canonical COSE, EAT, and RATS artifact core"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable the host-portable canonical CBOR, COSE_Sign1, ML-DSA AKP key,
+	  EAT CWT evidence, RATS appraisal, and stable C ABI implementation.
+	  Callers provide cryptographic callbacks and caller-owned workspaces.
+
+config PQCP_FLEET_POLICY_VM
+	bool "Enable deterministic fleet policy virtual machine"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable bounded policy bytecode verification and execution, canonical
+	  module serialization, posture and rate built-ins, explainable decision
+	  traces, dual-bank durable policy storage, and guarded canary rollout.
+
+config PQCP_FLEET_CONVERGENCE
+	bool "Enable durable fleet desired-state convergence"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable artifact delivery and receipts, desired/reported state
+	  convergence, bounded caches and snapshot synchronization, transport
+	  multiplexing, and recovery orchestration for intermittently connected
+	  gateway fleets.
+
 endmenu
 
 # =============================================================================
@@ -1613,6 +1641,26 @@ config PQCP_EDGE_SECURITY
 	  Applications provide every storage array during initialization, making
 	  maximum memory use explicit and suitable for constrained Zephyr targets.
 	  The public API is experimental.
+
+endmenu
+
+# =============================================================================
+# Sovereign Runtime and Continuity
+# =============================================================================
+menu "Sovereign Runtime and Continuity"
+
+config PQCP_SOVEREIGN_RUNTIME
+	bool "Enable sovereign supply-chain and workload governance"
+	depends on PQCP_EDGE_SECURITY
+	depends on PQCP_CRYPTO_BROKER
+	depends on PQCP_PROTECTED_CHANNEL
+	default n
+	help
+	  Enable bounded tenant and namespace governance, SBOM and build
+	  attestations, release and placement policy, privacy and residency
+	  controls, key ceremonies and custody, interoperable audit export,
+	  resumable broker channels, continuity objectives, fencing, and
+	  recovery orchestration.
 
 endmenu
 
