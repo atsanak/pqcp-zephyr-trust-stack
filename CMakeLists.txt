@@ -590,11 +590,24 @@ if(CONFIG_PQCP_SOVEREIGN_RUNTIME)
         ${PQCP_SRC}/sovereign_channel_flow.c
         ${PQCP_SRC}/sovereign_channel_resume.c
         ${PQCP_SRC}/sovereign_channel_broker.c
+        ${PQCP_SRC}/sovereign_channel_server.c
+        ${PQCP_SRC}/sovereign_channel_client.c
         ${PQCP_SRC}/sovereign_policy_common.c
         ${PQCP_SRC}/sovereign_network_policy.c
         ${PQCP_SRC}/sovereign_placement_engine.c
         ${PQCP_SRC}/sovereign_rollout_controller.c
         ${PQCP_SRC}/sovereign_rollback_coordinator.c
+        ${PQCP_SRC}/sovereign_dependency_graph.c
+        ${PQCP_SRC}/sovereign_risk_graph.c
+        ${PQCP_SRC}/sovereign_threat_intelligence.c
+        ${PQCP_SRC}/sovereign_forensic_timeline.c
+        ${PQCP_SRC}/sovereign_control_catalog.c
+        ${PQCP_SRC}/sovereign_exception_manager.c
+        ${PQCP_SRC}/sovereign_evidence_packager.c
+        ${PQCP_SRC}/sovereign_regulator_exporter.c
+        ${PQCP_SRC}/sovereign_continuity_exerciser.c
+        ${PQCP_SRC}/sovereign_recovery_quorum.c
+        ${PQCP_SRC}/sovereign_cost_governor.c
         ${PQCP_SRC}/sovereign_continuity_objective.c
         ${PQCP_SRC}/sovereign_recovery_point.c
         ${PQCP_SRC}/sovereign_authority_lease.c
@@ -602,6 +615,7 @@ if(CONFIG_PQCP_SOVEREIGN_RUNTIME)
         ${PQCP_SRC}/sovereign_recovery_plan.c
         ${PQCP_SRC}/sovereign_recovery_orchestrator.c
         ${PQCP_SRC}/sovereign_continuity_audit.c
+        ${PQCP_SRC}/sovereign_runtime.c
     )
 endif()
 
