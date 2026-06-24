@@ -11,7 +11,7 @@
 #include "sovereign_channel_internal.h"
 
 #define SOVEREIGN_RESUME_DOMAIN "PQCP-SOVEREIGN-RESUME-V1"
-#define SOVEREIGN_RESUME_CLAIM_BYTES 184U
+#define SOVEREIGN_RESUME_CLAIM_BYTES 200U
 
 static bool claim_valid(
 	const struct pqcp_sovereign_channel_resume_claim *claim)

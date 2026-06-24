@@ -10,7 +10,7 @@
 #include "fleet_internal.h"
 
 static void writer_byte(
-	struct pqcp_fleet_cbor_writer *writer,
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	uint8_t value)
 {
 	if (writer->error != 0) {
@@ -24,7 +24,7 @@ static void writer_byte(
 }
 
 static void writer_data(
-	struct pqcp_fleet_cbor_writer *writer,
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	const uint8_t *value,
 	size_t length)
 {
@@ -42,7 +42,7 @@ static void writer_data(
 }
 
 static int write_head(
-	struct pqcp_fleet_cbor_writer *writer,
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	uint8_t major,
 	uint64_t value)
 {
@@ -72,8 +72,8 @@ static int write_head(
 	return writer->error;
 }
 
-void pqcp_fleet_cbor_writer_init(
-	struct pqcp_fleet_cbor_writer *writer,
+void pqcp_fleet_legacy_cbor_writer_init(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	uint8_t *buffer,
 	size_t capacity)
 {
@@ -88,22 +88,22 @@ void pqcp_fleet_cbor_writer_init(
 	}
 }
 
-int pqcp_fleet_cbor_write_array(
-	struct pqcp_fleet_cbor_writer *writer,
+int pqcp_fleet_legacy_cbor_write_array(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	size_t count)
 {
 	return write_head(writer, 4U, count);
 }
 
-int pqcp_fleet_cbor_write_uint(
-	struct pqcp_fleet_cbor_writer *writer,
+int pqcp_fleet_legacy_cbor_write_uint(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	uint64_t value)
 {
 	return write_head(writer, 0U, value);
 }
 
-int pqcp_fleet_cbor_write_int(
-	struct pqcp_fleet_cbor_writer *writer,
+int pqcp_fleet_legacy_cbor_write_int(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	int64_t value)
 {
 	if (value >= 0) {
@@ -113,8 +113,8 @@ int pqcp_fleet_cbor_write_int(
 		writer, 1U, (uint64_t)(-(value + 1)));
 }
 
-int pqcp_fleet_cbor_write_bool(
-	struct pqcp_fleet_cbor_writer *writer,
+int pqcp_fleet_legacy_cbor_write_bool(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	bool value)
 {
 	if (writer == NULL) {
@@ -124,8 +124,8 @@ int pqcp_fleet_cbor_write_bool(
 	return writer->error;
 }
 
-int pqcp_fleet_cbor_write_bytes(
-	struct pqcp_fleet_cbor_writer *writer,
+int pqcp_fleet_legacy_cbor_write_bytes(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	const uint8_t *value,
 	size_t length)
 {
@@ -137,8 +137,8 @@ int pqcp_fleet_cbor_write_bytes(
 	return writer->error;
 }
 
-int pqcp_fleet_cbor_write_text(
-	struct pqcp_fleet_cbor_writer *writer,
+int pqcp_fleet_legacy_cbor_write_text(
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	const char *value,
 	size_t maximum)
 {
@@ -157,7 +157,7 @@ int pqcp_fleet_cbor_write_text(
 }
 
 static int reader_byte(
-	struct pqcp_fleet_cbor_reader *reader,
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	uint8_t *value)
 {
 	if (reader == NULL || value == NULL || reader->error != 0) {
@@ -172,7 +172,7 @@ static int reader_byte(
 }
 
 static int read_head(
-	struct pqcp_fleet_cbor_reader *reader,
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	uint8_t expected_major,
 	uint64_t *value)
 {
@@ -232,8 +232,8 @@ static int read_head(
 	return 0;
 }
 
-void pqcp_fleet_cbor_reader_init(
-	struct pqcp_fleet_cbor_reader *reader,
+void pqcp_fleet_legacy_cbor_reader_init(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	const uint8_t *buffer,
 	size_t length)
 {
@@ -248,8 +248,8 @@ void pqcp_fleet_cbor_reader_init(
 	}
 }
 
-int pqcp_fleet_cbor_read_array(
-	struct pqcp_fleet_cbor_reader *reader,
+int pqcp_fleet_legacy_cbor_read_array(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	size_t expected)
 {
 	uint64_t count;
@@ -265,15 +265,15 @@ int pqcp_fleet_cbor_read_array(
 	return 0;
 }
 
-int pqcp_fleet_cbor_read_uint(
-	struct pqcp_fleet_cbor_reader *reader,
+int pqcp_fleet_legacy_cbor_read_uint(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	uint64_t *value)
 {
 	return read_head(reader, 0U, value);
 }
 
-int pqcp_fleet_cbor_read_int(
-	struct pqcp_fleet_cbor_reader *reader,
+int pqcp_fleet_legacy_cbor_read_int(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	int64_t *value)
 {
 	uint8_t head;
@@ -314,8 +314,8 @@ int pqcp_fleet_cbor_read_int(
 	return reader->error;
 }
 
-int pqcp_fleet_cbor_read_bool(
-	struct pqcp_fleet_cbor_reader *reader,
+int pqcp_fleet_legacy_cbor_read_bool(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	bool *value)
 {
 	uint8_t encoded;
@@ -340,8 +340,8 @@ int pqcp_fleet_cbor_read_bool(
 	return reader->error;
 }
 
-int pqcp_fleet_cbor_read_bytes(
-	struct pqcp_fleet_cbor_reader *reader,
+int pqcp_fleet_legacy_cbor_read_bytes(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	uint8_t *value,
 	size_t capacity,
 	size_t *length)
@@ -368,8 +368,8 @@ int pqcp_fleet_cbor_read_bytes(
 	return 0;
 }
 
-int pqcp_fleet_cbor_read_text(
-	struct pqcp_fleet_cbor_reader *reader,
+int pqcp_fleet_legacy_cbor_read_text(
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	char *value,
 	size_t capacity)
 {
@@ -395,8 +395,8 @@ int pqcp_fleet_cbor_read_text(
 	return 0;
 }
 
-int pqcp_fleet_cbor_finish(
-	struct pqcp_fleet_cbor_reader *reader)
+int pqcp_fleet_legacy_cbor_finish(
+	struct pqcp_fleet_legacy_cbor_reader *reader)
 {
 	if (reader == NULL) {
 		return -EINVAL;
@@ -407,37 +407,37 @@ int pqcp_fleet_cbor_finish(
 	return reader->offset == reader->length ? 0 : -EBADMSG;
 }
 
-int pqcp_fleet_cbor_peek_envelope_type(
+int pqcp_fleet_legacy_cbor_peek_envelope_type(
 	const uint8_t *input,
 	size_t length,
 	enum pqcp_fleet_message_type *type)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	uint64_t value;
 	int ret;
 
 	if (input == NULL || type == NULL) {
 		return -EINVAL;
 	}
-	pqcp_fleet_cbor_reader_init(&reader, input, length);
-	ret = pqcp_fleet_cbor_read_array(&reader, 2U);
+	pqcp_fleet_legacy_cbor_reader_init(&reader, input, length);
+	ret = pqcp_fleet_legacy_cbor_read_array(&reader, 2U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_array(&reader, 12U);
+		ret = pqcp_fleet_legacy_cbor_read_array(&reader, 12U);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(&reader, &value);
+		ret = pqcp_fleet_legacy_cbor_read_uint(&reader, &value);
 	}
 	if (ret == 0 && value != PQCP_FLEET_SCHEMA_VERSION) {
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(&reader, &value);
+		ret = pqcp_fleet_legacy_cbor_read_uint(&reader, &value);
 	}
 	if (ret == 0 && value != PQCP_FLEET_PROTOCOL_VERSION) {
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(&reader, &value);
+		ret = pqcp_fleet_legacy_cbor_read_uint(&reader, &value);
 	}
 	if (ret != 0 || value <= PQCP_FLEET_MESSAGE_NONE ||
 	    value >= PQCP_FLEET_MESSAGE_TYPE_COUNT) {

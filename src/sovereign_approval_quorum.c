@@ -42,9 +42,9 @@ static bool request_shape_valid(
 	if (request == NULL || !request->occupied ||
 	    request->schema_version != PQCP_SOVEREIGN_SCHEMA_VERSION ||
 	    request->request_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    request->subject_id, sizeof(request->subject_id)) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    request->action, sizeof(request->action)) ||
 	    request->required_capabilities == 0U ||
 	    request->required_approvals == 0U ||
@@ -55,7 +55,7 @@ static bool request_shape_valid(
 	    request->opened_at_ms == 0U ||
 	    request->expires_at_ms <= request->opened_at_ms ||
 	    request->policy_epoch == 0U ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    request->subject_digest) ||
 	    !approval_state_valid(request->state)) {
 		return false;
@@ -89,14 +89,14 @@ static bool vote_shape_valid(
 	       vote->occupied &&
 	       vote->schema_version == PQCP_SOVEREIGN_SCHEMA_VERSION &&
 	       vote->request_id != 0U &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       vote->approver_id, sizeof(vote->approver_id)) &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       vote->role, sizeof(vote->role)) &&
 	       vote->capabilities != 0U &&
 	       vote->voted_at_ms != 0U &&
 	       vote->credential_epoch != 0U &&
-	       !pqcp_sovereign_internal_digest_zero(vote->vote_digest);
+	       !pqcp_sovereign_ceremony_digest_zero(vote->vote_digest);
 }
 
 static int lock_quorum(struct pqcp_sovereign_approval_quorum *quorum)
@@ -351,9 +351,9 @@ static int validate_open_arguments(
 	uint64_t now_ms,
 	uint64_t expires_at_ms)
 {
-	if (!pqcp_sovereign_internal_text_valid(
+	if (!pqcp_sovereign_ceremony_text_valid(
 		    subject_id, PQCP_SOVEREIGN_SUBJECT_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    action, PQCP_SOVEREIGN_LABEL_MAX_CHARS) ||
 	    required_capabilities == 0U ||
 	    required_approvals == 0U ||
@@ -361,7 +361,7 @@ static int validate_open_arguments(
 	    required_distinct_roles == 0U ||
 	    required_distinct_roles > required_approvals ||
 	    subject_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(subject_digest) ||
+	    pqcp_sovereign_ceremony_digest_zero(subject_digest) ||
 	    policy_epoch == 0U ||
 	    now_ms == 0U ||
 	    expires_at_ms <= now_ms) {
@@ -378,14 +378,14 @@ static int validate_vote_arguments(
 	const uint8_t vote_digest[PQCP_SOVEREIGN_DIGEST_BYTES],
 	uint64_t now_ms)
 {
-	if (!pqcp_sovereign_internal_text_valid(
+	if (!pqcp_sovereign_ceremony_text_valid(
 		    approver_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    role, PQCP_SOVEREIGN_LABEL_MAX_CHARS) ||
 	    capabilities == 0U ||
 	    credential_epoch == 0U ||
 	    vote_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(vote_digest) ||
+	    pqcp_sovereign_ceremony_digest_zero(vote_digest) ||
 	    now_ms == 0U) {
 		return -EINVAL;
 	}
@@ -466,10 +466,10 @@ int pqcp_sovereign_approval_open(
 	memset(&staged, 0, sizeof(staged));
 	staged.schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	staged.request_id = quorum->next_request_id++;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.subject_id, sizeof(staged.subject_id), subject_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.action, sizeof(staged.action), action);
 	}
 	if (ret != 0) {
@@ -569,11 +569,11 @@ int pqcp_sovereign_approval_vote(
 	memset(&staged, 0, sizeof(staged));
 	staged.schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	staged.request_id = request_id;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.approver_id, sizeof(staged.approver_id),
 		approver_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.role, sizeof(staged.role), role);
 	}
 	if (ret != 0) {

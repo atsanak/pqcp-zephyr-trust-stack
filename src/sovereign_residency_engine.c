@@ -72,7 +72,7 @@ static bool context_valid(
 	       context->now_ms != 0U;
 }
 
-static ssize_t rule_index_locked(
+static int rule_index_locked(
 	const struct pqcp_sovereign_residency_engine *engine,
 	uint32_t rule_id)
 {
@@ -81,20 +81,20 @@ static ssize_t rule_index_locked(
 	for (index = 0U; index < engine->capacity; ++index) {
 		if (engine->rules[index].enabled &&
 		    engine->rules[index].rule_id == rule_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_rule_index_locked(
+static int free_rule_index_locked(
 	const struct pqcp_sovereign_residency_engine *engine)
 {
 	size_t index;
 
 	for (index = 0U; index < engine->capacity; ++index) {
 		if (!engine->rules[index].enabled) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -143,7 +143,7 @@ int pqcp_sovereign_residency_rule_put(
 	const struct pqcp_sovereign_residency_rule *rule)
 {
 	struct pqcp_sovereign_residency_rule candidate;
-	ssize_t index;
+	int index;
 
 	if (engine == NULL || !engine->initialized ||
 	    !rule_valid(rule)) {
@@ -171,7 +171,7 @@ int pqcp_sovereign_residency_rule_remove(
 	struct pqcp_sovereign_residency_engine *engine,
 	uint32_t rule_id)
 {
-	ssize_t index;
+	int index;
 
 	if (engine == NULL || !engine->initialized ||
 	    rule_id == 0U) {

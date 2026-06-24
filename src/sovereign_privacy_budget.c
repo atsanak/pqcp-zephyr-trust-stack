@@ -11,7 +11,7 @@
 #include <limits.h>
 #include <string.h>
 
-static ssize_t budget_index_locked(
+static int budget_index_locked(
 	const struct pqcp_sovereign_privacy_budget_manager *manager,
 	const char *budget_id)
 {
@@ -21,20 +21,20 @@ static ssize_t budget_index_locked(
 		if (manager->budgets[index].occupied &&
 		    strcmp(manager->budgets[index].budget_id,
 			   budget_id) == 0) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_budget_index_locked(
+static int free_budget_index_locked(
 	const struct pqcp_sovereign_privacy_budget_manager *manager)
 {
 	size_t index;
 
 	for (index = 0U; index < manager->capacity; ++index) {
 		if (!manager->budgets[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -152,7 +152,7 @@ int pqcp_sovereign_privacy_budget_put(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_privacy_budget candidate;
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    !budget_valid(budget, now_ms)) {
@@ -209,7 +209,7 @@ int pqcp_sovereign_privacy_budget_consume(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_privacy_budget *budget;
-	ssize_t index;
+	int index;
 	int ret = 0;
 
 	if (manager == NULL || !manager->initialized ||
@@ -274,7 +274,7 @@ int pqcp_sovereign_privacy_budget_remaining(
 	uint64_t *query_count)
 {
 	struct pqcp_sovereign_privacy_budget *budget;
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    !pqcp_sovereign_privacy_text_valid(

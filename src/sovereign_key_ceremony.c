@@ -211,37 +211,37 @@ static int ceremony_open_digest(
 	size_t offset = 0U;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, CEREMONY_DOMAIN,
 		sizeof(CEREMONY_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, ceremony->schema_version);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->ceremony_id);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, ceremony->key_id,
 		sizeof(ceremony->key_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, ceremony->purpose,
 		sizeof(ceremony->purpose));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->current_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->target_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->opened_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->expires_at_ms);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, ceremony->threshold);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		ceremony->required_distinct_roles);
 	if (offset == 0U || offset > sizeof(body)) {
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	int ret = pqcp_sovereign_internal_hash(
+	int ret = pqcp_sovereign_ceremony_hash(
 		body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
@@ -256,31 +256,31 @@ static int contribution_event_digest(
 	size_t offset = 0U;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, CONTRIBUTION_DOMAIN,
 		sizeof(CONTRIBUTION_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, ceremony->transcript_digest,
 		sizeof(ceremony->transcript_digest));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, contribution->ceremony_id);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, contribution->custodian_id,
 		sizeof(contribution->custodian_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, contribution->role,
 		sizeof(contribution->role));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		contribution->submitted_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		contribution->credential_epoch);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		contribution->contribution_digest,
 		sizeof(contribution->contribution_digest));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		contribution->proof_digest,
 		sizeof(contribution->proof_digest));
@@ -288,7 +288,7 @@ static int contribution_event_digest(
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	int ret = pqcp_sovereign_internal_hash(
+	int ret = pqcp_sovereign_ceremony_hash(
 		body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
@@ -304,29 +304,29 @@ static int ceremony_terminal_digest(
 	size_t offset = 0U;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, domain,
 		PQCP_SOVEREIGN_LABEL_MAX_CHARS);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, ceremony->transcript_digest,
 		sizeof(ceremony->transcript_digest));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->ceremony_id);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, ceremony->target_epoch);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, ceremony->contribution_count);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		ceremony->distinct_role_count);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, key_digest,
 		PQCP_SOVEREIGN_DIGEST_BYTES);
 	if (offset == 0U || offset > sizeof(body)) {
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	int ret = pqcp_sovereign_internal_hash(
+	int ret = pqcp_sovereign_ceremony_hash(
 		body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
@@ -338,7 +338,7 @@ static bool purpose_epoch_valid(
 	uint64_t target_epoch)
 {
 	enum pqcp_sovereign_ceremony_action action =
-		pqcp_sovereign_internal_action_from_text(purpose);
+		pqcp_sovereign_ceremony_action_from_text(purpose);
 
 	switch (action) {
 	case PQCP_SOVEREIGN_CEREMONY_ACTION_GENERATE:
@@ -362,9 +362,9 @@ static bool ceremony_shape_valid(
 	if (ceremony == NULL || !ceremony->occupied ||
 	    ceremony->schema_version != PQCP_SOVEREIGN_SCHEMA_VERSION ||
 	    ceremony->ceremony_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    ceremony->key_id, sizeof(ceremony->key_id)) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    ceremony->purpose, sizeof(ceremony->purpose)) ||
 	    !purpose_epoch_valid(
 		    ceremony->purpose, ceremony->current_epoch,
@@ -379,7 +379,7 @@ static bool ceremony_shape_valid(
 		    PQCP_SOVEREIGN_MAX_APPROVERS ||
 	    ceremony->distinct_role_count >
 		    ceremony->contribution_count ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    ceremony->transcript_digest) ||
 	    !ceremony_state_valid(ceremony->state)) {
 		return false;
@@ -388,12 +388,12 @@ static bool ceremony_shape_valid(
 	    (ceremony->contribution_count < ceremony->threshold ||
 	     ceremony->distinct_role_count <
 		     ceremony->required_distinct_roles ||
-	     pqcp_sovereign_internal_digest_zero(
+	     pqcp_sovereign_ceremony_digest_zero(
 		     ceremony->committed_key_digest))) {
 		return false;
 	}
 	if (ceremony->state != PQCP_SOVEREIGN_CEREMONY_COMMITTED &&
-	    !pqcp_sovereign_internal_digest_zero(
+	    !pqcp_sovereign_ceremony_digest_zero(
 		    ceremony->committed_key_digest)) {
 		return false;
 	}
@@ -408,17 +408,17 @@ static bool contribution_shape_valid(
 	       contribution->schema_version ==
 		       PQCP_SOVEREIGN_SCHEMA_VERSION &&
 	       contribution->ceremony_id != 0U &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       contribution->custodian_id,
 		       sizeof(contribution->custodian_id)) &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       contribution->role,
 		       sizeof(contribution->role)) &&
 	       contribution->submitted_at_ms != 0U &&
 	       contribution->credential_epoch != 0U &&
-	       !pqcp_sovereign_internal_digest_zero(
+	       !pqcp_sovereign_ceremony_digest_zero(
 		       contribution->contribution_digest) &&
-	       !pqcp_sovereign_internal_digest_zero(
+	       !pqcp_sovereign_ceremony_digest_zero(
 		       contribution->proof_digest) &&
 	       contribution->verified;
 }
@@ -474,9 +474,9 @@ int pqcp_sovereign_key_ceremony_open(
 		return -EINVAL;
 	}
 	*ceremony = NULL;
-	if (!pqcp_sovereign_internal_text_valid(
+	if (!pqcp_sovereign_ceremony_text_valid(
 		    key_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    purpose, PQCP_SOVEREIGN_LABEL_MAX_CHARS) ||
 	    !purpose_epoch_valid(purpose, current_epoch, target_epoch) ||
 	    threshold == 0U ||
@@ -503,10 +503,10 @@ int pqcp_sovereign_key_ceremony_open(
 	memset(&staged, 0, sizeof(staged));
 	staged.schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	staged.ceremony_id = manager->next_ceremony_id++;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.key_id, sizeof(staged.key_id), key_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.purpose, sizeof(staged.purpose), purpose);
 	}
 	if (ret != 0) {
@@ -552,16 +552,16 @@ int pqcp_sovereign_key_ceremony_contribute(
 	int ret;
 
 	if (ceremony_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    custodian_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    role, PQCP_SOVEREIGN_LABEL_MAX_CHARS) ||
 	    credential_epoch == 0U ||
 	    contribution_digest == NULL ||
 	    proof_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    contribution_digest) ||
-	    pqcp_sovereign_internal_digest_zero(proof_digest) ||
+	    pqcp_sovereign_ceremony_digest_zero(proof_digest) ||
 	    now_ms == 0U) {
 		return -EINVAL;
 	}
@@ -619,11 +619,11 @@ int pqcp_sovereign_key_ceremony_contribute(
 	memset(&staged, 0, sizeof(staged));
 	staged.schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	staged.ceremony_id = ceremony_id;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.custodian_id,
 		sizeof(staged.custodian_id), custodian_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.role, sizeof(staged.role), role);
 	}
 	if (ret != 0) {
@@ -676,7 +676,7 @@ int pqcp_sovereign_key_ceremony_commit(
 
 	if (ceremony_id == 0U ||
 	    committed_key_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    committed_key_digest) ||
 	    now_ms == 0U) {
 		return -EINVAL;

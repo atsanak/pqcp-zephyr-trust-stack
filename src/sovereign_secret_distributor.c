@@ -98,7 +98,7 @@ static int equivalent_active_grant_locked(
 		    strcmp(grant->key_id, key_id) == 0 &&
 		    strcmp(grant->recipient_id, recipient_id) == 0 &&
 		    strcmp(grant->namespace_id, namespace_id) == 0 &&
-		    pqcp_sovereign_internal_digest_equal(
+		    pqcp_sovereign_ceremony_digest_equal(
 			    grant->recipient_binding,
 			    recipient_binding)) {
 			return (int)index;
@@ -116,38 +116,38 @@ static int secret_grant_digest(
 	int ret;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, SECRET_GRANT_DOMAIN,
 		sizeof(SECRET_GRANT_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, grant->schema_version);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, grant->grant_id);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, grant->key_id,
 		sizeof(grant->key_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, grant->recipient_id,
 		sizeof(grant->recipient_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, grant->namespace_id,
 		sizeof(grant->namespace_id));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, grant->key_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, grant->policy_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, grant->issued_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, grant->expires_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, grant->maximum_uses);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, grant->permissions);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, grant->recipient_binding,
 		sizeof(grant->recipient_binding));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		grant->wrapped_secret_digest,
 		sizeof(grant->wrapped_secret_digest));
@@ -155,7 +155,7 @@ static int secret_grant_digest(
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	ret = pqcp_sovereign_internal_hash(body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
@@ -166,11 +166,11 @@ static bool grant_shape_valid(
 	if (grant == NULL || !grant->occupied ||
 	    grant->schema_version != PQCP_SOVEREIGN_SCHEMA_VERSION ||
 	    grant->grant_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    grant->key_id, sizeof(grant->key_id)) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    grant->recipient_id, sizeof(grant->recipient_id)) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    grant->namespace_id, sizeof(grant->namespace_id)) ||
 	    grant->key_epoch == 0U ||
 	    grant->policy_epoch == 0U ||
@@ -179,9 +179,9 @@ static bool grant_shape_valid(
 	    grant->maximum_uses == 0U ||
 	    grant->use_count > grant->maximum_uses ||
 	    grant->permissions == 0U ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    grant->recipient_binding) ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    grant->wrapped_secret_digest) ||
 	    !grant_state_valid(grant->state)) {
 		return false;
@@ -241,19 +241,19 @@ int pqcp_sovereign_secret_grant_issue(
 		return -EINVAL;
 	}
 	*grant = NULL;
-	if (!pqcp_sovereign_internal_text_valid(
+	if (!pqcp_sovereign_ceremony_text_valid(
 		    key_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    recipient_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    namespace_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
 	    key_epoch == 0U || policy_epoch == 0U ||
 	    permissions == 0U ||
 	    recipient_binding == NULL ||
 	    wrapped_secret_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    recipient_binding) ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    wrapped_secret_digest) ||
 	    now_ms == 0U || expires_at_ms <= now_ms ||
 	    maximum_uses == 0U) {
@@ -285,15 +285,15 @@ int pqcp_sovereign_secret_grant_issue(
 	memset(&staged, 0, sizeof(staged));
 	staged.schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	staged.grant_id = distributor->next_grant_id++;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.key_id, sizeof(staged.key_id), key_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.recipient_id,
 			sizeof(staged.recipient_id), recipient_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.namespace_id,
 			sizeof(staged.namespace_id), namespace_id);
 	}
@@ -316,7 +316,7 @@ int pqcp_sovereign_secret_grant_issue(
 	staged.occupied = true;
 	ret = secret_grant_digest(&staged, computed);
 	if (ret != 0 ||
-	    pqcp_sovereign_internal_digest_zero(computed)) {
+	    pqcp_sovereign_ceremony_digest_zero(computed)) {
 		distributor->denial_count++;
 		pqcp_runtime_secure_zero(computed, sizeof(computed));
 		unlock_distributor(distributor);
@@ -348,14 +348,14 @@ int pqcp_sovereign_secret_grant_authorize(
 	int ret;
 
 	if (grant_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    recipient_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    namespace_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
 	    key_epoch == 0U || policy_epoch == 0U ||
 	    permissions == 0U ||
 	    recipient_binding == NULL ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    recipient_binding) ||
 	    now_ms == 0U) {
 		return -EINVAL;
@@ -394,7 +394,7 @@ int pqcp_sovereign_secret_grant_authorize(
 	    grant->key_epoch != key_epoch ||
 	    grant->policy_epoch != policy_epoch ||
 	    (permissions & grant->permissions) != permissions ||
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    grant->recipient_binding, recipient_binding)) {
 		distributor->denial_count++;
 		unlock_distributor(distributor);
@@ -584,45 +584,45 @@ static int reference_digest(
 	int ret;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, SECRET_REFERENCE_DOMAIN,
 		sizeof(SECRET_REFERENCE_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->grant_id);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, reference->tenant_id,
 		sizeof(reference->tenant_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, reference->recipient_id,
 		sizeof(reference->recipient_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, reference->namespace_id,
 		sizeof(reference->namespace_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, reference->key_id,
 		sizeof(reference->key_id));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, reference->key_handle.slot);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		reference->key_handle.generation);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		(uint32_t)reference->key_handle.backend);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		(uint32_t)reference->key_handle.family);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, reference->key_handle.level);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->key_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->issued_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->expires_at_ms);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, reference->permissions);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		reference->recipient_binding,
 		sizeof(reference->recipient_binding));
@@ -630,7 +630,7 @@ static int reference_digest(
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	ret = pqcp_sovereign_internal_hash(body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
@@ -676,7 +676,7 @@ int pqcp_sovereign_secret_reference_bind_internal(
 	int ret;
 
 	if (grant_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    tenant_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
 	    key_handle == NULL ||
 	    !pqcp_runtime_key_handle_is_valid(key_handle) ||
@@ -722,20 +722,20 @@ int pqcp_sovereign_secret_reference_bind_internal(
 	}
 	memset(&staged, 0, sizeof(staged));
 	staged.grant_id = grant_id;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.tenant_id, sizeof(staged.tenant_id), tenant_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.recipient_id,
 			sizeof(staged.recipient_id), grant.recipient_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.namespace_id,
 			sizeof(staged.namespace_id), grant.namespace_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.key_id, sizeof(staged.key_id),
 			grant.key_id);
 	}
@@ -785,7 +785,7 @@ int pqcp_sovereign_secret_reference_authorize_internal(
 	int ret;
 
 	if (key_handle == NULL ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    tenant_id, PQCP_SOVEREIGN_ID_MAX_CHARS)) {
 		return -EINVAL;
 	}
@@ -805,7 +805,7 @@ int pqcp_sovereign_secret_reference_authorize_internal(
 	    strcmp(reference.namespace_id, namespace_id) != 0 ||
 	    reference.key_epoch != key_epoch ||
 	    (permissions & reference.permissions) != permissions ||
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    reference.recipient_binding,
 		    recipient_binding) ||
 	    now_ms >= reference.expires_at_ms) {
@@ -905,26 +905,26 @@ int pqcp_sovereign_secret_reference_audit_internal(
 			continue;
 		}
 		if (entry->grant_id == 0U ||
-		    !pqcp_sovereign_internal_text_valid(
+		    !pqcp_sovereign_ceremony_text_valid(
 			    entry->tenant_id,
 			    sizeof(entry->tenant_id)) ||
-		    !pqcp_sovereign_internal_text_valid(
+		    !pqcp_sovereign_ceremony_text_valid(
 			    entry->recipient_id,
 			    sizeof(entry->recipient_id)) ||
-		    !pqcp_sovereign_internal_text_valid(
+		    !pqcp_sovereign_ceremony_text_valid(
 			    entry->namespace_id,
 			    sizeof(entry->namespace_id)) ||
-		    !pqcp_sovereign_internal_text_valid(
+		    !pqcp_sovereign_ceremony_text_valid(
 			    entry->key_id, sizeof(entry->key_id)) ||
 		    !pqcp_runtime_key_handle_is_valid(
 			    &entry->key_handle) ||
 		    entry->key_epoch == 0U ||
 		    entry->expires_at_ms <= entry->issued_at_ms ||
 		    entry->permissions == 0U ||
-		    pqcp_sovereign_internal_digest_zero(
+		    pqcp_sovereign_ceremony_digest_zero(
 			    entry->recipient_binding) ||
 		    reference_digest(entry, expected) != 0 ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    expected, entry->reference_digest) ||
 		    pqcp_runtime_key_store_metadata(
 			    store->key_store, &entry->key_handle,

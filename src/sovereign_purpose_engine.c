@@ -11,7 +11,7 @@
 #include <limits.h>
 #include <string.h>
 
-static ssize_t binding_index_locked(
+static int binding_index_locked(
 	const struct pqcp_sovereign_purpose_engine *engine,
 	uint32_t binding_id)
 {
@@ -20,20 +20,20 @@ static ssize_t binding_index_locked(
 	for (index = 0U; index < engine->capacity; ++index) {
 		if (engine->bindings[index].enabled &&
 		    engine->bindings[index].binding_id == binding_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_binding_index_locked(
+static int free_binding_index_locked(
 	const struct pqcp_sovereign_purpose_engine *engine)
 {
 	size_t index;
 
 	for (index = 0U; index < engine->capacity; ++index) {
 		if (!engine->bindings[index].enabled) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -88,7 +88,7 @@ int pqcp_sovereign_purpose_binding_put(
 	const struct pqcp_sovereign_purpose_binding *binding)
 {
 	struct pqcp_sovereign_purpose_binding candidate;
-	ssize_t index;
+	int index;
 
 	if (engine == NULL || !engine->initialized ||
 	    !binding_valid(binding)) {
@@ -128,7 +128,7 @@ int pqcp_sovereign_purpose_binding_remove(
 	struct pqcp_sovereign_purpose_engine *engine,
 	uint32_t binding_id)
 {
-	ssize_t index;
+	int index;
 
 	if (engine == NULL || !engine->initialized ||
 	    binding_id == 0U) {

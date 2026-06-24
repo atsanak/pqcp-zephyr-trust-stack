@@ -253,77 +253,77 @@ struct pqcp_sovereign_secret_reference_store_internal {
 	bool initialized;
 };
 
-bool pqcp_sovereign_internal_text_valid(
+bool pqcp_sovereign_ceremony_text_valid(
 	const char *text,
 	size_t capacity);
-int pqcp_sovereign_internal_copy_text(
+int pqcp_sovereign_ceremony_copy_text(
 	char *destination,
 	size_t capacity,
 	const char *source);
-bool pqcp_sovereign_internal_digest_zero(
+bool pqcp_sovereign_ceremony_digest_zero(
 	const uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES]);
-bool pqcp_sovereign_internal_digest_equal(
+bool pqcp_sovereign_ceremony_digest_equal(
 	const uint8_t left[PQCP_SOVEREIGN_DIGEST_BYTES],
 	const uint8_t right[PQCP_SOVEREIGN_DIGEST_BYTES]);
-bool pqcp_sovereign_internal_u64_add(
+bool pqcp_sovereign_ceremony_u64_add(
 	uint64_t left,
 	uint64_t right,
 	uint64_t *result);
-bool pqcp_sovereign_internal_u32_add(
+bool pqcp_sovereign_ceremony_u32_add(
 	uint32_t left,
 	uint32_t right,
 	uint32_t *result);
-size_t pqcp_sovereign_internal_encode_text(
+size_t pqcp_sovereign_ceremony_encode_text(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
 	const char *text,
 	size_t maximum);
-size_t pqcp_sovereign_internal_encode_u32(
+size_t pqcp_sovereign_ceremony_encode_u32(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
 	uint32_t value);
-size_t pqcp_sovereign_internal_encode_u64(
+size_t pqcp_sovereign_ceremony_encode_u64(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
 	uint64_t value);
-size_t pqcp_sovereign_internal_encode_bytes(
+size_t pqcp_sovereign_ceremony_encode_bytes(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
 	const uint8_t *value,
 	size_t value_length);
-int pqcp_sovereign_internal_hash(
+int pqcp_sovereign_ceremony_hash(
 	const uint8_t *input,
 	size_t input_length,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES]);
-int pqcp_sovereign_internal_hash_parts(
+int pqcp_sovereign_ceremony_hash_parts(
 	const uint8_t *const *parts,
 	const size_t *lengths,
 	size_t count,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES]);
 
-const char *pqcp_sovereign_internal_action_text(
+const char *pqcp_sovereign_ceremony_action_text(
 	enum pqcp_sovereign_ceremony_action action);
-const char *pqcp_sovereign_internal_role_text(
+const char *pqcp_sovereign_ceremony_role_text(
 	enum pqcp_sovereign_approval_role role);
 enum pqcp_sovereign_ceremony_action
-pqcp_sovereign_internal_action_from_text(const char *action);
+pqcp_sovereign_ceremony_action_from_text(const char *action);
 
-int pqcp_sovereign_internal_approval_body(
+int pqcp_sovereign_ceremony_approval_body(
 	const struct pqcp_sovereign_signed_approval_internal *approval,
 	uint8_t *output,
 	size_t output_capacity,
 	size_t *output_length);
-int pqcp_sovereign_internal_approval_digest(
+int pqcp_sovereign_ceremony_approval_digest(
 	const struct pqcp_sovereign_signed_approval_internal *approval,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES]);
-int pqcp_sovereign_internal_policy_digest(
+int pqcp_sovereign_ceremony_policy_digest(
 	const struct pqcp_sovereign_approval_policy_internal *policy,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES]);
-int pqcp_sovereign_internal_authorization_digest(
+int pqcp_sovereign_ceremony_authorization_digest(
 	const struct pqcp_sovereign_committed_authorization_internal *authorization,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES]);
 

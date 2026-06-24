@@ -173,60 +173,60 @@ int pqcp_fleet_verify_buffer(
 }
 
 static int write_envelope(
-	struct pqcp_fleet_cbor_writer *writer,
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	const struct pqcp_fleet_envelope *envelope)
 {
-	int ret = pqcp_fleet_cbor_write_array(
+	int ret = pqcp_fleet_legacy_cbor_write_array(
 		writer, ENVELOPE_FIELDS);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->schema_version);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->protocol_version);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->type);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->message_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->sequence);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->policy_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->revocation_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->issued_at_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			writer, envelope->expires_at_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			writer, envelope->nonce,
 			sizeof(envelope->nonce));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			writer, envelope->device_id,
 			sizeof(envelope->device_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			writer, envelope->domain_id,
 			sizeof(envelope->domain_id));
 	}
@@ -234,11 +234,11 @@ static int write_envelope(
 }
 
 static int read_u32(
-	struct pqcp_fleet_cbor_reader *reader,
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	uint32_t *value)
 {
 	uint64_t decoded;
-	int ret = pqcp_fleet_cbor_read_uint(reader, &decoded);
+	int ret = pqcp_fleet_legacy_cbor_read_uint(reader, &decoded);
 
 	if (ret != 0 || decoded > UINT32_MAX) {
 		return -EBADMSG;
@@ -248,13 +248,13 @@ static int read_u32(
 }
 
 static int read_envelope(
-	struct pqcp_fleet_cbor_reader *reader,
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	struct pqcp_fleet_envelope *envelope)
 {
 	uint64_t value;
 	size_t length;
 	uint32_t decoded;
-	int ret = pqcp_fleet_cbor_read_array(
+	int ret = pqcp_fleet_legacy_cbor_read_array(
 		reader, ENVELOPE_FIELDS);
 
 	memset(envelope, 0, sizeof(*envelope));
@@ -270,31 +270,31 @@ static int read_envelope(
 			(enum pqcp_fleet_message_type)decoded;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			reader, &envelope->message_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			reader, &envelope->sequence);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			reader, &envelope->policy_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			reader, &envelope->revocation_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			reader, &envelope->issued_at_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			reader, &envelope->expires_at_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			reader, envelope->nonce,
 			sizeof(envelope->nonce), &length);
 	}
@@ -302,12 +302,12 @@ static int read_envelope(
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			reader, envelope->device_id,
 			sizeof(envelope->device_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			reader, envelope->domain_id,
 			sizeof(envelope->domain_id));
 	}
@@ -316,7 +316,7 @@ static int read_envelope(
 }
 
 static int begin_encode(
-	struct pqcp_fleet_cbor_writer *writer,
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	uint8_t *output,
 	size_t capacity,
 	const struct pqcp_fleet_envelope *envelope,
@@ -327,21 +327,21 @@ static int begin_encode(
 	if (output == NULL || capacity == 0U || envelope == NULL) {
 		return -EINVAL;
 	}
-	pqcp_fleet_cbor_writer_init(writer, output, capacity);
-	ret = pqcp_fleet_cbor_write_array(
+	pqcp_fleet_legacy_cbor_writer_init(writer, output, capacity);
+	ret = pqcp_fleet_legacy_cbor_write_array(
 		writer, TOP_LEVEL_FIELDS);
 	if (ret == 0) {
 		ret = write_envelope(writer, envelope);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_array(
+		ret = pqcp_fleet_legacy_cbor_write_array(
 			writer, payload_fields);
 	}
 	return ret;
 }
 
 static int begin_decode(
-	struct pqcp_fleet_cbor_reader *reader,
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	const uint8_t *input,
 	size_t length,
 	struct pqcp_fleet_envelope *envelope,
@@ -352,21 +352,21 @@ static int begin_decode(
 	if (input == NULL || length == 0U || envelope == NULL) {
 		return -EINVAL;
 	}
-	pqcp_fleet_cbor_reader_init(reader, input, length);
-	ret = pqcp_fleet_cbor_read_array(
+	pqcp_fleet_legacy_cbor_reader_init(reader, input, length);
+	ret = pqcp_fleet_legacy_cbor_read_array(
 		reader, TOP_LEVEL_FIELDS);
 	if (ret == 0) {
 		ret = read_envelope(reader, envelope);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_array(
+		ret = pqcp_fleet_legacy_cbor_read_array(
 			reader, payload_fields);
 	}
 	return ret;
 }
 
 static int finish_encode(
-	const struct pqcp_fleet_cbor_writer *writer,
+	const struct pqcp_fleet_legacy_cbor_writer *writer,
 	size_t *length)
 {
 	if (writer == NULL || length == NULL) {
@@ -380,19 +380,19 @@ static int finish_encode(
 }
 
 static int write_signature(
-	struct pqcp_fleet_cbor_writer *writer,
+	struct pqcp_fleet_legacy_cbor_writer *writer,
 	const uint8_t signature[PQCP_FLEET_SIGNATURE_BYTES])
 {
-	return pqcp_fleet_cbor_write_bytes(
+	return pqcp_fleet_legacy_cbor_write_bytes(
 		writer, signature, PQCP_FLEET_SIGNATURE_BYTES);
 }
 
 static int read_signature(
-	struct pqcp_fleet_cbor_reader *reader,
+	struct pqcp_fleet_legacy_cbor_reader *reader,
 	uint8_t signature[PQCP_FLEET_SIGNATURE_BYTES])
 {
 	size_t length;
-	int ret = pqcp_fleet_cbor_read_bytes(
+	int ret = pqcp_fleet_legacy_cbor_read_bytes(
 		reader, signature,
 		PQCP_FLEET_SIGNATURE_BYTES, &length);
 
@@ -455,67 +455,67 @@ static int encode_enrollment(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 14U : 13U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->stage);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->boot_counter);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->enrollment_counter);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->supported_mlkem_mask);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->supported_mldsa_mask);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->requested_capabilities);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->firmware_version,
 			sizeof(message->firmware_version));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->product_class,
 			sizeof(message->product_class));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->factory_public_key,
 			sizeof(message->factory_public_key));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->factory_fingerprint,
 			sizeof(message->factory_fingerprint));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->hardware_id_digest,
 			sizeof(message->hardware_id_digest));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->operational_public_key,
 			sizeof(message->operational_public_key));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bool(
+		ret = pqcp_fleet_legacy_cbor_write_bool(
 			&writer, message->operational_key_present);
 	}
 	if (ret == 0 && include_signature) {
@@ -543,7 +543,7 @@ int pqcp_fleet_enrollment_request_decode(
 	size_t length,
 	struct pqcp_fleet_enrollment_request *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	uint32_t decoded;
 	size_t bytes;
 	int ret;
@@ -560,11 +560,11 @@ int pqcp_fleet_enrollment_request_decode(
 			(enum pqcp_fleet_enrollment_stage)decoded;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->boot_counter);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->enrollment_counter);
 	}
 	if (ret == 0) {
@@ -580,17 +580,17 @@ int pqcp_fleet_enrollment_request_decode(
 			&reader, &message->requested_capabilities);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->firmware_version,
 			sizeof(message->firmware_version));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->product_class,
 			sizeof(message->product_class));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			&reader, message->factory_public_key,
 			sizeof(message->factory_public_key), &bytes);
 	}
@@ -598,7 +598,7 @@ int pqcp_fleet_enrollment_request_decode(
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			&reader, message->factory_fingerprint,
 			sizeof(message->factory_fingerprint), &bytes);
 	}
@@ -606,7 +606,7 @@ int pqcp_fleet_enrollment_request_decode(
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			&reader, message->hardware_id_digest,
 			sizeof(message->hardware_id_digest), &bytes);
 	}
@@ -614,7 +614,7 @@ int pqcp_fleet_enrollment_request_decode(
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			&reader, message->operational_public_key,
 			sizeof(message->operational_public_key), &bytes);
 	}
@@ -623,14 +623,14 @@ int pqcp_fleet_enrollment_request_decode(
 		ret = -EBADMSG;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bool(
+		ret = pqcp_fleet_legacy_cbor_read_bool(
 			&reader, &message->operational_key_present);
 	}
 	if (ret == 0) {
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ? validate_enrollment(message, 0U) : ret;
 }
@@ -710,32 +710,32 @@ static int encode_voucher(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 6U : 5U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->factory_fingerprint,
 			sizeof(message->factory_fingerprint));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->operational_key_fingerprint,
 			sizeof(message->operational_key_fingerprint));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->registrar_public_key,
 			sizeof(message->registrar_public_key));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->granted_capabilities);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->product_class,
 			sizeof(message->product_class));
 	}
@@ -763,7 +763,7 @@ int pqcp_fleet_voucher_decode(
 	size_t length,
 	struct pqcp_fleet_ownership_voucher *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	size_t bytes = 0U;
 	int ret;
 
@@ -775,7 +775,7 @@ int pqcp_fleet_voucher_decode(
 		&reader, input, length, &message->envelope, 6U);
 #define READ_FIXED(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_read_bytes( \
+		ret = pqcp_fleet_legacy_cbor_read_bytes( \
 			&reader, message->member, \
 			sizeof(message->member), &bytes); \
 	} \
@@ -791,7 +791,7 @@ int pqcp_fleet_voucher_decode(
 			&reader, &message->granted_capabilities);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->product_class,
 			sizeof(message->product_class));
 	}
@@ -799,7 +799,7 @@ int pqcp_fleet_voucher_decode(
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ? validate_voucher(message, 0U) : ret;
 }
@@ -887,47 +887,47 @@ static int encode_credential(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 10U : 9U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->credential_id,
 			sizeof(message->credential_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->subject_public_key,
 			sizeof(message->subject_public_key));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->allowed_mlkem_mask);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->allowed_mldsa_mask);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->capabilities);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->valid_from_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->valid_until_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->issuance_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->product_class,
 			sizeof(message->product_class));
 	}
@@ -955,7 +955,7 @@ int pqcp_fleet_credential_decode(
 	size_t length,
 	struct pqcp_fleet_credential *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	size_t bytes;
 	int ret;
 
@@ -966,12 +966,12 @@ int pqcp_fleet_credential_decode(
 	ret = begin_decode(
 		&reader, input, length, &message->envelope, 10U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->credential_id,
 			sizeof(message->credential_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			&reader, message->subject_public_key,
 			sizeof(message->subject_public_key), &bytes);
 	}
@@ -990,19 +990,19 @@ int pqcp_fleet_credential_decode(
 		ret = read_u32(&reader, &message->capabilities);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->valid_from_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->valid_until_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->issuance_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->product_class,
 			sizeof(message->product_class));
 	}
@@ -1010,7 +1010,7 @@ int pqcp_fleet_credential_decode(
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ? validate_credential(message, 0U) : ret;
 }
@@ -1115,14 +1115,14 @@ static int encode_policy(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 16U : 15U);
 
 #define WRITE_UINT(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_write_uint( \
+		ret = pqcp_fleet_legacy_cbor_write_uint( \
 			&writer, message->member); \
 	}
 	WRITE_UINT(allowed_mlkem_mask);
@@ -1141,7 +1141,7 @@ static int encode_policy(
 	WRITE_UINT(rekey_after_ms);
 #undef WRITE_UINT
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->preferred_profile,
 			sizeof(message->preferred_profile));
 	}
@@ -1169,7 +1169,7 @@ int pqcp_fleet_policy_decode(
 	size_t length,
 	struct pqcp_fleet_policy_bundle *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	int ret;
 
 	if (message == NULL) {
@@ -1195,7 +1195,7 @@ int pqcp_fleet_policy_decode(
 #undef READ_U32
 #define READ_U64(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_read_uint( \
+		ret = pqcp_fleet_legacy_cbor_read_uint( \
 			&reader, &message->member); \
 	}
 	READ_U64(credential_lifetime_ms);
@@ -1204,7 +1204,7 @@ int pqcp_fleet_policy_decode(
 	READ_U64(rekey_after_ms);
 #undef READ_U64
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->preferred_profile,
 			sizeof(message->preferred_profile));
 	}
@@ -1212,7 +1212,7 @@ int pqcp_fleet_policy_decode(
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ? validate_policy(message, 0U) : ret;
 }
@@ -1302,25 +1302,25 @@ static int encode_revocation(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 5U : 4U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->previous_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->next_refresh_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->offline_grace_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_array(
+		ret = pqcp_fleet_legacy_cbor_write_array(
 			&writer, message->entry_count);
 	}
 	for (size_t index = 0U;
@@ -1329,22 +1329,22 @@ static int encode_revocation(
 		const struct pqcp_fleet_revocation_entry *entry =
 			&message->entries[index];
 
-		ret = pqcp_fleet_cbor_write_array(&writer, 4U);
+		ret = pqcp_fleet_legacy_cbor_write_array(&writer, 4U);
 		if (ret == 0) {
-			ret = pqcp_fleet_cbor_write_uint(
+			ret = pqcp_fleet_legacy_cbor_write_uint(
 				&writer, entry->kind);
 		}
 		if (ret == 0) {
-			ret = pqcp_fleet_cbor_write_text(
+			ret = pqcp_fleet_legacy_cbor_write_text(
 				&writer, entry->subject_id,
 				sizeof(entry->subject_id));
 		}
 		if (ret == 0) {
-			ret = pqcp_fleet_cbor_write_uint(
+			ret = pqcp_fleet_legacy_cbor_write_uint(
 				&writer, entry->effective_at_ms);
 		}
 		if (ret == 0) {
-			ret = pqcp_fleet_cbor_write_uint(
+			ret = pqcp_fleet_legacy_cbor_write_uint(
 				&writer, entry->reason);
 		}
 	}
@@ -1372,7 +1372,7 @@ int pqcp_fleet_revocation_decode(
 	size_t length,
 	struct pqcp_fleet_revocation_update *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	uint32_t value;
 	uint64_t count;
 	int ret;
@@ -1384,15 +1384,15 @@ int pqcp_fleet_revocation_decode(
 	ret = begin_decode(
 		&reader, input, length, &message->envelope, 5U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->previous_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->next_refresh_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->offline_grace_ms);
 	}
 	if (ret == 0) {
@@ -1410,9 +1410,9 @@ int pqcp_fleet_revocation_decode(
 				for (count = 0U;
 				     count <= PQCP_FLEET_MAX_REVOCATIONS;
 				     ++count) {
-					struct pqcp_fleet_cbor_reader copy =
+					struct pqcp_fleet_legacy_cbor_reader copy =
 						reader;
-					if (pqcp_fleet_cbor_read_array(
+					if (pqcp_fleet_legacy_cbor_read_array(
 						    &copy, count) == 0) {
 						reader = copy;
 						break;
@@ -1434,19 +1434,19 @@ int pqcp_fleet_revocation_decode(
 		struct pqcp_fleet_revocation_entry *entry =
 			&message->entries[index];
 
-		ret = pqcp_fleet_cbor_read_array(&reader, 4U);
+		ret = pqcp_fleet_legacy_cbor_read_array(&reader, 4U);
 		if (ret == 0) {
 			ret = read_u32(&reader, &value);
 			entry->kind =
 				(enum pqcp_fleet_revocation_kind)value;
 		}
 		if (ret == 0) {
-			ret = pqcp_fleet_cbor_read_text(
+			ret = pqcp_fleet_legacy_cbor_read_text(
 				&reader, entry->subject_id,
 				sizeof(entry->subject_id));
 		}
 		if (ret == 0) {
-			ret = pqcp_fleet_cbor_read_uint(
+			ret = pqcp_fleet_legacy_cbor_read_uint(
 				&reader, &entry->effective_at_ms);
 		}
 		if (ret == 0) {
@@ -1457,7 +1457,7 @@ int pqcp_fleet_revocation_decode(
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ? validate_revocation(message, 0U) : ret;
 }
@@ -1544,24 +1544,24 @@ static int encode_update(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 9U : 8U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->component_id,
 			sizeof(message->component_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->product_class,
 			sizeof(message->product_class));
 	}
 #define WRITE_UPDATE_UINT(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_write_uint( \
+		ret = pqcp_fleet_legacy_cbor_write_uint( \
 			&writer, message->member); \
 	}
 	WRITE_UPDATE_UINT(version);
@@ -1571,7 +1571,7 @@ static int encode_update(
 	WRITE_UPDATE_UINT(flags);
 #undef WRITE_UPDATE_UINT
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->image_digest,
 			sizeof(message->image_digest));
 	}
@@ -1599,7 +1599,7 @@ int pqcp_fleet_update_manifest_decode(
 	size_t length,
 	struct pqcp_fleet_update_manifest *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	size_t bytes;
 	int ret;
 
@@ -1610,18 +1610,18 @@ int pqcp_fleet_update_manifest_decode(
 	ret = begin_decode(
 		&reader, input, length, &message->envelope, 9U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->component_id,
 			sizeof(message->component_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->product_class,
 			sizeof(message->product_class));
 	}
 #define READ_UPDATE_U64(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_read_uint( \
+		ret = pqcp_fleet_legacy_cbor_read_uint( \
 			&reader, &message->member); \
 	}
 	READ_UPDATE_U64(version);
@@ -1636,7 +1636,7 @@ int pqcp_fleet_update_manifest_decode(
 		ret = read_u32(&reader, &message->flags);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_bytes(
+		ret = pqcp_fleet_legacy_cbor_read_bytes(
 			&reader, message->image_digest,
 			sizeof(message->image_digest), &bytes);
 	}
@@ -1647,7 +1647,7 @@ int pqcp_fleet_update_manifest_decode(
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ? validate_update(message, 0U) : ret;
 }
@@ -1730,28 +1730,28 @@ static int encode_rotation_request(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 5U : 4U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->current_credential_id,
 			sizeof(message->current_credential_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->current_key_fingerprint,
 			sizeof(message->current_key_fingerprint));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->new_operational_public_key,
 			sizeof(message->new_operational_public_key));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->requested_overlap_ms);
 	}
 	if (ret == 0 && include_signature) {
@@ -1778,7 +1778,7 @@ int pqcp_fleet_rotation_request_decode(
 	size_t length,
 	struct pqcp_fleet_rotation_request *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	size_t bytes;
 	int ret;
 
@@ -1789,13 +1789,13 @@ int pqcp_fleet_rotation_request_decode(
 	ret = begin_decode(
 		&reader, input, length, &message->envelope, 5U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->current_credential_id,
 			sizeof(message->current_credential_id));
 	}
 #define READ_ROTATION_FIXED(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_read_bytes( \
+		ret = pqcp_fleet_legacy_cbor_read_bytes( \
 			&reader, message->member, \
 			sizeof(message->member), &bytes); \
 	} \
@@ -1806,14 +1806,14 @@ int pqcp_fleet_rotation_request_decode(
 	READ_ROTATION_FIXED(new_operational_public_key);
 #undef READ_ROTATION_FIXED
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->requested_overlap_ms);
 	}
 	if (ret == 0) {
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ?
 		validate_rotation_request(message, 0U) : ret;
@@ -1897,41 +1897,41 @@ static int encode_rotation_authorization(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 8U : 7U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->authorization_id,
 			sizeof(message->authorization_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_text(
+		ret = pqcp_fleet_legacy_cbor_write_text(
 			&writer, message->replacement_credential_id,
 			sizeof(message->replacement_credential_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->old_key_fingerprint,
 			sizeof(message->old_key_fingerprint));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_bytes(
+		ret = pqcp_fleet_legacy_cbor_write_bytes(
 			&writer, message->new_key_fingerprint,
 			sizeof(message->new_key_fingerprint));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->valid_from_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->valid_until_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->overlap_until_ms);
 	}
 	if (ret == 0 && include_signature) {
@@ -1958,7 +1958,7 @@ int pqcp_fleet_rotation_authorization_decode(
 	size_t length,
 	struct pqcp_fleet_rotation_authorization *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	size_t bytes;
 	int ret;
 
@@ -1969,18 +1969,18 @@ int pqcp_fleet_rotation_authorization_decode(
 	ret = begin_decode(
 		&reader, input, length, &message->envelope, 8U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->authorization_id,
 			sizeof(message->authorization_id));
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_text(
+		ret = pqcp_fleet_legacy_cbor_read_text(
 			&reader, message->replacement_credential_id,
 			sizeof(message->replacement_credential_id));
 	}
 #define READ_AUTH_FIXED(member) \
 	if (ret == 0) { \
-		ret = pqcp_fleet_cbor_read_bytes( \
+		ret = pqcp_fleet_legacy_cbor_read_bytes( \
 			&reader, message->member, \
 			sizeof(message->member), &bytes); \
 	} \
@@ -1991,22 +1991,22 @@ int pqcp_fleet_rotation_authorization_decode(
 	READ_AUTH_FIXED(new_key_fingerprint);
 #undef READ_AUTH_FIXED
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->valid_from_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->valid_until_ms);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->overlap_until_ms);
 	}
 	if (ret == 0) {
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ?
 		validate_rotation_authorization(message, 0U) : ret;
@@ -2080,37 +2080,37 @@ static int encode_command_result(
 	size_t capacity,
 	size_t *length)
 {
-	struct pqcp_fleet_cbor_writer writer;
+	struct pqcp_fleet_legacy_cbor_writer writer;
 	int ret = begin_encode(
 		&writer, output, capacity, &message->envelope,
 		include_signature ? 8U : 7U);
 
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->command_message_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->applied_policy_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->applied_revocation_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->device_state);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->status);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_int(
+		ret = pqcp_fleet_legacy_cbor_write_int(
 			&writer, message->result);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_write_uint(
+		ret = pqcp_fleet_legacy_cbor_write_uint(
 			&writer, message->reason);
 	}
 	if (ret == 0 && include_signature) {
@@ -2137,7 +2137,7 @@ int pqcp_fleet_command_result_decode(
 	size_t length,
 	struct pqcp_fleet_command_result *message)
 {
-	struct pqcp_fleet_cbor_reader reader;
+	struct pqcp_fleet_legacy_cbor_reader reader;
 	int64_t signed_value;
 	uint32_t value;
 	int ret;
@@ -2149,15 +2149,15 @@ int pqcp_fleet_command_result_decode(
 	ret = begin_decode(
 		&reader, input, length, &message->envelope, 8U);
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->command_message_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->applied_policy_epoch);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_uint(
+		ret = pqcp_fleet_legacy_cbor_read_uint(
 			&reader, &message->applied_revocation_epoch);
 	}
 	if (ret == 0) {
@@ -2169,7 +2169,7 @@ int pqcp_fleet_command_result_decode(
 			(enum pqcp_fleet_command_status)value;
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_read_int(
+		ret = pqcp_fleet_legacy_cbor_read_int(
 			&reader, &signed_value);
 	}
 	if (ret == 0 &&
@@ -2184,7 +2184,7 @@ int pqcp_fleet_command_result_decode(
 		ret = read_signature(&reader, message->signature);
 	}
 	if (ret == 0) {
-		ret = pqcp_fleet_cbor_finish(&reader);
+		ret = pqcp_fleet_legacy_cbor_finish(&reader);
 	}
 	return ret == 0 ?
 		validate_command_result(message, 0U) : ret;
@@ -2241,7 +2241,7 @@ int pqcp_fleet_message_type_peek(
 	size_t length,
 	enum pqcp_fleet_message_type *type)
 {
-	return pqcp_fleet_cbor_peek_envelope_type(
+	return pqcp_fleet_legacy_cbor_peek_envelope_type(
 		input, length, type);
 }
 

@@ -61,7 +61,7 @@ static bool egress_rule_valid(
 	return true;
 }
 
-static ssize_t rule_index_locked(
+static int rule_index_locked(
 	const struct pqcp_sovereign_egress_engine *engine,
 	uint32_t rule_id)
 {
@@ -70,26 +70,26 @@ static ssize_t rule_index_locked(
 	for (index = 0U; index < engine->rule_capacity; ++index) {
 		if (engine->rules[index].enabled &&
 		    engine->rules[index].rule_id == rule_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_rule_index_locked(
+static int free_rule_index_locked(
 	const struct pqcp_sovereign_egress_engine *engine)
 {
 	size_t index;
 
 	for (index = 0U; index < engine->rule_capacity; ++index) {
 		if (!engine->rules[index].enabled) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t usage_index_locked(
+static int usage_index_locked(
 	const struct pqcp_sovereign_egress_engine *engine,
 	uint32_t rule_id,
 	const char *workload_id,
@@ -105,20 +105,20 @@ static ssize_t usage_index_locked(
 		    strcmp(usage->workload_id, workload_id) == 0 &&
 		    strcmp(usage->destination_domain,
 			   destination_domain) == 0) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_usage_index_locked(
+static int free_usage_index_locked(
 	const struct pqcp_sovereign_egress_engine *engine)
 {
 	size_t index;
 
 	for (index = 0U; index < engine->usage_capacity; ++index) {
 		if (!engine->usage[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -249,7 +249,7 @@ int pqcp_sovereign_egress_rule_put(
 	const struct pqcp_sovereign_egress_rule *rule)
 {
 	struct pqcp_sovereign_egress_rule candidate;
-	ssize_t index;
+	int index;
 
 	if (engine == NULL || !engine->initialized ||
 	    !egress_rule_valid(rule)) {
@@ -281,7 +281,7 @@ static int prepare_usage_locked(
 	struct pqcp_sovereign_egress_usage **usage_out)
 {
 	struct pqcp_sovereign_egress_usage candidate;
-	ssize_t index;
+	int index;
 	int ret;
 
 	index = usage_index_locked(
@@ -422,7 +422,7 @@ int pqcp_sovereign_egress_tick(
 	for (index = 0U; index < engine->usage_capacity; ++index) {
 		struct pqcp_sovereign_egress_usage *usage =
 			&engine->usage[index];
-		ssize_t rule_slot;
+		int rule_slot;
 
 		if (!usage->occupied) {
 			continue;
@@ -497,7 +497,7 @@ int pqcp_sovereign_egress_engine_audit(
 	     index < engine->usage_capacity && ret == 0; ++index) {
 		const struct pqcp_sovereign_egress_usage *usage =
 			&engine->usage[index];
-		ssize_t rule_slot;
+		int rule_slot;
 
 		if (!usage->occupied) {
 			continue;

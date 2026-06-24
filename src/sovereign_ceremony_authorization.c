@@ -19,7 +19,7 @@
 	"pqcp-sovereign-committed-authorization-v1"
 #define APPROVAL_SET_DOMAIN "pqcp-sovereign-approval-set-v1"
 
-bool pqcp_sovereign_internal_text_valid(
+bool pqcp_sovereign_ceremony_text_valid(
 	const char *text,
 	size_t capacity)
 {
@@ -32,7 +32,7 @@ bool pqcp_sovereign_internal_text_valid(
 	return length != 0U && length < capacity;
 }
 
-int pqcp_sovereign_internal_copy_text(
+int pqcp_sovereign_ceremony_copy_text(
 	char *destination,
 	size_t capacity,
 	const char *source)
@@ -40,7 +40,7 @@ int pqcp_sovereign_internal_copy_text(
 	size_t length;
 
 	if (destination == NULL ||
-	    !pqcp_sovereign_internal_text_valid(source, capacity)) {
+	    !pqcp_sovereign_ceremony_text_valid(source, capacity)) {
 		return -EINVAL;
 	}
 	length = strnlen(source, capacity);
@@ -49,7 +49,7 @@ int pqcp_sovereign_internal_copy_text(
 	return 0;
 }
 
-bool pqcp_sovereign_internal_digest_zero(
+bool pqcp_sovereign_ceremony_digest_zero(
 	const uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
 {
 	uint8_t aggregate = 0U;
@@ -65,7 +65,7 @@ bool pqcp_sovereign_internal_digest_zero(
 	return aggregate == 0U;
 }
 
-bool pqcp_sovereign_internal_digest_equal(
+bool pqcp_sovereign_ceremony_digest_equal(
 	const uint8_t left[PQCP_SOVEREIGN_DIGEST_BYTES],
 	const uint8_t right[PQCP_SOVEREIGN_DIGEST_BYTES])
 {
@@ -82,7 +82,7 @@ bool pqcp_sovereign_internal_digest_equal(
 	return difference == 0U;
 }
 
-bool pqcp_sovereign_internal_u64_add(
+bool pqcp_sovereign_ceremony_u64_add(
 	uint64_t left,
 	uint64_t right,
 	uint64_t *result)
@@ -94,7 +94,7 @@ bool pqcp_sovereign_internal_u64_add(
 	return true;
 }
 
-bool pqcp_sovereign_internal_u32_add(
+bool pqcp_sovereign_ceremony_u32_add(
 	uint32_t left,
 	uint32_t right,
 	uint32_t *result)
@@ -106,7 +106,7 @@ bool pqcp_sovereign_internal_u32_add(
 	return true;
 }
 
-size_t pqcp_sovereign_internal_encode_u32(
+size_t pqcp_sovereign_ceremony_encode_u32(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
@@ -120,7 +120,7 @@ size_t pqcp_sovereign_internal_encode_u32(
 	return offset + sizeof(value);
 }
 
-size_t pqcp_sovereign_internal_encode_u64(
+size_t pqcp_sovereign_ceremony_encode_u64(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
@@ -134,7 +134,7 @@ size_t pqcp_sovereign_internal_encode_u64(
 	return offset + sizeof(value);
 }
 
-size_t pqcp_sovereign_internal_encode_bytes(
+size_t pqcp_sovereign_ceremony_encode_bytes(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
@@ -148,7 +148,7 @@ size_t pqcp_sovereign_internal_encode_bytes(
 	    value_length > UINT32_MAX) {
 		return 0U;
 	}
-	next = pqcp_sovereign_internal_encode_u32(
+	next = pqcp_sovereign_ceremony_encode_u32(
 		output, capacity, offset, (uint32_t)value_length);
 	if (next == 0U || next > capacity ||
 	    capacity - next < value_length) {
@@ -160,7 +160,7 @@ size_t pqcp_sovereign_internal_encode_bytes(
 	return next + value_length;
 }
 
-size_t pqcp_sovereign_internal_encode_text(
+size_t pqcp_sovereign_ceremony_encode_text(
 	uint8_t *output,
 	size_t capacity,
 	size_t offset,
@@ -169,16 +169,16 @@ size_t pqcp_sovereign_internal_encode_text(
 {
 	size_t length;
 
-	if (!pqcp_sovereign_internal_text_valid(text, maximum)) {
+	if (!pqcp_sovereign_ceremony_text_valid(text, maximum)) {
 		return 0U;
 	}
 	length = strnlen(text, maximum);
-	return pqcp_sovereign_internal_encode_bytes(
+	return pqcp_sovereign_ceremony_encode_bytes(
 		output, capacity, offset,
 		(const uint8_t *)text, length);
 }
 
-int pqcp_sovereign_internal_hash(
+int pqcp_sovereign_ceremony_hash(
 	const uint8_t *input,
 	size_t input_length,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
@@ -191,7 +191,7 @@ int pqcp_sovereign_internal_hash(
 		input, input_length, digest);
 }
 
-int pqcp_sovereign_internal_hash_parts(
+int pqcp_sovereign_ceremony_hash_parts(
 	const uint8_t *const *parts,
 	const size_t *lengths,
 	size_t count,
@@ -205,7 +205,7 @@ int pqcp_sovereign_internal_hash_parts(
 		parts, lengths, count, digest);
 }
 
-const char *pqcp_sovereign_internal_action_text(
+const char *pqcp_sovereign_ceremony_action_text(
 	enum pqcp_sovereign_ceremony_action action)
 {
 	switch (action) {
@@ -224,7 +224,7 @@ const char *pqcp_sovereign_internal_action_text(
 	}
 }
 
-const char *pqcp_sovereign_internal_role_text(
+const char *pqcp_sovereign_ceremony_role_text(
 	enum pqcp_sovereign_approval_role role)
 {
 	switch (role) {
@@ -246,7 +246,7 @@ const char *pqcp_sovereign_internal_role_text(
 }
 
 enum pqcp_sovereign_ceremony_action
-pqcp_sovereign_internal_action_from_text(const char *action)
+pqcp_sovereign_ceremony_action_from_text(const char *action)
 {
 	if (action == NULL) {
 		return PQCP_SOVEREIGN_CEREMONY_ACTION_NONE;
@@ -314,7 +314,7 @@ static bool policy_shape_valid(
 
 	if (policy == NULL || !policy->occupied ||
 	    policy->schema_version != PQCP_SOVEREIGN_SCHEMA_VERSION ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    policy->tenant_id, sizeof(policy->tenant_id)) ||
 	    !action_valid(policy->action) ||
 	    policy->required_capabilities == 0U ||
@@ -330,9 +330,9 @@ static bool policy_shape_valid(
 	    policy->revocation_epoch == 0U ||
 	    policy->not_before_ms == 0U ||
 	    policy->expires_at_ms <= policy->not_before_ms ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    policy->target_digest) ||
-	    pqcp_sovereign_internal_digest_zero(policy->nonce)) {
+	    pqcp_sovereign_ceremony_digest_zero(policy->nonce)) {
 		return false;
 	}
 	return true;
@@ -345,10 +345,10 @@ static bool credential_shape_valid(
 	       credential->occupied &&
 	       credential->schema_version ==
 		       PQCP_SOVEREIGN_SCHEMA_VERSION &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       credential->tenant_id,
 		       sizeof(credential->tenant_id)) &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       credential->signer_id,
 		       sizeof(credential->signer_id)) &&
 	       role_valid(credential->role) &&
@@ -364,7 +364,7 @@ static bool credential_shape_valid(
 			PQCP_RUNTIME_KEY_MLDSA_PUBLIC ||
 		credential->verification_key.family ==
 			PQCP_RUNTIME_KEY_MLDSA_KEYPAIR) &&
-	       !pqcp_sovereign_internal_digest_zero(
+	       !pqcp_sovereign_ceremony_digest_zero(
 		       credential->identity_digest);
 }
 
@@ -376,10 +376,10 @@ static bool signed_approval_shape_valid(
 	       approval->schema_version ==
 		       PQCP_SOVEREIGN_SCHEMA_VERSION &&
 	       approval->authorization_id != 0U &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       approval->tenant_id,
 		       sizeof(approval->tenant_id)) &&
-	       pqcp_sovereign_internal_text_valid(
+	       pqcp_sovereign_ceremony_text_valid(
 		       approval->signer_id,
 		       sizeof(approval->signer_id)) &&
 	       role_valid(approval->role) &&
@@ -391,18 +391,18 @@ static bool signed_approval_shape_valid(
 	       approval->signed_at_ms != 0U &&
 	       approval->not_before_ms != 0U &&
 	       approval->expires_at_ms > approval->not_before_ms &&
-	       !pqcp_sovereign_internal_digest_zero(
+	       !pqcp_sovereign_ceremony_digest_zero(
 		       approval->target_digest) &&
-	       !pqcp_sovereign_internal_digest_zero(
+	       !pqcp_sovereign_ceremony_digest_zero(
 		       approval->nonce) &&
-	       !pqcp_sovereign_internal_digest_zero(
+	       !pqcp_sovereign_ceremony_digest_zero(
 		       approval->approval_digest) &&
 	       approval->signature_length != 0U &&
 	       approval->signature_length <=
 		       sizeof(approval->signature);
 }
 
-int pqcp_sovereign_internal_approval_body(
+int pqcp_sovereign_ceremony_approval_body(
 	const struct pqcp_sovereign_signed_approval_internal *approval,
 	uint8_t *output,
 	size_t output_capacity,
@@ -418,60 +418,60 @@ int pqcp_sovereign_internal_approval_body(
 	}
 	*output_length = 0U;
 	memset(output, 0, output_capacity);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		output, output_capacity, offset, APPROVAL_BODY_DOMAIN,
 		sizeof(APPROVAL_BODY_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		output, output_capacity, offset,
 		approval->schema_version);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->authorization_id);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		output, output_capacity, offset, approval->tenant_id,
 		sizeof(approval->tenant_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		output, output_capacity, offset, approval->signer_id,
 		sizeof(approval->signer_id));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		output, output_capacity, offset,
 		(uint32_t)approval->role);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		output, output_capacity, offset,
 		(uint32_t)approval->action);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->capabilities);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->credential_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->policy_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->revocation_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->signed_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->not_before_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		output, output_capacity, offset,
 		approval->expires_at_ms);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		output, output_capacity, offset,
 		approval->target_digest,
 		sizeof(approval->target_digest));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		output, output_capacity, offset, approval->nonce,
 		sizeof(approval->nonce));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		output, output_capacity, offset,
 		approval->previous_authorization_digest,
 		sizeof(approval->previous_authorization_digest));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		output, output_capacity, offset,
 		approval->approve ? 1U : 0U);
 	if (offset == 0U || offset > output_capacity) {
@@ -482,7 +482,7 @@ int pqcp_sovereign_internal_approval_body(
 	return 0;
 }
 
-int pqcp_sovereign_internal_approval_digest(
+int pqcp_sovereign_ceremony_approval_digest(
 	const struct pqcp_sovereign_signed_approval_internal *approval,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
 {
@@ -490,17 +490,17 @@ int pqcp_sovereign_internal_approval_digest(
 	size_t length = 0U;
 	int ret;
 
-	ret = pqcp_sovereign_internal_approval_body(
+	ret = pqcp_sovereign_ceremony_approval_body(
 		approval, body, sizeof(body), &length);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_hash(
+		ret = pqcp_sovereign_ceremony_hash(
 			body, length, digest);
 	}
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
 
-int pqcp_sovereign_internal_policy_digest(
+int pqcp_sovereign_ceremony_policy_digest(
 	const struct pqcp_sovereign_approval_policy_internal *policy,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
 {
@@ -512,41 +512,41 @@ int pqcp_sovereign_internal_policy_digest(
 		return -EINVAL;
 	}
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, APPROVAL_POLICY_DOMAIN,
 		sizeof(APPROVAL_POLICY_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, policy->schema_version);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, policy->tenant_id,
 		sizeof(policy->tenant_id));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, (uint32_t)policy->action);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		policy->required_capabilities);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, policy->allowed_role_mask);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, policy->required_approvals);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		policy->required_distinct_roles);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, policy->policy_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, policy->revocation_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, policy->not_before_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, policy->expires_at_ms);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, policy->target_digest,
 		sizeof(policy->target_digest));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, policy->nonce,
 		sizeof(policy->nonce));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		policy->previous_authorization_digest,
 		sizeof(policy->previous_authorization_digest));
@@ -554,12 +554,12 @@ int pqcp_sovereign_internal_policy_digest(
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	ret = pqcp_sovereign_internal_hash(body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
 
-int pqcp_sovereign_internal_authorization_digest(
+int pqcp_sovereign_ceremony_authorization_digest(
 	const struct pqcp_sovereign_committed_authorization_internal *authorization,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
 {
@@ -571,60 +571,60 @@ int pqcp_sovereign_internal_authorization_digest(
 		return -EINVAL;
 	}
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, AUTHORIZATION_BODY_DOMAIN,
 		sizeof(AUTHORIZATION_BODY_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		authorization->schema_version);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		authorization->authorization_id);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, authorization->tenant_id,
 		sizeof(authorization->tenant_id));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		(uint32_t)authorization->action);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		authorization->policy_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		authorization->revocation_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		authorization->committed_at_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset,
 		authorization->expires_at_ms);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		authorization->approval_count);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		authorization->distinct_role_count);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		authorization->signer_mask);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		authorization->role_mask);
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset,
 		authorization->maximum_uses);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		authorization->target_digest,
 		sizeof(authorization->target_digest));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, authorization->nonce,
 		sizeof(authorization->nonce));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		authorization->previous_authorization_digest,
 		sizeof(authorization->previous_authorization_digest));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset,
 		authorization->approvals_digest,
 		sizeof(authorization->approvals_digest));
@@ -632,7 +632,7 @@ int pqcp_sovereign_internal_authorization_digest(
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	ret = pqcp_sovereign_internal_hash(body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
@@ -650,31 +650,6 @@ static void unlock_engine(
 	struct pqcp_sovereign_authorization_engine_internal *engine)
 {
 	(void)k_mutex_unlock(&engine->lock);
-}
-
-static int authorization_slot_index_locked(
-	const struct pqcp_sovereign_authorization_engine_internal *engine,
-	uint64_t authorization_id)
-{
-	size_t index;
-
-	if (authorization_id == 0U) {
-		return -EINVAL;
-	}
-	for (index = 0U; index < engine->capacity; ++index) {
-		const struct pqcp_sovereign_authorization_slot_internal *slot =
-			&engine->slots[index];
-
-		if (slot->occupied &&
-		    (slot->committed.authorization_id ==
-			     authorization_id ||
-		     (slot->committed.authorization_id == 0U &&
-		      slot->approvals[0].authorization_id ==
-			      authorization_id))) {
-			return (int)index;
-		}
-	}
-	return -ENOENT;
 }
 
 static uint64_t slot_authorization_id(
@@ -769,25 +744,6 @@ static int free_approval_index(
 	return -ENOSPC;
 }
 
-static uint32_t approval_role_mask(
-	const struct pqcp_sovereign_authorization_slot_internal *slot)
-{
-	uint32_t mask = 0U;
-	size_t index;
-
-	for (index = 0U; index < ARRAY_SIZE(slot->approvals);
-	     ++index) {
-		const struct pqcp_sovereign_signed_approval_internal *approval =
-			&slot->approvals[index];
-
-		if (approval->occupied && approval->approve) {
-			mask |= PQCP_SOVEREIGN_APPROVAL_ROLE_BIT(
-				approval->role);
-		}
-	}
-	return mask;
-}
-
 static uint32_t bit_count_u32(uint32_t value)
 {
 	uint32_t count = 0U;
@@ -809,10 +765,10 @@ static int approval_set_digest(
 	int ret;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, APPROVAL_SET_DOMAIN,
 		sizeof(APPROVAL_SET_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, slot->policy.policy_digest,
 		sizeof(slot->policy.policy_digest));
 	for (index = 0U; index < ARRAY_SIZE(slot->approvals);
@@ -823,7 +779,7 @@ static int approval_set_digest(
 		if (!approval->occupied || !approval->approve) {
 			continue;
 		}
-		offset = pqcp_sovereign_internal_encode_bytes(
+		offset = pqcp_sovereign_ceremony_encode_bytes(
 			body, sizeof(body), offset,
 			approval->approval_digest,
 			sizeof(approval->approval_digest));
@@ -832,7 +788,7 @@ static int approval_set_digest(
 			return -EOVERFLOW;
 		}
 	}
-	ret = pqcp_sovereign_internal_hash(body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
@@ -847,14 +803,14 @@ static int verify_signed_approval(
 	size_t body_length = 0U;
 	int ret;
 
-	ret = pqcp_sovereign_internal_approval_body(
+	ret = pqcp_sovereign_ceremony_approval_body(
 		approval, body, sizeof(body), &body_length);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_hash(
+		ret = pqcp_sovereign_ceremony_hash(
 			body, body_length, digest);
 	}
 	if (ret == 0 &&
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    digest, approval->approval_digest)) {
 		ret = -EBADMSG;
 	}
@@ -932,12 +888,12 @@ static int validate_approval_binding(
 	    approval->expires_at_ms > credential->expires_at_ms) {
 		return -ETIMEDOUT;
 	}
-	if (!pqcp_sovereign_internal_digest_equal(
+	if (!pqcp_sovereign_ceremony_digest_equal(
 		    policy->target_digest,
 		    approval->target_digest) ||
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    policy->nonce, approval->nonce) ||
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    policy->previous_authorization_digest,
 		    approval->previous_authorization_digest)) {
 		return -EBADMSG;
@@ -985,14 +941,14 @@ int pqcp_sovereign_authorization_open_internal(
 		return -EINVAL;
 	}
 	*authorization_id = 0U;
-	ret = pqcp_sovereign_internal_policy_digest(
+	ret = pqcp_sovereign_ceremony_policy_digest(
 		policy, digest);
 	if (ret != 0) {
 		return ret;
 	}
-	if (!pqcp_sovereign_internal_digest_zero(
+	if (!pqcp_sovereign_ceremony_digest_zero(
 		    policy->policy_digest) &&
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    policy->policy_digest, digest)) {
 		pqcp_runtime_secure_zero(digest, sizeof(digest));
 		return -EBADMSG;
@@ -1131,7 +1087,7 @@ static int committed_authorization_build(
 	result->schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	result->authorization_id =
 		slot->committed.authorization_id;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		result->tenant_id, sizeof(result->tenant_id),
 		slot->policy.tenant_id);
 	if (ret != 0) {
@@ -1167,7 +1123,7 @@ static int committed_authorization_build(
 	}
 	result->state = PQCP_SOVEREIGN_AUTHORIZATION_COMMITTED;
 	result->occupied = true;
-	ret = pqcp_sovereign_internal_authorization_digest(
+	ret = pqcp_sovereign_ceremony_authorization_digest(
 		result, result->authorization_digest);
 	return ret;
 }
@@ -1243,10 +1199,10 @@ int pqcp_sovereign_authorization_consume_internal(
 	int ret;
 
 	if (authorization_id == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    tenant_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
 	    !action_valid(action) || target_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(target_digest) ||
+	    pqcp_sovereign_ceremony_digest_zero(target_digest) ||
 	    policy_epoch == 0U || revocation_epoch == 0U ||
 	    now_ms == 0U || authorization == NULL) {
 		return -EINVAL;
@@ -1280,7 +1236,7 @@ int pqcp_sovereign_authorization_consume_internal(
 	    committed->action != action ||
 	    committed->policy_epoch != policy_epoch ||
 	    committed->revocation_epoch != revocation_epoch ||
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    committed->target_digest, target_digest)) {
 		unlock_engine(engine);
 		return -EACCES;
@@ -1387,10 +1343,10 @@ static int audit_approval_slot(
 	    !authorization_state_valid(slot->committed.state)) {
 		return -EBADMSG;
 	}
-	ret = pqcp_sovereign_internal_policy_digest(
+	ret = pqcp_sovereign_ceremony_policy_digest(
 		&slot->policy, expected);
 	if (ret != 0 ||
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    expected, slot->policy.policy_digest)) {
 		pqcp_runtime_secure_zero(expected, sizeof(expected));
 		return ret != 0 ? ret : -EBADMSG;
@@ -1413,22 +1369,22 @@ static int audit_approval_slot(
 			    slot->policy.policy_epoch ||
 		    approval->revocation_epoch !=
 			    slot->policy.revocation_epoch ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    approval->target_digest,
 			    slot->policy.target_digest) ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    approval->nonce, slot->policy.nonce) ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    approval->previous_authorization_digest,
 			    slot->policy
 				    .previous_authorization_digest)) {
 			pqcp_runtime_secure_zero(expected, sizeof(expected));
 			return -EBADMSG;
 		}
-		ret = pqcp_sovereign_internal_approval_digest(
+		ret = pqcp_sovereign_ceremony_approval_digest(
 			approval, expected);
 		if (ret != 0 ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    expected, approval->approval_digest)) {
 			pqcp_runtime_secure_zero(expected, sizeof(expected));
 			return ret != 0 ? ret : -EBADMSG;
@@ -1465,7 +1421,7 @@ static int audit_approval_slot(
 
 		ret = approval_set_digest(slot, approval_digest);
 		if (ret != 0 ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    approval_digest,
 			    slot->committed.approvals_digest)) {
 			pqcp_runtime_secure_zero(
@@ -1474,12 +1430,12 @@ static int audit_approval_slot(
 				expected, sizeof(expected));
 			return ret != 0 ? ret : -EBADMSG;
 		}
-		ret = pqcp_sovereign_internal_authorization_digest(
+		ret = pqcp_sovereign_ceremony_authorization_digest(
 			&slot->committed, expected);
 		pqcp_runtime_secure_zero(
 			approval_digest, sizeof(approval_digest));
 		if (ret != 0 ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    expected,
 			    slot->committed.authorization_digest)) {
 			pqcp_runtime_secure_zero(
