@@ -1057,7 +1057,7 @@ int pqcp_sovereign_runtime_tick(
 			now_ms, &changed),
 		&first_error);
 	remember_error(
-		pqcp_sovereign_recovery_tick(
+		pqcp_sovereign_recovery_quorum_tick(
 			&runtime->recovery,
 			now_ms, &changed),
 		&first_error);
