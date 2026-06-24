@@ -43,6 +43,11 @@ int pqcp_channel_internal_encrypt_record(
 	uint8_t *output,
 	size_t output_capacity,
 	size_t *output_length);
+int pqcp_channel_internal_send_application(
+	struct pqcp_channel *channel,
+	const uint8_t *plaintext,
+	size_t plaintext_length,
+	bool allow_blocked);
 int pqcp_channel_internal_decrypt_record(
 	struct pqcp_channel *channel,
 	uint64_t sequence,

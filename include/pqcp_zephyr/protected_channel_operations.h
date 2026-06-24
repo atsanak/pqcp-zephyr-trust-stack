@@ -300,6 +300,9 @@ struct pqcp_channel_rekey_context {
 	int last_cleanup_error;
 	uint32_t cleanup_failures;
 	bool cleanup_pending;
+	bool local_direction_committed;
+	bool peer_direction_committed;
+	bool pending_peer_receive;
 	bool pending_cleanup;
 	bool initiator;
 };
@@ -418,10 +421,13 @@ struct pqcp_channel_operations {
 	enum pqcp_channel_policy_state state;
 	uint64_t epoch_started_at_ms;
 	uint64_t epoch_started_bytes;
+	uint64_t rekey_last_send_ms;
 	uint64_t next_control_id;
 	uint64_t controls_sent;
 	uint64_t controls_received;
 	uint64_t failures;
+	uint32_t rekey_phase;
+	uint32_t rekey_retries;
 	struct k_mutex lock;
 	bool initialized;
 };
@@ -570,6 +576,14 @@ int pqcp_channel_rekey_accept(
 	const uint8_t confirmation[PQCP_CHANNEL_FINISHED_BYTES],
 	uint64_t now_ms);
 int pqcp_channel_rekey_commit(
+	struct pqcp_channel *channel,
+	struct pqcp_channel_rekey_context *context,
+	uint64_t now_ms);
+int pqcp_channel_rekey_commit_local(
+	struct pqcp_channel *channel,
+	struct pqcp_channel_rekey_context *context,
+	uint64_t now_ms);
+int pqcp_channel_rekey_commit_peer(
 	struct pqcp_channel *channel,
 	struct pqcp_channel_rekey_context *context,
 	uint64_t now_ms);

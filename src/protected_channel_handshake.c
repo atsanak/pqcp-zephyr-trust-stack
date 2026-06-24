@@ -939,20 +939,26 @@ int pqcp_channel_handshake(struct pqcp_channel *channel)
 	return 0;
 }
 
-int pqcp_channel_send(
+int pqcp_channel_internal_send_application(
 	struct pqcp_channel *channel,
 	const uint8_t *plaintext,
-	size_t plaintext_length)
+	size_t plaintext_length,
+	bool allow_blocked)
 {
 	size_t ciphertext_length = 0U;
 	int ret;
 
 	if (channel == NULL || !channel->established ||
 	    channel->state != PQCP_CHANNEL_STATE_ESTABLISHED ||
+	    (!allow_blocked &&
+	     channel->application_send_blocked) ||
 	    (plaintext == NULL && plaintext_length != 0U) ||
 	    plaintext_length >
 		    channel->config.max_payload_bytes) {
-		return -EINVAL;
+		return channel != NULL &&
+			       channel->application_send_blocked &&
+			       !allow_blocked ?
+			       -EBUSY : -EINVAL;
 	}
 	ret = pqcp_channel_internal_encrypt_record(
 		channel, plaintext, plaintext_length,
@@ -973,6 +979,15 @@ int pqcp_channel_send(
 	}
 	channel->application_bytes_sent += plaintext_length;
 	return 0;
+}
+
+int pqcp_channel_send(
+	struct pqcp_channel *channel,
+	const uint8_t *plaintext,
+	size_t plaintext_length)
+{
+	return pqcp_channel_internal_send_application(
+		channel, plaintext, plaintext_length, false);
 }
 
 int pqcp_channel_receive(

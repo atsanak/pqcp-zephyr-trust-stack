@@ -11,11 +11,34 @@
 
 #include <pqcp_zephyr/protected_channel_operations.h>
 
+#include "protected_channel_internal.h"
 #include "runtime_internal.h"
 
 #define REKEY_PREPARE_PAYLOAD_BYTES \
 	(PQCP_CHANNEL_REKEY_SALT_BYTES + PQCP_CHANNEL_FINISHED_BYTES)
 #define REKEY_CONFIRM_PAYLOAD_BYTES PQCP_CHANNEL_FINISHED_BYTES
+
+enum rekey_commit_phase {
+	REKEY_COMMIT_PHASE_NONE = 0,
+	REKEY_COMMIT_PHASE_REQUEST = 1,
+	REKEY_COMMIT_PHASE_ACK = 2,
+	REKEY_COMMIT_PHASE_ACTIVATE = 3,
+	REKEY_COMMIT_PHASE_CONFIRM = 4,
+};
+
+enum rekey_wait_phase {
+	REKEY_WAIT_NONE = 0,
+	REKEY_WAIT_ACCEPT,
+	REKEY_WAIT_REQUEST,
+	REKEY_WAIT_ACK,
+	REKEY_WAIT_ACTIVATE,
+	REKEY_WAIT_CONFIRM,
+};
+
+static int send_control_locked(
+	struct pqcp_channel_operations *operations,
+	struct pqcp_channel_control_message *message,
+	uint64_t now_ms);
 
 static bool secure_equal(
 	const uint8_t *left,
@@ -28,6 +51,161 @@ static bool secure_equal(
 		difference |= left[index] ^ right[index];
 	}
 	return difference == 0U;
+}
+
+static enum pqcp_channel_role peer_role(
+	enum pqcp_channel_role role)
+{
+	return role == PQCP_CHANNEL_ROLE_CLIENT ?
+		PQCP_CHANNEL_ROLE_SERVER :
+		PQCP_CHANNEL_ROLE_CLIENT;
+}
+
+static void set_application_barrier(
+	struct pqcp_channel_operations *operations,
+	bool blocked)
+{
+	if (operations != NULL &&
+	    operations->channel != NULL) {
+		operations->channel->application_send_blocked =
+			blocked;
+	}
+}
+
+static void clear_rekey_progress(
+	struct pqcp_channel_operations *operations)
+{
+	operations->rekey_phase = REKEY_WAIT_NONE;
+	operations->rekey_last_send_ms = 0U;
+	operations->rekey_retries = 0U;
+}
+
+static uint64_t rekey_retry_interval_ms(
+	const struct pqcp_channel_rekey_policy *policy)
+{
+	uint64_t interval;
+
+	if (policy == NULL) {
+		return 1000U;
+	}
+	interval = policy->minimum_interval_ms;
+	if (interval == 0U) {
+		interval = 1000U;
+	}
+	if (policy->handshake_timeout_ms != 0U) {
+		const uint64_t quarter =
+			policy->handshake_timeout_ms / 4U;
+
+		if (quarter != 0U && interval > quarter) {
+			interval = quarter;
+		}
+	}
+	return interval < 100U ? 100U : interval;
+}
+
+static void rekey_established_locked(
+	struct pqcp_channel_operations *operations,
+	uint64_t now_ms)
+{
+	operations->state =
+		PQCP_CHANNEL_POLICY_ESTABLISHED;
+	operations->epoch_started_at_ms = now_ms;
+	operations->epoch_started_bytes =
+		operations->channel->application_bytes_sent +
+		operations->channel->application_bytes_received;
+	set_application_barrier(operations, false);
+	clear_rekey_progress(operations);
+}
+
+static int send_rekey_abort_locked(
+	struct pqcp_channel_operations *operations,
+	uint64_t epoch,
+	uint32_t error,
+	uint64_t now_ms)
+{
+	struct pqcp_channel_control_message abort = {
+		.kind = PQCP_CHANNEL_CONTROL_REKEY_ABORT,
+		.epoch = epoch,
+		.error = error,
+	};
+
+	return send_control_locked(
+		operations, &abort, now_ms);
+}
+
+static int resend_rekey_phase_locked(
+	struct pqcp_channel_operations *operations,
+	uint64_t now_ms)
+{
+	struct pqcp_channel_control_message message;
+
+	if (operations == NULL ||
+	    operations->rekey == NULL ||
+	    operations->rekey->pending_epoch == 0U) {
+		return -EINVAL;
+	}
+	memset(&message, 0, sizeof(message));
+	message.epoch = operations->rekey->pending_epoch;
+	switch (operations->rekey_phase) {
+	case REKEY_WAIT_ACCEPT:
+		message.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_PREPARE;
+		memcpy(message.payload,
+		       operations->rekey->salt,
+		       sizeof(operations->rekey->salt));
+		memcpy(message.payload +
+			       sizeof(operations->rekey->salt),
+		       operations->rekey->confirmation,
+		       sizeof(operations->rekey->confirmation));
+		message.payload_length =
+			REKEY_PREPARE_PAYLOAD_BYTES;
+		break;
+	case REKEY_WAIT_REQUEST:
+		message.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_ACCEPT;
+		memcpy(message.payload,
+		       operations->rekey->confirmation,
+		       sizeof(operations->rekey->confirmation));
+		message.payload_length =
+			REKEY_CONFIRM_PAYLOAD_BYTES;
+		break;
+	case REKEY_WAIT_ACK:
+		message.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+		message.value =
+			REKEY_COMMIT_PHASE_REQUEST;
+		memcpy(message.payload,
+		       operations->rekey->confirmation,
+		       sizeof(operations->rekey->confirmation));
+		message.payload_length =
+			REKEY_CONFIRM_PAYLOAD_BYTES;
+		break;
+	case REKEY_WAIT_ACTIVATE:
+		message.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+		message.value = REKEY_COMMIT_PHASE_ACK;
+		memcpy(message.payload,
+		       operations->rekey->confirmation,
+		       sizeof(operations->rekey->confirmation));
+		message.payload_length =
+			REKEY_CONFIRM_PAYLOAD_BYTES;
+		break;
+	case REKEY_WAIT_CONFIRM:
+		message.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+		message.value =
+			REKEY_COMMIT_PHASE_ACTIVATE;
+		memcpy(message.payload,
+		       operations->rekey->confirmation,
+		       sizeof(operations->rekey->confirmation));
+		message.payload_length =
+			REKEY_CONFIRM_PAYLOAD_BYTES;
+		break;
+	default:
+		return 0;
+	}
+	return send_control_locked(
+		operations, &message, now_ms);
 }
 
 static enum pqcp_channel_policy_state initial_policy_state(
@@ -78,14 +256,14 @@ static int send_control_locked(
 	    PQCP_CHANNEL_POLICY_DENY) {
 		return decision.error;
 	}
-	ret = pqcp_channel_control_encode(
-		message, encoded, sizeof(encoded),
-		&encoded_length);
-	if (ret == 0) {
-		ret = pqcp_channel_send(
-			operations->channel,
-			encoded, encoded_length);
-	}
+		ret = pqcp_channel_control_encode(
+			message, encoded, sizeof(encoded),
+			&encoded_length);
+		if (ret == 0) {
+			ret = pqcp_channel_internal_send_application(
+				operations->channel, encoded,
+				encoded_length, true);
+		}
 	pqcp_runtime_secure_zero(encoded, sizeof(encoded));
 	if (ret != 0) {
 		operations->failures++;
@@ -110,6 +288,7 @@ static int handle_control_locked(
 	uint64_t now_ms)
 {
 	struct pqcp_channel_policy_decision decision;
+	struct pqcp_channel_control_message reply;
 	int ret;
 
 	ret = pqcp_channel_policy_lookup(
@@ -124,17 +303,13 @@ static int handle_control_locked(
 	}
 	switch (message->kind) {
 	case PQCP_CHANNEL_CONTROL_KEEPALIVE:
-		{
-			struct pqcp_channel_control_message ack = {
-				.kind =
-					PQCP_CHANNEL_CONTROL_KEEPALIVE_ACK,
-				.epoch = message->epoch,
-				.value = message->value,
-			};
-
-			ret = send_control_locked(
-				operations, &ack, now_ms);
-		}
+		memset(&reply, 0, sizeof(reply));
+		reply.kind =
+			PQCP_CHANNEL_CONTROL_KEEPALIVE_ACK;
+		reply.epoch = message->epoch;
+		reply.value = message->value;
+		ret = send_control_locked(
+			operations, &reply, now_ms);
 		break;
 	case PQCP_CHANNEL_CONTROL_KEEPALIVE_ACK:
 		ret = pqcp_channel_peer_probe_ack(
@@ -152,124 +327,466 @@ static int handle_control_locked(
 		ret = 0;
 		break;
 	case PQCP_CHANNEL_CONTROL_REKEY_PREPARE:
-		{
-			struct pqcp_channel_control_message accept = {
-				.kind = PQCP_CHANNEL_CONTROL_REKEY_ACCEPT,
-				.epoch = message->epoch,
-			};
-
-			if (message->payload_length !=
-				    REKEY_PREPARE_PAYLOAD_BYTES ||
-			    message->epoch <=
-				    operations->rekey->current_epoch) {
-				return -EBADMSG;
-			}
-			ret = pqcp_channel_rekey_prepare(
-				operations->channel,
-				&operations->rekey_policy,
-				operations->rekey, now_ms,
-				message->epoch, message->payload,
-				false);
+		if (message->payload_length !=
+			    REKEY_PREPARE_PAYLOAD_BYTES ||
+		    message->epoch <=
+			    operations->rekey->current_epoch) {
+			return -EBADMSG;
+		}
+		if (!operations->rekey->initiator &&
+		    operations->rekey_phase ==
+			    REKEY_WAIT_REQUEST &&
+		    operations->rekey->pending_epoch ==
+			    message->epoch &&
+		    secure_equal(
+			    operations->rekey->salt,
+			    message->payload,
+			    PQCP_CHANNEL_REKEY_SALT_BYTES) &&
+		    secure_equal(
+			    operations->rekey
+				    ->expected_peer_confirmation,
+			    message->payload +
+				    PQCP_CHANNEL_REKEY_SALT_BYTES,
+			    PQCP_CHANNEL_FINISHED_BYTES)) {
+			memset(&reply, 0, sizeof(reply));
+			reply.kind =
+				PQCP_CHANNEL_CONTROL_REKEY_ACCEPT;
+			reply.epoch = message->epoch;
+			memcpy(reply.payload,
+			       operations->rekey->confirmation,
+			       PQCP_CHANNEL_FINISHED_BYTES);
+			reply.payload_length =
+				REKEY_CONFIRM_PAYLOAD_BYTES;
+			ret = send_control_locked(
+				operations, &reply, now_ms);
 			if (ret == 0) {
-				ret = pqcp_channel_rekey_accept(
-					operations->channel,
-					operations->rekey,
-					message->payload +
-						PQCP_CHANNEL_REKEY_SALT_BYTES,
-					now_ms);
-			}
-			if (ret == 0) {
-				memcpy(
-					accept.payload,
-					operations->rekey->confirmation,
-					PQCP_CHANNEL_FINISHED_BYTES);
-				accept.payload_length =
-					REKEY_CONFIRM_PAYLOAD_BYTES;
-				operations->state =
-					PQCP_CHANNEL_POLICY_REKEY_PREPARED;
-				ret = send_control_locked(
-					operations, &accept, now_ms);
+				operations->rekey_last_send_ms =
+					now_ms;
+				operations->rekey_retries++;
 			}
 			return ret;
 		}
-	case PQCP_CHANNEL_CONTROL_REKEY_ACCEPT:
-		{
-			struct pqcp_channel_control_message commit = {
-				.kind = PQCP_CHANNEL_CONTROL_REKEY_COMMIT,
-				.epoch = message->epoch,
-			};
-
-			if (!operations->rekey->initiator ||
-			    operations->rekey->pending_epoch !=
-				    message->epoch ||
-			    message->payload_length !=
-				    REKEY_CONFIRM_PAYLOAD_BYTES) {
-				return -EBADMSG;
-			}
+		if ((operations->rekey->state ==
+			     PQCP_CHANNEL_REKEY_PREPARED ||
+		     operations->rekey->state ==
+			     PQCP_CHANNEL_REKEY_ACCEPTED) &&
+		    operations->rekey->initiator &&
+		    operations->rekey->pending_epoch ==
+			    message->epoch &&
+		    operations->rekey->initiator_role ==
+			    PQCP_CHANNEL_ROLE_SERVER &&
+		    !operations->rekey
+			     ->local_direction_committed) {
+			(void)pqcp_channel_rekey_abort(
+				operations->rekey);
+			rekey_established_locked(
+				operations, now_ms);
+		} else if (operations->rekey->state !=
+				       PQCP_CHANNEL_REKEY_IDLE &&
+			   operations->rekey->state !=
+				       PQCP_CHANNEL_REKEY_ABORTED &&
+			   operations->rekey->state !=
+				       PQCP_CHANNEL_REKEY_COMMITTED) {
+			ret = send_rekey_abort_locked(
+				operations, message->epoch,
+				(uint32_t)EBUSY, now_ms);
+			return ret == 0 ? 0 : ret;
+		}
+		set_application_barrier(operations, true);
+		ret = pqcp_channel_rekey_prepare(
+			operations->channel,
+			&operations->rekey_policy,
+			operations->rekey, now_ms,
+			message->epoch, message->payload,
+			false);
+		if (ret == 0) {
 			ret = pqcp_channel_rekey_accept(
 				operations->channel,
 				operations->rekey,
-				message->payload, now_ms);
+				message->payload +
+					PQCP_CHANNEL_REKEY_SALT_BYTES,
+				now_ms);
+		}
+		if (ret != 0) {
+			(void)pqcp_channel_rekey_abort(
+				operations->rekey);
+			rekey_established_locked(
+				operations, now_ms);
+			return ret;
+		}
+		memset(&reply, 0, sizeof(reply));
+		reply.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_ACCEPT;
+		reply.epoch = message->epoch;
+		memcpy(reply.payload,
+		       operations->rekey->confirmation,
+		       PQCP_CHANNEL_FINISHED_BYTES);
+		reply.payload_length =
+			REKEY_CONFIRM_PAYLOAD_BYTES;
+		operations->state =
+			PQCP_CHANNEL_POLICY_REKEY_PREPARED;
+		ret = send_control_locked(
+			operations, &reply, now_ms);
+		if (ret == 0) {
+			operations->rekey_phase =
+				REKEY_WAIT_REQUEST;
+			operations->rekey_last_send_ms = now_ms;
+			operations->rekey_retries = 0U;
+		} else {
+			(void)pqcp_channel_rekey_abort(
+				operations->rekey);
+			rekey_established_locked(
+				operations, now_ms);
+		}
+		return ret;
+	case PQCP_CHANNEL_CONTROL_REKEY_ACCEPT:
+		if (message->payload_length !=
+			    REKEY_CONFIRM_PAYLOAD_BYTES) {
+			return -EBADMSG;
+		}
+		if (operations->rekey->initiator &&
+		    operations->rekey_phase ==
+			    REKEY_WAIT_ACK &&
+		    operations->rekey->pending_epoch ==
+			    message->epoch &&
+		    secure_equal(
+			    operations->rekey
+				    ->expected_peer_confirmation,
+			    message->payload,
+			    PQCP_CHANNEL_FINISHED_BYTES)) {
+			memset(&reply, 0, sizeof(reply));
+			reply.kind =
+				PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+			reply.epoch = message->epoch;
+			reply.value =
+				REKEY_COMMIT_PHASE_REQUEST;
+			memcpy(reply.payload,
+			       operations->rekey->confirmation,
+			       PQCP_CHANNEL_FINISHED_BYTES);
+			reply.payload_length =
+				REKEY_CONFIRM_PAYLOAD_BYTES;
+			ret = send_control_locked(
+				operations, &reply, now_ms);
 			if (ret == 0) {
-				memcpy(
-					commit.payload,
-					operations->rekey->confirmation,
-					PQCP_CHANNEL_FINISHED_BYTES);
-				commit.payload_length =
-					REKEY_CONFIRM_PAYLOAD_BYTES;
-				operations->state =
-					PQCP_CHANNEL_POLICY_REKEY_ACCEPTED;
-				ret = send_control_locked(
-					operations, &commit, now_ms);
-			}
-			if (ret == 0) {
-				ret = pqcp_channel_rekey_commit(
-					operations->channel,
-					operations->rekey, now_ms);
-			}
-			if (ret == 0) {
-				operations->state =
-					PQCP_CHANNEL_POLICY_ESTABLISHED;
-				operations->epoch_started_at_ms = now_ms;
-				operations->epoch_started_bytes =
-					operations->channel->
-						application_bytes_sent +
-					operations->channel->
-						application_bytes_received;
+				operations->rekey_last_send_ms =
+					now_ms;
+				operations->rekey_retries++;
 			}
 			return ret;
 		}
-	case PQCP_CHANNEL_CONTROL_REKEY_COMMIT:
-		if (operations->rekey->initiator ||
-		    operations->rekey->state !=
-			    PQCP_CHANNEL_REKEY_ACCEPTED ||
+		if (!operations->rekey->initiator ||
+		    operations->rekey_phase !=
+			    REKEY_WAIT_ACCEPT ||
 		    operations->rekey->pending_epoch !=
-			    message->epoch ||
-		    message->payload_length !=
-			    REKEY_CONFIRM_PAYLOAD_BYTES ||
-		    !secure_equal(
-			    operations->rekey->
-				    expected_peer_confirmation,
-			    message->payload,
-			    PQCP_CHANNEL_FINISHED_BYTES)) {
-			ret = -EKEYREJECTED;
+			    message->epoch) {
+			return -EBADMSG;
+		}
+		ret = pqcp_channel_rekey_accept(
+			operations->channel,
+			operations->rekey,
+			message->payload, now_ms);
+		if (ret != 0) {
+			(void)pqcp_channel_rekey_abort(
+				operations->rekey);
+			rekey_established_locked(
+				operations, now_ms);
+			return ret;
+		}
+		memset(&reply, 0, sizeof(reply));
+		reply.kind =
+			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+		reply.epoch = message->epoch;
+		reply.value = REKEY_COMMIT_PHASE_REQUEST;
+		memcpy(reply.payload,
+		       operations->rekey->confirmation,
+		       PQCP_CHANNEL_FINISHED_BYTES);
+		reply.payload_length =
+			REKEY_CONFIRM_PAYLOAD_BYTES;
+		operations->state =
+			PQCP_CHANNEL_POLICY_REKEY_COMMITTING;
+		ret = send_control_locked(
+			operations, &reply, now_ms);
+		if (ret == 0) {
+			operations->rekey_phase =
+				REKEY_WAIT_ACK;
+			operations->rekey_last_send_ms = now_ms;
+			operations->rekey_retries = 0U;
+		} else {
+			(void)pqcp_channel_rekey_abort(
+				operations->rekey);
+			rekey_established_locked(
+				operations, now_ms);
+		}
+		return ret;
+	case PQCP_CHANNEL_CONTROL_REKEY_COMMIT:
+		if (message->payload_length !=
+			    REKEY_CONFIRM_PAYLOAD_BYTES) {
+			return -EBADMSG;
+		}
+		switch (message->value) {
+		case REKEY_COMMIT_PHASE_REQUEST:
+			if (!operations->rekey->initiator &&
+			    operations->rekey_phase ==
+				    REKEY_WAIT_ACTIVATE &&
+			    operations->rekey->pending_epoch ==
+				    message->epoch &&
+			    secure_equal(
+				    operations->rekey
+					    ->expected_peer_confirmation,
+				    message->payload,
+				    PQCP_CHANNEL_FINISHED_BYTES)) {
+				memset(&reply, 0, sizeof(reply));
+				reply.kind =
+					PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+				reply.epoch = message->epoch;
+				reply.value =
+					REKEY_COMMIT_PHASE_ACK;
+				memcpy(reply.payload,
+				       operations->rekey
+					       ->confirmation,
+				       PQCP_CHANNEL_FINISHED_BYTES);
+				reply.payload_length =
+					REKEY_CONFIRM_PAYLOAD_BYTES;
+				ret = send_control_locked(
+					operations, &reply,
+					now_ms);
+				if (ret == 0) {
+					operations->rekey_last_send_ms =
+						now_ms;
+					operations->rekey_retries++;
+				}
+				return ret;
+			}
+			if (operations->rekey->initiator ||
+			    operations->rekey_phase !=
+				    REKEY_WAIT_REQUEST ||
+			    operations->rekey->pending_epoch !=
+				    message->epoch ||
+			    !secure_equal(
+				    operations->rekey
+					    ->expected_peer_confirmation,
+				    message->payload,
+				    PQCP_CHANNEL_FINISHED_BYTES)) {
+				return -EKEYREJECTED;
+			}
+			memset(&reply, 0, sizeof(reply));
+			reply.kind =
+				PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+			reply.epoch = message->epoch;
+			reply.value = REKEY_COMMIT_PHASE_ACK;
+			memcpy(reply.payload,
+			       operations->rekey->confirmation,
+			       PQCP_CHANNEL_FINISHED_BYTES);
+			reply.payload_length =
+				REKEY_CONFIRM_PAYLOAD_BYTES;
+			operations->state =
+				PQCP_CHANNEL_POLICY_REKEY_COMMITTING;
+			operations->rekey->pending_peer_receive =
+				true;
+			ret = send_control_locked(
+				operations, &reply, now_ms);
+			if (ret == 0) {
+				operations->rekey_phase =
+					REKEY_WAIT_ACTIVATE;
+				operations->rekey_last_send_ms =
+					now_ms;
+				operations->rekey_retries = 0U;
+			} else {
+				(void)pqcp_channel_rekey_abort(
+					operations->rekey);
+				rekey_established_locked(
+					operations, now_ms);
+			}
+			return ret;
+		case REKEY_COMMIT_PHASE_ACK:
+			if (operations->rekey->initiator &&
+			    operations->rekey_phase ==
+				    REKEY_WAIT_CONFIRM &&
+			    operations->rekey->pending_epoch ==
+				    message->epoch &&
+			    secure_equal(
+				    operations->rekey
+					    ->expected_peer_confirmation,
+				    message->payload,
+				    PQCP_CHANNEL_FINISHED_BYTES)) {
+				memset(&reply, 0, sizeof(reply));
+				reply.kind =
+					PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+				reply.epoch = message->epoch;
+				reply.value =
+					REKEY_COMMIT_PHASE_ACTIVATE;
+				memcpy(reply.payload,
+				       operations->rekey
+					       ->confirmation,
+				       PQCP_CHANNEL_FINISHED_BYTES);
+				reply.payload_length =
+					REKEY_CONFIRM_PAYLOAD_BYTES;
+				ret = send_control_locked(
+					operations, &reply,
+					now_ms);
+				if (ret == 0) {
+					operations->rekey_last_send_ms =
+						now_ms;
+					operations->rekey_retries++;
+				}
+				return ret;
+			}
+			if (!operations->rekey->initiator ||
+			    operations->rekey_phase !=
+				    REKEY_WAIT_ACK ||
+			    operations->rekey->pending_epoch !=
+				    message->epoch ||
+			    !secure_equal(
+				    operations->rekey
+					    ->expected_peer_confirmation,
+				    message->payload,
+				    PQCP_CHANNEL_FINISHED_BYTES)) {
+				return -EKEYREJECTED;
+			}
+			ret = pqcp_channel_rekey_commit_local(
+				operations->channel,
+				operations->rekey, now_ms);
+			if (ret != 0) {
+				return ret;
+			}
+			operations->rekey->pending_peer_receive =
+				true;
+			memset(&reply, 0, sizeof(reply));
+			reply.kind =
+				PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+			reply.epoch = message->epoch;
+			reply.value =
+				REKEY_COMMIT_PHASE_ACTIVATE;
+			memcpy(reply.payload,
+			       operations->rekey->confirmation,
+			       PQCP_CHANNEL_FINISHED_BYTES);
+			reply.payload_length =
+				REKEY_CONFIRM_PAYLOAD_BYTES;
+			operations->state =
+				PQCP_CHANNEL_POLICY_REKEY_COMMITTING;
+			ret = send_control_locked(
+				operations, &reply, now_ms);
+			operations->rekey_phase =
+				REKEY_WAIT_CONFIRM;
+			operations->rekey_last_send_ms = now_ms;
+			operations->rekey_retries = 0U;
+			return ret;
+		case REKEY_COMMIT_PHASE_ACTIVATE:
+			if (!operations->rekey->initiator &&
+			    operations->rekey->state ==
+				    PQCP_CHANNEL_REKEY_COMMITTED &&
+			    operations->rekey->current_epoch ==
+				    message->epoch) {
+				memset(&reply, 0, sizeof(reply));
+				reply.kind =
+					PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+				reply.epoch = message->epoch;
+				reply.value =
+					REKEY_COMMIT_PHASE_CONFIRM;
+				memcpy(reply.payload,
+				       operations->rekey
+					       ->confirmation,
+				       PQCP_CHANNEL_FINISHED_BYTES);
+				reply.payload_length =
+					REKEY_CONFIRM_PAYLOAD_BYTES;
+				ret = send_control_locked(
+					operations, &reply,
+					now_ms);
+				if (ret == 0) {
+					rekey_established_locked(
+						operations, now_ms);
+				}
+				return ret;
+			}
+			if (operations->rekey->initiator ||
+			    operations->rekey_phase !=
+				    REKEY_WAIT_ACTIVATE ||
+			    operations->rekey->pending_epoch !=
+				    message->epoch ||
+			    !secure_equal(
+				    operations->rekey
+					    ->expected_peer_confirmation,
+				    message->payload,
+				    PQCP_CHANNEL_FINISHED_BYTES)) {
+				return -EKEYREJECTED;
+			}
+			ret = pqcp_channel_rekey_commit_peer(
+				operations->channel,
+				operations->rekey, now_ms);
+			if (ret == 0) {
+				ret = pqcp_channel_rekey_commit_local(
+					operations->channel,
+					operations->rekey,
+					now_ms);
+			}
+			if (ret != 0) {
+				return ret;
+			}
+			memset(&reply, 0, sizeof(reply));
+			reply.kind =
+				PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
+			reply.epoch = message->epoch;
+			reply.value =
+				REKEY_COMMIT_PHASE_CONFIRM;
+			memcpy(reply.payload,
+			       operations->rekey->confirmation,
+			       PQCP_CHANNEL_FINISHED_BYTES);
+			reply.payload_length =
+				REKEY_CONFIRM_PAYLOAD_BYTES;
+			ret = send_control_locked(
+				operations, &reply, now_ms);
+			if (ret == 0) {
+				rekey_established_locked(
+					operations, now_ms);
+			}
+			return ret;
+		case REKEY_COMMIT_PHASE_CONFIRM:
+			if (operations->rekey->state ==
+				    PQCP_CHANNEL_REKEY_COMMITTED &&
+			    operations->rekey->current_epoch ==
+				    message->epoch) {
+				return 0;
+			}
+			if (!operations->rekey->initiator ||
+			    operations->rekey_phase !=
+				    REKEY_WAIT_CONFIRM ||
+			    operations->rekey->pending_epoch !=
+				    message->epoch ||
+			    !secure_equal(
+				    operations->rekey
+					    ->expected_peer_confirmation,
+				    message->payload,
+				    PQCP_CHANNEL_FINISHED_BYTES)) {
+				return -EKEYREJECTED;
+			}
+			ret = pqcp_channel_rekey_commit_peer(
+				operations->channel,
+				operations->rekey, now_ms);
+			if (ret == 0) {
+				rekey_established_locked(
+					operations, now_ms);
+			}
+			return ret;
+		default:
+			return -EBADMSG;
+		}
+	case PQCP_CHANNEL_CONTROL_REKEY_ABORT:
+		if (operations->rekey
+			    ->local_direction_committed) {
+			operations->state =
+				PQCP_CHANNEL_POLICY_FAILED;
+			set_application_barrier(
+				operations, true);
+			ret = pqcp_channel_internal_fail(
+				operations->channel,
+				PQCP_CHANNEL_ALERT_TIMEOUT,
+				-ECONNABORTED);
 			break;
 		}
-		ret = pqcp_channel_rekey_commit(
-			operations->channel,
-			operations->rekey, now_ms);
-		if (ret == 0) {
-			operations->epoch_started_at_ms = now_ms;
-			operations->epoch_started_bytes =
-				operations->channel->
-					application_bytes_sent +
-				operations->channel->
-					application_bytes_received;
-		}
-		break;
-	case PQCP_CHANNEL_CONTROL_REKEY_ABORT:
 		ret = pqcp_channel_rekey_abort(
 			operations->rekey);
+		rekey_established_locked(
+			operations, now_ms);
 		break;
 	case PQCP_CHANNEL_CONTROL_ERROR:
 		operations->state =

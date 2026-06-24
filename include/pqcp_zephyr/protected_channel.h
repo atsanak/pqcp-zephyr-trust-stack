@@ -23,6 +23,8 @@
 extern "C" {
 #endif
 
+struct pqcp_channel_rekey_context;
+
 #define PQCP_CHANNEL_SCHEMA_VERSION 1U
 #define PQCP_CHANNEL_MAGIC 0x50514350U
 #define PQCP_CHANNEL_EXPORTER_LABEL "EXPORTER-PQCP-CHANNEL-v1"
@@ -183,9 +185,11 @@ struct pqcp_channel {
 	uint8_t tx_frame[PQCP_CHANNEL_MAX_FRAME_BYTES];
 	uint8_t rx_frame[PQCP_CHANNEL_MAX_FRAME_BYTES];
 	uint8_t work_buffer[PQCP_CHANNEL_MAX_FRAME_BYTES];
+	struct pqcp_channel_rekey_context *rekey_context;
 	bool peer_authenticated;
 	bool local_authenticated;
 	bool established;
+	bool application_send_blocked;
 };
 
 const char *pqcp_channel_state_str(enum pqcp_channel_state state);
