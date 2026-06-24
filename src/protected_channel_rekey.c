@@ -254,7 +254,7 @@ static int commit_direction(
 	return 0;
 }
 
-static int build_rekey_info(
+static void build_rekey_info(
 	const struct pqcp_channel *channel,
 	const struct pqcp_channel_rekey_context *context,
 	enum pqcp_channel_role direction,
@@ -290,7 +290,6 @@ static int build_rekey_info(
 	offset += 4U;
 	info[offset++] = (uint8_t)direction;
 	*info_length = offset;
-	return 0;
 }
 
 static int derive_rekey_handle(
@@ -322,15 +321,13 @@ static int derive_rekey_handle(
 	request.label =
 		direction == PQCP_CHANNEL_ROLE_CLIENT ?
 			"client-rekey" : "server-rekey";
-	ret = build_rekey_info(
+	build_rekey_info(
 		channel, context, direction, transcript_hash,
 		info, &info_length);
-	if (ret == 0) {
-		ret = pqcp_runtime_key_store_derive(
-			channel->key_store, source,
-			context->salt, sizeof(context->salt),
-			info, info_length, &request, destination);
-	}
+	ret = pqcp_runtime_key_store_derive(
+		channel->key_store, source,
+		context->salt, sizeof(context->salt),
+		info, info_length, &request, destination);
 	pqcp_runtime_secure_zero(info, sizeof(info));
 	return ret;
 }

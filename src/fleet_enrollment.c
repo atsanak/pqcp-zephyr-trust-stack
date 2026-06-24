@@ -98,8 +98,11 @@ static int export_key(
 		&device->runtime->key_store, key, output,
 		PQCP_FLEET_PUBLIC_KEY_BYTES, &length);
 
-	return ret == 0 && length == PQCP_FLEET_PUBLIC_KEY_BYTES ?
-		0 : ret != 0 ? ret : -EBADMSG;
+	if (ret != 0) {
+		return ret;
+	}
+	return length == PQCP_FLEET_PUBLIC_KEY_BYTES ?
+		0 : -EBADMSG;
 }
 
 int pqcp_fleet_device_init(

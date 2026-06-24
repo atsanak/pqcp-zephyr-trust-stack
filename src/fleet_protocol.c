@@ -251,7 +251,7 @@ static int read_envelope(
 	struct pqcp_fleet_legacy_cbor_reader *reader,
 	struct pqcp_fleet_envelope *envelope)
 {
-	uint64_t value;
+	uint64_t value = 0U;
 	size_t length;
 	uint32_t decoded;
 	int ret = pqcp_fleet_legacy_cbor_read_array(
@@ -1397,7 +1397,6 @@ int pqcp_fleet_revocation_decode(
 	}
 	if (ret == 0) {
 		uint8_t head;
-		size_t saved = reader.offset;
 
 		if (reader.offset >= reader.length) {
 			ret = -EBADMSG;
@@ -1406,7 +1405,6 @@ int pqcp_fleet_revocation_decode(
 			if ((head >> 5) != 4U) {
 				ret = -EBADMSG;
 			} else {
-				reader.offset = saved;
 				for (count = 0U;
 				     count <= PQCP_FLEET_MAX_REVOCATIONS;
 				     ++count) {

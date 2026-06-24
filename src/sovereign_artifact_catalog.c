@@ -224,11 +224,10 @@ bool pqcp_sovereign_internal_artifact_transition_valid(
 		return false;
 	}
 	if (next == PQCP_SOVEREIGN_ARTIFACT_REVOKED) {
-		return current != PQCP_SOVEREIGN_ARTIFACT_REVOKED;
+		return true;
 	}
 	if (next == PQCP_SOVEREIGN_ARTIFACT_QUARANTINED) {
-		return current != PQCP_SOVEREIGN_ARTIFACT_REVOKED &&
-		       current != PQCP_SOVEREIGN_ARTIFACT_QUARANTINED;
+		return current != PQCP_SOVEREIGN_ARTIFACT_REVOKED;
 	}
 	switch (current) {
 	case PQCP_SOVEREIGN_ARTIFACT_REGISTERED:

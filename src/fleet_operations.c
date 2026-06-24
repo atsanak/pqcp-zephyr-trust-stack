@@ -11,6 +11,13 @@
 
 #include "runtime_internal.h"
 
+static void retain_first_error(int candidate, int *first_error)
+{
+	if (candidate != 0 && *first_error == 0) {
+		*first_error = candidate;
+	}
+}
+
 struct policy_audit_payload {
 	uint32_t operation;
 	uint32_t effect;
@@ -324,20 +331,14 @@ int pqcp_fleet_operations_tick(
 	}
 	ret = pqcp_fleet_device_tick(
 		operations->device, now_ms);
-	if (ret != 0 && first_error == 0) {
-		first_error = ret;
-	}
+	retain_first_error(ret, &first_error);
 	ret = pqcp_fleet_command_expire(
 		&operations->commands, now_ms, &expired);
-	if (ret != 0 && first_error == 0) {
-		first_error = ret;
-	}
+	retain_first_error(ret, &first_error);
 	ret = pqcp_fleet_update_tick(
 		&operations->updates, now_ms,
 		&updates_changed);
-	if (ret != 0 && first_error == 0) {
-		first_error = ret;
-	}
+	retain_first_error(ret, &first_error);
 	if (expired != 0U) {
 		(void)pqcp_fleet_telemetry_record(
 			&operations->telemetry,

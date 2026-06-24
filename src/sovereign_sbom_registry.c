@@ -332,8 +332,7 @@ static int validate_dependency_references(
 	    count > PQCP_SOVEREIGN_MAX_COMPONENTS) {
 		return -EINVAL;
 	}
-	valid_mask = count == 64U ?
-		UINT64_MAX : ((1ULL << count) - 1ULL);
+	valid_mask = (1ULL << count) - 1ULL;
 	for (size_t index = 0U; index < count; ++index) {
 		uint64_t dependencies = ordered[index]->dependency_mask;
 

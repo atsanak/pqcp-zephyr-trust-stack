@@ -158,8 +158,7 @@ static bool state_valid(uint32_t state)
 
 static bool health_valid(uint32_t health)
 {
-	return health >= PQCP_FLEET_POLICY_ROLLOUT_HEALTH_PENDING &&
-	       health <= PQCP_FLEET_POLICY_ROLLOUT_HEALTH_ROLLED_BACK;
+	return health <= PQCP_FLEET_POLICY_ROLLOUT_HEALTH_ROLLED_BACK;
 }
 
 static bool terminal(uint32_t state)

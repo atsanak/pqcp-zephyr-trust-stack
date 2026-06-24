@@ -408,9 +408,9 @@ int pqcp_sovereign_channel_receipt_decode(
 	struct pqcp_crypto_broker_receipt *receipt)
 {
 	size_t offset = 0U;
-	uint32_t magic;
-	uint32_t wire_schema;
-	uint32_t encoded_length;
+	uint32_t magic = 0U;
+	uint32_t wire_schema = 0U;
+	uint32_t encoded_length = 0U;
 	uint32_t signature_length;
 	uint32_t operation;
 	uint32_t decision;
