@@ -2483,7 +2483,7 @@ int pqcp_sovereign_recovery_authorize(
 	uint64_t recovery_id,
 	uint64_t policy_epoch,
 	uint64_t now_ms);
-int pqcp_sovereign_recovery_tick(
+int pqcp_sovereign_recovery_quorum_tick(
 	struct pqcp_sovereign_recovery_quorum *quorum,
 	uint64_t now_ms,
 	uint32_t *expired_count);
