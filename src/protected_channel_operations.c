@@ -53,14 +53,6 @@ static bool secure_equal(
 	return difference == 0U;
 }
 
-static enum pqcp_channel_role peer_role(
-	enum pqcp_channel_role role)
-{
-	return role == PQCP_CHANNEL_ROLE_CLIENT ?
-		PQCP_CHANNEL_ROLE_SERVER :
-		PQCP_CHANNEL_ROLE_CLIENT;
-}
-
 static void set_application_barrier(
 	struct pqcp_channel_operations *operations,
 	bool blocked)
@@ -78,29 +70,6 @@ static void clear_rekey_progress(
 	operations->rekey_phase = REKEY_WAIT_NONE;
 	operations->rekey_last_send_ms = 0U;
 	operations->rekey_retries = 0U;
-}
-
-static uint64_t rekey_retry_interval_ms(
-	const struct pqcp_channel_rekey_policy *policy)
-{
-	uint64_t interval;
-
-	if (policy == NULL) {
-		return 1000U;
-	}
-	interval = policy->minimum_interval_ms;
-	if (interval == 0U) {
-		interval = 1000U;
-	}
-	if (policy->handshake_timeout_ms != 0U) {
-		const uint64_t quarter =
-			policy->handshake_timeout_ms / 4U;
-
-		if (quarter != 0U && interval > quarter) {
-			interval = quarter;
-		}
-	}
-	return interval < 100U ? 100U : interval;
 }
 
 static void rekey_established_locked(
@@ -131,81 +100,6 @@ static int send_rekey_abort_locked(
 
 	return send_control_locked(
 		operations, &abort, now_ms);
-}
-
-static int resend_rekey_phase_locked(
-	struct pqcp_channel_operations *operations,
-	uint64_t now_ms)
-{
-	struct pqcp_channel_control_message message;
-
-	if (operations == NULL ||
-	    operations->rekey == NULL ||
-	    operations->rekey->pending_epoch == 0U) {
-		return -EINVAL;
-	}
-	memset(&message, 0, sizeof(message));
-	message.epoch = operations->rekey->pending_epoch;
-	switch (operations->rekey_phase) {
-	case REKEY_WAIT_ACCEPT:
-		message.kind =
-			PQCP_CHANNEL_CONTROL_REKEY_PREPARE;
-		memcpy(message.payload,
-		       operations->rekey->salt,
-		       sizeof(operations->rekey->salt));
-		memcpy(message.payload +
-			       sizeof(operations->rekey->salt),
-		       operations->rekey->confirmation,
-		       sizeof(operations->rekey->confirmation));
-		message.payload_length =
-			REKEY_PREPARE_PAYLOAD_BYTES;
-		break;
-	case REKEY_WAIT_REQUEST:
-		message.kind =
-			PQCP_CHANNEL_CONTROL_REKEY_ACCEPT;
-		memcpy(message.payload,
-		       operations->rekey->confirmation,
-		       sizeof(operations->rekey->confirmation));
-		message.payload_length =
-			REKEY_CONFIRM_PAYLOAD_BYTES;
-		break;
-	case REKEY_WAIT_ACK:
-		message.kind =
-			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
-		message.value =
-			REKEY_COMMIT_PHASE_REQUEST;
-		memcpy(message.payload,
-		       operations->rekey->confirmation,
-		       sizeof(operations->rekey->confirmation));
-		message.payload_length =
-			REKEY_CONFIRM_PAYLOAD_BYTES;
-		break;
-	case REKEY_WAIT_ACTIVATE:
-		message.kind =
-			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
-		message.value = REKEY_COMMIT_PHASE_ACK;
-		memcpy(message.payload,
-		       operations->rekey->confirmation,
-		       sizeof(operations->rekey->confirmation));
-		message.payload_length =
-			REKEY_CONFIRM_PAYLOAD_BYTES;
-		break;
-	case REKEY_WAIT_CONFIRM:
-		message.kind =
-			PQCP_CHANNEL_CONTROL_REKEY_COMMIT;
-		message.value =
-			REKEY_COMMIT_PHASE_ACTIVATE;
-		memcpy(message.payload,
-		       operations->rekey->confirmation,
-		       sizeof(operations->rekey->confirmation));
-		message.payload_length =
-			REKEY_CONFIRM_PAYLOAD_BYTES;
-		break;
-	default:
-		return 0;
-	}
-	return send_control_locked(
-		operations, &message, now_ms);
 }
 
 static enum pqcp_channel_policy_state initial_policy_state(

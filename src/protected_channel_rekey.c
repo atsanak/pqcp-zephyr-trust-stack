@@ -140,15 +140,6 @@ static uint8_t *direction_nonce_base(
 		keys->server_nonce_base;
 }
 
-static const uint8_t *const_direction_nonce_base(
-	const struct pqcp_channel_keys *keys,
-	enum pqcp_channel_role direction)
-{
-	return direction == PQCP_CHANNEL_ROLE_CLIENT ?
-		keys->client_nonce_base :
-		keys->server_nonce_base;
-}
-
 static void record_retired_direction(
 	struct pqcp_channel_rekey_context *context,
 	enum pqcp_channel_role direction,
