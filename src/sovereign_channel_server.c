@@ -204,6 +204,39 @@ static struct pqcp_sovereign_channel_server_slot *slot_by_ids(
 	return NULL;
 }
 
+static bool slot_identifier_conflict(
+	const struct pqcp_sovereign_channel_server *server,
+	const uint8_t transaction_id[
+		PQCP_SOVEREIGN_CHANNEL_TRANSACTION_ID_BYTES],
+	const uint8_t request_id[
+		PQCP_CRYPTO_BROKER_REQUEST_ID_BYTES],
+	const char *principal_id)
+{
+	if (server == NULL || transaction_id == NULL ||
+	    request_id == NULL || principal_id == NULL) {
+		return true;
+	}
+	for (size_t index = 0U;
+	     index < server->storage.capacity; ++index) {
+		const struct pqcp_sovereign_channel_server_slot *slot =
+			&server->storage.slots[index];
+
+		if (!slot->occupied) {
+			continue;
+		}
+		if (pqcp_sovereign_channel_internal_equal(
+			    slot->transaction_id, transaction_id,
+			    sizeof(slot->transaction_id)) ||
+		    (strcmp(slot->principal_id, principal_id) == 0 &&
+		     pqcp_sovereign_channel_internal_equal(
+			     slot->request_id, request_id,
+			     sizeof(slot->request_id)))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static struct pqcp_sovereign_channel_server_slot *free_slot(
 	struct pqcp_sovereign_channel_server *server,
 	size_t *slot_index)
@@ -605,9 +638,10 @@ static int begin_new_transaction(
 	if (frame->flags !=
 		    PQCP_SOVEREIGN_CHANNEL_FLAG_FIRST ||
 	    frame->sequence != 0U ||
-	    slot_by_ids(
+	    slot_identifier_conflict(
 		    server, frame->transaction_id,
-		    frame->request_id) != NULL ||
+		    frame->request_id,
+		    frame->body.begin.principal_id) ||
 	    slot_by_stream(server, stream_id) != NULL) {
 		return -EALREADY;
 	}
@@ -1203,6 +1237,7 @@ int pqcp_sovereign_channel_server_receive(
 	struct pqcp_channel_stream_header stream_header;
 	struct pqcp_sovereign_channel_frame frame;
 	struct pqcp_sovereign_channel_server_slot *slot;
+	struct pqcp_sovereign_channel_window begin_credit;
 	size_t encoded_length = 0U;
 	int ret;
 	int account_ret;
@@ -1233,23 +1268,34 @@ int pqcp_sovereign_channel_server_receive(
 	}
 	slot = slot_by_stream(
 		server, stream_header.stream_id);
-	account_ret = account_received_frame(
-		server, slot, &stream_header, now_ms);
-	if (account_ret != 0) {
-		server->rejected_frames++;
-		unlock_server(server);
-		pqcp_runtime_secure_zero(&frame, sizeof(frame));
-		pqcp_runtime_secure_zero(encoded, sizeof(encoded));
-		return account_ret;
-	}
 	if (frame.type == PQCP_SOVEREIGN_CHANNEL_FRAME_BEGIN) {
-		ret = handle_begin(
-			server, stream_header.stream_id,
-			&frame, now_ms);
+		memset(&begin_credit, 0, sizeof(begin_credit));
+		ret = pqcp_sovereign_channel_flow_receive_account(
+			&server->flow, stream_header.stream_id,
+			stream_header.payload_length,
+			&begin_credit);
+		if (ret == 0) {
+			ret = handle_begin(
+				server, stream_header.stream_id,
+				&frame, now_ms);
+		}
+		if (ret == 0) {
+			slot = slot_by_stream(
+				server, stream_header.stream_id);
+			if (begin_credit.connection_credit != 0U ||
+			    begin_credit.stream_credit != 0U) {
+				ret = send_credit(
+					server, slot, &begin_credit,
+					now_ms);
+			}
+		}
 		if (ret != 0) {
 			server->rejected_frames++;
 			(void)send_error_frame(
-				server, stream_header.stream_id, 0U,
+				server, stream_header.stream_id,
+				slot != NULL ?
+					slot->next_send_sequence :
+					0U,
 				frame.transaction_id,
 				frame.request_id, ret,
 				(frame.flags &
@@ -1265,6 +1311,15 @@ int pqcp_sovereign_channel_server_receive(
 		pqcp_runtime_secure_zero(&frame, sizeof(frame));
 		pqcp_runtime_secure_zero(encoded, sizeof(encoded));
 		return ret;
+	}
+	account_ret = account_received_frame(
+		server, slot, &stream_header, now_ms);
+	if (account_ret != 0) {
+		server->rejected_frames++;
+		unlock_server(server);
+		pqcp_runtime_secure_zero(&frame, sizeof(frame));
+		pqcp_runtime_secure_zero(encoded, sizeof(encoded));
+		return account_ret;
 	}
 	if (slot == NULL ||
 	    frame.sequence != slot->next_receive_sequence ||
@@ -1513,6 +1568,18 @@ static int progress_slot(
 		return send_result_chunk(server, slot, now_ms);
 	case PQCP_SOVEREIGN_CHANNEL_SERVER_SENDING_RECEIPT:
 		return send_receipt_chunk(server, slot, now_ms);
+	case PQCP_SOVEREIGN_CHANNEL_SERVER_WAITING_ACK:
+		if (slot->broker_executed &&
+		    !slot->result_announced &&
+		    slot->result_ack_offset ==
+			    slot->response.output_length &&
+		    (slot->receipt_length == 0U ||
+		     (!slot->receipt_announced &&
+		      slot->receipt_ack_offset ==
+			      slot->receipt_length))) {
+			return send_complete(server, slot, now_ms);
+		}
+		return 0;
 	default:
 		return 0;
 	}
