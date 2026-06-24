@@ -39,6 +39,8 @@ add_executable(pqcp-evidence-verify
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_verdict_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_seal_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_assurance_passport_replay.c
+    ${PQCP_MODULE_ROOT}/src/deployment_tamper_matrix_replay.c
+    ${PQCP_MODULE_ROOT}/src/deployment_evidence_trail_replay.c
 )
 
 target_include_directories(pqcp-evidence-verify PRIVATE
