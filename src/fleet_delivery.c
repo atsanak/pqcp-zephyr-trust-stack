@@ -100,11 +100,6 @@ static uint64_t minimum_u64(uint64_t left, uint64_t right)
 	return left < right ? left : right;
 }
 
-static uint64_t maximum_u64(uint64_t left, uint64_t right)
-{
-	return left > right ? left : right;
-}
-
 static void encoder_init(
 	struct delivery_encoder *encoder,
 	uint8_t *buffer,
@@ -246,15 +241,6 @@ bool pqcp_fleet_delivery_state_terminal(
 	default:
 		return false;
 	}
-}
-
-static bool state_schedulable(
-	enum pqcp_fleet_delivery_state state)
-{
-	return state == PQCP_FLEET_DELIVERY_READY ||
-	       state == PQCP_FLEET_DELIVERY_RETRY_WAIT ||
-	       state ==
-		       PQCP_FLEET_DELIVERY_WAITING_DEPENDENCY;
 }
 
 static int record_digest_compute(

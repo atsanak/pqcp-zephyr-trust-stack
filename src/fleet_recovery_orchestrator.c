@@ -2957,8 +2957,12 @@ int pqcp_fleet_recovery_checkpoint_import(
 		size_t index;
 		uint32_t bit;
 
-		(void)step_index_by_id_locked(
+		ret = step_index_by_id_locked(
 			orchestrator, checkpoint->step_id, &index);
+		if (ret != 0) {
+			(void)k_mutex_unlock(&orchestrator->lock);
+			return -EBADMSG;
+		}
 		step = &orchestrator->steps[index];
 		bit = UINT32_C(1) << index;
 		step->state = checkpoint->step_state;

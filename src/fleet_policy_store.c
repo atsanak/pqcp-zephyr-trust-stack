@@ -96,10 +96,6 @@ static int load_locked(
 	struct pqcp_fleet_policy_record_info *record);
 static int compact_locked(
 	struct pqcp_fleet_policy_store *store);
-static bool bank_can_append(
-	const struct pqcp_fleet_policy_store *store,
-	const struct pqcp_fleet_policy_bank_info *info,
-	size_t bank, size_t payload_length);
 static int ensure_append_space_locked(
 	struct pqcp_fleet_policy_store *store,
 	size_t payload_length, bool *compacted);
