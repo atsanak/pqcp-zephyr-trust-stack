@@ -23,19 +23,6 @@
 	(32U + 8U * 8U + 4U * 3U + \
 	 PQCP_FLEET_DIGEST_BYTES * 2U)
 
-static bool bytes_zero(const uint8_t *bytes, size_t length)
-{
-	uint8_t accumulator = 0U;
-
-	if (bytes == NULL) {
-		return true;
-	}
-	for (size_t index = 0U; index < length; ++index) {
-		accumulator |= bytes[index];
-	}
-	return accumulator == 0U;
-}
-
 static bool text_character_valid(char value)
 {
 	return (value >= 'a' && value <= 'z') ||

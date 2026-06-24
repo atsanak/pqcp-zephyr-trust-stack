@@ -246,6 +246,38 @@ if(CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE)
     zephyr_library_sources(${PQCP_SRC}/deployment_passport_signature.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_MARKER_RENDER)
+    zephyr_library_sources(${PQCP_SRC}/deployment_marker_render.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_ENGINE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_engine.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_audit.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_audit.c)
+endif()
+
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CODEC)
     zephyr_library_sources(${PQCP_SRC}/deployment_evidence_codec.c)
 endif()
@@ -402,6 +434,7 @@ if(CONFIG_PQCP_FLEET_TRUST)
         ${PQCP_SRC}/fleet_command_engine.c
         ${PQCP_SRC}/fleet_update_manager.c
         ${PQCP_SRC}/fleet_audit_ledger.c
+        ${PQCP_SRC}/fleet_journal.c
         ${PQCP_SRC}/fleet_telemetry.c
         ${PQCP_SRC}/fleet_attestation.c
         ${PQCP_SRC}/fleet_reconciliation.c
@@ -629,36 +662,6 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL_MBEDTLS)
         ${PQCP_SRC}/protected_channel_mbedtls.c
         ${PQCP_SRC}/protected_channel_tls.c
     )
-if(CONFIG_PQCP_DEPLOYMENT_MARKER_RENDER)
-    zephyr_library_sources(${PQCP_SRC}/deployment_marker_render.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_TAMPER_ENGINE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_engine.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_replay.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_audit.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_replay.c)
-endif()
-
-if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_audit.c)
 endif()
 
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
