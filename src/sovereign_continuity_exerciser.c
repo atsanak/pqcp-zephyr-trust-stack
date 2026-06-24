@@ -37,11 +37,6 @@ static uint64_t add_u64(uint64_t left, uint64_t right)
 	return UINT64_MAX - left < right ? UINT64_MAX : left + right;
 }
 
-static uint32_t add_u32(uint32_t left, uint32_t right)
-{
-	return UINT32_MAX - left < right ? UINT32_MAX : left + right;
-}
-
 static uint32_t required_mask(uint32_t required_steps)
 {
 	return required_steps == 32U ?
