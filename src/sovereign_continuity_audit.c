@@ -102,10 +102,11 @@ int pqcp_sovereign_continuity_audit_append(
 	       sizeof(candidate.evidence_digest));
 
 	k_mutex_lock(&log->lock, K_FOREVER);
-	candidate.sequence = log->next_sequence++;
-	if (log->next_sequence == 0U) {
-		log->next_sequence = 1U;
+	if (log->next_sequence == UINT64_MAX) {
+		k_mutex_unlock(&log->lock);
+		return -EOVERFLOW;
 	}
+	candidate.sequence = log->next_sequence++;
 	memcpy(candidate.previous_digest, log->tail_digest,
 	       sizeof(candidate.previous_digest));
 	ret = pqcp_sovereign_continuity_digest_event(

@@ -445,6 +445,7 @@ int pqcp_sovereign_recovery_point_select(
 	struct pqcp_sovereign_recovery_point_selection *selection)
 {
 	struct pqcp_sovereign_recovery_point *best = NULL;
+	struct pqcp_sovereign_recovery_point previous;
 	uint64_t best_age = UINT64_MAX;
 	int ret = 0;
 
@@ -484,7 +485,14 @@ int pqcp_sovereign_recovery_point_select(
 		ret = -ENOENT;
 		goto out;
 	}
+	previous = *best;
 	best->state = PQCP_SOVEREIGN_POINT_SELECTED;
+	ret = pqcp_sovereign_continuity_digest_point(
+		best, best->point_digest);
+	if (ret != 0) {
+		*best = previous;
+		goto out;
+	}
 	selection->generation = best->generation;
 	selection->selected_at_ms = query->now_ms;
 	selection->age_ms = best_age;
@@ -504,8 +512,9 @@ int pqcp_sovereign_recovery_point_select(
 		catalog->selection_count =
 			pqcp_sovereign_continuity_add_u64(
 				catalog->selection_count, 1U);
-		ret = pqcp_sovereign_continuity_digest_point(
-			best, best->point_digest);
+	} else {
+		*best = previous;
+		memset(selection, 0, sizeof(*selection));
 	}
 out:
 	k_mutex_unlock(&catalog->lock);
@@ -551,6 +560,74 @@ int pqcp_sovereign_recovery_point_consume(
 		point->state = PQCP_SOVEREIGN_POINT_CONSUMED;
 		ret = pqcp_sovereign_continuity_digest_point(
 			point, point->point_digest);
+	}
+out:
+	k_mutex_unlock(&catalog->lock);
+	return ret;
+}
+
+int pqcp_sovereign_recovery_point_release(
+	struct pqcp_sovereign_recovery_point_catalog *catalog,
+	const char *tenant_id,
+	const char *point_id,
+	uint32_t generation,
+	const uint8_t evidence_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES],
+	uint64_t now_ms)
+{
+	struct pqcp_sovereign_recovery_point previous;
+	struct pqcp_sovereign_recovery_point *point;
+	int index;
+	int ret = 0;
+
+	if (catalog == NULL || !catalog->initialized ||
+	    !pqcp_sovereign_continuity_text_valid(tenant_id) ||
+	    !pqcp_sovereign_continuity_text_valid(point_id) ||
+	    generation == 0U ||
+	    !pqcp_sovereign_continuity_digest_valid(
+		    evidence_digest) ||
+	    now_ms == 0U) {
+		return -EINVAL;
+	}
+	k_mutex_lock(&catalog->lock, K_FOREVER);
+	index = point_index(catalog, tenant_id, point_id);
+	if (index < 0) {
+		ret = index;
+		goto out;
+	}
+	point = &catalog->points[index];
+	if (point->generation != generation) {
+		ret = -ESTALE;
+		goto out;
+	}
+	if (point->state == PQCP_SOVEREIGN_POINT_VERIFIED) {
+		ret = -EALREADY;
+		goto out;
+	}
+	if (point->state != PQCP_SOVEREIGN_POINT_SELECTED) {
+		ret = -EPERM;
+		goto out;
+	}
+	if (point->expires_at_ms != 0U &&
+	    point->expires_at_ms <= now_ms) {
+		point->state = PQCP_SOVEREIGN_POINT_EXPIRED;
+		ret = pqcp_sovereign_continuity_digest_point(
+			point, point->point_digest);
+		if (ret == 0) {
+			ret = -ETIMEDOUT;
+		}
+		goto out;
+	}
+	previous = *point;
+	point->state = PQCP_SOVEREIGN_POINT_VERIFIED;
+	ret = chain_evidence(
+		point, evidence_digest, now_ms, 0x52534c53U);
+	if (ret == 0) {
+		ret = pqcp_sovereign_continuity_digest_point(
+			point, point->point_digest);
+	}
+	if (ret != 0) {
+		*point = previous;
 	}
 out:
 	k_mutex_unlock(&catalog->lock);

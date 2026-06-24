@@ -387,6 +387,21 @@ struct pqcp_sovereign_fence_claim {
 	uint8_t authorization_digest[PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES];
 };
 
+struct pqcp_sovereign_fence_guard {
+	uint32_t schema_version;
+	uint32_t generation;
+	char tenant_id[PQCP_SOVEREIGN_CONTINUITY_ID_MAX_CHARS];
+	char resource_id[PQCP_SOVEREIGN_CONTINUITY_ID_MAX_CHARS];
+	char holder_id[PQCP_SOVEREIGN_CONTINUITY_ID_MAX_CHARS];
+	char lease_id[PQCP_SOVEREIGN_CONTINUITY_ID_MAX_CHARS];
+	uint64_t epoch;
+	uint64_t captured_at_ms;
+	uint64_t expires_at_ms;
+	uint8_t authorization_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES];
+	uint8_t fence_digest[PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES];
+};
+
 struct pqcp_sovereign_fence_manager {
 	uint32_t schema_version;
 	struct pqcp_sovereign_fence *fences;
@@ -661,6 +676,14 @@ int pqcp_sovereign_recovery_point_consume(
 	const char *point_id,
 	uint32_t generation,
 	uint64_t now_ms);
+int pqcp_sovereign_recovery_point_release(
+	struct pqcp_sovereign_recovery_point_catalog *catalog,
+	const char *tenant_id,
+	const char *point_id,
+	uint32_t generation,
+	const uint8_t evidence_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES],
+	uint64_t now_ms);
 int pqcp_sovereign_recovery_point_catalog_expire(
 	struct pqcp_sovereign_recovery_point_catalog *catalog,
 	uint64_t now_ms,
@@ -743,6 +766,21 @@ int pqcp_sovereign_fence_check(
 	const char *holder_id,
 	uint64_t epoch,
 	uint64_t now_ms);
+int pqcp_sovereign_fence_guard_capture(
+	struct pqcp_sovereign_fence_manager *manager,
+	const char *tenant_id,
+	const char *resource_id,
+	const char *holder_id,
+	const char *lease_id,
+	uint64_t epoch,
+	uint64_t now_ms,
+	struct pqcp_sovereign_fence_guard *guard);
+int pqcp_sovereign_fence_guard_check(
+	struct pqcp_sovereign_fence_manager *manager,
+	const struct pqcp_sovereign_fence_guard *guard,
+	const uint8_t authorization_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES],
+	uint64_t now_ms);
 int pqcp_sovereign_fence_expire(
 	struct pqcp_sovereign_fence_manager *manager,
 	uint64_t now_ms,
@@ -791,6 +829,10 @@ int pqcp_sovereign_recovery_current_step(
 	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
 	uint64_t run_id,
 	struct pqcp_sovereign_recovery_step *step);
+int pqcp_sovereign_recovery_get(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	uint64_t run_id,
+	struct pqcp_sovereign_recovery_run *run);
 int pqcp_sovereign_recovery_record(
 	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
 	const struct pqcp_sovereign_recovery_step_result *result,

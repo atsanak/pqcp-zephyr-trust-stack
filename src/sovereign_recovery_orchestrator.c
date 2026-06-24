@@ -243,12 +243,17 @@ static int acquire_run_fence(
 	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
 	const struct pqcp_sovereign_recovery_plan *plan,
 	struct pqcp_sovereign_recovery_run *run,
-	uint64_t now_ms)
+	uint64_t now_ms,
+	bool *acquired)
 {
 	struct pqcp_sovereign_fence_claim claim;
 	struct pqcp_sovereign_fence fence;
 	int ret;
 
+	if (acquired == NULL) {
+		return -EINVAL;
+	}
+	*acquired = false;
 	if (!plan_requires_fence(plan)) {
 		return 0;
 	}
@@ -283,10 +288,38 @@ static int acquire_run_fence(
 	if (ret != 0 && ret != -EALREADY) {
 		return ret;
 	}
+	*acquired = ret == 0;
 	run->fencing_epoch = fence.epoch;
 	run->fence_generation = fence.generation;
 	run->fence_held = true;
 	return 0;
+}
+
+static int release_selected_point(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	struct pqcp_sovereign_recovery_run *run,
+	uint64_t now_ms)
+{
+	int ret;
+
+	if (run->selected_point_generation == 0U) {
+		return 0;
+	}
+	ret = pqcp_sovereign_recovery_point_release(
+		orchestrator->points, run->tenant_id,
+		run->selected_point_id,
+		run->selected_point_generation,
+		run->quorum_authorization_digest, now_ms);
+	if (ret == 0 || ret == -EALREADY ||
+	    ret == -ETIMEDOUT) {
+		run->selected_point_generation = 0U;
+		memset(run->selected_point_id, 0,
+		       sizeof(run->selected_point_id));
+		memset(run->selected_point_digest, 0,
+		       sizeof(run->selected_point_digest));
+		return 0;
+	}
+	return ret;
 }
 
 static int check_run_fence(
@@ -487,6 +520,29 @@ static int edge_complete(
 	return ret;
 }
 
+static int edge_abort(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	struct pqcp_sovereign_recovery_run *run,
+	uint64_t now_ms)
+{
+	int ret;
+
+	if (!run->edge_authorized ||
+	    orchestrator->edge.recovery == NULL) {
+		return 0;
+	}
+	ret = pqcp_edge_recovery_advance(
+		orchestrator->edge.recovery,
+		run->edge_recovery_id,
+		PQCP_EDGE_RECOVERY_FAILED, now_ms);
+	if (ret == 0 || ret == -EALREADY ||
+	    ret == -ETIMEDOUT) {
+		run->edge_authorized = false;
+		return 0;
+	}
+	return ret;
+}
+
 static int edge_set_continuity_mode(
 	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
 	const struct pqcp_sovereign_recovery_plan *plan,
@@ -584,6 +640,100 @@ static int validate_start(
 	return 0;
 }
 
+static int reserve_run(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	struct pqcp_sovereign_recovery_run *candidate,
+	int *reserved_index)
+{
+	int index;
+	int ret = 0;
+
+	k_mutex_lock(&orchestrator->lock, K_FOREVER);
+	index = active_resource_run(
+		orchestrator, candidate->tenant_id,
+		candidate->resource_id);
+	if (index >= 0) {
+		ret = -EBUSY;
+		goto out;
+	}
+	index = free_run_index(orchestrator);
+	if (index < 0) {
+		ret = index;
+		goto out;
+	}
+	candidate->generation =
+		pqcp_edge_internal_next_generation(
+			&orchestrator->next_generation);
+	candidate->run_id =
+		pqcp_edge_internal_next_identifier(
+			&orchestrator->next_run_id);
+	ret = pqcp_sovereign_continuity_digest_run(
+		candidate, candidate->run_digest);
+	if (ret != 0) {
+		goto out;
+	}
+	orchestrator->runs[index] = *candidate;
+	*reserved_index = index;
+out:
+	k_mutex_unlock(&orchestrator->lock);
+	return ret;
+}
+
+static int publish_reserved_run(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	int reserved_index,
+	const uint8_t reservation_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES],
+	const struct pqcp_sovereign_recovery_run *candidate)
+{
+	int ret = 0;
+
+	k_mutex_lock(&orchestrator->lock, K_FOREVER);
+	if (reserved_index < 0 ||
+	    (size_t)reserved_index >= orchestrator->capacity ||
+	    !orchestrator->runs[reserved_index].occupied ||
+	    orchestrator->runs[reserved_index].run_id !=
+		    candidate->run_id ||
+	    orchestrator->runs[reserved_index].generation !=
+		    candidate->generation ||
+	    !pqcp_sovereign_continuity_digest_equal(
+		    orchestrator->runs[reserved_index].run_digest,
+		    reservation_digest)) {
+		ret = -ESTALE;
+	} else {
+		orchestrator->runs[reserved_index] = *candidate;
+	}
+	k_mutex_unlock(&orchestrator->lock);
+	return ret;
+}
+
+static void discard_reserved_run(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	int reserved_index,
+	const uint8_t reservation_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES],
+	const struct pqcp_sovereign_recovery_run *candidate)
+{
+	k_mutex_lock(&orchestrator->lock, K_FOREVER);
+	if (reserved_index >= 0 &&
+	    (size_t)reserved_index < orchestrator->capacity &&
+	    orchestrator->runs[reserved_index].occupied &&
+	    orchestrator->runs[reserved_index].run_id ==
+		    candidate->run_id &&
+	    orchestrator->runs[reserved_index].generation ==
+		    candidate->generation &&
+	    pqcp_sovereign_continuity_digest_equal(
+		    orchestrator->runs[reserved_index].run_digest,
+		    reservation_digest)) {
+		memset(&orchestrator->runs[reserved_index], 0,
+		       sizeof(orchestrator->runs[reserved_index]));
+	}
+	orchestrator->rejected_count =
+		pqcp_sovereign_continuity_add_u64(
+			orchestrator->rejected_count, 1U);
+	k_mutex_unlock(&orchestrator->lock);
+}
+
 int pqcp_sovereign_recovery_orchestrator_init(
 	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
 	struct pqcp_sovereign_recovery_run *runs,
@@ -642,7 +792,11 @@ int pqcp_sovereign_recovery_start(
 	struct pqcp_sovereign_recovery_run candidate;
 	const struct pqcp_sovereign_recovery_step *first_step;
 	uint32_t first_index;
-	int index;
+	uint8_t reservation_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES] = {0};
+	int reserved_index = -1;
+	bool continuity_mode_set = false;
+	bool fence_acquired = false;
 	int ret;
 
 	if (orchestrator == NULL || !orchestrator->initialized ||
@@ -681,12 +835,6 @@ int pqcp_sovereign_recovery_start(
 	memset(&candidate, 0, sizeof(candidate));
 	candidate.schema_version =
 		PQCP_SOVEREIGN_CONTINUITY_SCHEMA_VERSION;
-	candidate.generation =
-		pqcp_edge_internal_next_generation(
-			&orchestrator->next_generation);
-	candidate.run_id =
-		pqcp_edge_internal_next_identifier(
-			&orchestrator->next_run_id);
 	ret = pqcp_sovereign_continuity_copy_id(
 		candidate.tenant_id, start->tenant_id);
 	if (ret == 0) {
@@ -738,33 +886,43 @@ int pqcp_sovereign_recovery_start(
 	       start->quorum_authorization_digest,
 	       sizeof(candidate.quorum_authorization_digest));
 	candidate.occupied = true;
+	ret = reserve_run(
+		orchestrator, &candidate, &reserved_index);
+	if (ret != 0) {
+		discard_reserved_run(
+			orchestrator, reserved_index,
+			reservation_digest, &candidate);
+		return ret;
+	}
+	memcpy(reservation_digest, candidate.run_digest,
+	       sizeof(reservation_digest));
 	ret = select_recovery_point(
 		orchestrator, &plan, &objective,
 		&candidate, start->now_ms);
 	if (ret != 0) {
-		goto reject;
+		goto rollback;
 	}
 	ret = acquire_run_fence(
 		orchestrator, &plan, &candidate,
-		start->now_ms);
+		start->now_ms, &fence_acquired);
 	if (ret != 0) {
-		goto reject;
+		goto rollback;
 	}
 	ret = edge_authorize(
 		orchestrator, start, &plan, &candidate);
 	if (ret != 0) {
-		goto release;
+		goto rollback;
 	}
 	ret = current_plan_step(
 		&plan, &candidate, &first_index, &first_step);
 	if (ret != 0) {
-		goto release;
+		goto rollback;
 	}
 	ret = authorize_step(
 		orchestrator, &candidate,
 		first_step, start->now_ms);
 	if (ret != 0) {
-		goto release;
+		goto rollback;
 	}
 	candidate.step_attempts[first_index] = 1U;
 	candidate.attempt_mask |= 1U << first_index;
@@ -775,33 +933,8 @@ int pqcp_sovereign_recovery_start(
 		orchestrator, &candidate,
 		first_step, start->now_ms);
 	if (ret != 0) {
-		goto release;
+		goto rollback;
 	}
-	ret = pqcp_sovereign_continuity_digest_run(
-		&candidate, candidate.run_digest);
-	if (ret != 0) {
-		goto release;
-	}
-	k_mutex_lock(&orchestrator->lock, K_FOREVER);
-	index = active_resource_run(
-		orchestrator, candidate.tenant_id,
-		candidate.resource_id);
-	if (index >= 0) {
-		ret = -EBUSY;
-		k_mutex_unlock(
-			&orchestrator->lock);
-		goto release;
-	}
-	index = free_run_index(orchestrator);
-	if (index < 0) {
-		ret = index;
-		k_mutex_unlock(
-			&orchestrator->lock);
-		goto release;
-	}
-	orchestrator->runs[index] = candidate;
-	*run = candidate;
-	k_mutex_unlock(&orchestrator->lock);
 	ret = edge_set_continuity_mode(
 		orchestrator, &plan,
 		PQCP_EDGE_CONTINUITY_RECOVERY,
@@ -809,14 +942,43 @@ int pqcp_sovereign_recovery_start(
 	if (ret == -EAGAIN) {
 		ret = 0;
 	}
-	return ret;
-release:
-	(void)release_run_fence(
+	if (ret != 0) {
+		goto rollback;
+	}
+	continuity_mode_set =
+		orchestrator->edge.continuity != NULL;
+	ret = pqcp_sovereign_continuity_digest_run(
+		&candidate, candidate.run_digest);
+	if (ret != 0) {
+		goto rollback;
+	}
+	ret = publish_reserved_run(
+		orchestrator, reserved_index,
+		reservation_digest, &candidate);
+	if (ret != 0) {
+		goto rollback;
+	}
+	*run = candidate;
+	return 0;
+rollback:
+	(void)edge_abort(
 		orchestrator, &candidate, start->now_ms);
-reject:
-	orchestrator->rejected_count =
-		pqcp_sovereign_continuity_add_u64(
-			orchestrator->rejected_count, 1U);
+	if (fence_acquired) {
+		(void)release_run_fence(
+			orchestrator, &candidate,
+			start->now_ms);
+	}
+	(void)release_selected_point(
+		orchestrator, &candidate, start->now_ms);
+	if (continuity_mode_set) {
+		(void)edge_set_continuity_mode(
+			orchestrator, &plan,
+			PQCP_EDGE_CONTINUITY_NORMAL,
+			start->now_ms);
+	}
+	discard_reserved_run(
+		orchestrator, reserved_index,
+		reservation_digest, &candidate);
 	return ret;
 }
 
@@ -863,6 +1025,30 @@ int pqcp_sovereign_recovery_current_step(
 	if (ret == 0) {
 		*step = *current;
 	}
+	return ret;
+}
+
+int pqcp_sovereign_recovery_get(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	uint64_t run_id,
+	struct pqcp_sovereign_recovery_run *run)
+{
+	int index;
+	int ret = 0;
+
+	if (orchestrator == NULL || !orchestrator->initialized ||
+	    run_id == 0U || run == NULL) {
+		return -EINVAL;
+	}
+	memset(run, 0, sizeof(*run));
+	k_mutex_lock(&orchestrator->lock, K_FOREVER);
+	index = run_index(orchestrator, run_id);
+	if (index < 0) {
+		ret = index;
+	} else {
+		*run = orchestrator->runs[index];
+	}
+	k_mutex_unlock(&orchestrator->lock);
 	return ret;
 }
 
@@ -968,6 +1154,25 @@ static int advance_run_step(
 	return 0;
 }
 
+static void mark_run_failed(
+	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
+	const struct pqcp_sovereign_recovery_plan *plan,
+	struct pqcp_sovereign_recovery_run *run,
+	uint64_t now_ms)
+{
+	if (run->state != PQCP_SOVEREIGN_RUN_FAILED) {
+		orchestrator->failed_count =
+			pqcp_sovereign_continuity_add_u64(
+				orchestrator->failed_count, 1U);
+	}
+	run->state = PQCP_SOVEREIGN_RUN_FAILED;
+	run->updated_at_ms = now_ms;
+	(void)edge_abort(orchestrator, run, now_ms);
+	(void)edge_set_continuity_mode(
+		orchestrator, plan,
+		PQCP_EDGE_CONTINUITY_FAILSAFE, now_ms);
+}
+
 int pqcp_sovereign_recovery_record(
 	struct pqcp_sovereign_recovery_orchestrator *orchestrator,
 	const struct pqcp_sovereign_recovery_step_result *result,
@@ -977,6 +1182,7 @@ int pqcp_sovereign_recovery_record(
 	struct pqcp_sovereign_recovery_run candidate;
 	const struct pqcp_sovereign_recovery_step *step;
 	uint32_t step_index;
+	int outcome;
 	int index;
 	int ret;
 
@@ -988,26 +1194,75 @@ int pqcp_sovereign_recovery_record(
 	    run == NULL) {
 		return -EINVAL;
 	}
+	memset(run, 0, sizeof(*run));
 	k_mutex_lock(&orchestrator->lock, K_FOREVER);
 	index = run_index(orchestrator, result->run_id);
 	if (index < 0) {
-		k_mutex_unlock(&orchestrator->lock);
-		return index;
+		ret = index;
+		goto out;
 	}
 	candidate = orchestrator->runs[index];
-	k_mutex_unlock(&orchestrator->lock);
 	if (pqcp_sovereign_continuity_terminal_state(
 		    candidate.state)) {
-		return -EALREADY;
+		ret = -EALREADY;
+		goto out;
 	}
 	if (candidate.deadline_ms <= result->now_ms) {
-		return -ETIMEDOUT;
+		(void)edge_abort(
+			orchestrator, &candidate,
+			result->now_ms);
+		(void)release_run_fence(
+			orchestrator, &candidate,
+			result->now_ms);
+		(void)release_selected_point(
+			orchestrator, &candidate,
+			result->now_ms);
+		if (pqcp_sovereign_recovery_plan_get(
+			    orchestrator->plans,
+			    candidate.tenant_id,
+			    candidate.plan_id, &plan) == 0) {
+			(void)edge_set_continuity_mode(
+				orchestrator, &plan,
+				PQCP_EDGE_CONTINUITY_FAILSAFE,
+				result->now_ms);
+		}
+		candidate.state = PQCP_SOVEREIGN_RUN_EXPIRED;
+		candidate.updated_at_ms = result->now_ms;
+		candidate.completed_at_ms = result->now_ms;
+		orchestrator->failed_count =
+			pqcp_sovereign_continuity_add_u64(
+				orchestrator->failed_count, 1U);
+		ret = pqcp_sovereign_continuity_digest_run(
+			&candidate, candidate.run_digest);
+		if (ret == 0) {
+			orchestrator->runs[index] = candidate;
+			*run = candidate;
+			ret = -ETIMEDOUT;
+		}
+		goto out;
 	}
 	ret = pqcp_sovereign_recovery_plan_get(
 		orchestrator->plans, candidate.tenant_id,
 		candidate.plan_id, &plan);
 	if (ret != 0) {
-		return ret;
+		int plan_error = ret;
+
+		(void)edge_abort(
+			orchestrator, &candidate,
+			result->now_ms);
+		candidate.state = PQCP_SOVEREIGN_RUN_FAILED;
+		candidate.updated_at_ms = result->now_ms;
+		orchestrator->failed_count =
+			pqcp_sovereign_continuity_add_u64(
+				orchestrator->failed_count, 1U);
+		ret = pqcp_sovereign_continuity_digest_run(
+			&candidate, candidate.run_digest);
+		if (ret == 0) {
+			orchestrator->runs[index] = candidate;
+			*run = candidate;
+			ret = plan_error;
+		}
+		goto out;
 	}
 	if (!plan.active ||
 	    !pqcp_sovereign_continuity_digest_equal(
@@ -1015,42 +1270,74 @@ int pqcp_sovereign_recovery_record(
 	    plan.policy_epoch != candidate.policy_epoch ||
 	    plan.revocation_epoch !=
 		    candidate.revocation_epoch) {
-		return -ESTALE;
+		mark_run_failed(
+			orchestrator, &plan, &candidate,
+			result->now_ms);
+		ret = pqcp_sovereign_continuity_digest_run(
+			&candidate, candidate.run_digest);
+		if (ret == 0) {
+			orchestrator->runs[index] = candidate;
+			*run = candidate;
+			ret = -ESTALE;
+		}
+		goto out;
 	}
 	ret = current_plan_step(
 		&plan, &candidate, &step_index, &step);
 	if (ret != 0) {
-		return ret;
+		goto out;
 	}
 	if (step->step_id != result->step_id) {
-		return -EPROTO;
+		ret = -EPROTO;
+		goto out;
 	}
 	ret = check_run_fence(
 		orchestrator, &candidate, result->now_ms);
 	if (ret != 0 && step->kind !=
 	    PQCP_SOVEREIGN_STEP_RELEASE_FENCE) {
-		return ret;
+		int fence_error = ret;
+
+		mark_run_failed(
+			orchestrator, &plan, &candidate,
+			result->now_ms);
+		ret = pqcp_sovereign_continuity_digest_run(
+			&candidate, candidate.run_digest);
+		if (ret == 0) {
+			orchestrator->runs[index] = candidate;
+			*run = candidate;
+			ret = fence_error;
+		}
+		goto out;
 	}
 	if (step->evidence_required &&
 	    !pqcp_sovereign_continuity_digest_equal(
 		    step->expected_evidence_digest,
 		    result->evidence_digest)) {
-		return -EKEYREJECTED;
+		ret = -EKEYREJECTED;
+		goto out;
 	}
 	ret = chain_run_evidence(
 		&candidate, step, result->result,
 		result->evidence_digest, result->now_ms);
 	if (ret != 0) {
-		return ret;
+		goto out;
 	}
 	candidate.updated_at_ms = result->now_ms;
+	outcome = result->result;
 	if (result->result == 0) {
 		ret = edge_record_success(
 			orchestrator, &candidate, step,
 			result->evidence_digest,
 			result->now_ms);
 		if (ret != 0) {
-			return ret;
+			outcome = ret;
+			candidate.failed_step_mask |=
+				1U << step_index;
+			++candidate.failure_count;
+			mark_run_failed(
+				orchestrator, &plan, &candidate,
+				result->now_ms);
+			goto digest;
 		}
 		candidate.completed_step_mask |=
 			1U << step_index;
@@ -1060,10 +1347,13 @@ int pqcp_sovereign_recovery_record(
 			orchestrator, &plan, &candidate,
 			result->now_ms);
 		if (ret != 0) {
-			candidate.state =
-				PQCP_SOVEREIGN_RUN_FAILED;
+			outcome = ret;
 			candidate.failed_step_mask |=
 				1U << step_index;
+			++candidate.failure_count;
+			mark_run_failed(
+				orchestrator, &plan, &candidate,
+				result->now_ms);
 		}
 	} else {
 		++candidate.failure_count;
@@ -1072,12 +1362,9 @@ int pqcp_sovereign_recovery_record(
 		if (candidate.step_attempts[step_index] >=
 		    step->maximum_attempts ||
 		    step->critical) {
-			candidate.state =
-				PQCP_SOVEREIGN_RUN_FAILED;
-			orchestrator->failed_count =
-				pqcp_sovereign_continuity_add_u64(
-					orchestrator->failed_count,
-					1U);
+			mark_run_failed(
+				orchestrator, &plan, &candidate,
+				result->now_ms);
 		} else {
 			ret = authorize_step(
 				orchestrator, &candidate,
@@ -1086,32 +1373,24 @@ int pqcp_sovereign_recovery_record(
 				++candidate.step_attempts[
 					step_index];
 			} else {
-				candidate.state =
-					PQCP_SOVEREIGN_RUN_FAILED;
+				outcome = ret;
+				mark_run_failed(
+					orchestrator, &plan,
+					&candidate,
+					result->now_ms);
 			}
 		}
 	}
+digest:
 	ret = pqcp_sovereign_continuity_digest_run(
 		&candidate, candidate.run_digest);
 	if (ret != 0) {
-		return ret;
+		goto out;
 	}
-	k_mutex_lock(&orchestrator->lock, K_FOREVER);
-	index = run_index(orchestrator, result->run_id);
-	if (index < 0) {
-		ret = index;
-	} else if (orchestrator->runs[index].generation !=
-			   candidate.generation ||
-		   (!pqcp_sovereign_continuity_digest_equal(
-			    orchestrator->runs[index].run_digest,
-			    run->run_digest) &&
-		    run->run_id != 0U)) {
-		ret = -ESTALE;
-	} else {
-		orchestrator->runs[index] = candidate;
-		*run = candidate;
-		ret = result->result;
-	}
+	orchestrator->runs[index] = candidate;
+	*run = candidate;
+	ret = outcome;
+out:
 	k_mutex_unlock(&orchestrator->lock);
 	return ret;
 }
@@ -1124,6 +1403,7 @@ int pqcp_sovereign_recovery_cancel(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_recovery_run *run;
+	struct pqcp_sovereign_recovery_plan plan;
 	int index;
 	int ret = 0;
 
@@ -1142,7 +1422,8 @@ int pqcp_sovereign_recovery_cancel(
 	}
 	run = &orchestrator->runs[index];
 	if (pqcp_sovereign_continuity_terminal_state(
-		    run->state)) {
+		    run->state) &&
+	    run->state != PQCP_SOVEREIGN_RUN_FAILED) {
 		ret = -EALREADY;
 		goto out;
 	}
@@ -1152,8 +1433,19 @@ int pqcp_sovereign_recovery_cancel(
 		ret = -EKEYREJECTED;
 		goto out;
 	}
+	ret = pqcp_sovereign_recovery_plan_get(
+		orchestrator->plans, run->tenant_id,
+		run->plan_id, &plan);
+	if (ret != 0) {
+		goto out;
+	}
+	(void)edge_abort(orchestrator, run, now_ms);
 	ret = release_run_fence(
 		orchestrator, run, now_ms);
+	if (ret == 0 || ret == -EALREADY) {
+		ret = release_selected_point(
+			orchestrator, run, now_ms);
+	}
 	if (ret == 0) {
 		run->state =
 			PQCP_SOVEREIGN_RUN_CANCELLED;
@@ -1161,6 +1453,12 @@ int pqcp_sovereign_recovery_cancel(
 		run->completed_at_ms = now_ms;
 		ret = pqcp_sovereign_continuity_digest_run(
 			run, run->run_digest);
+		if (ret == 0) {
+			(void)edge_set_continuity_mode(
+				orchestrator, &plan,
+				PQCP_EDGE_CONTINUITY_FAILSAFE,
+				now_ms);
+		}
 	}
 out:
 	k_mutex_unlock(&orchestrator->lock);
@@ -1184,15 +1482,41 @@ int pqcp_sovereign_recovery_tick(
 	     index < orchestrator->capacity; ++index) {
 		struct pqcp_sovereign_recovery_run *run =
 			&orchestrator->runs[index];
+		struct pqcp_sovereign_recovery_plan plan;
 
-		if (!run->occupied ||
-		    pqcp_sovereign_continuity_terminal_state(
-			    run->state) ||
-		    run->deadline_ms > now_ms) {
+		if (!run->occupied || run->deadline_ms > now_ms) {
 			continue;
 		}
+		if (run->state == PQCP_SOVEREIGN_RUN_FAILED) {
+			(void)release_run_fence(
+				orchestrator, run, now_ms);
+			(void)release_selected_point(
+				orchestrator, run, now_ms);
+			run->completed_at_ms = now_ms;
+			ret = pqcp_sovereign_continuity_digest_run(
+				run, run->run_digest);
+			if (ret != 0) {
+				break;
+			}
+			continue;
+		}
+		if (pqcp_sovereign_continuity_terminal_state(
+			    run->state)) {
+			continue;
+		}
+		(void)edge_abort(orchestrator, run, now_ms);
 		(void)release_run_fence(
 			orchestrator, run, now_ms);
+		(void)release_selected_point(
+			orchestrator, run, now_ms);
+		if (pqcp_sovereign_recovery_plan_get(
+			    orchestrator->plans, run->tenant_id,
+			    run->plan_id, &plan) == 0) {
+			(void)edge_set_continuity_mode(
+				orchestrator, &plan,
+				PQCP_EDGE_CONTINUITY_FAILSAFE,
+				now_ms);
+		}
 		run->state = PQCP_SOVEREIGN_RUN_EXPIRED;
 		run->updated_at_ms = now_ms;
 		run->completed_at_ms = now_ms;

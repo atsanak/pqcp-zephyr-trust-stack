@@ -109,21 +109,21 @@ static int validate_fence(
 	return 0;
 }
 
-static uint64_t next_epoch(
-	struct pqcp_sovereign_fence_manager *manager,
+static int validate_claim_epoch(
+	const struct pqcp_sovereign_fence_manager *manager,
+	const struct pqcp_sovereign_fence *current,
 	uint64_t requested_epoch)
 {
-	uint64_t epoch = manager->highest_epoch;
-
-	if (requested_epoch > epoch) {
-		epoch = requested_epoch;
-	} else if (epoch != UINT64_MAX) {
-		++epoch;
+	if (current != NULL) {
+		if (requested_epoch <= current->epoch) {
+			return -ESTALE;
+		}
+		return 0;
 	}
-	if (epoch == 0U) {
-		epoch = 1U;
+	if (requested_epoch < manager->highest_epoch) {
+		return -ESTALE;
 	}
-	return epoch;
+	return 0;
 }
 
 static int update_fence_digest(
@@ -201,6 +201,12 @@ int pqcp_sovereign_fence_acquire(
 			}
 			goto reject;
 		}
+		ret = validate_claim_epoch(
+			manager, current,
+			claim->requested_epoch);
+		if (ret != 0) {
+			goto reject;
+		}
 		current->state =
 			current->expires_at_ms <= claim->now_ms ?
 				PQCP_SOVEREIGN_FENCE_EXPIRED :
@@ -216,6 +222,12 @@ int pqcp_sovereign_fence_acquire(
 		index = free_fence_index(manager);
 		if (index < 0) {
 			ret = index;
+			goto reject;
+		}
+		ret = validate_claim_epoch(
+			manager, NULL,
+			claim->requested_epoch);
+		if (ret != 0) {
 			goto reject;
 		}
 	}
@@ -244,8 +256,7 @@ int pqcp_sovereign_fence_acquire(
 		goto reject;
 	}
 	candidate.state = PQCP_SOVEREIGN_FENCE_HELD;
-	candidate.epoch = next_epoch(
-		manager, claim->requested_epoch);
+	candidate.epoch = claim->requested_epoch;
 	candidate.acquired_at_ms = claim->now_ms;
 	candidate.renewed_at_ms = claim->now_ms;
 	candidate.expires_at_ms = claim->expires_at_ms;
@@ -262,7 +273,9 @@ int pqcp_sovereign_fence_acquire(
 	ret = update_fence_digest(manager, &candidate);
 	if (ret == 0) {
 		manager->fences[index] = candidate;
-		manager->highest_epoch = candidate.epoch;
+		if (candidate.epoch > manager->highest_epoch) {
+			manager->highest_epoch = candidate.epoch;
+		}
 		manager->acquisition_count =
 			pqcp_sovereign_continuity_add_u64(
 				manager->acquisition_count, 1U);
@@ -496,14 +509,159 @@ int pqcp_sovereign_fence_check(
 			    PQCP_SOVEREIGN_FENCE_HELD ||
 		    fence->expires_at_ms <= now_ms) {
 			ret = -ETIMEDOUT;
-		} else if (fence->epoch != epoch ||
-			   epoch != manager->highest_epoch) {
+		} else if (fence->epoch != epoch) {
 			ret = -ESTALE;
 		} else if (strcmp(fence->holder_id,
 				  holder_id) != 0) {
 			ret = -EACCES;
 		}
 	}
+	k_mutex_unlock(&manager->lock);
+	return ret;
+}
+
+int pqcp_sovereign_fence_guard_capture(
+	struct pqcp_sovereign_fence_manager *manager,
+	const char *tenant_id,
+	const char *resource_id,
+	const char *holder_id,
+	const char *lease_id,
+	uint64_t epoch,
+	uint64_t now_ms,
+	struct pqcp_sovereign_fence_guard *guard)
+{
+	const struct pqcp_sovereign_fence *fence;
+	int index;
+	int ret = 0;
+
+	if (manager == NULL || !manager->initialized ||
+	    !pqcp_sovereign_continuity_text_valid(tenant_id) ||
+	    !pqcp_sovereign_continuity_text_valid(resource_id) ||
+	    !pqcp_sovereign_continuity_text_valid(holder_id) ||
+	    !pqcp_sovereign_continuity_text_valid(lease_id) ||
+	    epoch == 0U || now_ms == 0U || guard == NULL) {
+		return -EINVAL;
+	}
+	memset(guard, 0, sizeof(*guard));
+	k_mutex_lock(&manager->lock, K_FOREVER);
+	index = fence_index(manager, tenant_id, resource_id);
+	if (index < 0) {
+		ret = index;
+		goto out;
+	}
+	fence = &manager->fences[index];
+	if (fence->state != PQCP_SOVEREIGN_FENCE_HELD ||
+	    fence->expires_at_ms <= now_ms) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+	if (fence->epoch != epoch) {
+		ret = -ESTALE;
+		goto out;
+	}
+	if (strcmp(fence->holder_id, holder_id) != 0 ||
+	    strcmp(fence->lease_id, lease_id) != 0) {
+		ret = -EACCES;
+		goto out;
+	}
+	guard->schema_version =
+		PQCP_SOVEREIGN_CONTINUITY_SCHEMA_VERSION;
+	guard->generation = fence->generation;
+	memcpy(guard->tenant_id, fence->tenant_id,
+	       sizeof(guard->tenant_id));
+	memcpy(guard->resource_id, fence->resource_id,
+	       sizeof(guard->resource_id));
+	memcpy(guard->holder_id, fence->holder_id,
+	       sizeof(guard->holder_id));
+	memcpy(guard->lease_id, fence->lease_id,
+	       sizeof(guard->lease_id));
+	guard->epoch = fence->epoch;
+	guard->captured_at_ms = now_ms;
+	guard->expires_at_ms = fence->expires_at_ms;
+	memcpy(guard->authorization_digest,
+	       fence->authorization_digest,
+	       sizeof(guard->authorization_digest));
+	memcpy(guard->fence_digest, fence->fence_digest,
+	       sizeof(guard->fence_digest));
+out:
+	k_mutex_unlock(&manager->lock);
+	return ret;
+}
+
+int pqcp_sovereign_fence_guard_check(
+	struct pqcp_sovereign_fence_manager *manager,
+	const struct pqcp_sovereign_fence_guard *guard,
+	const uint8_t authorization_digest[
+		PQCP_SOVEREIGN_CONTINUITY_DIGEST_BYTES],
+	uint64_t now_ms)
+{
+	const struct pqcp_sovereign_fence *fence;
+	int index;
+	int ret = 0;
+
+	if (manager == NULL || !manager->initialized ||
+	    guard == NULL ||
+	    guard->schema_version !=
+		    PQCP_SOVEREIGN_CONTINUITY_SCHEMA_VERSION ||
+	    guard->generation == 0U ||
+	    !pqcp_sovereign_continuity_text_valid(
+		    guard->tenant_id) ||
+	    !pqcp_sovereign_continuity_text_valid(
+		    guard->resource_id) ||
+	    !pqcp_sovereign_continuity_text_valid(
+		    guard->holder_id) ||
+	    !pqcp_sovereign_continuity_text_valid(
+		    guard->lease_id) ||
+	    guard->epoch == 0U || guard->captured_at_ms == 0U ||
+	    guard->expires_at_ms <= guard->captured_at_ms ||
+	    now_ms < guard->captured_at_ms ||
+	    !pqcp_sovereign_continuity_digest_valid(
+		    guard->authorization_digest) ||
+	    !pqcp_sovereign_continuity_digest_valid(
+		    guard->fence_digest) ||
+	    !pqcp_sovereign_continuity_digest_valid(
+		    authorization_digest)) {
+		return -EINVAL;
+	}
+	if (!pqcp_sovereign_continuity_digest_equal(
+		    guard->authorization_digest,
+		    authorization_digest)) {
+		return -EKEYREJECTED;
+	}
+	k_mutex_lock(&manager->lock, K_FOREVER);
+	index = fence_index(
+		manager, guard->tenant_id,
+		guard->resource_id);
+	if (index < 0) {
+		ret = index;
+		goto out;
+	}
+	fence = &manager->fences[index];
+	if (fence->state != PQCP_SOVEREIGN_FENCE_HELD ||
+	    fence->expires_at_ms <= now_ms ||
+	    guard->expires_at_ms <= now_ms) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+	if (fence->generation != guard->generation ||
+	    fence->epoch != guard->epoch) {
+		ret = -ESTALE;
+		goto out;
+	}
+	if (strcmp(fence->holder_id, guard->holder_id) != 0 ||
+	    strcmp(fence->lease_id, guard->lease_id) != 0) {
+		ret = -EACCES;
+		goto out;
+	}
+	if (!pqcp_sovereign_continuity_digest_equal(
+		    fence->authorization_digest,
+		    guard->authorization_digest) ||
+	    !pqcp_sovereign_continuity_digest_equal(
+		    fence->fence_digest,
+		    guard->fence_digest)) {
+		ret = -EKEYREJECTED;
+	}
+out:
 	k_mutex_unlock(&manager->lock);
 	return ret;
 }
