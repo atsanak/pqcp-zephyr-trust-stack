@@ -1676,6 +1676,14 @@ def main() -> int:
                 "--inline-suppr",
                 "--suppress=missingIncludeSystem",
                 "--suppress=unusedStructMember",
+                # Keep the release gate focused on control-flow, bounds,
+                # initialization, portability, and performance defects. These
+                # four IDs are readability/const-propagation heuristics and
+                # are already non-blocking in the focused extended checker.
+                "--suppress=variableScope",
+                "--suppress=constParameterPointer",
+                "--suppress=constVariablePointer",
+                "--suppress=constVariable",
                 "--template={severity}:{id}:{file}:{line}:{message}",
                 f"-I{module_path / 'include'}",
                 str(module_path / "src"),

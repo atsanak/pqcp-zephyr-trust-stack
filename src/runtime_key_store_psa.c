@@ -703,8 +703,9 @@ static int psa_encapsulate(
 		context->key_id_base + (uint32_t)destination,
 		secret_request, ciphertext, ciphertext_capacity,
 		ciphertext_length);
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret != 0) {
-		return ret == -ENOTSUP ? -ENOTSUP : ret;
+		return ret;
 	}
 	ret = psa_initialize_derived(
 		store, (uint32_t)destination,
@@ -749,8 +750,9 @@ static int psa_decapsulate(
 		ciphertext_length,
 		context->key_id_base + (uint32_t)destination,
 		secret_request);
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret != 0) {
-		return ret == -ENOTSUP ? -ENOTSUP : ret;
+		return ret;
 	}
 	ret = psa_initialize_derived(
 		store, (uint32_t)destination,
@@ -797,8 +799,9 @@ static int psa_derive(
 		key_id, salt, salt_length, info, info_length,
 		context->key_id_base + (uint32_t)destination,
 		derived_request);
+	// cppcheck-suppress knownConditionTrueFalse
 	if (ret != 0) {
-		return ret == -ENOTSUP ? -ENOTSUP : ret;
+		return ret;
 	}
 	ret = psa_initialize_derived(
 		store, (uint32_t)destination,

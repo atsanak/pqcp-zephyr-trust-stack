@@ -439,7 +439,7 @@ int pqcp_fleet_legacy_cbor_peek_envelope_type(
 	if (ret == 0) {
 		ret = pqcp_fleet_legacy_cbor_read_uint(&reader, &value);
 	}
-	if (ret != 0 || value <= PQCP_FLEET_MESSAGE_NONE ||
+	if (ret != 0 || value == PQCP_FLEET_MESSAGE_NONE ||
 	    value >= PQCP_FLEET_MESSAGE_TYPE_COUNT) {
 		return -EBADMSG;
 	}

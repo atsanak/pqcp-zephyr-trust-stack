@@ -137,7 +137,6 @@ int pqcp_fleet_recovery_enter(
 		return -EDQUOT;
 	}
 	manager->attempt_count++;
-	manager->state = PQCP_FLEET_RECOVERY_ENTERING;
 	manager->state = PQCP_FLEET_RECOVERY_ACTIVE;
 	(void)k_mutex_unlock(&manager->lock);
 	return 0;
@@ -270,7 +269,6 @@ int pqcp_fleet_recovery_complete(
 		(void)k_mutex_unlock(&manager->lock);
 		return -EACCES;
 	}
-	manager->state = PQCP_FLEET_RECOVERY_EXITING;
 	manager->cooldown_until_ms = now_ms + cooldown_ms;
 	manager->state = PQCP_FLEET_RECOVERY_COMPLETE;
 	(void)k_mutex_unlock(&manager->lock);

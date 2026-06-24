@@ -296,11 +296,7 @@ static int hard_guard_decision(
 	struct pqcp_fleet_policy_decision *decision)
 {
 	if (context->device_state ==
-		    PQCP_FLEET_DEVICE_DECOMMISSIONED ||
-	    (context->operation ==
-		     PQCP_FLEET_OPERATION_DECOMMISSION &&
-	     context->device_state ==
-		     PQCP_FLEET_DEVICE_DECOMMISSIONED)) {
+		    PQCP_FLEET_DEVICE_DECOMMISSIONED) {
 		decision->effect =
 			PQCP_FLEET_POLICY_EFFECT_DENY;
 		decision->reason =
