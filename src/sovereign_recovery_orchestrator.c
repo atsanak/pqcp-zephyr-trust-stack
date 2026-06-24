@@ -1102,10 +1102,10 @@ int pqcp_sovereign_recovery_record(
 		ret = index;
 	} else if (orchestrator->runs[index].generation !=
 			   candidate.generation ||
-		   !pqcp_sovereign_continuity_digest_equal(
-			   orchestrator->runs[index].run_digest,
-			   run->run_digest) &&
-		   run->run_id != 0U) {
+		   (!pqcp_sovereign_continuity_digest_equal(
+			    orchestrator->runs[index].run_digest,
+			    run->run_digest) &&
+		    run->run_id != 0U)) {
 		ret = -ESTALE;
 	} else {
 		orchestrator->runs[index] = candidate;

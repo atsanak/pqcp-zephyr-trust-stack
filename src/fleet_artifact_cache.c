@@ -180,12 +180,6 @@ static void bit_set(uint8_t *bitmap, uint32_t index)
 		(uint8_t)(1U << (index % 8U));
 }
 
-static void bit_clear(uint8_t *bitmap, uint32_t index)
-{
-	bitmap[index / 8U] &=
-		(uint8_t)~(uint8_t)(1U << (index % 8U));
-}
-
 static uint32_t bitmap_count(
 	const uint8_t bitmap[PQCP_FLEET_ARTIFACT_CHUNK_BITMAP_BYTES],
 	uint32_t bit_count)
