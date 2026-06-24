@@ -41,6 +41,30 @@ static bool ceremony_terminal(
 	       state == PQCP_SOVEREIGN_CEREMONY_ABORTED;
 }
 
+static bool ceremony_role_valid(const char *role)
+{
+	static const char *const roles[] = {
+		"security-officer",
+		"key-custodian",
+		"policy-owner",
+		"auditor",
+		"recovery-officer",
+		"privacy-steward",
+	};
+	size_t index;
+
+	if (!pqcp_sovereign_ceremony_text_valid(
+		    role, PQCP_SOVEREIGN_LABEL_MAX_CHARS)) {
+		return false;
+	}
+	for (index = 0U; index < ARRAY_SIZE(roles); ++index) {
+		if (strcmp(role, roles[index]) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static int lock_manager(
 	struct pqcp_sovereign_key_ceremony_manager *manager)
 {
@@ -247,21 +271,27 @@ static int ceremony_open_digest(
 	return ret;
 }
 
-static int contribution_event_digest(
+static int contribution_leaf_digest(
 	const struct pqcp_sovereign_key_ceremony *ceremony,
 	const struct pqcp_sovereign_key_contribution *contribution,
 	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
 {
 	uint8_t body[PQCP_SOVEREIGN_CANONICAL_CEREMONY_BYTES];
+	uint8_t open_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
 	size_t offset = 0U;
+	int ret;
 
 	memset(body, 0, sizeof(body));
+	ret = ceremony_open_digest(ceremony, open_digest);
+	if (ret != 0) {
+		return ret;
+	}
 	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, CONTRIBUTION_DOMAIN,
 		sizeof(CONTRIBUTION_DOMAIN));
 	offset = pqcp_sovereign_ceremony_encode_bytes(
-		body, sizeof(body), offset, ceremony->transcript_digest,
-		sizeof(ceremony->transcript_digest));
+		body, sizeof(body), offset, open_digest,
+		sizeof(open_digest));
 	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, contribution->ceremony_id);
 	offset = pqcp_sovereign_ceremony_encode_text(
@@ -286,11 +316,138 @@ static int contribution_event_digest(
 		sizeof(contribution->proof_digest));
 	if (offset == 0U || offset > sizeof(body)) {
 		pqcp_runtime_secure_zero(body, sizeof(body));
+		pqcp_runtime_secure_zero(open_digest, sizeof(open_digest));
 		return -EOVERFLOW;
 	}
-	int ret = pqcp_sovereign_ceremony_hash(
-		body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
+	pqcp_runtime_secure_zero(open_digest, sizeof(open_digest));
+	return ret;
+}
+
+static bool contribution_order_after(
+	const struct pqcp_sovereign_key_contribution *entry,
+	uint64_t submitted_at_ms,
+	const char *custodian_id,
+	bool have_previous)
+{
+	if (!have_previous) {
+		return true;
+	}
+	if (entry->submitted_at_ms > submitted_at_ms) {
+		return true;
+	}
+	return entry->submitted_at_ms == submitted_at_ms &&
+	       strcmp(entry->custodian_id, custodian_id) > 0;
+}
+
+static bool contribution_order_before(
+	const struct pqcp_sovereign_key_contribution *left,
+	const struct pqcp_sovereign_key_contribution *right)
+{
+	if (right == NULL) {
+		return true;
+	}
+	if (left->submitted_at_ms < right->submitted_at_ms) {
+		return true;
+	}
+	return left->submitted_at_ms == right->submitted_at_ms &&
+	       strcmp(left->custodian_id, right->custodian_id) < 0;
+}
+
+static int ceremony_contribution_transcript_locked(
+	const struct pqcp_sovereign_key_ceremony_manager *manager,
+	const struct pqcp_sovereign_key_ceremony *ceremony,
+	uint8_t digest[PQCP_SOVEREIGN_DIGEST_BYTES])
+{
+	static const char transcript_domain[] =
+		"pqcp-sovereign-ceremony-transcript-v1";
+	uint8_t body[PQCP_SOVEREIGN_CANONICAL_CEREMONY_BYTES];
+	uint8_t open_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
+	uint8_t leaf_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
+	const struct pqcp_sovereign_key_contribution *selected;
+	uint64_t previous_time = 0U;
+	char previous_custodian[PQCP_SOVEREIGN_ID_MAX_CHARS];
+	size_t offset = 0U;
+	uint32_t ordinal;
+	bool have_previous = false;
+	int ret;
+
+	ret = ceremony_open_digest(ceremony, open_digest);
+	if (ret != 0) {
+		return ret;
+	}
+	if (ceremony->contribution_count == 0U) {
+		memcpy(digest, open_digest, sizeof(open_digest));
+		pqcp_runtime_secure_zero(open_digest, sizeof(open_digest));
+		return 0;
+	}
+	memset(body, 0, sizeof(body));
+	memset(previous_custodian, 0, sizeof(previous_custodian));
+	offset = pqcp_sovereign_ceremony_encode_text(
+		body, sizeof(body), offset, transcript_domain,
+		sizeof(transcript_domain));
+	offset = pqcp_sovereign_ceremony_encode_bytes(
+		body, sizeof(body), offset, open_digest,
+		sizeof(open_digest));
+	offset = pqcp_sovereign_ceremony_encode_u32(
+		body, sizeof(body), offset,
+		ceremony->contribution_count);
+	for (ordinal = 0U;
+	     ordinal < ceremony->contribution_count; ++ordinal) {
+		size_t index;
+
+		selected = NULL;
+		for (index = 0U;
+		     index < manager->contribution_capacity; ++index) {
+			const struct pqcp_sovereign_key_contribution *entry =
+				&manager->contributions[index];
+
+			if (!entry->occupied || !entry->verified ||
+			    entry->ceremony_id != ceremony->ceremony_id ||
+			    !contribution_order_after(
+				    entry, previous_time,
+				    previous_custodian,
+				    have_previous) ||
+			    !contribution_order_before(entry, selected)) {
+				continue;
+			}
+			selected = entry;
+		}
+		if (selected == NULL) {
+			ret = -EBADMSG;
+			goto cleanup;
+		}
+		ret = contribution_leaf_digest(
+			ceremony, selected, leaf_digest);
+		if (ret != 0) {
+			goto cleanup;
+		}
+		offset = pqcp_sovereign_ceremony_encode_bytes(
+			body, sizeof(body), offset, leaf_digest,
+			sizeof(leaf_digest));
+		if (offset == 0U) {
+			ret = -EOVERFLOW;
+			goto cleanup;
+		}
+		previous_time = selected->submitted_at_ms;
+		ret = pqcp_sovereign_ceremony_copy_text(
+			previous_custodian,
+			sizeof(previous_custodian),
+			selected->custodian_id);
+		if (ret != 0) {
+			goto cleanup;
+		}
+		have_previous = true;
+	}
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
+
+cleanup:
+	pqcp_runtime_secure_zero(body, sizeof(body));
+	pqcp_runtime_secure_zero(open_digest, sizeof(open_digest));
+	pqcp_runtime_secure_zero(leaf_digest, sizeof(leaf_digest));
+	pqcp_runtime_secure_zero(
+		previous_custodian, sizeof(previous_custodian));
 	return ret;
 }
 
@@ -411,9 +568,7 @@ static bool contribution_shape_valid(
 	       pqcp_sovereign_ceremony_text_valid(
 		       contribution->custodian_id,
 		       sizeof(contribution->custodian_id)) &&
-	       pqcp_sovereign_ceremony_text_valid(
-		       contribution->role,
-		       sizeof(contribution->role)) &&
+	       ceremony_role_valid(contribution->role) &&
 	       contribution->submitted_at_ms != 0U &&
 	       contribution->credential_epoch != 0U &&
 	       !pqcp_sovereign_ceremony_digest_zero(
@@ -554,8 +709,7 @@ int pqcp_sovereign_key_ceremony_contribute(
 	if (ceremony_id == 0U ||
 	    !pqcp_sovereign_ceremony_text_valid(
 		    custodian_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_ceremony_text_valid(
-		    role, PQCP_SOVEREIGN_LABEL_MAX_CHARS) ||
+	    !ceremony_role_valid(role) ||
 	    credential_epoch == 0U ||
 	    contribution_digest == NULL ||
 	    proof_digest == NULL ||
@@ -638,16 +792,22 @@ int pqcp_sovereign_key_ceremony_contribute(
 	       sizeof(staged.proof_digest));
 	staged.verified = true;
 	staged.occupied = true;
-	ret = contribution_event_digest(
-		ceremony, &staged, next_digest);
-	if (ret != 0) {
-		unlock_manager(manager);
-		return ret;
-	}
 	manager->contributions[contribution_slot] = staged;
 	ceremony->contribution_count++;
 	if (new_role) {
 		ceremony->distinct_role_count++;
+	}
+	ret = ceremony_contribution_transcript_locked(
+		manager, ceremony, next_digest);
+	if (ret != 0) {
+		memset(&manager->contributions[contribution_slot], 0,
+		       sizeof(manager->contributions[contribution_slot]));
+		ceremony->contribution_count--;
+		if (new_role) {
+			ceremony->distinct_role_count--;
+		}
+		unlock_manager(manager);
+		return ret;
 	}
 	memcpy(ceremony->transcript_digest, next_digest,
 	       sizeof(ceremony->transcript_digest));
@@ -834,12 +994,17 @@ static int audit_contributions_locked(
 	const struct pqcp_sovereign_key_ceremony_manager *manager,
 	const struct pqcp_sovereign_key_ceremony *ceremony)
 {
+	struct pqcp_sovereign_key_ceremony transcript_source;
+	uint8_t base_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
+	uint8_t expected_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
+	uint8_t zero_digest[PQCP_SOVEREIGN_DIGEST_BYTES] = { 0 };
 	uint32_t count = contribution_count_locked(
 		manager, ceremony->ceremony_id);
 	uint32_t roles = distinct_role_count_locked(
 		manager, ceremony->ceremony_id);
 	size_t left;
 	size_t right;
+	int ret;
 
 	if (count != ceremony->contribution_count ||
 	    roles != ceremony->distinct_role_count) {
@@ -873,7 +1038,43 @@ static int audit_contributions_locked(
 			}
 		}
 	}
-	return 0;
+	ret = ceremony_contribution_transcript_locked(
+		manager, ceremony, base_digest);
+	if (ret != 0) {
+		goto cleanup;
+	}
+	if (ceremony->state == PQCP_SOVEREIGN_CEREMONY_COMMITTED ||
+	    ceremony->state == PQCP_SOVEREIGN_CEREMONY_ABORTED) {
+		transcript_source = *ceremony;
+		memcpy(transcript_source.transcript_digest, base_digest,
+		       sizeof(transcript_source.transcript_digest));
+		ret = ceremony_terminal_digest(
+			&transcript_source,
+			ceremony->state ==
+				PQCP_SOVEREIGN_CEREMONY_COMMITTED ?
+				COMMIT_DOMAIN : ABORT_DOMAIN,
+			ceremony->state ==
+				PQCP_SOVEREIGN_CEREMONY_COMMITTED ?
+				ceremony->committed_key_digest :
+				zero_digest,
+			expected_digest);
+	} else {
+		memcpy(expected_digest, base_digest,
+		       sizeof(expected_digest));
+	}
+	if (ret == 0 &&
+	    !pqcp_sovereign_ceremony_digest_equal(
+		    expected_digest, ceremony->transcript_digest)) {
+		ret = -EBADMSG;
+	}
+
+cleanup:
+	pqcp_runtime_secure_zero(base_digest, sizeof(base_digest));
+	pqcp_runtime_secure_zero(
+		expected_digest, sizeof(expected_digest));
+	pqcp_runtime_secure_zero(
+		&transcript_source, sizeof(transcript_source));
+	return ret;
 }
 
 int pqcp_sovereign_key_ceremony_manager_audit(

@@ -36,6 +36,30 @@ static bool approval_terminal(enum pqcp_sovereign_approval_state state)
 	       state == PQCP_SOVEREIGN_APPROVAL_CANCELLED;
 }
 
+static bool approval_role_valid(const char *role)
+{
+	static const char *const roles[] = {
+		"security-officer",
+		"key-custodian",
+		"policy-owner",
+		"auditor",
+		"recovery-officer",
+		"privacy-steward",
+	};
+	size_t index;
+
+	if (!pqcp_sovereign_ceremony_text_valid(
+		    role, PQCP_SOVEREIGN_LABEL_MAX_CHARS)) {
+		return false;
+	}
+	for (index = 0U; index < ARRAY_SIZE(roles); ++index) {
+		if (strcmp(role, roles[index]) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool request_shape_valid(
 	const struct pqcp_sovereign_approval_request *request)
 {
@@ -79,6 +103,12 @@ static bool request_shape_valid(
 		    request->required_distinct_roles) {
 		return false;
 	}
+	if (request->state == PQCP_SOVEREIGN_APPROVAL_REJECTED &&
+	    request->approval_count >= request->required_approvals &&
+	    request->distinct_role_count >=
+		    request->required_distinct_roles) {
+		return false;
+	}
 	return true;
 }
 
@@ -91,8 +121,7 @@ static bool vote_shape_valid(
 	       vote->request_id != 0U &&
 	       pqcp_sovereign_ceremony_text_valid(
 		       vote->approver_id, sizeof(vote->approver_id)) &&
-	       pqcp_sovereign_ceremony_text_valid(
-		       vote->role, sizeof(vote->role)) &&
+	       approval_role_valid(vote->role) &&
 	       vote->capabilities != 0U &&
 	       vote->voted_at_ms != 0U &&
 	       vote->credential_epoch != 0U &&
@@ -218,6 +247,21 @@ static uint32_t request_vote_count_locked(
 	return count;
 }
 
+static uint32_t free_vote_count_locked(
+	const struct pqcp_sovereign_approval_quorum *quorum)
+{
+	uint32_t count = 0U;
+	size_t index;
+
+	for (index = 0U; index < quorum->vote_capacity; ++index) {
+		if (!quorum->votes[index].occupied &&
+		    count != UINT32_MAX) {
+			count++;
+		}
+	}
+	return count;
+}
+
 static uint32_t request_approval_count_locked(
 	const struct pqcp_sovereign_approval_quorum *quorum,
 	uint64_t request_id)
@@ -301,17 +345,30 @@ static bool request_can_still_satisfy_locked(
 		quorum, request->request_id);
 	const uint32_t approvals = request_approval_count_locked(
 		quorum, request->request_id);
-	uint32_t remaining;
+	const uint32_t distinct_roles =
+		request_distinct_role_count_locked(
+			quorum, request->request_id);
+	uint32_t remaining = free_vote_count_locked(quorum);
+	uint32_t request_slots;
 
 	if (cast >= PQCP_SOVEREIGN_MAX_APPROVERS) {
-		remaining = 0U;
+		request_slots = 0U;
 	} else {
-		remaining = PQCP_SOVEREIGN_MAX_APPROVERS - cast;
+		request_slots = PQCP_SOVEREIGN_MAX_APPROVERS - cast;
 	}
-	if (approvals >= request->required_approvals) {
-		return true;
+	if (remaining > request_slots) {
+		remaining = request_slots;
 	}
-	return remaining >= request->required_approvals - approvals;
+	if (approvals < request->required_approvals &&
+	    remaining < request->required_approvals - approvals) {
+		return false;
+	}
+	if (distinct_roles < request->required_distinct_roles &&
+	    remaining <
+		    request->required_distinct_roles - distinct_roles) {
+		return false;
+	}
+	return true;
 }
 
 static void refresh_request_locked(
@@ -380,8 +437,7 @@ static int validate_vote_arguments(
 {
 	if (!pqcp_sovereign_ceremony_text_valid(
 		    approver_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_ceremony_text_valid(
-		    role, PQCP_SOVEREIGN_LABEL_MAX_CHARS) ||
+	    !approval_role_valid(role) ||
 	    capabilities == 0U ||
 	    credential_epoch == 0U ||
 	    vote_digest == NULL ||
