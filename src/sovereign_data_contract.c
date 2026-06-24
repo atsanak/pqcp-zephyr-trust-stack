@@ -51,7 +51,7 @@ static bool contract_valid(
 	       contract->state == PQCP_SOVEREIGN_LIFECYCLE_ACTIVE;
 }
 
-static ssize_t contract_index_locked(
+static int contract_index_locked(
 	const struct pqcp_sovereign_data_contract_manager *manager,
 	uint64_t contract_id)
 {
@@ -61,20 +61,20 @@ static ssize_t contract_index_locked(
 		if (manager->contracts[index].occupied &&
 		    manager->contracts[index].contract_id ==
 			    contract_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_contract_index_locked(
+static int free_contract_index_locked(
 	const struct pqcp_sovereign_data_contract_manager *manager)
 {
 	size_t index;
 
 	for (index = 0U; index < manager->capacity; ++index) {
 		if (!manager->contracts[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -139,7 +139,7 @@ int pqcp_sovereign_data_contract_put(
 {
 	struct pqcp_sovereign_data_contract candidate;
 	const struct pqcp_sovereign_data_contract *existing = NULL;
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    !contract_valid(contract, now_ms)) {
@@ -227,7 +227,7 @@ int pqcp_sovereign_data_contract_authorize(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_data_contract *contract;
-	ssize_t index;
+	int index;
 	int ret = 0;
 
 	if (manager == NULL || !manager->initialized ||
@@ -294,7 +294,7 @@ int pqcp_sovereign_data_contract_revoke(
 	struct pqcp_sovereign_data_contract_manager *manager,
 	uint64_t contract_id)
 {
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    contract_id == 0U) {

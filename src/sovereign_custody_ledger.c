@@ -47,7 +47,7 @@ static bool custody_action_valid(const char *action)
 	};
 	size_t index;
 
-	if (!pqcp_sovereign_internal_text_valid(
+	if (!pqcp_sovereign_ceremony_text_valid(
 		    action, PQCP_SOVEREIGN_LABEL_MAX_CHARS)) {
 		return false;
 	}
@@ -68,39 +68,39 @@ static int custody_event_digest(
 	int ret;
 
 	memset(body, 0, sizeof(body));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, CUSTODY_EVENT_DOMAIN,
 		sizeof(CUSTODY_EVENT_DOMAIN));
-	offset = pqcp_sovereign_internal_encode_u32(
+	offset = pqcp_sovereign_ceremony_encode_u32(
 		body, sizeof(body), offset, event->schema_version);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, event->sequence);
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, event->key_id,
 		sizeof(event->key_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, event->custodian_id,
 		sizeof(event->custodian_id));
-	offset = pqcp_sovereign_internal_encode_text(
+	offset = pqcp_sovereign_ceremony_encode_text(
 		body, sizeof(body), offset, event->action,
 		sizeof(event->action));
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, event->key_epoch);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, event->timestamp_ms);
-	offset = pqcp_sovereign_internal_encode_u64(
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, event->policy_epoch);
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, event->evidence_digest,
 		sizeof(event->evidence_digest));
-	offset = pqcp_sovereign_internal_encode_bytes(
+	offset = pqcp_sovereign_ceremony_encode_bytes(
 		body, sizeof(body), offset, event->previous_digest,
 		sizeof(event->previous_digest));
 	if (offset == 0U || offset > sizeof(body)) {
 		pqcp_runtime_secure_zero(body, sizeof(body));
 		return -EOVERFLOW;
 	}
-	ret = pqcp_sovereign_internal_hash(body, offset, digest);
+	ret = pqcp_sovereign_ceremony_hash(body, offset, digest);
 	pqcp_runtime_secure_zero(body, sizeof(body));
 	return ret;
 }
@@ -114,24 +114,24 @@ static bool custody_event_shape_valid(
 	if (event == NULL || !event->occupied ||
 	    event->schema_version != PQCP_SOVEREIGN_SCHEMA_VERSION ||
 	    event->sequence == 0U ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    event->key_id, sizeof(event->key_id)) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    event->custodian_id, sizeof(event->custodian_id)) ||
 	    !custody_action_valid(event->action) ||
 	    event->key_epoch == 0U ||
 	    event->timestamp_ms == 0U ||
 	    event->policy_epoch == 0U ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    event->evidence_digest) ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    event->event_digest)) {
 		return false;
 	}
 	if (custody_event_digest(event, expected) != 0) {
 		return false;
 	}
-	valid = pqcp_sovereign_internal_digest_equal(
+	valid = pqcp_sovereign_ceremony_digest_equal(
 		expected, event->event_digest);
 	pqcp_runtime_secure_zero(expected, sizeof(expected));
 	return valid;
@@ -210,14 +210,14 @@ int pqcp_sovereign_custody_append(
 	struct pqcp_sovereign_custody_event staged;
 	int ret;
 
-	if (!pqcp_sovereign_internal_text_valid(
+	if (!pqcp_sovereign_ceremony_text_valid(
 		    key_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
-	    !pqcp_sovereign_internal_text_valid(
+	    !pqcp_sovereign_ceremony_text_valid(
 		    custodian_id, PQCP_SOVEREIGN_ID_MAX_CHARS) ||
 	    !custody_action_valid(action) ||
 	    key_epoch == 0U || policy_epoch == 0U ||
 	    evidence_digest == NULL ||
-	    pqcp_sovereign_internal_digest_zero(
+	    pqcp_sovereign_ceremony_digest_zero(
 		    evidence_digest) ||
 	    now_ms == 0U) {
 		return -EINVAL;
@@ -236,15 +236,15 @@ int pqcp_sovereign_custody_append(
 	memset(&staged, 0, sizeof(staged));
 	staged.schema_version = PQCP_SOVEREIGN_SCHEMA_VERSION;
 	staged.sequence = ledger->next_sequence;
-	ret = pqcp_sovereign_internal_copy_text(
+	ret = pqcp_sovereign_ceremony_copy_text(
 		staged.key_id, sizeof(staged.key_id), key_id);
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.custodian_id,
 			sizeof(staged.custodian_id), custodian_id);
 	}
 	if (ret == 0) {
-		ret = pqcp_sovereign_internal_copy_text(
+		ret = pqcp_sovereign_ceremony_copy_text(
 			staged.action, sizeof(staged.action), action);
 	}
 	if (ret != 0) {
@@ -339,14 +339,14 @@ static int verify_chain_locked(
 
 		if (!custody_event_shape_valid(entry) ||
 		    entry->sequence != expected_sequence ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    previous, entry->previous_digest)) {
 			ret = -EBADMSG;
 			break;
 		}
 		ret = custody_event_digest(entry, expected);
 		if (ret != 0 ||
-		    !pqcp_sovereign_internal_digest_equal(
+		    !pqcp_sovereign_ceremony_digest_equal(
 			    expected, entry->event_digest)) {
 			ret = ret != 0 ? ret : -EBADMSG;
 			break;
@@ -360,7 +360,7 @@ static int verify_chain_locked(
 		expected_sequence++;
 	}
 	if (ret == 0 &&
-	    !pqcp_sovereign_internal_digest_equal(
+	    !pqcp_sovereign_ceremony_digest_equal(
 		    previous, ledger->chain_head)) {
 		ret = -EBADMSG;
 	}
@@ -400,7 +400,7 @@ int pqcp_sovereign_custody_verify(
 		return -EBADMSG;
 	}
 	if (ledger->count == 0U) {
-		if (!pqcp_sovereign_internal_digest_zero(
+		if (!pqcp_sovereign_ceremony_digest_zero(
 			    ledger->chain_head) ||
 		    ledger->next_sequence != 1U ||
 		    ledger->dropped_count != 0U) {

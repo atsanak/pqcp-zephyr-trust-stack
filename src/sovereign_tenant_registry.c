@@ -185,7 +185,7 @@ static bool tenant_input_valid(
 	return true;
 }
 
-static ssize_t tenant_index_locked(
+static int tenant_index_locked(
 	const struct pqcp_sovereign_tenant_registry *registry,
 	const char *tenant_id)
 {
@@ -195,20 +195,20 @@ static ssize_t tenant_index_locked(
 		if (registry->tenants[index].occupied &&
 		    strcmp(registry->tenants[index].tenant_id,
 			   tenant_id) == 0) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_tenant_index_locked(
+static int free_tenant_index_locked(
 	const struct pqcp_sovereign_tenant_registry *registry)
 {
 	size_t index;
 
 	for (index = 0U; index < registry->capacity; ++index) {
 		if (!registry->tenants[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -241,7 +241,7 @@ static bool tenant_parent_valid_locked(
 	const struct pqcp_sovereign_tenant_registry *registry,
 	const struct pqcp_sovereign_tenant *tenant)
 {
-	ssize_t parent_index;
+	int parent_index;
 	const struct pqcp_sovereign_tenant *parent;
 
 	if (tenant->parent_tenant_id[0] == '\0') {
@@ -300,7 +300,7 @@ int pqcp_sovereign_tenant_register(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_tenant candidate;
-	ssize_t index;
+	int index;
 	int ret;
 
 	if (registry == NULL || !registry->initialized ||
@@ -352,7 +352,7 @@ int pqcp_sovereign_tenant_find(
 	const char *tenant_id,
 	struct pqcp_sovereign_tenant **tenant)
 {
-	ssize_t index;
+	int index;
 
 	if (registry == NULL || !registry->initialized ||
 	    !pqcp_sovereign_privacy_text_valid(
@@ -381,7 +381,7 @@ int pqcp_sovereign_tenant_authorize(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_tenant *tenant;
-	ssize_t index;
+	int index;
 	int ret = 0;
 
 	if (registry == NULL || !registry->initialized ||
@@ -449,7 +449,7 @@ int pqcp_sovereign_tenant_set_state(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_tenant *tenant;
-	ssize_t index;
+	int index;
 	int ret;
 
 	if (registry == NULL || !registry->initialized ||
@@ -670,7 +670,7 @@ static int federation_digest(
 		parts, lengths, ARRAY_SIZE(parts), output);
 }
 
-static ssize_t federation_grant_index_locked(
+static int federation_grant_index_locked(
 	const struct pqcp_sovereign_federation_manager *manager,
 	uint64_t grant_id)
 {
@@ -679,20 +679,20 @@ static ssize_t federation_grant_index_locked(
 	for (index = 0U; index < manager->capacity; ++index) {
 		if (manager->grants[index].occupied &&
 		    manager->grants[index].grant_id == grant_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_federation_index_locked(
+static int free_federation_index_locked(
 	const struct pqcp_sovereign_federation_manager *manager)
 {
 	size_t index;
 
 	for (index = 0U; index < manager->capacity; ++index) {
 		if (!manager->grants[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -726,7 +726,7 @@ int pqcp_sovereign_federation_grant_issue(
 	struct pqcp_sovereign_federation_grant **stored)
 {
 	struct pqcp_sovereign_federation_grant candidate;
-	ssize_t index;
+	int index;
 	int ret;
 
 	if (manager == NULL || !manager->initialized ||
@@ -857,7 +857,7 @@ int pqcp_sovereign_federation_grant_revoke(
 	struct pqcp_sovereign_federation_manager *manager,
 	uint64_t grant_id)
 {
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    grant_id == 0U) {

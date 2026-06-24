@@ -11,7 +11,7 @@
 #include <limits.h>
 #include <string.h>
 
-static ssize_t namespace_index_locked(
+static int namespace_index_locked(
 	const struct pqcp_sovereign_namespace_manager *manager,
 	const char *namespace_id)
 {
@@ -21,26 +21,26 @@ static ssize_t namespace_index_locked(
 		if (manager->namespaces[index].occupied &&
 		    strcmp(manager->namespaces[index].namespace_id,
 			   namespace_id) == 0) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_namespace_index_locked(
+static int free_namespace_index_locked(
 	const struct pqcp_sovereign_namespace_manager *manager)
 {
 	size_t index;
 
 	for (index = 0U; index < manager->capacity; ++index) {
 		if (!manager->namespaces[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t tenant_index_locked(
+static int tenant_index_locked(
 	const struct pqcp_sovereign_tenant_registry *registry,
 	const char *tenant_id)
 {
@@ -50,7 +50,7 @@ static ssize_t tenant_index_locked(
 		if (registry->tenants[index].occupied &&
 		    strcmp(registry->tenants[index].tenant_id,
 			   tenant_id) == 0) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -181,8 +181,8 @@ int pqcp_sovereign_namespace_create(
 {
 	struct pqcp_sovereign_namespace candidate;
 	struct pqcp_sovereign_tenant *tenant;
-	ssize_t tenant_slot;
-	ssize_t namespace_slot;
+	int tenant_slot;
+	int namespace_slot;
 	int ret;
 
 	if (manager == NULL || !manager->initialized ||
@@ -258,7 +258,7 @@ int pqcp_sovereign_namespace_find(
 	const char *namespace_id,
 	struct pqcp_sovereign_namespace **namespace_value)
 {
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    !pqcp_sovereign_privacy_text_valid(
@@ -283,7 +283,7 @@ int pqcp_sovereign_namespace_reserve_workload(
 	uint64_t storage_bytes)
 {
 	struct pqcp_sovereign_namespace *namespace_value;
-	ssize_t index;
+	int index;
 	int ret = 0;
 
 	if (manager == NULL || !manager->initialized ||
@@ -327,7 +327,7 @@ int pqcp_sovereign_namespace_release_workload(
 	uint64_t storage_bytes)
 {
 	struct pqcp_sovereign_namespace *namespace_value;
-	ssize_t index;
+	int index;
 	int ret = 0;
 
 	if (manager == NULL || !manager->initialized ||
@@ -367,7 +367,7 @@ int pqcp_sovereign_namespace_authorize(
 	uint64_t now_ms)
 {
 	const struct pqcp_sovereign_namespace *namespace_value;
-	ssize_t index;
+	int index;
 	int ret = 0;
 
 	if (manager == NULL || !manager->initialized ||

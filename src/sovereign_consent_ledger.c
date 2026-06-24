@@ -11,7 +11,7 @@
 #include <limits.h>
 #include <string.h>
 
-static ssize_t consent_index_locked(
+static int consent_index_locked(
 	const struct pqcp_sovereign_consent_ledger *ledger,
 	uint64_t consent_id)
 {
@@ -20,20 +20,20 @@ static ssize_t consent_index_locked(
 	for (index = 0U; index < ledger->capacity; ++index) {
 		if (ledger->records[index].occupied &&
 		    ledger->records[index].consent_id == consent_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_consent_index_locked(
+static int free_consent_index_locked(
 	const struct pqcp_sovereign_consent_ledger *ledger)
 {
 	size_t index;
 
 	for (index = 0U; index < ledger->capacity; ++index) {
 		if (!ledger->records[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -135,7 +135,7 @@ int pqcp_sovereign_consent_grant(
 	struct pqcp_sovereign_consent_record **record)
 {
 	struct pqcp_sovereign_consent_record candidate;
-	ssize_t index;
+	int index;
 	int ret;
 
 	if (ledger == NULL || !ledger->initialized || record == NULL ||
@@ -275,7 +275,7 @@ int pqcp_sovereign_consent_revoke(
 	uint64_t now_ms)
 {
 	struct pqcp_sovereign_consent_record *record;
-	ssize_t index;
+	int index;
 
 	if (ledger == NULL || !ledger->initialized ||
 	    consent_id == 0U || now_ms == 0U) {

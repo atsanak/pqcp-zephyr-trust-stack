@@ -30,7 +30,7 @@ static bool retention_rule_valid(
 	       rule->priority != 0U && rule->enabled;
 }
 
-static ssize_t retention_rule_index_locked(
+static int retention_rule_index_locked(
 	const struct pqcp_sovereign_retention_manager *manager,
 	uint32_t rule_id)
 {
@@ -39,26 +39,26 @@ static ssize_t retention_rule_index_locked(
 	for (index = 0U; index < manager->rule_capacity; ++index) {
 		if (manager->rules[index].enabled &&
 		    manager->rules[index].rule_id == rule_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_rule_index_locked(
+static int free_rule_index_locked(
 	const struct pqcp_sovereign_retention_manager *manager)
 {
 	size_t index;
 
 	for (index = 0U; index < manager->rule_capacity; ++index) {
 		if (!manager->rules[index].enabled) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t retention_record_index_locked(
+static int retention_record_index_locked(
 	const struct pqcp_sovereign_retention_manager *manager,
 	uint64_t record_id)
 {
@@ -67,20 +67,20 @@ static ssize_t retention_record_index_locked(
 	for (index = 0U; index < manager->record_capacity; ++index) {
 		if (manager->records[index].occupied &&
 		    manager->records[index].record_id == record_id) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
 }
 
-static ssize_t free_record_index_locked(
+static int free_record_index_locked(
 	const struct pqcp_sovereign_retention_manager *manager)
 {
 	size_t index;
 
 	for (index = 0U; index < manager->record_capacity; ++index) {
 		if (!manager->records[index].occupied) {
-			return (ssize_t)index;
+			return (int)index;
 		}
 	}
 	return -1;
@@ -188,7 +188,7 @@ int pqcp_sovereign_retention_rule_put(
 	const struct pqcp_sovereign_retention_rule *rule)
 {
 	struct pqcp_sovereign_retention_rule candidate;
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    !retention_rule_valid(rule)) {
@@ -223,7 +223,7 @@ int pqcp_sovereign_retention_track(
 {
 	const struct pqcp_sovereign_retention_rule *rule;
 	struct pqcp_sovereign_retention_record candidate;
-	ssize_t index;
+	int index;
 	uint64_t delete_after_ms;
 	int ret;
 
@@ -311,7 +311,7 @@ int pqcp_sovereign_retention_hold(
 	uint64_t hold_until_ms)
 {
 	struct pqcp_sovereign_retention_record *record;
-	ssize_t index;
+	int index;
 
 	if (manager == NULL || !manager->initialized ||
 	    record_id == 0U || hold_until_ms == 0U) {
@@ -367,7 +367,7 @@ int pqcp_sovereign_retention_mark_deleted(
 {
 	struct pqcp_sovereign_retention_record *record;
 	uint64_t minimum_deadline;
-	ssize_t index;
+	int index;
 	int ret;
 
 	if (manager == NULL || !manager->initialized ||
