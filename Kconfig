@@ -976,6 +976,14 @@ config PQCP_ADAPTIVE_CONTROL
 	  This option does not load implementations dynamically, execute
 	  cryptographic operations by itself, change the selected provider, or
 	  alter the ACVP and PQCP_METRIC wire formats.
+
+endmenu
+
+# =============================================================================
+# Firmware Capability Extension and Adversarial Evidence
+# =============================================================================
+menu "Firmware Capability Extension and Adversarial Evidence"
+
 config PQCP_CAPABILITY_EXTENSION
 	bool "Enable extended firmware capability plane"
 	depends on PQCP_CAPABILITY_DESCRIPTOR
