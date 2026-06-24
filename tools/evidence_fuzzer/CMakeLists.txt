@@ -47,6 +47,9 @@ add_library(fuzz_targets OBJECT
     ${PQCP_VERIFIER_DIR}/src/signature_check.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_verdict_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_seal_replay.c
+    ${PQCP_MODULE_ROOT}/src/deployment_assurance_passport_replay.c
+    ${PQCP_MODULE_ROOT}/src/deployment_tamper_matrix_replay.c
+    ${PQCP_MODULE_ROOT}/src/deployment_evidence_trail_replay.c
 )
 target_include_directories(fuzz_targets PRIVATE
     ${PQCP_VERIFIER_DIR}/shim
