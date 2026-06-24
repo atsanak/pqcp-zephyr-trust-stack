@@ -204,12 +204,17 @@ struct pqcp_sovereign_ceremony_binding_internal {
 	struct pqcp_runtime_key_handle committed_key;
 	uint8_t target_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
 	uint8_t authorization_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
+	uint8_t execution_receipt_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
+	uint8_t execution_evidence_digest[PQCP_SOVEREIGN_DIGEST_BYTES];
 	uint8_t capability[PQCP_CRYPTO_BROKER_TOKEN_BYTES];
 	char principal_id[PQCP_CRYPTO_BROKER_ID_MAX_CHARS];
 	uint64_t created_at_ms;
 	uint64_t expires_at_ms;
+	uint64_t executed_at_ms;
 	uint64_t policy_epoch;
 	uint64_t revocation_epoch;
+	int result;
+	bool terminal;
 	bool executed;
 	bool occupied;
 };
@@ -235,6 +240,7 @@ struct pqcp_sovereign_secret_reference_internal {
 	char key_id[PQCP_SOVEREIGN_ID_MAX_CHARS];
 	struct pqcp_runtime_key_handle key_handle;
 	uint64_t key_epoch;
+	uint64_t policy_epoch;
 	uint64_t issued_at_ms;
 	uint64_t expires_at_ms;
 	uint32_t permissions;

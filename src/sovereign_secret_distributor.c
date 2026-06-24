@@ -617,6 +617,8 @@ static int reference_digest(
 	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->key_epoch);
 	offset = pqcp_sovereign_ceremony_encode_u64(
+		body, sizeof(body), offset, reference->policy_epoch);
+	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->issued_at_ms);
 	offset = pqcp_sovereign_ceremony_encode_u64(
 		body, sizeof(body), offset, reference->expires_at_ms);
@@ -745,6 +747,7 @@ int pqcp_sovereign_secret_reference_bind_internal(
 	}
 	staged.key_handle = *key_handle;
 	staged.key_epoch = grant.key_epoch;
+	staged.policy_epoch = grant.policy_epoch;
 	staged.issued_at_ms = grant.issued_at_ms;
 	staged.expires_at_ms = grant.expires_at_ms;
 	staged.permissions = grant.permissions;
@@ -757,13 +760,16 @@ int pqcp_sovereign_secret_reference_bind_internal(
 		unlock_reference_store(store);
 		return ret;
 	}
-	store->references[slot] = staged;
-	unlock_reference_store(store);
-	return pqcp_sovereign_custody_append(
+	ret = pqcp_sovereign_custody_append(
 		store->custody, staged.key_id, staged.recipient_id,
 		"secret-granted", staged.key_epoch,
 		grant.policy_epoch, staged.reference_digest, now_ms,
 		NULL);
+	if (ret == 0) {
+		store->references[slot] = staged;
+	}
+	unlock_reference_store(store);
+	return ret;
 }
 
 int pqcp_sovereign_secret_reference_authorize_internal(
