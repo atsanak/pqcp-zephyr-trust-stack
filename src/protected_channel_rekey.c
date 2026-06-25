@@ -143,16 +143,24 @@ static uint8_t *direction_nonce_base(
 static void record_retired_direction(
 	struct pqcp_channel_rekey_context *context,
 	enum pqcp_channel_role direction,
-	const struct pqcp_runtime_key_handle *handle)
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t nonce[PQCP_CHANNEL_AEAD_NONCE_BYTES])
 {
 	struct pqcp_runtime_key_handle *retired =
 		direction_handle(&context->retired_keys, direction);
+	uint8_t *retired_nonce =
+		direction_nonce_base(
+			&context->retired_keys, direction);
 
 	if (handle == NULL ||
-	    !pqcp_runtime_key_handle_is_valid(handle)) {
+	    !pqcp_runtime_key_handle_is_valid(handle) ||
+	    nonce == NULL) {
 		return;
 	}
 	*retired = *handle;
+	memcpy(retired_nonce, nonce,
+	       PQCP_CHANNEL_AEAD_NONCE_BYTES);
+	context->retired_keys.traffic_keys_ready = true;
 	context->cleanup_pending = true;
 }
 
@@ -177,19 +185,10 @@ static void finalize_rekey(
 	context->pending_epoch = 0U;
 	context->prepared_at_ms = now_ms;
 	context->committed_at_ms = now_ms;
-	context->expires_at_ms = 0U;
 	context->bytes_at_prepare = 0U;
 	context->local_direction_committed = false;
 	context->peer_direction_committed = false;
 	context->pending_peer_receive = false;
-	pqcp_runtime_secure_zero(
-		context->salt, sizeof(context->salt));
-	pqcp_runtime_secure_zero(
-		context->confirmation,
-		sizeof(context->confirmation));
-	pqcp_runtime_secure_zero(
-		context->expected_peer_confirmation,
-		sizeof(context->expected_peer_confirmation));
 }
 
 static int commit_direction(
@@ -201,6 +200,7 @@ static int commit_direction(
 	struct pqcp_runtime_key_handle *active_handle;
 	struct pqcp_runtime_key_handle *pending_handle;
 	struct pqcp_runtime_key_handle old_handle;
+	uint8_t old_nonce[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	uint8_t *active_nonce;
 	uint8_t *pending_nonce;
 	bool local_direction;
@@ -232,6 +232,7 @@ static int commit_direction(
 		return -EBADMSG;
 	}
 	old_handle = *active_handle;
+	memcpy(old_nonce, active_nonce, sizeof(old_nonce));
 	*active_handle = *pending_handle;
 	memcpy(active_nonce, pending_nonce,
 	       PQCP_CHANNEL_AEAD_NONCE_BYTES);
@@ -239,7 +240,9 @@ static int commit_direction(
 	pqcp_runtime_secure_zero(
 		pending_nonce, PQCP_CHANNEL_AEAD_NONCE_BYTES);
 	record_retired_direction(
-		context, direction, &old_handle);
+		context, direction, &old_handle, old_nonce);
+	pqcp_runtime_secure_zero(
+		old_nonce, sizeof(old_nonce));
 	if (local_direction) {
 		context->local_direction_committed = true;
 	} else {
@@ -250,7 +253,6 @@ static int commit_direction(
 	    context->peer_direction_committed) {
 		finalize_rekey(channel, context, now_ms);
 	}
-	(void)pqcp_channel_rekey_cleanup(context);
 	return 0;
 }
 
@@ -597,28 +599,28 @@ int pqcp_channel_rekey_prepare(
 	    context->state != PQCP_CHANNEL_REKEY_ABORTED) {
 		return -EBUSY;
 	}
-		if (next_epoch <= context->current_epoch) {
-			return -EALREADY;
-		}
-		if (context->prepared_at_ms != 0U &&
-		    now_ms < context->prepared_at_ms) {
-			return -ERANGE;
-		}
-		if (context->prepared_at_ms != 0U &&
-		    now_ms - context->prepared_at_ms <
-			    policy->minimum_interval_ms) {
-			return -EAGAIN;
-		}
-		ret = safe_add_ms(
-			now_ms,
-			(uint64_t)policy->handshake_timeout_ms,
-			&expires_at_ms);
-		if (ret != 0) {
-			return ret;
-		}
-		current_epoch = context->current_epoch;
-		ret = destroy_pending_keys(context);
-		if (ret != 0) {
+	if (next_epoch <= context->current_epoch) {
+		return -EALREADY;
+	}
+	if (context->prepared_at_ms != 0U &&
+	    now_ms < context->prepared_at_ms) {
+		return -ERANGE;
+	}
+	if (context->prepared_at_ms != 0U &&
+	    now_ms - context->prepared_at_ms <
+		    policy->minimum_interval_ms) {
+		return -EAGAIN;
+	}
+	ret = safe_add_ms(
+		now_ms,
+		(uint64_t)policy->handshake_timeout_ms,
+		&expires_at_ms);
+	if (ret != 0) {
+		return ret;
+	}
+	current_epoch = context->current_epoch;
+	ret = destroy_pending_keys(context);
+	if (ret != 0) {
 		context->last_cleanup_error = ret;
 		context->cleanup_failures++;
 		return ret;
@@ -854,44 +856,67 @@ int pqcp_channel_rekey_audit(
 	const struct pqcp_channel *channel,
 	const struct pqcp_channel_rekey_context *context)
 {
+	const bool active_exchange =
+		context != NULL &&
+		(context->state == PQCP_CHANNEL_REKEY_PREPARED ||
+		 context->state == PQCP_CHANNEL_REKEY_ACCEPTED);
+	bool client_pending_required = false;
+	bool server_pending_required = false;
+
 	if (channel == NULL || context == NULL ||
 	    context->schema_version !=
 		    PQCP_CHANNEL_OPERATION_SCHEMA_VERSION ||
 	    context->state < PQCP_CHANNEL_REKEY_IDLE ||
 	    context->state > PQCP_CHANNEL_REKEY_ABORTED ||
 	    (context->pending_epoch != 0U &&
-	     context->pending_epoch <=
-		     context->current_epoch)) {
+		     context->pending_epoch <=
+			     context->current_epoch)) {
 		return -EINVAL;
 	}
-		if ((context->state ==
-			     PQCP_CHANNEL_REKEY_PREPARED ||
-		     context->state ==
-			     PQCP_CHANNEL_REKEY_ACCEPTED) &&
-	    (!context->pending_keys.traffic_keys_ready ||
-	     !pqcp_runtime_key_handle_is_valid(
-		     &context->pending_keys.client_write_key) ||
-	     !pqcp_runtime_key_handle_is_valid(
-		     &context->pending_keys.server_write_key) ||
-	     context->key_store == NULL ||
-		     context->prepared_at_ms == 0U ||
-		     context->expires_at_ms <=
-			     context->prepared_at_ms)) {
+	if (active_exchange) {
+		if (!context->pending_keys.traffic_keys_ready ||
+		    context->key_store == NULL ||
+		    context->prepared_at_ms == 0U ||
+		    context->expires_at_ms <=
+			    context->prepared_at_ms) {
 			return -EBADMSG;
 		}
-		if ((context->local_direction_committed ||
-		     context->peer_direction_committed) &&
-		    context->state !=
-			    PQCP_CHANNEL_REKEY_ACCEPTED) {
+		client_pending_required =
+			channel->config.role ==
+				PQCP_CHANNEL_ROLE_CLIENT ?
+				!context->local_direction_committed :
+				!context->peer_direction_committed;
+		server_pending_required =
+			channel->config.role ==
+				PQCP_CHANNEL_ROLE_SERVER ?
+				!context->local_direction_committed :
+				!context->peer_direction_committed;
+		if ((client_pending_required &&
+		     !pqcp_runtime_key_handle_is_valid(
+			     &context->pending_keys.client_write_key)) ||
+		    (server_pending_required &&
+		     !pqcp_runtime_key_handle_is_valid(
+			     &context->pending_keys.server_write_key))) {
 			return -EBADMSG;
 		}
-		if (context->state ==
-			    PQCP_CHANNEL_REKEY_COMMITTED &&
-		    !channel->keys.traffic_keys_ready) {
-			return -EBADMSG;
-		}
+	}
+	if ((context->local_direction_committed ||
+	     context->peer_direction_committed) &&
+	    context->state !=
+		    PQCP_CHANNEL_REKEY_ACCEPTED) {
+		return -EBADMSG;
+	}
+	if (context->state ==
+		    PQCP_CHANNEL_REKEY_COMMITTED &&
+	    (!channel->keys.traffic_keys_ready ||
+	     context->committed_at_ms == 0U ||
+	     context->expires_at_ms <
+		     context->committed_at_ms)) {
+		return -EBADMSG;
+	}
 	if (context->cleanup_pending &&
 	    (context->key_store == NULL ||
+	     !context->retired_keys.traffic_keys_ready ||
 	     (!pqcp_runtime_key_handle_is_valid(
 		      &context->retired_keys.client_write_key) &&
 	      !pqcp_runtime_key_handle_is_valid(
@@ -899,18 +924,18 @@ int pqcp_channel_rekey_audit(
 		return -EBADMSG;
 	}
 	if (context->pending_cleanup &&
-	    (!pqcp_runtime_key_handle_is_valid(
+		    (!pqcp_runtime_key_handle_is_valid(
 		      &context->pending_keys.client_write_key) &&
-		     !pqcp_runtime_key_handle_is_valid(
+	     !pqcp_runtime_key_handle_is_valid(
 			      &context->pending_keys.server_write_key))) {
-			return -EBADMSG;
-		}
-		if (context->pending_peer_receive &&
-		    !pqcp_runtime_key_handle_is_valid(
-			    const_direction_handle(
-				    &context->pending_keys,
-				    peer_role(channel->config.role)))) {
-			return -EBADMSG;
-		}
-		return 0;
+		return -EBADMSG;
+	}
+	if (context->pending_peer_receive &&
+	    !pqcp_runtime_key_handle_is_valid(
+		    const_direction_handle(
+			    &context->pending_keys,
+			    peer_role(channel->config.role)))) {
+		return -EBADMSG;
+	}
+	return 0;
 }

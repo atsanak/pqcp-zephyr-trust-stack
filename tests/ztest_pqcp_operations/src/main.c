@@ -14,6 +14,7 @@
 #include <pqcp_zephyr/operation_scenario.h>
 #include <pqcp_zephyr/operation_transition.h>
 #include <pqcp_zephyr/protected_channel_guard.h>
+#include <pqcp_zephyr/protected_channel_memory.h>
 #include <pqcp_zephyr/protected_channel_operations.h>
 #include <pqcp_zephyr/runtime_guard.h>
 #include <pqcp_zephyr/runtime_operations.h>
@@ -24,7 +25,7 @@
 #define TENANT_CAPACITY 3U
 #define RESERVATION_CAPACITY 4U
 #define PATH_CAPACITY 4U
-#define SERVICE_KEYS 6U
+#define SERVICE_KEYS 16U
 #define SERVICE_WORKSPACES 1U
 #define SERVICE_WORKSPACE_BYTES 49152U
 #define SERVICE_JOBS 4U
@@ -1081,6 +1082,272 @@ ZTEST(pqcp_operations, test_rekey_and_resumption_lifecycle)
 		-EALREADY);
 	zassert_ok(pqcp_channel_resumption_store_audit(
 		&resumption));
+}
+
+ZTEST(pqcp_operations, test_two_peer_rekey_cutover)
+{
+	static struct pqcp_channel client;
+	static struct pqcp_channel server;
+	static struct pqcp_channel_memory_pipe client_to_server;
+	static struct pqcp_channel_memory_pipe server_to_client;
+	static struct pqcp_channel_memory_endpoint client_endpoint;
+	static struct pqcp_channel_memory_endpoint server_endpoint;
+	static uint8_t client_to_server_bytes[4096];
+	static uint8_t server_to_client_bytes[4096];
+	static struct pqcp_channel_multiplexer client_mux;
+	static struct pqcp_channel_multiplexer server_mux;
+	static struct pqcp_channel_stream client_streams[2];
+	static struct pqcp_channel_stream server_streams[2];
+	static struct pqcp_channel_flow_controller client_flow;
+	static struct pqcp_channel_flow_controller server_flow;
+	static struct pqcp_channel_rekey_context client_rekey;
+	static struct pqcp_channel_rekey_context server_rekey;
+	static struct pqcp_channel_resumption_store client_resumption;
+	static struct pqcp_channel_resumption_store server_resumption;
+	static struct pqcp_channel_ticket_replay_entry
+		client_replay[TICKET_REPLAY_ENTRIES];
+	static struct pqcp_channel_ticket_replay_entry
+		server_replay[TICKET_REPLAY_ENTRIES];
+	static struct pqcp_channel_peer_health client_peer;
+	static struct pqcp_channel_peer_health server_peer;
+	static struct pqcp_channel_operations client_operations;
+	static struct pqcp_channel_operations server_operations;
+	struct pqcp_channel_flow_policy flow_policy;
+	struct pqcp_channel_peer_policy peer_policy;
+	struct pqcp_channel_rekey_policy rekey_policy;
+	struct pqcp_channel_control_message received;
+	struct pqcp_runtime_key_handle old_client_write;
+	struct pqcp_runtime_key_handle old_server_write;
+	uint8_t resumption_secret[
+		PQCP_CHANNEL_RESUMPTION_SECRET_BYTES];
+	uint8_t exporter[PQCP_CHANNEL_EXPORTER_BYTES];
+	uint8_t plaintext[] = "post-rekey application record";
+	uint8_t output[sizeof(plaintext)];
+	size_t output_length = 0U;
+	int ret;
+
+	zassert_equal(psa_crypto_init(), PSA_SUCCESS);
+	reset_service();
+	initialize_fake_channel(&client);
+	initialize_fake_channel(&server);
+	server.config.role = PQCP_CHANNEL_ROLE_SERVER;
+	client.config.timeout_ms = 100U;
+	server.config.timeout_ms = 100U;
+	old_client_write = client.keys.client_write_key;
+	old_server_write = server.keys.server_write_key;
+	memcpy(exporter, client.keys.exporter, sizeof(exporter));
+	for (size_t index = 0U;
+	     index < sizeof(resumption_secret); ++index) {
+		resumption_secret[index] =
+			(uint8_t)(0xc0U + index);
+	}
+
+	zassert_ok(pqcp_channel_memory_pipe_init(
+		&client_to_server, client_to_server_bytes,
+		sizeof(client_to_server_bytes)));
+	zassert_ok(pqcp_channel_memory_pipe_init(
+		&server_to_client, server_to_client_bytes,
+		sizeof(server_to_client_bytes)));
+	zassert_ok(pqcp_channel_memory_pair_init(
+		&client_endpoint, &server_endpoint,
+		&client_to_server, &server_to_client,
+		exporter));
+	zassert_ok(pqcp_channel_memory_make_transport(
+		&client_endpoint, &client.transport));
+	zassert_ok(pqcp_channel_memory_make_transport(
+		&server_endpoint, &server.transport));
+
+	zassert_ok(pqcp_channel_flow_policy_default(
+		&flow_policy));
+	zassert_ok(pqcp_channel_flow_init(
+		&client_flow, &flow_policy));
+	zassert_ok(pqcp_channel_flow_init(
+		&server_flow, &flow_policy));
+	zassert_ok(pqcp_channel_multiplexer_init(
+		&client_mux, &client, client_streams,
+		ARRAY_SIZE(client_streams),
+		flow_policy.initial_connection_window,
+		flow_policy.initial_stream_window));
+	zassert_ok(pqcp_channel_multiplexer_init(
+		&server_mux, &server, server_streams,
+		ARRAY_SIZE(server_streams),
+		flow_policy.initial_connection_window,
+		flow_policy.initial_stream_window));
+	zassert_ok(pqcp_channel_resumption_store_init(
+		&client_resumption, resumption_secret,
+		client_replay, ARRAY_SIZE(client_replay)));
+	zassert_ok(pqcp_channel_resumption_store_init(
+		&server_resumption, resumption_secret,
+		server_replay, ARRAY_SIZE(server_replay)));
+	zassert_ok(pqcp_channel_peer_policy_default(
+		&peer_policy));
+	peer_policy.keepalive_interval_ms = 60000U;
+	peer_policy.keepalive_timeout_ms = 120000U;
+	peer_policy.idle_timeout_ms = 180000U;
+	zassert_ok(pqcp_channel_peer_health_init(
+		&client_peer, &peer_policy, 1000U));
+	zassert_ok(pqcp_channel_peer_health_init(
+		&server_peer, &peer_policy, 1000U));
+	zassert_ok(pqcp_channel_operations_init(
+		&client_operations, &client, &client_mux,
+		&client_flow, &client_rekey,
+		&client_resumption, &client_peer,
+		&peer_policy, 1000U));
+	zassert_ok(pqcp_channel_operations_init(
+		&server_operations, &server, &server_mux,
+		&server_flow, &server_rekey,
+		&server_resumption, &server_peer,
+		&peer_policy, 1000U));
+	zassert_ok(pqcp_channel_rekey_policy_default(
+		&rekey_policy));
+	rekey_policy.maximum_epoch_bytes = 1U;
+	rekey_policy.handshake_timeout_ms = 10000U;
+	client.application_bytes_sent = 1U;
+
+	zassert_ok(pqcp_channel_operations_tick(
+		&client_operations, &rekey_policy, 2000U));
+	zassert_true(client.application_send_blocked);
+	zassert_equal(pqcp_channel_send(
+		&client, plaintext, sizeof(plaintext)),
+		-EBUSY);
+
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 2010U));
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_PREPARE);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 2020U));
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_ACCEPT);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 2030U));
+	zassert_equal(received.value, 1U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 2040U));
+	zassert_equal(received.value, 2U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 2050U));
+	zassert_equal(received.value, 3U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 2060U));
+	zassert_equal(received.value, 4U);
+
+	zassert_equal(client_rekey.current_epoch, 2U);
+	zassert_equal(server_rekey.current_epoch, 2U);
+	zassert_equal(client_rekey.state,
+		PQCP_CHANNEL_REKEY_COMMITTED);
+	zassert_equal(server_rekey.state,
+		PQCP_CHANNEL_REKEY_COMMITTED);
+	zassert_false(client.application_send_blocked);
+	zassert_false(server.application_send_blocked);
+	zassert_false(pqcp_runtime_key_handle_equal(
+		&old_client_write,
+		&client.keys.client_write_key));
+	zassert_false(pqcp_runtime_key_handle_equal(
+		&old_server_write,
+		&server.keys.server_write_key));
+
+	zassert_ok(pqcp_channel_send(
+		&client, plaintext, sizeof(plaintext)));
+	zassert_ok(pqcp_channel_receive(
+		&server, output, sizeof(output),
+		&output_length));
+	zassert_equal(output_length, sizeof(plaintext));
+	zassert_mem_equal(
+		output, plaintext, sizeof(plaintext));
+	zassert_ok(pqcp_channel_rekey_audit(
+		&client, &client_rekey));
+	zassert_ok(pqcp_channel_rekey_audit(
+		&server, &server_rekey));
+	zassert_ok(pqcp_channel_multiplexer_audit(
+		&client_mux));
+	zassert_ok(pqcp_channel_multiplexer_audit(
+		&server_mux));
+
+	/*
+	 * Start the next epoch from both sides.  The client proposal wins,
+	 * while queued duplicate PREPARE/ACCEPT/REQUEST/ACK/ACTIVATE records
+	 * exercise idempotent recovery at every cutover phase.
+	 */
+	rekey_policy.maximum_epoch_ms = 1U;
+	rekey_policy.minimum_interval_ms = 1U;
+	zassert_true(pqcp_channel_rekey_due(
+		&server, &rekey_policy, 33002U,
+		server_operations.epoch_started_at_ms,
+		server_operations.epoch_started_bytes));
+	zassert_ok(pqcp_channel_operations_tick(
+		&client_operations, &rekey_policy, 33001U));
+	zassert_ok(pqcp_channel_operations_tick(
+		&server_operations, &rekey_policy, 33002U));
+	zassert_equal(server_rekey.state,
+		PQCP_CHANNEL_REKEY_PREPARED,
+		"server state=%u policy=%u phase=%u cleanup=%u pending_cleanup=%u expires=%llu epoch_start=%llu",
+		server_rekey.state, server_operations.state,
+		server_operations.rekey_phase,
+		server_rekey.cleanup_pending,
+		server_rekey.pending_cleanup,
+		(unsigned long long)server_rekey.expires_at_ms,
+		(unsigned long long)
+			server_operations.epoch_started_at_ms);
+	zassert_true(server_rekey.initiator);
+	zassert_equal(server_rekey.pending_epoch, 3U);
+	ret = pqcp_channel_operations_receive_control(
+		&server_operations, &received, 33010U);
+	zassert_equal(ret, 0,
+		      "server collision receive failed: %d state=%u cleanup=%u pending_cleanup=%u",
+		      ret, server_rekey.state,
+		      server_rekey.cleanup_pending,
+		      server_rekey.pending_cleanup);
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_PREPARE);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33020U));
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_PREPARE);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33030U));
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_ACCEPT);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 33040U));
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_PREPARE);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 33050U));
+	zassert_equal(received.value, 1U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33060U));
+	zassert_equal(received.kind,
+		PQCP_CHANNEL_CONTROL_REKEY_ACCEPT);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33070U));
+	zassert_equal(received.value, 2U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 33080U));
+	zassert_equal(received.value, 1U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 33090U));
+	zassert_equal(received.value, 3U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33100U));
+	zassert_equal(received.value, 2U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33110U));
+	zassert_equal(received.value, 4U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&server_operations, &received, 33120U));
+	zassert_equal(received.value, 3U);
+	zassert_ok(pqcp_channel_operations_receive_control(
+		&client_operations, &received, 33130U));
+	zassert_equal(received.value, 4U);
+	zassert_equal(client_rekey.current_epoch, 3U);
+	zassert_equal(server_rekey.current_epoch, 3U);
+	zassert_false(client.application_send_blocked);
+	zassert_false(server.application_send_blocked);
+	zassert_ok(pqcp_channel_rekey_audit(
+		&client, &client_rekey));
+	zassert_ok(pqcp_channel_rekey_audit(
+		&server, &server_rekey));
 }
 
 ZTEST_SUITE(pqcp_operations, NULL, NULL, NULL, NULL, NULL);
