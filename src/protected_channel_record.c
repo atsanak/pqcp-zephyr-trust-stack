@@ -100,6 +100,54 @@ static bool pending_read_enabled(
 	       pqcp_runtime_key_handle_is_valid(handle);
 }
 
+static const struct pqcp_runtime_key_handle *retired_read_key(
+	const struct pqcp_channel *channel)
+{
+	if (channel == NULL || channel->rekey_context == NULL) {
+		return NULL;
+	}
+	return peer_role(channel->config.role) ==
+			       PQCP_CHANNEL_ROLE_CLIENT ?
+		       &channel->rekey_context->retired_keys
+				.client_write_key :
+		       &channel->rekey_context->retired_keys
+				.server_write_key;
+}
+
+static const uint8_t *retired_read_nonce_base(
+	const struct pqcp_channel *channel)
+{
+	if (channel == NULL || channel->rekey_context == NULL) {
+		return NULL;
+	}
+	return peer_role(channel->config.role) ==
+			       PQCP_CHANNEL_ROLE_CLIENT ?
+		       channel->rekey_context->retired_keys
+			       .client_nonce_base :
+		       channel->rekey_context->retired_keys
+			       .server_nonce_base;
+}
+
+static bool retired_read_enabled(
+	const struct pqcp_channel *channel)
+{
+	const struct pqcp_channel_rekey_context *context =
+		channel != NULL ? channel->rekey_context : NULL;
+	const struct pqcp_runtime_key_handle *handle;
+
+	if (context == NULL ||
+	    context->schema_version !=
+		    PQCP_CHANNEL_OPERATION_SCHEMA_VERSION ||
+	    context->state != PQCP_CHANNEL_REKEY_COMMITTED ||
+	    !context->cleanup_pending ||
+	    !context->retired_keys.traffic_keys_ready) {
+		return false;
+	}
+	handle = retired_read_key(channel);
+	return handle != NULL &&
+	       pqcp_runtime_key_handle_is_valid(handle);
+}
+
 static void build_nonce(
 	const uint8_t base[PQCP_CHANNEL_AEAD_NONCE_BYTES],
 	uint64_t sequence,
@@ -268,6 +316,15 @@ int pqcp_channel_internal_decrypt_record(
 			ciphertext_length,
 			pending_read_key(channel),
 			pending_read_nonce_base(channel),
+			output, output_capacity,
+			output_length);
+	}
+	if (ret != 0 && retired_read_enabled(channel)) {
+		ret = decrypt_record_with_material(
+			channel, sequence, ciphertext,
+			ciphertext_length,
+			retired_read_key(channel),
+			retired_read_nonce_base(channel),
 			output, output_capacity,
 			output_length);
 	}

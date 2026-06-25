@@ -973,9 +973,12 @@ int pqcp_channel_internal_send_application(
 	}
 	pqcp_runtime_secure_zero(
 		channel->work_buffer, ciphertext_length);
-	if (ret != 0) {
+	if (ret != 0 && !allow_blocked) {
 		return pqcp_channel_internal_fail(
 			channel, alert_for_error(ret), ret);
+	}
+	if (ret != 0) {
+		return ret;
 	}
 	channel->application_bytes_sent += plaintext_length;
 	return 0;
