@@ -293,8 +293,7 @@ static bool exception_shape_valid(
 			    PQCP_SOVEREIGN_EXCEPTION_REVOKED) {
 			return false;
 		}
-		return exception->approved_at_ms == 0U &&
-		       digest_zero(exception->approval_digest);
+		return digest_zero(exception->approval_digest);
 	}
 	if (exception->approved_at_ms <
 		    exception->requested_at_ms ||
