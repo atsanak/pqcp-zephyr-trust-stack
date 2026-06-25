@@ -1685,9 +1685,10 @@ def main() -> int:
                 "--suppress=toomanyconfigs",
                 # Keep the release gate focused on control-flow, bounds,
                 # initialization, portability, and performance defects. These
-                # four IDs are readability/const-propagation heuristics and
+                # five IDs are readability/const-propagation heuristics and
                 # are already non-blocking in the focused extended checker.
                 "--suppress=variableScope",
+                "--suppress=constParameter",
                 "--suppress=constParameterPointer",
                 "--suppress=constVariablePointer",
                 "--suppress=constVariable",
