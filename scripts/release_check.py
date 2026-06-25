@@ -1676,6 +1676,13 @@ def main() -> int:
                 "--inline-suppr",
                 "--suppress=missingIncludeSystem",
                 "--suppress=unusedStructMember",
+                # cppcheck 2.7 emits this informational diagnostic and applies
+                # --error-exitcode to it when the tree has more preprocessor
+                # combinations than its default exploration limit. Newer
+                # cppcheck versions do not report it for this invocation. It
+                # is configuration-coverage metadata, not a source finding;
+                # strict per-file/config analysis remains in extended checks.
+                "--suppress=toomanyconfigs",
                 # Keep the release gate focused on control-flow, bounds,
                 # initialization, portability, and performance defects. These
                 # four IDs are readability/const-propagation heuristics and
