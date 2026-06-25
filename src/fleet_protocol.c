@@ -252,7 +252,7 @@ static int read_envelope(
 	struct pqcp_fleet_envelope *envelope)
 {
 	uint64_t value = 0U;
-	size_t length;
+	size_t length = 0U;
 	uint32_t decoded;
 	int ret = pqcp_fleet_legacy_cbor_read_array(
 		reader, ENVELOPE_FIELDS);

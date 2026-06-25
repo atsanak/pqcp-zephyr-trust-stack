@@ -131,6 +131,16 @@ static const struct pqcp_runtime_key_handle *const_direction_handle(
 		&keys->server_write_key;
 }
 
+static bool direction_committed(
+	const struct pqcp_channel *channel,
+	const struct pqcp_channel_rekey_context *context,
+	enum pqcp_channel_role direction)
+{
+	return direction == channel->config.role ?
+		context->local_direction_committed :
+		context->peer_direction_committed;
+}
+
 static uint8_t *direction_nonce_base(
 	struct pqcp_channel_keys *keys,
 	enum pqcp_channel_role direction)
@@ -860,8 +870,6 @@ int pqcp_channel_rekey_audit(
 		context != NULL &&
 		(context->state == PQCP_CHANNEL_REKEY_PREPARED ||
 		 context->state == PQCP_CHANNEL_REKEY_ACCEPTED);
-	bool client_pending_required = false;
-	bool server_pending_required = false;
 
 	if (channel == NULL || context == NULL ||
 	    context->schema_version !=
@@ -881,20 +889,14 @@ int pqcp_channel_rekey_audit(
 			    context->prepared_at_ms) {
 			return -EBADMSG;
 		}
-		client_pending_required =
-			channel->config.role ==
-				PQCP_CHANNEL_ROLE_CLIENT ?
-				!context->local_direction_committed :
-				!context->peer_direction_committed;
-		server_pending_required =
-			channel->config.role ==
-				PQCP_CHANNEL_ROLE_SERVER ?
-				!context->local_direction_committed :
-				!context->peer_direction_committed;
-		if ((client_pending_required &&
+		if ((!direction_committed(
+			      channel, context,
+			      PQCP_CHANNEL_ROLE_CLIENT) &&
 		     !pqcp_runtime_key_handle_is_valid(
 			     &context->pending_keys.client_write_key)) ||
-		    (server_pending_required &&
+		    (!direction_committed(
+			      channel, context,
+			      PQCP_CHANNEL_ROLE_SERVER) &&
 		     !pqcp_runtime_key_handle_is_valid(
 			     &context->pending_keys.server_write_key))) {
 			return -EBADMSG;
