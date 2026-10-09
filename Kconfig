@@ -1479,6 +1479,23 @@ config PQCP_RUNTIME_KEY_STORE_PSA
 	  key-ID range. Unsupported platforms return -ENOTSUP. No file, settings,
 	  or plaintext raw-key persistence fallback is provided.
 
+config PQCP_RUNTIME_JOURNAL
+	bool "Enable commit-last metadata snapshot journal"
+	default n
+	help
+	  Persist secret-free runtime snapshots in two independent erase slots.
+	  Interrupted writes retain the previous checkpoint. Caller-owned buffers
+	  and storage callbacks are required; hashes are not authentication.
+
+config PQCP_RUNTIME_JOURNAL_FLASH
+	bool "Use Zephyr flash partitions for the metadata journal"
+	depends on PQCP_RUNTIME_JOURNAL && FLASH_MAP && FLASH_PAGE_LAYOUT
+	default n
+	help
+	  Bind the metadata journal to an explicitly supplied flash partition.
+	  Secret key persistence remains the responsibility of a supported PSA
+	  provider; the journal never exports or stores raw key material.
+
 config PQCP_RUNTIME_ADAPTIVE_INTEGRATION
 	bool "Feed measured operations into adaptive control"
 	default y

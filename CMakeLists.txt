@@ -393,6 +393,13 @@ if(CONFIG_PQCP_CRYPTO_BROKER)
     )
 endif()
 
+if(CONFIG_PQCP_RUNTIME_JOURNAL)
+    zephyr_library_sources(${PQCP_SRC}/runtime_journal.c)
+endif()
+if(CONFIG_PQCP_RUNTIME_JOURNAL_FLASH)
+    zephyr_library_sources(${PQCP_SRC}/runtime_journal_flash.c)
+endif()
+
 if(CONFIG_PQCP_PROTECTED_CHANNEL)
     zephyr_library_sources(
         ${PQCP_SRC}/protected_channel_codec.c
