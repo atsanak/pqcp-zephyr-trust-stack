@@ -139,6 +139,7 @@ enum live_test_mode {
 	LIVE_UNCERTAIN_CONTROL,
 	LIVE_IDLE_TIMEOUT,
 	LIVE_CLOSE_TIMEOUT,
+	LIVE_CLOSE_LATE_SUCCESS,
 };
 
 struct interrupted_transport {
@@ -439,6 +440,14 @@ static int stalled_bio_receive(
 	ARG_UNUSED(buffer);
 	ARG_UNUSED(length);
 	return MBEDTLS_ERR_SSL_WANT_READ;
+}
+
+static int late_bio_send(void *context, const unsigned char *buffer, size_t length)
+{
+	ARG_UNUSED(context);
+	ARG_UNUSED(buffer);
+	k_sleep(K_MSEC(30));
+	return (int)length;
 }
 
 ZTEST(pqcp_tls_loopback, test_tls_handshake_honors_deadline)
@@ -887,11 +896,12 @@ static void run_tls_pair(enum live_test_mode mode)
 		zassert_false(client_channel.established);
 		zassert_equal(client_runtime.key_store.active_count, 1U);
 		printk("PQCP_CHANNEL_RECOVERY case=unreachable_peer status=PASS traffic_keys=0 environment=qemu\n");
-	} else if (mode == LIVE_CLOSE_TIMEOUT) {
+	} else if (mode == LIVE_CLOSE_TIMEOUT || mode == LIVE_CLOSE_LATE_SUCCESS) {
 		int64_t close_started = k_uptime_get();
 
 		mbedtls_ssl_set_bio(&client_endpoint.ssl, &client_bio,
-			stalled_bio_send, stalled_bio_receive, NULL);
+			mode == LIVE_CLOSE_TIMEOUT ? stalled_bio_send : late_bio_send,
+			stalled_bio_receive, NULL);
 		client_adapter.default_timeout_ms = 20U;
 		zassert_equal(pqcp_channel_mbedtls_close(&client_adapter), -ETIMEDOUT);
 		zassert_true(k_uptime_get() - close_started >= 20);
@@ -940,6 +950,11 @@ ZTEST(pqcp_tls_loopback, test_unreachable_peer_erases_keys)
 ZTEST(pqcp_tls_loopback, test_close_notify_honors_deadline)
 {
 	run_tls_pair(LIVE_CLOSE_TIMEOUT);
+}
+
+ZTEST(pqcp_tls_loopback, test_close_notify_rejects_late_success)
+{
+	run_tls_pair(LIVE_CLOSE_LATE_SUCCESS);
 }
 
 static void release_tls_fixture(void *fixture)
