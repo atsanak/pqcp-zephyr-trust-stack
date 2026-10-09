@@ -16,6 +16,58 @@
 #define PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES 160U
 #define PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES 160U
 
+static int snapshot_size(size_t session_count, size_t profile_count,
+			 size_t *required)
+{
+	const size_t overhead = PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
+		PQCP_RUNTIME_DIGEST_BYTES;
+	const size_t limit = (UINT32_MAX - overhead) /
+		PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES;
+
+	_Static_assert(PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES ==
+		       PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES,
+		       "snapshot record sizes must match");
+	if (session_count > limit || profile_count > limit - session_count) {
+		return -EINVAL;
+	}
+	*required = overhead + (session_count + profile_count) *
+		PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES;
+	return 0;
+}
+
+static bool buffers_overlap(const void *first, size_t first_size,
+			    const void *second, size_t second_size)
+{
+	const uintptr_t a = (uintptr_t)first;
+	const uintptr_t b = (uintptr_t)second;
+
+	if (first_size == 0U || second_size == 0U) {
+		return false;
+	}
+	return a <= b ? b - a < first_size : a - b < second_size;
+}
+
+static bool session_valid(const struct pqcp_runtime_session *session)
+{
+	return session->schema_version == PQCP_RUNTIME_SCHEMA_VERSION &&
+		session->session_id != 0U && session->active &&
+		pqcp_runtime_internal_text_valid(session->profile_id,
+						sizeof(session->profile_id));
+}
+
+static bool profile_valid(const struct pqcp_runtime_profile_state *profile)
+{
+	return profile->schema_version == PQCP_RUNTIME_SCHEMA_VERSION &&
+		pqcp_runtime_internal_text_valid(profile->profile_id,
+						sizeof(profile->profile_id)) &&
+		(unsigned int)profile->latency_source <= PQCP_RUNTIME_METRIC_CALIBRATED &&
+		(unsigned int)profile->cycles_source <= PQCP_RUNTIME_METRIC_CALIBRATED &&
+		(unsigned int)profile->memory_source <= PQCP_RUNTIME_METRIC_CALIBRATED &&
+		(unsigned int)profile->energy_source <= PQCP_RUNTIME_METRIC_CALIBRATED &&
+		(uint64_t)profile->successful_observations +
+			profile->failed_observations == profile->observation_count;
+}
+
 static void write_handle(
 	uint8_t *output,
 	const struct pqcp_runtime_key_handle *handle)
@@ -79,10 +131,7 @@ static int write_session(
 	uint8_t *output,
 	const struct pqcp_runtime_session *session)
 {
-	if (!session->active ||
-	    !pqcp_runtime_internal_text_valid(
-		    session->profile_id,
-		    sizeof(session->profile_id))) {
+	if (!session_valid(session)) {
 		return -EINVAL;
 	}
 	memset(output, 0, PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES);
@@ -145,13 +194,9 @@ static int read_session(
 	       sizeof(session->profile_id) - 1U);
 	read_handle(input + 112U, &session->kem_key);
 	read_handle(input + 132U, &session->signing_key);
-	if (session->schema_version !=
-		    PQCP_RUNTIME_SCHEMA_VERSION ||
-	    session->session_id == 0U ||
-	    !session->active ||
-	    !pqcp_runtime_internal_text_valid(
-		    session->profile_id,
-		    sizeof(session->profile_id))) {
+	if (!session_valid(session) || input[60] != 1U ||
+	    input[61] > 1U || input[62] > 1U ||
+	    memchr(input + 64U, '\0', sizeof(session->profile_id)) == NULL) {
 		pqcp_runtime_secure_zero(
 			session, sizeof(*session));
 		return -EBADMSG;
@@ -163,11 +208,7 @@ static int write_profile(
 	uint8_t *output,
 	const struct pqcp_runtime_profile_state *profile)
 {
-	if (profile->schema_version !=
-		    PQCP_RUNTIME_SCHEMA_VERSION ||
-	    !pqcp_runtime_internal_text_valid(
-		    profile->profile_id,
-		    sizeof(profile->profile_id))) {
+	if (!profile_valid(profile)) {
 		return -EINVAL;
 	}
 	memset(output, 0, PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES);
@@ -236,14 +277,8 @@ static int read_profile(
 		pqcp_runtime_internal_read_u64(input + 64U);
 	memcpy(profile->profile_id, input + 72U,
 	       sizeof(profile->profile_id) - 1U);
-	if (profile->schema_version !=
-		    PQCP_RUNTIME_SCHEMA_VERSION ||
-	    !pqcp_runtime_internal_text_valid(
-		    profile->profile_id,
-		    sizeof(profile->profile_id)) ||
-	    profile->successful_observations +
-		    profile->failed_observations !=
-		    profile->observation_count) {
+	if (!profile_valid(profile) ||
+	    memchr(input + 72U, '\0', sizeof(profile->profile_id)) == NULL) {
 		memset(profile, 0, sizeof(*profile));
 		return -EBADMSG;
 	}
@@ -259,30 +294,41 @@ int pqcp_runtime_snapshot_write(
 	size_t output_capacity,
 	struct pqcp_runtime_snapshot_info *info)
 {
-	const size_t session_count =
-		active_sessions(sessions, session_capacity);
-	const size_t profile_count =
-		active_profiles(profiles, profile_capacity);
-	const size_t payload_bytes =
-		session_count *
-			PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES +
-		profile_count *
-			PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES;
-	const size_t required =
-		PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
-		payload_bytes +
-		PQCP_RUNTIME_DIGEST_BYTES;
+	size_t session_count;
+	size_t profile_count;
+	size_t required;
 	size_t offset = PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES;
 	uint8_t digest[PQCP_RUNTIME_DIGEST_BYTES];
 	uint32_t key_references = 0U;
 
 	if (sessions == NULL || profiles == NULL ||
 	    output == NULL || info == NULL ||
-	    output_capacity < required ||
-	    session_count > UINT32_MAX ||
-	    profile_count > UINT32_MAX ||
-	    required > UINT32_MAX) {
+	    session_capacity > SIZE_MAX / sizeof(*sessions) ||
+	    profile_capacity > SIZE_MAX / sizeof(*profiles) ||
+	    snapshot_size(session_capacity, profile_capacity, &required) != 0) {
 		return -EINVAL;
+	}
+	session_count = active_sessions(sessions, session_capacity);
+	profile_count = active_profiles(profiles, profile_capacity);
+	if (snapshot_size(session_count, profile_count, &required) != 0 ||
+	    output_capacity < required ||
+	    buffers_overlap(output, required, sessions,
+			    session_capacity * sizeof(*sessions)) ||
+	    buffers_overlap(output, required, profiles,
+			    profile_capacity * sizeof(*profiles)) ||
+	    buffers_overlap(output, required, info, sizeof(*info))) {
+		return -EINVAL;
+	}
+	for (size_t index = 0U; index < session_capacity; ++index) {
+		if (sessions[index].active && !session_valid(&sessions[index])) {
+			return -EBADMSG;
+		}
+	}
+	for (size_t index = 0U; index < profile_capacity; ++index) {
+		if (profiles[index].schema_version == PQCP_RUNTIME_SCHEMA_VERSION &&
+		    !profile_valid(&profiles[index])) {
+			return -EBADMSG;
+		}
 	}
 	memset(output, 0, required);
 	pqcp_runtime_internal_write_u32(
@@ -361,12 +407,27 @@ int pqcp_runtime_snapshot_read(
 	uint32_t profile_count;
 	uint32_t key_references;
 	size_t digest_offset;
+	size_t required;
 	size_t offset = PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES;
+	uint32_t actual_references = 0U;
 
 	if (input == NULL ||
 	    input_length < PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
 			    PQCP_RUNTIME_DIGEST_BYTES ||
-	    sessions == NULL || profiles == NULL || info == NULL) {
+	    sessions == NULL || profiles == NULL || info == NULL ||
+	    session_capacity > SIZE_MAX / sizeof(*sessions) ||
+	    profile_capacity > SIZE_MAX / sizeof(*profiles) ||
+	    buffers_overlap(input, input_length, sessions,
+			    session_capacity * sizeof(*sessions)) ||
+	    buffers_overlap(input, input_length, profiles,
+			    profile_capacity * sizeof(*profiles)) ||
+	    buffers_overlap(input, input_length, info, sizeof(*info)) ||
+	    buffers_overlap(sessions, session_capacity * sizeof(*sessions),
+			    profiles, profile_capacity * sizeof(*profiles)) ||
+	    buffers_overlap(sessions, session_capacity * sizeof(*sessions),
+			    info, sizeof(*info)) ||
+	    buffers_overlap(profiles, profile_capacity * sizeof(*profiles),
+			    info, sizeof(*info))) {
 		return -EINVAL;
 	}
 	magic = pqcp_runtime_internal_read_u32(input);
@@ -378,21 +439,16 @@ int pqcp_runtime_snapshot_read(
 		pqcp_runtime_internal_read_u32(input + 16U);
 	key_references =
 		pqcp_runtime_internal_read_u32(input + 20U);
-	digest_offset =
-		PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES +
-		(size_t)session_count *
-			PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES +
-		(size_t)profile_count *
-			PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES;
 	if (magic != PQCP_RUNTIME_SNAPSHOT_MAGIC ||
 	    schema != PQCP_RUNTIME_SCHEMA_VERSION ||
 	    total != input_length ||
 	    session_count > session_capacity ||
 	    profile_count > profile_capacity ||
-	    digest_offset + PQCP_RUNTIME_DIGEST_BYTES !=
-		    input_length) {
+	    snapshot_size(session_count, profile_count, &required) != 0 ||
+	    required != input_length) {
 		return -EINVAL;
 	}
+	digest_offset = required - PQCP_RUNTIME_DIGEST_BYTES;
 	if (pqcp_runtime_internal_sha256(
 		    input, digest_offset, digest) != 0 ||
 	    memcmp(digest, input + digest_offset,
@@ -400,24 +456,44 @@ int pqcp_runtime_snapshot_read(
 		pqcp_runtime_secure_zero(digest, sizeof(digest));
 		return -EBADMSG;
 	}
+	/* Validate every record before changing any caller-owned restore state. */
+	for (uint32_t index = 0U; index < session_count; ++index) {
+		struct pqcp_runtime_session decoded;
+
+		if (read_session(input + offset, &decoded) != 0) {
+			pqcp_runtime_secure_zero(digest, sizeof(digest));
+			return -EBADMSG;
+		}
+		actual_references += pqcp_runtime_key_handle_is_valid(&decoded.kem_key);
+		actual_references += pqcp_runtime_key_handle_is_valid(&decoded.signing_key);
+		offset += PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES;
+	}
+	for (uint32_t index = 0U; index < profile_count; ++index) {
+		struct pqcp_runtime_profile_state decoded;
+
+		if (read_profile(input + offset, &decoded) != 0) {
+			pqcp_runtime_secure_zero(digest, sizeof(digest));
+			return -EBADMSG;
+		}
+		offset += PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES;
+	}
+	if (actual_references != key_references) {
+		pqcp_runtime_secure_zero(digest, sizeof(digest));
+		return -EBADMSG;
+	}
+	offset = PQCP_RUNTIME_SNAPSHOT_HEADER_BYTES;
 	memset(sessions, 0,
 	       sizeof(*sessions) * session_capacity);
 	memset(profiles, 0,
 	       sizeof(*profiles) * profile_capacity);
 	for (uint32_t index = 0U;
 	     index < session_count; ++index) {
-		if (read_session(input + offset,
-				 &sessions[index]) != 0) {
-			return -EBADMSG;
-		}
+		(void)read_session(input + offset, &sessions[index]);
 		offset += PQCP_RUNTIME_SNAPSHOT_SESSION_BYTES;
 	}
 	for (uint32_t index = 0U;
 	     index < profile_count; ++index) {
-		if (read_profile(input + offset,
-				 &profiles[index]) != 0) {
-			return -EBADMSG;
-		}
+		(void)read_profile(input + offset, &profiles[index]);
 		offset += PQCP_RUNTIME_SNAPSHOT_PROFILE_BYTES;
 	}
 	memset(info, 0, sizeof(*info));
