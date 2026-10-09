@@ -60,6 +60,7 @@ int pqcp_channel_internal_fail(
 	struct pqcp_channel *channel,
 	enum pqcp_channel_alert alert,
 	int error);
+int pqcp_channel_internal_discard_keys(struct pqcp_channel *channel);
 int pqcp_channel_internal_encode_hello(
 	const struct pqcp_channel *channel,
 	const uint8_t nonce[PQCP_CHANNEL_NONCE_BYTES],

@@ -973,12 +973,12 @@ int pqcp_channel_internal_send_application(
 	}
 	pqcp_runtime_secure_zero(
 		channel->work_buffer, ciphertext_length);
-	if (ret != 0 && !allow_blocked) {
+	/* Even control records may have been partially transmitted. Never retry
+	 * with the same sequence/nonce after an uncertain transport failure.
+	 */
+	if (ret != 0) {
 		return pqcp_channel_internal_fail(
 			channel, alert_for_error(ret), ret);
-	}
-	if (ret != 0) {
-		return ret;
 	}
 	channel->application_bytes_sent += plaintext_length;
 	return 0;
@@ -1009,6 +1009,8 @@ int pqcp_channel_receive(
 	    plaintext == NULL || plaintext_length == NULL) {
 		return -EINVAL;
 	}
+	*plaintext_length = 0U;
+	pqcp_runtime_secure_zero(plaintext, plaintext_capacity);
 	ret = pqcp_channel_internal_receive_frame(
 		channel, PQCP_CHANNEL_FRAME_APPLICATION,
 		&header, &ciphertext, &ciphertext_length, false);
@@ -1020,6 +1022,8 @@ int pqcp_channel_receive(
 			plaintext_length);
 	}
 	if (ret != 0) {
+		*plaintext_length = 0U;
+		pqcp_runtime_secure_zero(plaintext, plaintext_capacity);
 		return pqcp_channel_internal_fail(
 			channel, alert_for_error(ret), ret);
 	}
@@ -1031,6 +1035,7 @@ int pqcp_channel_receive(
 int pqcp_channel_close(struct pqcp_channel *channel)
 {
 	int ret = 0;
+	int cleanup_ret;
 
 	if (channel == NULL ||
 	    channel->schema_version !=
@@ -1046,34 +1051,10 @@ int pqcp_channel_close(struct pqcp_channel *channel)
 			channel, PQCP_CHANNEL_FRAME_CLOSE,
 			0U, NULL, 0U, false);
 	}
-	if (pqcp_runtime_key_handle_is_valid(
-		    &channel->ephemeral_kem_key)) {
-		(void)pqcp_runtime_key_store_destroy(
-			channel->key_store,
-			&channel->ephemeral_kem_key);
+	cleanup_ret = pqcp_channel_internal_discard_keys(channel);
+	if (cleanup_ret != 0) {
+		ret = cleanup_ret;
 	}
-	if (pqcp_runtime_key_handle_is_valid(
-		    &channel->keys.client_write_key)) {
-		(void)pqcp_runtime_key_store_destroy(
-			channel->key_store,
-			&channel->keys.client_write_key);
-	}
-	if (pqcp_runtime_key_handle_is_valid(
-		    &channel->keys.server_write_key)) {
-		(void)pqcp_runtime_key_store_destroy(
-			channel->key_store,
-			&channel->keys.server_write_key);
-	}
-	pqcp_runtime_secure_zero(
-		&channel->keys, sizeof(channel->keys));
-	pqcp_runtime_secure_zero(
-		channel->local_nonce, sizeof(channel->local_nonce));
-	pqcp_runtime_secure_zero(
-		channel->peer_nonce, sizeof(channel->peer_nonce));
-	pqcp_runtime_secure_zero(
-		channel->work_buffer,
-		sizeof(channel->work_buffer));
-	channel->established = false;
 	if (channel->transport.close != NULL) {
 		int close_ret = channel->transport.close(
 			channel->transport.context);
@@ -1082,7 +1063,8 @@ int pqcp_channel_close(struct pqcp_channel *channel)
 			ret = close_ret;
 		}
 	}
-	channel->state = PQCP_CHANNEL_STATE_CLOSED;
+	channel->state = cleanup_ret == 0 ? PQCP_CHANNEL_STATE_CLOSED :
+		PQCP_CHANNEL_STATE_FAILED;
 	return ret;
 }
 
