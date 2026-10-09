@@ -238,6 +238,10 @@ int pqcp_channel_send(
 	struct pqcp_channel *channel,
 	const uint8_t *plaintext,
 	size_t plaintext_length);
+/* For a valid established channel, any receive failure clears the supplied
+ * output buffer and length, fails the channel and discards its traffic keys.
+ * A failed channel cannot be resumed: establish a fresh TLS/PQC session.
+ */
 int pqcp_channel_receive(
 	struct pqcp_channel *channel,
 	uint8_t *plaintext,
@@ -254,6 +258,11 @@ int pqcp_channel_receive_message(
 	size_t message_capacity,
 	size_t *message_length,
 	uint32_t *message_id);
+/* Call with other channel operations quiesced. Erases active/pending/retired
+ * traffic material, but not separately provisioned identity keys. A busy key
+ * handle is retained and -EBUSY returned; release its references and retry
+ * close rather than reinitializing/discarding the channel object.
+ */
 int pqcp_channel_close(
 	struct pqcp_channel *channel);
 int pqcp_channel_audit(

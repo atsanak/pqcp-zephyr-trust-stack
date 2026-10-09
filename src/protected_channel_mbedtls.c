@@ -253,13 +253,21 @@ int pqcp_channel_mbedtls_close(void *context)
 	}
 	if (adapter->ssl != NULL &&
 	    adapter->handshake_complete) {
+		const int64_t deadline = k_uptime_get() + adapter->default_timeout_ms;
 		int ret;
 
 		do {
 			ret = mbedtls_ssl_close_notify(adapter->ssl);
-		} while (ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+			if (ret == MBEDTLS_ERR_SSL_WANT_WRITE || ret == MBEDTLS_ERR_SSL_WANT_READ) {
+				if (k_uptime_get() >= deadline) {
+					result = -ETIMEDOUT;
+					break;
+				}
+				k_yield();
+			}
+		} while (ret == MBEDTLS_ERR_SSL_WANT_WRITE || ret == MBEDTLS_ERR_SSL_WANT_READ);
 		if (ret != 0 &&
-		    ret != MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
+		    ret != MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY && result == 0) {
 			result = ssl_error_to_errno(ret);
 		}
 	}

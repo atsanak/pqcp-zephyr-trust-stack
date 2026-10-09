@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include <pqcp_zephyr/protected_channel.h>
+#include <pqcp_zephyr/protected_channel_operations.h>
 
 #include "protected_channel_internal.h"
 #include "runtime_internal.h"
@@ -15,19 +16,27 @@
 static int receive_exact(
 	struct pqcp_channel *channel,
 	uint8_t *buffer,
-	size_t length)
+	size_t length, int64_t deadline)
 {
 	size_t offset = 0U;
 
 	while (offset < length) {
 		size_t received = 0U;
+		int64_t remaining = deadline - k_uptime_get();
+
+		if (remaining <= 0) {
+			return -ETIMEDOUT;
+		}
 		int ret = channel->transport.receive(
 			channel->transport.context,
 			buffer + offset, length - offset,
-			&received, channel->config.timeout_ms);
+			&received, (uint32_t)remaining);
 
 		if (ret != 0) {
 			return ret;
+		}
+		if (k_uptime_get() >= deadline) {
+			return -ETIMEDOUT;
 		}
 		if (received == 0U ||
 		    received > length - offset) {
@@ -54,6 +63,9 @@ int pqcp_channel_internal_send_frame(
 	    channel->transport.send == NULL ||
 	    payload_length > channel->config.max_payload_bytes) {
 		return -EINVAL;
+	}
+	if (channel->send_sequence == UINT64_MAX) {
+		return -EOVERFLOW;
 	}
 	header = (struct pqcp_channel_frame_header) {
 		.magic = PQCP_CHANNEL_MAGIC,
@@ -103,6 +115,7 @@ int pqcp_channel_internal_receive_frame(
 	const uint8_t *decoded_payload = NULL;
 	size_t decoded_length = 0U;
 	size_t frame_length;
+	int64_t deadline;
 	int ret;
 
 	if (channel == NULL || header == NULL ||
@@ -110,9 +123,13 @@ int pqcp_channel_internal_receive_frame(
 	    channel->transport.receive == NULL) {
 		return -EINVAL;
 	}
+	if (channel->receive_sequence == UINT64_MAX) {
+		return -EOVERFLOW;
+	}
+	deadline = k_uptime_get() + channel->config.timeout_ms;
 	ret = receive_exact(
 		channel, channel->rx_frame,
-		PQCP_CHANNEL_FRAME_HEADER_BYTES);
+		PQCP_CHANNEL_FRAME_HEADER_BYTES, deadline);
 	if (ret != 0) {
 		return ret;
 	}
@@ -148,7 +165,7 @@ int pqcp_channel_internal_receive_frame(
 			channel,
 			channel->rx_frame +
 				PQCP_CHANNEL_FRAME_HEADER_BYTES,
-			header->payload_length);
+			header->payload_length, deadline);
 		if (ret != 0) {
 			return ret;
 		}
@@ -192,6 +209,77 @@ int pqcp_channel_internal_receive_frame(
 	return 0;
 }
 
+static int destroy_handle(struct pqcp_runtime_key_store *store,
+	struct pqcp_runtime_key_handle *handle)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle)) {
+		return 0;
+	}
+	ret = pqcp_runtime_key_store_destroy(store, handle);
+	if (ret == 0 || ret == -ENOENT) {
+		memset(handle, 0, sizeof(*handle));
+		return 0;
+	}
+	return ret;
+}
+
+static void erase_material_keep_handles(struct pqcp_channel_keys *keys)
+{
+	struct pqcp_runtime_key_handle client = keys->client_write_key;
+	struct pqcp_runtime_key_handle server = keys->server_write_key;
+
+	pqcp_runtime_secure_zero(keys, sizeof(*keys));
+	keys->client_write_key = client;
+	keys->server_write_key = server;
+}
+
+int pqcp_channel_internal_discard_keys(struct pqcp_channel *channel)
+{
+	struct pqcp_runtime_key_handle client = channel->keys.client_write_key;
+	struct pqcp_runtime_key_handle server = channel->keys.server_write_key;
+	int first_error = 0;
+	int ret;
+
+	channel->established = false;
+	channel->application_send_blocked = true;
+	/* Erase material immediately, but retain failed handles for close retries. */
+	pqcp_runtime_secure_zero(&channel->keys, sizeof(channel->keys));
+	if (channel->rekey_context != NULL) {
+		ret = pqcp_channel_rekey_abort(channel->rekey_context);
+		if (ret != 0) {
+			first_error = ret;
+		}
+		ret = pqcp_channel_rekey_cleanup(channel->rekey_context);
+		if (first_error == 0 && ret != 0) {
+			first_error = ret;
+		}
+		erase_material_keep_handles(&channel->rekey_context->pending_keys);
+		erase_material_keep_handles(&channel->rekey_context->retired_keys);
+	}
+	ret = destroy_handle(channel->key_store, &client);
+	if (first_error == 0 && ret != 0) {
+		first_error = ret;
+	}
+	ret = destroy_handle(channel->key_store, &server);
+	if (first_error == 0 && ret != 0) {
+		first_error = ret;
+	}
+	ret = destroy_handle(channel->key_store, &channel->ephemeral_kem_key);
+	if (first_error == 0 && ret != 0) {
+		first_error = ret;
+	}
+	channel->keys.client_write_key = client;
+	channel->keys.server_write_key = server;
+	pqcp_runtime_secure_zero(channel->local_nonce, sizeof(channel->local_nonce));
+	pqcp_runtime_secure_zero(channel->peer_nonce, sizeof(channel->peer_nonce));
+	pqcp_runtime_secure_zero(channel->work_buffer, sizeof(channel->work_buffer));
+	pqcp_runtime_secure_zero(channel->tx_frame, sizeof(channel->tx_frame));
+	pqcp_runtime_secure_zero(channel->rx_frame, sizeof(channel->rx_frame));
+	return first_error;
+}
+
 int pqcp_channel_internal_fail(
 	struct pqcp_channel *channel,
 	enum pqcp_channel_alert alert,
@@ -213,7 +301,6 @@ int pqcp_channel_internal_fail(
 			channel, PQCP_CHANNEL_FRAME_ALERT,
 			0U, payload, sizeof(payload), false);
 	}
-	pqcp_runtime_secure_zero(
-		&channel->keys, sizeof(channel->keys));
+	(void)pqcp_channel_internal_discard_keys(channel);
 	return error != 0 ? error : -EIO;
 }
