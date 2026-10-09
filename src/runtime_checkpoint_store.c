@@ -511,6 +511,75 @@ int pqcp_runtime_checkpoint_store_init(
 	return 0;
 }
 
+int pqcp_runtime_checkpoint_store_reopen(
+	struct pqcp_runtime_checkpoint_store *store,
+	struct pqcp_runtime_checkpoint_slot *slots, size_t slot_count)
+{
+	uint64_t highest = 0U;
+	size_t selected = 0U;
+	size_t rejected = 0U;
+
+	if (store == NULL || slots == NULL || slot_count < 2U) {
+		return -EINVAL;
+	}
+	for (size_t i = 0U; i < slot_count; ++i) {
+		if (slots[i].buffer == NULL || slots[i].capacity <
+		    PQCP_RUNTIME_CHECKPOINT_HEADER_BYTES) {
+			return -EINVAL;
+		}
+	}
+	memset(store, 0, sizeof(*store));
+	store->slots = slots;
+	store->slot_count = slot_count;
+	k_mutex_init(&store->lock);
+	for (size_t i = 0U; i < slot_count; ++i) {
+		struct pqcp_runtime_checkpoint_slot *slot = &slots[i];
+		struct pqcp_runtime_checkpoint_header header;
+		size_t length = PQCP_RUNTIME_CHECKPOINT_HEADER_BYTES;
+		uint32_t payload = pqcp_runtime_internal_read_u32(slot->buffer + 8U);
+
+		slot->valid = false;
+		slot->generation = 0U;
+		slot->length = 0U;
+		if (pqcp_runtime_internal_read_u32(slot->buffer) == 0U ||
+		    pqcp_runtime_internal_read_u32(slot->buffer) == UINT32_MAX) {
+			continue;
+		}
+		if (payload > slot->capacity - length) {
+			rejected++;
+			continue;
+		}
+		length += payload;
+		if (pqcp_runtime_checkpoint_verify(slot->buffer, length, &header) != 0) {
+			rejected++;
+			continue;
+		}
+		for (size_t j = 0U; j < i; ++j) {
+			if (slots[j].valid && slots[j].generation == header.generation) {
+				return -EBADMSG;
+			}
+		}
+		slot->valid = true;
+		slot->length = length;
+		slot->generation = header.generation;
+		if (header.generation > highest) {
+			highest = header.generation;
+			selected = i;
+			memcpy(store->chain_head, header.payload_digest, sizeof(store->chain_head));
+		}
+	}
+	if (highest == UINT64_MAX) {
+		return -EOVERFLOW;
+	}
+	if (highest == 0U && rejected != 0U) {
+		return -EBADMSG;
+	}
+	store->active_slot = selected;
+	store->next_generation = highest + 1U;
+	store->initialized = true;
+	return 0;
+}
+
 int pqcp_runtime_checkpoint_write(
 	struct pqcp_runtime_checkpoint_store *store,
 	const struct pqcp_runtime_service *service,
@@ -536,6 +605,10 @@ int pqcp_runtime_checkpoint_write(
 	ret = k_mutex_lock(&store->lock, K_FOREVER);
 	if (ret != 0) {
 		return ret;
+	}
+	if (store->next_generation == UINT64_MAX || store->next_generation == 0U) {
+		(void)k_mutex_unlock(&store->lock);
+		return -EOVERFLOW;
 	}
 	target = (store->active_slot + 1U) % store->slot_count;
 	slot = &store->slots[target];
