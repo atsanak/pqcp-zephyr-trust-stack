@@ -982,6 +982,7 @@ int pqcp_channel_operations_init(
 		PQCP_CHANNEL_OPERATION_SCHEMA_VERSION;
 	rekey->state = PQCP_CHANNEL_REKEY_IDLE;
 	rekey->current_epoch = 1U;
+	rekey->key_store = channel->key_store;
 	channel->rekey_context = rekey;
 	channel->application_send_blocked = false;
 	clear_rekey_progress(operations);
@@ -1242,7 +1243,8 @@ int pqcp_channel_operations_tick(
 		first_error = ret;
 	}
 	if (operations->rekey_phase ==
-	    REKEY_WAIT_NONE) {
+	    REKEY_WAIT_NONE && operations->channel->established &&
+	    operations->peer->status != PQCP_CHANNEL_PEER_UNREACHABLE) {
 		ret = maybe_send_keepalive(
 			operations, now_ms);
 		if (ret != 0 && first_error == 0) {
@@ -1258,6 +1260,8 @@ int pqcp_channel_operations_tick(
 	    PQCP_CHANNEL_PEER_UNREACHABLE) {
 		operations->state =
 			PQCP_CHANNEL_POLICY_FAILED;
+		(void)pqcp_channel_internal_fail(operations->channel,
+			PQCP_CHANNEL_ALERT_TIMEOUT, -ETIMEDOUT);
 		if (first_error == 0) {
 			first_error = -ETIMEDOUT;
 		}

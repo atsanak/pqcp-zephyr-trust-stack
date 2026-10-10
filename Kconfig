@@ -1440,11 +1440,22 @@ endmenu
 # =============================================================================
 menu "Executable Adaptive PQC Runtime"
 
+config PQCP_MBEDTLS_THREADING
+	bool "Zephyr threading port for Mbed TLS 4 / TF-PSA-Crypto"
+	depends on MBEDTLS_VERSION_4_x && MULTITHREADING
+	default n
+	help
+	  Protect shared TF-PSA allocator, RNG and key-slot state when runtime
+	  workers and TLS endpoints execute concurrently. Installs the alternate
+	  mutex and condition-variable callbacks before the crypto heap is
+	  initialized. Do not install a second threading port in the application.
+
 config PQCP_RUNTIME
 	bool "Enable executable adaptive PQC runtime"
 	depends on PQCP_MLKEM && PQCP_MLDSA
 	depends on PQCP_ADAPTIVE_CONTROL
 	depends on MBEDTLS_PSA_CRYPTO_C
+	select PQCP_MBEDTLS_THREADING if MBEDTLS_VERSION_4_x && MULTITHREADING
 	select PSA_WANT_ALG_SHA_256
 	select PSA_WANT_ALG_HMAC
 	select PSA_WANT_ALG_HKDF
@@ -1478,6 +1489,23 @@ config PQCP_RUNTIME_KEY_STORE_PSA
 	  provisional PQC key import/open/destroy operations in the PSA application
 	  key-ID range. Unsupported platforms return -ENOTSUP. No file, settings,
 	  or plaintext raw-key persistence fallback is provided.
+
+config PQCP_RUNTIME_JOURNAL
+	bool "Enable commit-last metadata snapshot journal"
+	default n
+	help
+	  Persist secret-free runtime snapshots in two independent erase slots.
+	  Interrupted writes retain the previous checkpoint. Caller-owned buffers
+	  and storage callbacks are required; hashes are not authentication.
+
+config PQCP_RUNTIME_JOURNAL_FLASH
+	bool "Use Zephyr flash partitions for the metadata journal"
+	depends on PQCP_RUNTIME_JOURNAL && FLASH_MAP && FLASH_PAGE_LAYOUT
+	default n
+	help
+	  Bind the metadata journal to an explicitly supplied flash partition.
+	  Secret key persistence remains the responsibility of a supported PSA
+	  provider; the journal never exports or stores raw key material.
 
 config PQCP_RUNTIME_ADAPTIVE_INTEGRATION
 	bool "Feed measured operations into adaptive control"
@@ -1612,6 +1640,7 @@ config PQCP_PROTECTED_CHANNEL_MUTUAL_AUTH
 config PQCP_PROTECTED_CHANNEL_MBEDTLS
 	bool "Enable direct mbedTLS transport adapter"
 	depends on MBEDTLS_SSL_KEYING_MATERIAL_EXPORT
+	select PQCP_MBEDTLS_THREADING if MBEDTLS_VERSION_4_x
 	select MBEDTLS_SSL_PROTO_TLS1_3
 	select MBEDTLS_SSL_SESSION_TICKETS
 	select MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED

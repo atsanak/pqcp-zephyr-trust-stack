@@ -8,3 +8,14 @@ tests:
       - mbedtls
       - protected-channel
     timeout: 180
+  pqcp.tls_loopback.tcp:
+    platform_allow:
+      - qemu_x86_64
+    tags:
+      - pqcp
+      - tls
+      - tcp
+      - protected-channel
+    extra_conf_files:
+      - tcp.conf
+    timeout: 180
