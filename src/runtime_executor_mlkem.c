@@ -106,49 +106,14 @@ int pqcp_runtime_execute_mlkem_keygen(
 	return ensure_profile_id(job);
 }
 
-static int acquire_public_key(
-	struct pqcp_runtime_executor *executor,
-	struct pqcp_runtime_job *job,
-	const uint8_t **public_key,
-	size_t *public_key_length)
-{
-	const uint8_t *secret = NULL;
-	size_t secret_length = 0U;
-	int ret;
-
-	ret = pqcp_runtime_key_store_acquire(
-		executor->key_store, &job->primary_key,
-		PQCP_RUNTIME_USAGE_ENCAPSULATE,
-		pqcp_runtime_internal_now_ms(),
-		public_key, public_key_length,
-		&secret, &secret_length);
-	if (ret != 0) {
-		return ret;
-	}
-	if (*public_key == NULL ||
-	    *public_key_length !=
-		    pqcp_mlkem_pk_size(
-			    (pqcp_mlkem_level_t)job->level)) {
-		(void)pqcp_runtime_key_store_release(
-			executor->key_store,
-			&job->primary_key);
-		return -EBADMSG;
-	}
-	return 0;
-}
-
 int pqcp_runtime_execute_mlkem_encapsulate(
 	struct pqcp_runtime_executor *executor,
 	struct pqcp_runtime_job *job,
 	uint8_t *workspace,
 	size_t workspace_capacity)
 {
-	const uint8_t *public_key = NULL;
-	size_t public_key_length = 0U;
 	size_t ciphertext_length;
 	struct pqcp_runtime_key_request secret_request;
-	uint8_t *ciphertext;
-	uint8_t *shared_secret;
 	int ret;
 
 	if (executor == NULL || job == NULL ||
@@ -160,75 +125,26 @@ int pqcp_runtime_execute_mlkem_encapsulate(
 	ciphertext_length = pqcp_mlkem_ct_size(
 		(pqcp_mlkem_level_t)job->level);
 	if (ciphertext_length == 0U ||
-	    workspace_capacity <
-		    ciphertext_length + PQCP_MLKEM_SS_SIZE ||
+	    workspace_capacity < ciphertext_length ||
 	    job->output_capacity < ciphertext_length) {
 		return -EINVAL;
 	}
-	ret = acquire_public_key(
-		executor, job, &public_key,
-		&public_key_length);
-	if (ret != 0) {
-		return ret;
-	}
-	ciphertext = workspace;
-	shared_secret = workspace + ciphertext_length;
-	ret = pqcp_mlkem_encapsulate(
-		(pqcp_mlkem_level_t)job->level,
-		public_key, ciphertext, shared_secret);
-	(void)pqcp_runtime_key_store_release(
-		executor->key_store, &job->primary_key);
-	if (ret != PQCP_MLKEM_SUCCESS) {
-		pqcp_runtime_secure_zero(
-			workspace, workspace_capacity);
-		return -EIO;
-	}
 	shared_secret_request(job, &secret_request);
-	ret = pqcp_runtime_key_store_create(
-		executor->key_store, &secret_request,
-		NULL, 0U, shared_secret,
-		PQCP_MLKEM_SS_SIZE, &job->secondary_key);
+	ret = pqcp_runtime_key_store_encapsulate(
+		executor->key_store, &job->primary_key,
+		&secret_request, workspace,
+		workspace_capacity, &ciphertext_length,
+		&job->secondary_key);
 	if (ret != 0) {
 		pqcp_runtime_secure_zero(
 			workspace, workspace_capacity);
 		return ret;
 	}
-	memcpy(job->output, ciphertext, ciphertext_length);
+	memcpy(job->output, workspace, ciphertext_length);
 	job->output_length = ciphertext_length;
 	pqcp_runtime_secure_zero(
-		shared_secret, PQCP_MLKEM_SS_SIZE);
+		workspace, workspace_capacity);
 	return ensure_profile_id(job);
-}
-
-static int acquire_secret_key(
-	struct pqcp_runtime_executor *executor,
-	struct pqcp_runtime_job *job,
-	const uint8_t **secret_key,
-	size_t *secret_key_length)
-{
-	const uint8_t *public_key = NULL;
-	size_t public_key_length = 0U;
-	int ret;
-
-	ret = pqcp_runtime_key_store_acquire(
-		executor->key_store, &job->primary_key,
-		PQCP_RUNTIME_USAGE_DECAPSULATE,
-		pqcp_runtime_internal_now_ms(),
-		&public_key, &public_key_length,
-		secret_key, secret_key_length);
-	if (ret != 0) {
-		return ret;
-	}
-	if (*secret_key == NULL ||
-	    *secret_key_length !=
-		    pqcp_mlkem_sk_size(
-			    (pqcp_mlkem_level_t)job->level)) {
-		(void)pqcp_runtime_key_store_release(
-			executor->key_store,
-			&job->primary_key);
-		return -EBADMSG;
-	}
-	return 0;
 }
 
 int pqcp_runtime_execute_mlkem_decapsulate(
@@ -237,15 +153,12 @@ int pqcp_runtime_execute_mlkem_decapsulate(
 	uint8_t *workspace,
 	size_t workspace_capacity)
 {
-	const uint8_t *secret_key = NULL;
-	size_t secret_key_length = 0U;
 	size_t ciphertext_length;
 	struct pqcp_runtime_key_request secret_request;
 	int ret;
 
 	if (executor == NULL || job == NULL ||
-	    workspace == NULL ||
-	    workspace_capacity < PQCP_MLKEM_SS_SIZE ||
+	    workspace == NULL || workspace_capacity == 0U ||
 	    !compiled_mlkem_level(job->level) ||
 	    job->input == NULL) {
 		return -EINVAL;
@@ -256,29 +169,11 @@ int pqcp_runtime_execute_mlkem_decapsulate(
 	    job->input_length != ciphertext_length) {
 		return -EINVAL;
 	}
-	ret = acquire_secret_key(
-		executor, job, &secret_key,
-		&secret_key_length);
-	if (ret != 0) {
-		return ret;
-	}
-	ret = pqcp_mlkem_decapsulate(
-		(pqcp_mlkem_level_t)job->level,
-		job->input, secret_key, workspace);
-	(void)pqcp_runtime_key_store_release(
-		executor->key_store, &job->primary_key);
-	if (ret != PQCP_MLKEM_SUCCESS) {
-		pqcp_runtime_secure_zero(
-			workspace, workspace_capacity);
-		return -EIO;
-	}
 	shared_secret_request(job, &secret_request);
-	ret = pqcp_runtime_key_store_create(
-		executor->key_store, &secret_request,
-		NULL, 0U, workspace,
-		PQCP_MLKEM_SS_SIZE, &job->secondary_key);
-	pqcp_runtime_secure_zero(
-		workspace, workspace_capacity);
+	ret = pqcp_runtime_key_store_decapsulate(
+		executor->key_store, &job->primary_key,
+		job->input, job->input_length,
+		&secret_request, &job->secondary_key);
 	if (ret != 0) {
 		return ret;
 	}

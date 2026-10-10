@@ -11,6 +11,11 @@
 
 #include <pqcp_zephyr/deployment_assurance_passport_replay.h>
 
+#define FIELD_VALUE_MAX 96U
+#define PASSPORT_REPLAY_LINE_MAX 1280U
+
+#define PASSPORT_MARKER_PREFIX "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT "
+
 static bool text_present(const char *value)
 {
 	return value != NULL && value[0] != '\0';
@@ -320,9 +325,397 @@ const char *pqcp_deployment_assurance_passport_replay_error_str(
 		return "mask_range";
 	case PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_SCORE_RANGE:
 		return "score_range";
+	case PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_DUPLICATE_MARKER:
+		return "duplicate_marker";
+	case PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_MISSING_REQUIRED:
+		return "missing_required";
 	default:
 		return "unknown";
 	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Passport marker line ingestion                                      */
+/* ------------------------------------------------------------------ */
+
+static int field_value(const char *line, const char *key, char *out,
+		       size_t out_len)
+{
+	size_t key_len;
+	const char *p = line;
+
+	if (line == NULL || key == NULL || out == NULL || out_len == 0U) {
+		return -EINVAL;
+	}
+	key_len = strlen(key);
+
+	while (*p != '\0') {
+		if ((p == line || *(p - 1) == ' ') &&
+		    strncmp(p, key, key_len) == 0 && p[key_len] == '=') {
+			const char *value = p + key_len + 1U;
+			size_t len = 0U;
+
+			while (value[len] != '\0' && value[len] != ' ') {
+				len++;
+			}
+			if (len == 0U || len >= out_len) {
+				return -EINVAL;
+			}
+			memcpy(out, value, len);
+			out[len] = '\0';
+			return 0;
+		}
+		p++;
+	}
+
+	return -ENOENT;
+}
+
+static int parse_u32_dec(const char *value, uint32_t *out)
+{
+	uint32_t result = 0U;
+
+	if (value == NULL || out == NULL || *value == '\0') {
+		return -EINVAL;
+	}
+
+	for (const char *p = value; *p != '\0'; ++p) {
+		if (*p < '0' || *p > '9') {
+			return -EINVAL;
+		}
+		if (result > (UINT32_MAX - (uint32_t)(*p - '0')) / 10U) {
+			return -EINVAL;
+		}
+		result = (result * 10U) + (uint32_t)(*p - '0');
+	}
+
+	*out = result;
+	return 0;
+}
+
+static int hex_nibble(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+
+	return -1;
+}
+
+static int parse_u32_hex(const char *value, uint32_t *out)
+{
+	uint32_t result = 0U;
+	const char *p = value;
+
+	if (value == NULL || out == NULL || *value == '\0') {
+		return -EINVAL;
+	}
+	if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+		p += 2;
+		if (*p == '\0') {
+			return -EINVAL;
+		}
+	}
+
+	while (*p != '\0') {
+		int nibble = hex_nibble(*p);
+
+		if (nibble < 0 || result > (UINT32_MAX >> 4)) {
+			return -EINVAL;
+		}
+		result = (result << 4) | (uint32_t)nibble;
+		p++;
+	}
+
+	*out = result;
+	return 0;
+}
+
+static int get_u32_dec(const char *line, const char *key, uint32_t *out)
+{
+	char value[FIELD_VALUE_MAX];
+
+	return field_value(line, key, value, sizeof(value)) == 0 ?
+		parse_u32_dec(value, out) : -EINVAL;
+}
+
+static int get_u32_hex(const char *line, const char *key, uint32_t *out)
+{
+	char value[FIELD_VALUE_MAX];
+
+	return field_value(line, key, value, sizeof(value)) == 0 ?
+		parse_u32_hex(value, out) : -EINVAL;
+}
+
+static int get_bool_flag(const char *line, const char *key, bool *out)
+{
+	uint32_t value;
+
+	if (get_u32_dec(line, key, &value) != 0 || value > 1U) {
+		return -EINVAL;
+	}
+	*out = value != 0U;
+	return 0;
+}
+
+static int get_text(const char *line, const char *key, char *out,
+		    size_t out_len)
+{
+	return field_value(line, key, out, out_len) == 0 ? 0 : -EINVAL;
+}
+
+static int parse_profile(const char *value,
+			 enum pqcp_deployment_release_gate_profile *out)
+{
+	if (strcmp(value, "prototype") == 0) {
+		*out = PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PROTOTYPE;
+		return 0;
+	}
+	if (strcmp(value, "paper") == 0) {
+		*out = PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PAPER;
+		return 0;
+	}
+	if (strcmp(value, "product") == 0) {
+		*out = PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PRODUCT;
+		return 0;
+	}
+	if (strcmp(value, "partner") == 0) {
+		*out = PQCP_DEPLOYMENT_RELEASE_GATE_PROFILE_PARTNER;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+static int parse_tri_status(const char *value, uint32_t *out)
+{
+	if (strcmp(value, "PASS") == 0) {
+		*out = 2U;
+		return 0;
+	}
+	if (strcmp(value, "WARN") == 0) {
+		*out = 1U;
+		return 0;
+	}
+	if (strcmp(value, "FAIL") == 0) {
+		*out = 0U;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+static int parse_passport_marker(
+	const char *line,
+	struct pqcp_deployment_assurance_passport *passport,
+	char observed_digest[
+		PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_DIGEST_HEX_CHARS + 1U])
+{
+	char text[FIELD_VALUE_MAX];
+	uint32_t tri;
+
+	memset(passport, 0, sizeof(*passport));
+
+	if (get_u32_dec(line, "schema", &passport->schema_version) != 0) {
+		return -EINVAL;
+	}
+	if (get_text(line, "profile", text, sizeof(text)) != 0 ||
+	    parse_profile(text, &passport->profile) != 0) {
+		return -EINVAL;
+	}
+	if (get_text(line, "status", text, sizeof(text)) != 0 ||
+	    parse_tri_status(text, &tri) != 0) {
+		return -EINVAL;
+	}
+	passport->status = (enum pqcp_deployment_assurance_passport_status)tri;
+	if (get_text(line, "seal_status", text, sizeof(text)) != 0 ||
+	    parse_tri_status(text, &tri) != 0) {
+		return -EINVAL;
+	}
+	passport->seal_status = (enum pqcp_deployment_evidence_seal_status)tri;
+	if (get_text(line, "seal_audit_status", text, sizeof(text)) != 0 ||
+	    parse_tri_status(text, &tri) != 0) {
+		return -EINVAL;
+	}
+	passport->seal_audit_status =
+		(enum pqcp_deployment_evidence_seal_audit_status)tri;
+	if (get_u32_hex(line, "errors", &passport->error_mask) != 0 ||
+	    get_u32_hex(line, "warnings", &passport->warning_mask) != 0 ||
+	    get_u32_dec(line, "score", &passport->passport_score) != 0 ||
+	    get_u32_dec(line, "min_score",
+			&passport->min_terminal_score) != 0 ||
+	    get_u32_dec(line, "capability_score",
+			&passport->capability_readiness_score) != 0 ||
+	    get_u32_dec(line, "audited_results",
+			&passport->audited_result_count) != 0 ||
+	    get_u32_dec(line, "chain_stages",
+			&passport->chain_stage_count) != 0 ||
+	    get_u32_hex(line, "evidence_all",
+			&passport->evidence_capabilities_all) != 0 ||
+	    get_u32_hex(line, "evidence_any",
+			&passport->evidence_capabilities_any) != 0 ||
+	    get_u32_hex(line, "mlkem_levels",
+			&passport->mlkem_level_mask) != 0 ||
+	    get_u32_hex(line, "mldsa_levels",
+			&passport->mldsa_level_mask) != 0) {
+		return -EINVAL;
+	}
+	if (get_bool_flag(line, "seal_replay_passed",
+			  &passport->seal_replay_passed) != 0 ||
+	    get_bool_flag(line, "top_consistent",
+			  &passport->top_consistent) != 0 ||
+	    get_bool_flag(line, "nonce_consistent",
+			  &passport->nonce_consistent) != 0 ||
+	    get_bool_flag(line, "digest_consistent",
+			  &passport->seal_digest_consistent) != 0 ||
+	    get_bool_flag(line, "profile_consistent",
+			  &passport->profile_consistent) != 0 ||
+	    get_bool_flag(line, "production_allowed",
+			  &passport->production_allowed) != 0) {
+		return -EINVAL;
+	}
+	if (get_text(line, "pqcp_version", passport->pqcp_version,
+		     sizeof(passport->pqcp_version)) != 0 ||
+	    get_text(line, "zephyr_version", passport->zephyr_version,
+		     sizeof(passport->zephyr_version)) != 0 ||
+	    get_text(line, "board", passport->board,
+		     sizeof(passport->board)) != 0 ||
+	    get_text(line, "top", passport->top_candidate_id,
+		     sizeof(passport->top_candidate_id)) != 0 ||
+	    get_text(line, "nonce", passport->nonce_hex,
+		     sizeof(passport->nonce_hex)) != 0 ||
+	    get_text(line, "seal_digest", passport->seal_digest_hex,
+		     sizeof(passport->seal_digest_hex)) != 0 ||
+	    get_text(line, "seal_audit_digest",
+		     passport->seal_audit_digest_hex,
+		     sizeof(passport->seal_audit_digest_hex)) != 0 ||
+	    get_text(line, "passport_digest", observed_digest,
+		     PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_DIGEST_HEX_CHARS +
+			     1U) != 0) {
+		return -EINVAL;
+	}
+
+	set_text(passport->passport_digest_hex,
+		 sizeof(passport->passport_digest_hex), observed_digest);
+	return 0;
+}
+
+static void note_error(
+	struct pqcp_deployment_assurance_passport_replay_state *state,
+	enum pqcp_deployment_assurance_passport_replay_error error)
+{
+	if (state->first_error ==
+	    PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_NONE) {
+		state->first_error = error;
+		state->first_error_line = state->lines_seen;
+	}
+}
+
+int pqcp_deployment_assurance_passport_replay_init(
+	struct pqcp_deployment_assurance_passport_replay_state *state)
+{
+	if (state == NULL) {
+		return -EINVAL;
+	}
+
+	memset(state, 0, sizeof(*state));
+	state->schema_version =
+		PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_SCHEMA_VERSION;
+	state->first_error =
+		PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_NONE;
+	return 0;
+}
+
+int pqcp_deployment_assurance_passport_replay_ingest_line(
+	struct pqcp_deployment_assurance_passport_replay_state *state,
+	const char *line)
+{
+	size_t len;
+
+	if (state == NULL || line == NULL) {
+		return -EINVAL;
+	}
+
+	len = strlen(line);
+	if (len >= PASSPORT_REPLAY_LINE_MAX) {
+		state->lines_seen++;
+		note_error(state,
+			   PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_MALFORMED_FIELD);
+		return -EINVAL;
+	}
+
+	if (strncmp(line, PASSPORT_MARKER_PREFIX,
+		    strlen(PASSPORT_MARKER_PREFIX)) != 0) {
+		/* Non-passport lines are ignored, not consumed as evidence. */
+		return 0;
+	}
+
+	state->lines_seen++;
+
+	if ((state->marker_mask &
+	     PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_MARKER_PASSPORT) !=
+	    0U) {
+		note_error(state,
+			   PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_DUPLICATE_MARKER);
+		return -EINVAL;
+	}
+
+	if (parse_passport_marker(line, &state->passport,
+				  state->passport_digest_observed_hex) != 0) {
+		note_error(state,
+			   PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_MALFORMED_FIELD);
+		return -EINVAL;
+	}
+
+	state->marker_mask |=
+		PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_MARKER_PASSPORT;
+	return 0;
+}
+
+int pqcp_deployment_assurance_passport_replay_finish(
+	struct pqcp_deployment_assurance_passport_replay_state *state,
+	struct pqcp_deployment_assurance_passport_replay_result *result)
+{
+	char recomputed[
+		PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_DIGEST_HEX_CHARS + 1U];
+	enum pqcp_deployment_assurance_passport_replay_error error;
+
+	if (state == NULL || result == NULL) {
+		return -EINVAL;
+	}
+
+	if (state->first_error !=
+	    PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_NONE) {
+		recompute_passport_digest(&state->passport, recomputed);
+		build_result(&state->passport, recomputed, state->first_error,
+			     result);
+		return -EBADMSG;
+	}
+
+	if ((state->marker_mask &
+	     PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_REQUIRED_MASK) !=
+	    PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_REQUIRED_MASK) {
+		recompute_passport_digest(&state->passport, recomputed);
+		build_result(&state->passport, recomputed,
+			     PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_MISSING_REQUIRED,
+			     result);
+		return -EBADMSG;
+	}
+
+	error = validate_passport(&state->passport, recomputed);
+	if (error != PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_NONE) {
+		recompute_passport_digest(&state->passport, recomputed);
+	}
+	build_result(&state->passport, recomputed, error, result);
+
+	return error == PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_NONE ?
+		0 : -EBADMSG;
 }
 
 int pqcp_deployment_assurance_passport_replay_verify(

@@ -19,6 +19,8 @@ MODULE_ROOT = Path(__file__).resolve().parent.parent
 TOOL_DIR = MODULE_ROOT / "tools" / "evidence_verifier"
 FIXTURE = TOOL_DIR / "testdata" / "advisor_qemu_transcript.log"
 SIGNED_FIXTURE = TOOL_DIR / "testdata" / "signed_passport_transcript.log"
+FULL_CHAIN_FIXTURE = (
+    TOOL_DIR / "testdata" / "advisor_full_chain_transcript.log")
 
 
 def build_tool(build_dir: Path) -> Path:
@@ -194,6 +196,71 @@ def main() -> int:
         check("missing argument exits 2", result.returncode == 2)
         result = run_tool(binary, workdir / "does_not_exist.log")
         check("unreadable transcript exits 2", result.returncode == 2)
+
+        # 13. Full-chain fixture (adversarial tamper matrix + evidence
+        # trail) verifies, and the JSON reports the new layers and
+        # bindings.
+        full_text = FULL_CHAIN_FIXTURE.read_text()
+        json_path = workdir / "full_chain.json"
+        result = run_tool(binary, FULL_CHAIN_FIXTURE,
+                          "--json", str(json_path))
+        check("full-chain transcript verifies", result.returncode == 0,
+              result.stdout + result.stderr)
+        summary = json.loads(json_path.read_text())
+        check("json reports tamper matrix replayed",
+              summary["tamper_matrix"]["markers"] == 1
+              and summary["tamper_matrix"]["passed"] is True
+              and summary["tamper_matrix"]["coverage_permille"] == 1000
+              and summary["tamper_matrix"]["missed"] == 0)
+        check("json reports trail replayed",
+              summary["trail"]["markers"] == 6
+              and summary["trail"]["passed"] is True
+              and summary["trail"]["entries"] == 5)
+        check("json reports wave-11 bindings",
+              summary["bindings"]["passport_to_tamper"] is True
+              and summary["bindings"]["trail_identity"] is True)
+
+        # 14. Tampering with one trail entry digest breaks the link chain.
+        idx = full_text.find(
+            "PQCP_DEPLOYMENT_EVIDENCE_TRAIL_ENTRY schema=1 seq=2")
+        idx = full_text.find("digest=", idx) + len("digest=")
+        flipped = "0" if full_text[idx] != "0" else "1"
+        tampered = write_variant(
+            workdir, "trail_entry_tampered.log",
+            full_text[:idx] + flipped + full_text[idx + 1:])
+        result = run_tool(binary, tampered, "--quiet")
+        check("tampered trail entry rejected", result.returncode == 1)
+
+        # 15. Removing one trail entry breaks the head count.
+        no_entry = write_variant(
+            workdir, "trail_entry_dropped.log",
+            "\n".join(line for line in full_text.splitlines()
+                      if "TRAIL_ENTRY schema=1 seq=3" not in line) + "\n")
+        result = run_tool(binary, no_entry, "--quiet")
+        check("dropped trail entry rejected", result.returncode == 1)
+
+        # 16. Forging the claimed detection coverage breaks the matrix
+        # digest.
+        forged = write_variant(
+            workdir, "matrix_coverage_forged.log",
+            full_text.replace("coverage_permille=1000",
+                              "coverage_permille=970", 1))
+        result = run_tool(binary, forged, "--quiet")
+        check("forged tamper coverage rejected", result.returncode == 1)
+
+        # 17. Older transcripts without the new layers must keep verifying
+        # (covered by test 1) and stripping the new layers from a new
+        # transcript must also keep the core chain verifiable.
+        stripped = write_variant(
+            workdir, "wave11_stripped.log",
+            "\n".join(line for line in full_text.splitlines()
+                      if not line.startswith((
+                          "PQCP_DEPLOYMENT_TAMPER_",
+                          "PQCP_DEPLOYMENT_EVIDENCE_TRAIL",
+                          "PQCP_CAPABILITY_EXTENSION"))) + "\n")
+        result = run_tool(binary, stripped, "--quiet")
+        check("stripped wave-11 layers keep core chain verifiable",
+              result.returncode == 0)
 
     if failures:
         print(f"\n{len(failures)} test(s) failed")

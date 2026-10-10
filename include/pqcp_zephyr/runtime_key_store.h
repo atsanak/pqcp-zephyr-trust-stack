@@ -38,9 +38,7 @@ struct pqcp_runtime_key_store_ops {
 		       uint32_t required_usage,
 		       uint64_t now_ms,
 		       const uint8_t **public_data,
-		       size_t *public_length,
-		       const uint8_t **secret_data,
-		       size_t *secret_length);
+		       size_t *public_length);
 	int (*release)(struct pqcp_runtime_key_store *store,
 		       const struct pqcp_runtime_key_handle *handle);
 	int (*export_public)(struct pqcp_runtime_key_store *store,
@@ -48,6 +46,73 @@ struct pqcp_runtime_key_store_ops {
 			     uint8_t *output,
 			     size_t output_capacity,
 			     size_t *output_length);
+	int (*sign)(struct pqcp_runtime_key_store *store,
+		    const struct pqcp_runtime_key_handle *handle,
+		    const uint8_t *message,
+		    size_t message_length,
+		    const uint8_t *context,
+		    size_t context_length,
+		    uint8_t *signature,
+		    size_t signature_capacity,
+		    size_t *signature_length);
+	int (*verify)(struct pqcp_runtime_key_store *store,
+		      const struct pqcp_runtime_key_handle *handle,
+		      const uint8_t *message,
+		      size_t message_length,
+		      const uint8_t *context,
+		      size_t context_length,
+		      const uint8_t *signature,
+		      size_t signature_length);
+	int (*encapsulate)(struct pqcp_runtime_key_store *store,
+			   const struct pqcp_runtime_key_handle *handle,
+			   const struct pqcp_runtime_key_request *secret_request,
+			   uint8_t *ciphertext,
+			   size_t ciphertext_capacity,
+			   size_t *ciphertext_length,
+			   struct pqcp_runtime_key_handle *secret_handle);
+	int (*decapsulate)(struct pqcp_runtime_key_store *store,
+			   const struct pqcp_runtime_key_handle *handle,
+			   const uint8_t *ciphertext,
+			   size_t ciphertext_length,
+			   const struct pqcp_runtime_key_request *secret_request,
+			   struct pqcp_runtime_key_handle *secret_handle);
+	int (*derive)(struct pqcp_runtime_key_store *store,
+		      const struct pqcp_runtime_key_handle *handle,
+		      const uint8_t *salt,
+		      size_t salt_length,
+		      const uint8_t *info,
+		      size_t info_length,
+		      const struct pqcp_runtime_key_request *derived_request,
+		      struct pqcp_runtime_key_handle *derived_handle);
+	int (*mac)(struct pqcp_runtime_key_store *store,
+		   const struct pqcp_runtime_key_handle *handle,
+		   const uint8_t *message,
+		   size_t message_length,
+		   uint8_t *tag,
+		   size_t tag_capacity,
+		   size_t *tag_length);
+	int (*aead_encrypt)(struct pqcp_runtime_key_store *store,
+			    const struct pqcp_runtime_key_handle *handle,
+			    const uint8_t *nonce,
+			    size_t nonce_length,
+			    const uint8_t *aad,
+			    size_t aad_length,
+			    const uint8_t *plaintext,
+			    size_t plaintext_length,
+			    uint8_t *ciphertext,
+			    size_t ciphertext_capacity,
+			    size_t *ciphertext_length);
+	int (*aead_decrypt)(struct pqcp_runtime_key_store *store,
+			    const struct pqcp_runtime_key_handle *handle,
+			    const uint8_t *nonce,
+			    size_t nonce_length,
+			    const uint8_t *aad,
+			    size_t aad_length,
+			    const uint8_t *ciphertext,
+			    size_t ciphertext_length,
+			    uint8_t *plaintext,
+			    size_t plaintext_capacity,
+			    size_t *plaintext_length);
 	int (*rotate)(struct pqcp_runtime_key_store *store,
 		      const struct pqcp_runtime_key_handle *old_handle,
 		      const struct pqcp_runtime_key_request *request,
@@ -148,9 +213,7 @@ int pqcp_runtime_key_store_acquire(
 	uint32_t required_usage,
 	uint64_t now_ms,
 	const uint8_t **public_data,
-	size_t *public_length,
-	const uint8_t **secret_data,
-	size_t *secret_length);
+	size_t *public_length);
 int pqcp_runtime_key_store_release(
 	struct pqcp_runtime_key_store *store,
 	const struct pqcp_runtime_key_handle *handle);
@@ -160,6 +223,81 @@ int pqcp_runtime_key_store_export_public(
 	uint8_t *output,
 	size_t output_capacity,
 	size_t *output_length);
+int pqcp_runtime_key_store_sign(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	uint8_t *signature,
+	size_t signature_capacity,
+	size_t *signature_length);
+int pqcp_runtime_key_store_verify(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	const uint8_t *signature,
+	size_t signature_length);
+int pqcp_runtime_key_store_encapsulate(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const struct pqcp_runtime_key_request *secret_request,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length,
+	struct pqcp_runtime_key_handle *secret_handle);
+int pqcp_runtime_key_store_decapsulate(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	const struct pqcp_runtime_key_request *secret_request,
+	struct pqcp_runtime_key_handle *secret_handle);
+int pqcp_runtime_key_store_derive(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *salt,
+	size_t salt_length,
+	const uint8_t *info,
+	size_t info_length,
+	const struct pqcp_runtime_key_request *derived_request,
+	struct pqcp_runtime_key_handle *derived_handle);
+int pqcp_runtime_key_store_mac(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	uint8_t *tag,
+	size_t tag_capacity,
+	size_t *tag_length);
+int pqcp_runtime_key_store_aead_encrypt(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *plaintext,
+	size_t plaintext_length,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length);
+int pqcp_runtime_key_store_aead_decrypt(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	uint8_t *plaintext,
+	size_t plaintext_capacity,
+	size_t *plaintext_length);
 int pqcp_runtime_key_store_rotate(
 	struct pqcp_runtime_key_store *store,
 	const struct pqcp_runtime_key_handle *old_handle,

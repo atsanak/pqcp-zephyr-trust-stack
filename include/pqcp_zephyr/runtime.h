@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include <pqcp_zephyr/adaptive_control.h>
+#include <pqcp_zephyr/errno.h>
 #include <pqcp_zephyr/mldsa.h>
 #include <pqcp_zephyr/mlkem.h>
 
@@ -36,6 +37,8 @@ extern "C" {
 #define PQCP_RUNTIME_MAX_OUTPUT_BYTES 8192U
 #define PQCP_RUNTIME_MAX_CONTEXT_BYTES 255U
 #define PQCP_RUNTIME_AEAD_KEY_BYTES 32U
+#define PQCP_RUNTIME_AEAD_NONCE_BYTES 12U
+#define PQCP_RUNTIME_AEAD_TAG_BYTES 16U
 
 enum pqcp_runtime_status {
 	PQCP_RUNTIME_STATUS_IDLE = 0,
@@ -70,6 +73,13 @@ enum pqcp_runtime_key_backend {
 	PQCP_RUNTIME_KEY_BACKEND_PSA_PERSISTENT,
 };
 
+enum pqcp_runtime_key_custody {
+	PQCP_RUNTIME_CUSTODY_NONE = 0,
+	PQCP_RUNTIME_CUSTODY_SOFTWARE_OPAQUE,
+	PQCP_RUNTIME_CUSTODY_PLATFORM_OPAQUE,
+	PQCP_RUNTIME_CUSTODY_HARDWARE_BOUND,
+};
+
 enum pqcp_runtime_job_type {
 	PQCP_RUNTIME_JOB_NONE = 0,
 	PQCP_RUNTIME_JOB_MLKEM_KEYGEN,
@@ -78,6 +88,9 @@ enum pqcp_runtime_job_type {
 	PQCP_RUNTIME_JOB_MLDSA_KEYGEN,
 	PQCP_RUNTIME_JOB_MLDSA_SIGN,
 	PQCP_RUNTIME_JOB_MLDSA_VERIFY,
+	PQCP_RUNTIME_JOB_HKDF_DERIVE,
+	PQCP_RUNTIME_JOB_AEAD_ENCRYPT,
+	PQCP_RUNTIME_JOB_AEAD_DECRYPT,
 };
 
 enum pqcp_runtime_job_priority {
@@ -96,6 +109,9 @@ enum pqcp_runtime_key_usage {
 	PQCP_RUNTIME_USAGE_DERIVE = (1U << 4),
 	PQCP_RUNTIME_USAGE_EXPORT_PUBLIC = (1U << 5),
 	PQCP_RUNTIME_USAGE_DESTROY = (1U << 6),
+	PQCP_RUNTIME_USAGE_ENCRYPT = (1U << 7),
+	PQCP_RUNTIME_USAGE_DECRYPT = (1U << 8),
+	PQCP_RUNTIME_USAGE_MAC = (1U << 9),
 };
 
 struct pqcp_runtime_key_handle {
@@ -116,6 +132,7 @@ struct pqcp_runtime_key_metadata {
 	uint32_t use_count;
 	uint32_t public_bytes;
 	uint32_t secret_bytes;
+	enum pqcp_runtime_key_custody custody;
 	char owner[PQCP_RUNTIME_OWNER_MAX_CHARS];
 	char label[PQCP_RUNTIME_LABEL_MAX_CHARS];
 	bool active;
@@ -276,6 +293,12 @@ int pqcp_runtime_snapshot_write(
 	uint8_t *output,
 	size_t output_capacity,
 	struct pqcp_runtime_snapshot_info *info);
+/**
+ * Restore metadata only after the complete snapshot passes validation.
+ * Failure preserves sessions, profiles and info. Input and output storage must
+ * not overlap; the caller must keep the input immutable for the entire call.
+ * The digest detects corruption, but does not authenticate the snapshot sender.
+ */
 int pqcp_runtime_snapshot_read(
 	const uint8_t *input,
 	size_t input_length,

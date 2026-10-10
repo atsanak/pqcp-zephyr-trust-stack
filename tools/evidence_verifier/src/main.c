@@ -6,9 +6,11 @@
  * Ingests one captured device transcript (QEMU or serial console log),
  * replays the terminal evidence chain markers with the UNMODIFIED firmware
  * verifier translation units, recomputes every digest, and cross-binds the
- * layers (verdict digest into seal, seal digest into passport). Exit code 0
- * means the transcript's terminal chain is internally consistent and
- * tamper-free; any parse failure, digest mismatch, or broken binding exits 1.
+ * layers (verdict digest into seal, seal digest into passport, passport
+ * digest into the adversarial tamper matrix, chain identity into the
+ * hash-chained evidence trail). Exit code 0 means the transcript's terminal
+ * chain is internally consistent and tamper-free; any parse failure, digest
+ * mismatch, or broken binding exits 1.
  *
  * No Zephyr toolchain, no python, no network: a reviewer needs only a C
  * compiler to independently check what a device claimed.
@@ -22,25 +24,29 @@
 
 #include <pqcp_zephyr/deployment_assurance_passport_replay.h>
 #include <pqcp_zephyr/deployment_evidence_seal_replay.h>
+#include <pqcp_zephyr/deployment_evidence_trail_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
-#include "passport_parse.h"
+#include <pqcp_zephyr/deployment_tamper_matrix_replay.h>
 #include "signature_check.h"
 
 #define LINE_MAX_CHARS 4096U
-#define FIELD_MAX_CHARS 96U
-
-#define PASSPORT_MARKER_PREFIX "PQCP_DEPLOYMENT_ASSURANCE_PASSPORT "
 
 struct transcript_summary {
 	unsigned long total_lines;
 	unsigned long verdict_markers;
 	unsigned long seal_markers;
 	unsigned long passport_markers;
+	unsigned long tamper_markers;
+	unsigned long trail_markers;
 	bool verdict_passed;
 	bool seal_passed;
 	bool passport_passed;
+	bool tamper_passed;
+	bool trail_passed;
 	bool verdict_seal_bound;
 	bool seal_passport_bound;
+	bool passport_tamper_bound;
+	bool trail_identity_bound;
 	bool signature_present;
 	bool signature_complete;
 	bool signature_digest_bound;
@@ -48,6 +54,8 @@ struct transcript_summary {
 	struct pqcp_deployment_evidence_verdict_replay_result verdict;
 	struct pqcp_deployment_evidence_seal_replay_result seal;
 	struct pqcp_deployment_assurance_passport_replay_result passport;
+	struct pqcp_deployment_tamper_matrix_replay_result tamper;
+	struct pqcp_deployment_evidence_trail_replay_result trail;
 };
 
 /* ------------------------------------------------------------------ */
@@ -76,44 +84,50 @@ static int process_transcript(FILE *input, bool lenient,
 	static char line[LINE_MAX_CHARS];
 	struct pqcp_deployment_evidence_verdict_replay_state verdict_state;
 	struct pqcp_deployment_evidence_seal_replay_state seal_state;
-	struct pqcp_deployment_assurance_passport passport;
+	static struct pqcp_deployment_assurance_passport_replay_state
+		passport_state;
+	static struct pqcp_deployment_tamper_matrix_replay_state tamper_state;
+	static struct pqcp_deployment_evidence_trail_replay_state trail_state;
 	struct signature_capture sig_capture;
-	bool passport_parse_failed = false;
+	bool layers_ok;
+	bool bindings_ok;
 	int ret;
 
 	memset(summary, 0, sizeof(*summary));
 	if (pqcp_deployment_evidence_verdict_replay_init(&verdict_state) != 0 ||
-	    pqcp_deployment_evidence_seal_replay_init(&seal_state) != 0) {
+	    pqcp_deployment_evidence_seal_replay_init(&seal_state) != 0 ||
+	    pqcp_deployment_assurance_passport_replay_init(
+		    &passport_state) != 0 ||
+	    pqcp_deployment_tamper_matrix_replay_init(&tamper_state) != 0 ||
+	    pqcp_deployment_evidence_trail_replay_init(&trail_state) != 0) {
 		return -EINVAL;
 	}
-	memset(&passport, 0, sizeof(passport));
 	signature_capture_init(&sig_capture);
 
 	while (fgets(line, sizeof(line), input) != NULL) {
 		summary->total_lines++;
 		strip_line_endings(line);
 
-		if (strncmp(line, PASSPORT_MARKER_PREFIX,
-			    strlen(PASSPORT_MARKER_PREFIX)) == 0) {
-			summary->passport_markers++;
-			if (summary->passport_markers > 1U ||
-			    parse_passport_marker(line, &passport) != 0) {
-				passport_parse_failed = true;
-			}
-			continue;
-		}
-
 		(void)signature_capture_ingest_line(&sig_capture, line);
 
-		/* Both replay state machines ignore non-matching lines. */
+		/* All replay state machines ignore non-matching lines. */
 		(void)pqcp_deployment_evidence_verdict_replay_ingest_line(
 			&verdict_state, line);
 		(void)pqcp_deployment_evidence_seal_replay_ingest_line(
 			&seal_state, line);
+		(void)pqcp_deployment_assurance_passport_replay_ingest_line(
+			&passport_state, line);
+		(void)pqcp_deployment_tamper_matrix_replay_ingest_line(
+			&tamper_state, line);
+		(void)pqcp_deployment_evidence_trail_replay_ingest_line(
+			&trail_state, line);
 	}
 
 	summary->verdict_markers = verdict_state.lines_seen;
 	summary->seal_markers = seal_state.lines_seen;
+	summary->passport_markers = passport_state.lines_seen;
+	summary->tamper_markers = tamper_state.lines_seen;
+	summary->trail_markers = trail_state.lines_seen;
 
 	ret = pqcp_deployment_evidence_verdict_replay_finish(
 		&verdict_state, &summary->verdict);
@@ -123,14 +137,17 @@ static int process_transcript(FILE *input, bool lenient,
 		&seal_state, &summary->seal);
 	summary->seal_passed = ret == 0 && summary->seal.passed;
 
-	if (summary->passport_markers == 1U && !passport_parse_failed) {
-		ret = pqcp_deployment_assurance_passport_replay_verify(
-			&passport, &summary->passport);
-		summary->passport_passed = ret == 0 &&
-			summary->passport.passed;
-	} else {
-		summary->passport_passed = false;
-	}
+	ret = pqcp_deployment_assurance_passport_replay_finish(
+		&passport_state, &summary->passport);
+	summary->passport_passed = ret == 0 && summary->passport.passed;
+
+	ret = pqcp_deployment_tamper_matrix_replay_finish(
+		&tamper_state, &summary->tamper);
+	summary->tamper_passed = ret == 0 && summary->tamper.passed;
+
+	ret = pqcp_deployment_evidence_trail_replay_finish(
+		&trail_state, &summary->trail);
+	summary->trail_passed = ret == 0 && summary->trail.passed;
 
 	summary->verdict_seal_bound =
 		summary->verdict_passed && summary->seal_passed &&
@@ -138,8 +155,18 @@ static int process_transcript(FILE *input, bool lenient,
 		       summary->verdict.computed_digest_hex) == 0;
 	summary->seal_passport_bound =
 		summary->seal_passed && summary->passport_passed &&
-		strcmp(passport.seal_digest_hex,
+		strcmp(passport_state.passport.seal_digest_hex,
 		       summary->seal.computed_digest_hex) == 0;
+	summary->passport_tamper_bound =
+		summary->passport_passed && summary->tamper_passed &&
+		strcmp(summary->tamper.passport_digest_hex,
+		       summary->passport.computed_digest_hex) == 0;
+	summary->trail_identity_bound =
+		summary->verdict_passed && summary->trail_passed &&
+		strcmp(summary->trail.top_candidate_id,
+		       summary->verdict.top_candidate_id) == 0 &&
+		strcmp(summary->trail.nonce_hex,
+		       summary->verdict.nonce_hex) == 0;
 
 	summary->signature_present = sig_capture.present;
 	summary->signature_complete = signature_capture_complete(&sig_capture);
@@ -158,6 +185,23 @@ static int process_transcript(FILE *input, bool lenient,
 		return -EBADMSG;
 	}
 	if (summary->signature_present && !summary->signature_verified) {
+		return -EBADMSG;
+	}
+
+	/* The adversarial tamper matrix and the evidence trail are newer
+	 * layers: when present they must verify and bind; older transcripts
+	 * without them remain fully verifiable.
+	 */
+	if (summary->tamper_markers != 0U &&
+	    (!summary->tamper_passed ||
+	     (summary->passport_markers != 0U &&
+	      !summary->passport_tamper_bound))) {
+		return -EBADMSG;
+	}
+	if (summary->trail_markers != 0U &&
+	    (!summary->trail_passed ||
+	     (summary->verdict_markers != 0U &&
+	      !summary->trail_identity_bound))) {
 		return -EBADMSG;
 	}
 
@@ -183,9 +227,12 @@ static int process_transcript(FILE *input, bool lenient,
 			passport_ok && binding_ok) ? 0 : -EBADMSG;
 	}
 
-	return (summary->verdict_passed && summary->seal_passed &&
-		summary->passport_passed && summary->verdict_seal_bound &&
-		summary->seal_passport_bound) ? 0 : -EBADMSG;
+	layers_ok = summary->verdict_passed && summary->seal_passed &&
+		summary->passport_passed;
+	bindings_ok = summary->verdict_seal_bound &&
+		summary->seal_passport_bound;
+
+	return (layers_ok && bindings_ok) ? 0 : -EBADMSG;
 }
 
 /* ------------------------------------------------------------------ */
@@ -198,9 +245,10 @@ static void print_summary(FILE *out, const struct transcript_summary *summary,
 	fprintf(out, "pqcp-evidence-verify: %s\n",
 		chain_ok ? "CHAIN OK" : "CHAIN BROKEN");
 	fprintf(out,
-		"  lines=%lu verdict_markers=%lu seal_markers=%lu passport_markers=%lu\n",
+		"  lines=%lu verdict_markers=%lu seal_markers=%lu passport_markers=%lu tamper_markers=%lu trail_markers=%lu\n",
 		summary->total_lines, summary->verdict_markers,
-		summary->seal_markers, summary->passport_markers);
+		summary->seal_markers, summary->passport_markers,
+		summary->tamper_markers, summary->trail_markers);
 	fprintf(out, "  verdict_replay=%s error=%s digest=%s\n",
 		bool_token(summary->verdict_passed),
 		pqcp_deployment_evidence_verdict_replay_error_str(
@@ -216,9 +264,35 @@ static void print_summary(FILE *out, const struct transcript_summary *summary,
 		pqcp_deployment_assurance_passport_replay_error_str(
 			summary->passport.first_error),
 		summary->passport.computed_digest_hex);
+	if (summary->tamper_markers != 0U) {
+		fprintf(out,
+			"  tamper_matrix_replay=%s error=%s coverage_permille=%u attacks=%u detected=%u digest=%s\n",
+			bool_token(summary->tamper_passed),
+			pqcp_deployment_tamper_matrix_replay_error_str(
+				summary->tamper.first_error),
+			summary->tamper.coverage_permille,
+			summary->tamper.attack_count,
+			summary->tamper.detected_count,
+			summary->tamper.computed_digest_hex);
+	}
+	if (summary->trail_markers != 0U) {
+		fprintf(out,
+			"  trail_replay=%s error=%s entries=%u head=%s\n",
+			bool_token(summary->trail_passed),
+			pqcp_deployment_evidence_trail_replay_error_str(
+				summary->trail.first_error),
+			summary->trail.entry_count,
+			summary->trail.computed_head_digest_hex);
+	}
 	fprintf(out, "  verdict->seal_binding=%s seal->passport_binding=%s\n",
 		bool_token(summary->verdict_seal_bound),
 		bool_token(summary->seal_passport_bound));
+	if (summary->tamper_markers != 0U || summary->trail_markers != 0U) {
+		fprintf(out,
+			"  passport->tamper_binding=%s trail_identity_binding=%s\n",
+			bool_token(summary->passport_tamper_bound),
+			bool_token(summary->trail_identity_bound));
+	}
 	fprintf(out,
 		"  signature_present=%s complete=%s digest_bound=%s verified=%s\n",
 		bool_token(summary->signature_present),
@@ -238,7 +312,7 @@ static int write_json(const char *path,
 	}
 
 	fprintf(out, "{\n");
-	fprintf(out, "  \"schema_version\": 1,\n");
+	fprintf(out, "  \"schema_version\": 2,\n");
 	fprintf(out, "  \"chain_ok\": %s,\n", bool_token(chain_ok));
 	fprintf(out, "  \"total_lines\": %lu,\n", summary->total_lines);
 	fprintf(out, "  \"verdict\": {\"markers\": %lu, \"passed\": %s, \"error\": \"%s\", \"computed_digest\": \"%s\"},\n",
@@ -260,9 +334,28 @@ static int write_json(const char *path,
 			summary->passport.first_error),
 		summary->passport.computed_digest_hex,
 		summary->passport.board);
-	fprintf(out, "  \"bindings\": {\"verdict_to_seal\": %s, \"seal_to_passport\": %s},\n",
+	fprintf(out, "  \"tamper_matrix\": {\"markers\": %lu, \"passed\": %s, \"error\": \"%s\", \"coverage_permille\": %u, \"attacks\": %u, \"detected\": %u, \"missed\": %u, \"computed_digest\": \"%s\"},\n",
+		summary->tamper_markers,
+		bool_token(summary->tamper_passed),
+		pqcp_deployment_tamper_matrix_replay_error_str(
+			summary->tamper.first_error),
+		summary->tamper.coverage_permille,
+		summary->tamper.attack_count,
+		summary->tamper.detected_count,
+		summary->tamper.missed_count,
+		summary->tamper.computed_digest_hex);
+	fprintf(out, "  \"trail\": {\"markers\": %lu, \"passed\": %s, \"error\": \"%s\", \"entries\": %u, \"computed_head\": \"%s\"},\n",
+		summary->trail_markers,
+		bool_token(summary->trail_passed),
+		pqcp_deployment_evidence_trail_replay_error_str(
+			summary->trail.first_error),
+		summary->trail.entry_count,
+		summary->trail.computed_head_digest_hex);
+	fprintf(out, "  \"bindings\": {\"verdict_to_seal\": %s, \"seal_to_passport\": %s, \"passport_to_tamper\": %s, \"trail_identity\": %s},\n",
 		bool_token(summary->verdict_seal_bound),
-		bool_token(summary->seal_passport_bound));
+		bool_token(summary->seal_passport_bound),
+		bool_token(summary->passport_tamper_bound),
+		bool_token(summary->trail_identity_bound));
 	fprintf(out, "  \"signature\": {\"present\": %s, \"complete\": %s, \"digest_bound\": %s, \"verified\": %s}\n",
 		bool_token(summary->signature_present),
 		bool_token(summary->signature_complete),
@@ -283,6 +376,9 @@ static void usage(const char *argv0)
 		"Exit 0: terminal chain consistent. Exit 1: missing, malformed,\n"
 		"tampered, or unbound evidence. Exit 2: usage or I/O error.\n"
 		"\n"
+		"When adversarial tamper matrix or evidence trail markers are\n"
+		"present they must verify and bind in every mode.\n"
+		"\n"
 		"  --lenient  verify only the layers present instead of\n"
 		"             requiring the full verdict+seal+passport chain\n"
 		"  --require-signature  fail unless an ML-DSA-65 passport\n"
@@ -294,7 +390,7 @@ static void usage(const char *argv0)
 
 int main(int argc, char **argv)
 {
-	struct transcript_summary summary;
+	static struct transcript_summary summary;
 	const char *transcript_path = NULL;
 	const char *json_path = NULL;
 	bool lenient = false;

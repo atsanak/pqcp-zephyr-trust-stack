@@ -275,7 +275,7 @@ int pqcp_runtime_session_submit(
 		    pqcp_runtime_internal_now_ms()) {
 		manager->rejected_count++;
 		(void)k_mutex_unlock(&manager->lock);
-		return -EKEYEXPIRED;
+		return -ETIMEDOUT;
 	}
 	job->session_id = session_id;
 	(void)pqcp_runtime_internal_copy_text(

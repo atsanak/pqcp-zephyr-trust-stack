@@ -20,6 +20,14 @@ static bool ops_complete(const struct pqcp_runtime_key_store_ops *ops)
 	       ops->acquire != NULL &&
 	       ops->release != NULL &&
 	       ops->export_public != NULL &&
+	       ops->sign != NULL &&
+	       ops->verify != NULL &&
+	       ops->encapsulate != NULL &&
+	       ops->decapsulate != NULL &&
+	       ops->derive != NULL &&
+	       ops->mac != NULL &&
+	       ops->aead_encrypt != NULL &&
+	       ops->aead_decrypt != NULL &&
 	       ops->rotate != NULL &&
 	       ops->destroy != NULL &&
 	       ops->expire != NULL &&
@@ -57,9 +65,13 @@ static bool request_valid(
 		return (request->usage &
 			PQCP_RUNTIME_USAGE_SIGN) != 0U;
 	case PQCP_RUNTIME_KEY_SHARED_SECRET:
-	case PQCP_RUNTIME_KEY_AEAD:
 		return (request->usage &
 			PQCP_RUNTIME_USAGE_DERIVE) != 0U;
+	case PQCP_RUNTIME_KEY_AEAD:
+		return (request->usage &
+			(PQCP_RUNTIME_USAGE_ENCRYPT |
+			 PQCP_RUNTIME_USAGE_DECRYPT |
+			 PQCP_RUNTIME_USAGE_MAC)) != 0U;
 	default:
 		return false;
 	}
@@ -207,31 +219,25 @@ int pqcp_runtime_key_store_acquire(
 	uint32_t required_usage,
 	uint64_t now_ms,
 	const uint8_t **public_data,
-	size_t *public_length,
-	const uint8_t **secret_data,
-	size_t *secret_length)
+	size_t *public_length)
 {
 	int ret;
 
 	if (!pqcp_runtime_key_handle_is_valid(handle) ||
 	    !pqcp_runtime_internal_usage_valid(required_usage) ||
 	    now_ms == 0U || public_data == NULL ||
-	    public_length == NULL || secret_data == NULL ||
-	    secret_length == NULL) {
+	    public_length == NULL) {
 		return -EINVAL;
 	}
 	*public_data = NULL;
 	*public_length = 0U;
-	*secret_data = NULL;
-	*secret_length = 0U;
 	ret = lock_store(store);
 	if (ret != 0) {
 		return ret;
 	}
 	ret = store->ops->acquire(
 		store, handle, required_usage, now_ms,
-		public_data, public_length,
-		secret_data, secret_length);
+		public_data, public_length);
 	if (ret != 0) {
 		store->rejected_count++;
 	}
@@ -281,6 +287,308 @@ int pqcp_runtime_key_store_export_public(
 	ret = store->ops->export_public(
 		store, handle, output,
 		output_capacity, output_length);
+	if (ret != 0) {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_sign(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	uint8_t *signature,
+	size_t signature_capacity,
+	size_t *signature_length)
+{
+	int ret;
+
+	if (store == NULL || handle == NULL ||
+	    (message == NULL && message_length != 0U) ||
+	    (context == NULL && context_length != 0U) ||
+	    context_length > PQCP_RUNTIME_MAX_CONTEXT_BYTES ||
+	    signature == NULL || signature_capacity == 0U ||
+	    signature_length == NULL ||
+	    !pqcp_runtime_key_handle_is_valid(handle) ||
+	    store->ops == NULL || store->ops->sign == NULL) {
+		return -EINVAL;
+	}
+	*signature_length = 0U;
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->sign(
+		store, handle, message, message_length,
+		context, context_length, signature,
+		signature_capacity, signature_length);
+	if (ret != 0) {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_verify(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	const uint8_t *context,
+	size_t context_length,
+	const uint8_t *signature,
+	size_t signature_length)
+{
+	int ret;
+
+	if (store == NULL ||
+	    !pqcp_runtime_key_handle_is_valid(handle) ||
+	    (message == NULL && message_length != 0U) ||
+	    (context == NULL && context_length != 0U) ||
+	    context_length > PQCP_RUNTIME_MAX_CONTEXT_BYTES ||
+	    signature == NULL || signature_length == 0U) {
+		return -EINVAL;
+	}
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->verify(
+		store, handle, message, message_length,
+		context, context_length, signature,
+		signature_length);
+	if (ret != 0) {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_encapsulate(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const struct pqcp_runtime_key_request *secret_request,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length,
+	struct pqcp_runtime_key_handle *secret_handle)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle) ||
+	    !request_valid(secret_request) ||
+	    secret_request->family != PQCP_RUNTIME_KEY_SHARED_SECRET ||
+	    ciphertext == NULL || ciphertext_capacity == 0U ||
+	    ciphertext_length == NULL ||
+	    secret_handle == NULL) {
+		return -EINVAL;
+	}
+	*ciphertext_length = 0U;
+	memset(secret_handle, 0, sizeof(*secret_handle));
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->encapsulate(
+		store, handle, secret_request, ciphertext,
+		ciphertext_capacity, ciphertext_length,
+		secret_handle);
+	if (ret == 0) {
+		store->create_count++;
+		store->active_count++;
+	} else {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_decapsulate(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	const struct pqcp_runtime_key_request *secret_request,
+	struct pqcp_runtime_key_handle *secret_handle)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle) ||
+	    ciphertext == NULL || ciphertext_length == 0U ||
+	    !request_valid(secret_request) ||
+	    secret_request->family != PQCP_RUNTIME_KEY_SHARED_SECRET ||
+	    secret_handle == NULL) {
+		return -EINVAL;
+	}
+	memset(secret_handle, 0, sizeof(*secret_handle));
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->decapsulate(
+		store, handle, ciphertext, ciphertext_length,
+		secret_request, secret_handle);
+	if (ret == 0) {
+		store->create_count++;
+		store->active_count++;
+	} else {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_derive(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *salt,
+	size_t salt_length,
+	const uint8_t *info,
+	size_t info_length,
+	const struct pqcp_runtime_key_request *derived_request,
+	struct pqcp_runtime_key_handle *derived_handle)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle) ||
+	    (salt == NULL && salt_length != 0U) ||
+	    (info == NULL && info_length != 0U) ||
+	    !request_valid(derived_request) ||
+	    derived_request->family != PQCP_RUNTIME_KEY_AEAD ||
+	    (handle->family != PQCP_RUNTIME_KEY_SHARED_SECRET &&
+	     handle->family != PQCP_RUNTIME_KEY_AEAD) ||
+	    derived_handle == NULL) {
+		return -EINVAL;
+	}
+	memset(derived_handle, 0, sizeof(*derived_handle));
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->derive(
+		store, handle, salt, salt_length, info,
+		info_length, derived_request, derived_handle);
+	if (ret == 0) {
+		store->create_count++;
+		store->active_count++;
+	} else {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_mac(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *message,
+	size_t message_length,
+	uint8_t *tag,
+	size_t tag_capacity,
+	size_t *tag_length)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle) ||
+	    handle->family != PQCP_RUNTIME_KEY_AEAD ||
+	    (message == NULL && message_length != 0U) ||
+	    tag == NULL ||
+	    tag_capacity < PQCP_RUNTIME_DIGEST_BYTES ||
+	    tag_length == NULL) {
+		return -EINVAL;
+	}
+	*tag_length = 0U;
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->mac(
+		store, handle, message, message_length,
+		tag, tag_capacity, tag_length);
+	if (ret != 0) {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_aead_encrypt(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *plaintext,
+	size_t plaintext_length,
+	uint8_t *ciphertext,
+	size_t ciphertext_capacity,
+	size_t *ciphertext_length)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle) ||
+	    nonce == NULL || nonce_length == 0U ||
+	    (aad == NULL && aad_length != 0U) ||
+	    (plaintext == NULL && plaintext_length != 0U) ||
+	    ciphertext == NULL || ciphertext_capacity == 0U ||
+	    ciphertext_length == NULL) {
+		return -EINVAL;
+	}
+	*ciphertext_length = 0U;
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->aead_encrypt(
+		store, handle, nonce, nonce_length, aad,
+		aad_length, plaintext, plaintext_length,
+		ciphertext, ciphertext_capacity,
+		ciphertext_length);
+	if (ret != 0) {
+		store->rejected_count++;
+	}
+	unlock_store(store);
+	return ret;
+}
+
+int pqcp_runtime_key_store_aead_decrypt(
+	struct pqcp_runtime_key_store *store,
+	const struct pqcp_runtime_key_handle *handle,
+	const uint8_t *nonce,
+	size_t nonce_length,
+	const uint8_t *aad,
+	size_t aad_length,
+	const uint8_t *ciphertext,
+	size_t ciphertext_length,
+	uint8_t *plaintext,
+	size_t plaintext_capacity,
+	size_t *plaintext_length)
+{
+	int ret;
+
+	if (!pqcp_runtime_key_handle_is_valid(handle) ||
+	    nonce == NULL || nonce_length == 0U ||
+	    (aad == NULL && aad_length != 0U) ||
+	    ciphertext == NULL || ciphertext_length == 0U ||
+	    plaintext == NULL || plaintext_capacity == 0U ||
+	    plaintext_length == NULL) {
+		return -EINVAL;
+	}
+	*plaintext_length = 0U;
+	ret = lock_store(store);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = store->ops->aead_decrypt(
+		store, handle, nonce, nonce_length, aad,
+		aad_length, ciphertext, ciphertext_length,
+		plaintext, plaintext_capacity,
+		plaintext_length);
 	if (ret != 0) {
 		store->rejected_count++;
 	}

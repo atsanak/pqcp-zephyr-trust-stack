@@ -65,21 +65,46 @@ int pqcp_runtime_service_selftest(
 {
 	static const uint8_t message[] =
 		"PQCP executable runtime self-test";
+	static const uint8_t confirmation_salt[] =
+		"PQCP runtime self-test salt";
+	static const uint8_t confirmation_info[] =
+		"PQCP runtime self-test AEAD";
+	static const uint8_t confirmation_nonce[
+		PQCP_RUNTIME_AEAD_NONCE_BYTES] = {
+		0x50U, 0x51U, 0x43U, 0x50U,
+		0x53U, 0x45U, 0x4cU, 0x46U,
+		0x54U, 0x45U, 0x53U, 0x54U,
+	};
 	uint8_t ciphertext[PQCP_MLKEM_CT_SIZE_MAX];
 	uint8_t signature[PQCP_MLDSA_SIG_SIZE_MAX];
-	uint8_t first_secret[PQCP_MLKEM_SS_SIZE];
-	uint8_t second_secret[PQCP_MLKEM_SS_SIZE];
+	uint8_t confirmation[
+		sizeof(message) - 1U +
+		PQCP_RUNTIME_AEAD_TAG_BYTES];
+	uint8_t recovered[sizeof(message) - 1U];
 	struct pqcp_runtime_session_request request;
+	struct pqcp_runtime_key_request derived_request = {
+		.family = PQCP_RUNTIME_KEY_AEAD,
+		.level = 256U,
+		.usage = PQCP_RUNTIME_USAGE_ENCRYPT |
+			 PQCP_RUNTIME_USAGE_DECRYPT |
+			 PQCP_RUNTIME_USAGE_MAC |
+			 PQCP_RUNTIME_USAGE_DERIVE |
+			 PQCP_RUNTIME_USAGE_DESTROY,
+		.owner = "runtime-selftest",
+		.label = "kem-confirmation",
+		.persistent = false,
+		.exportable_public = false,
+	};
 	struct pqcp_runtime_session *session = NULL;
 	struct pqcp_runtime_job job;
 	struct pqcp_runtime_key_handle encapsulated_secret = { 0 };
 	struct pqcp_runtime_key_handle decapsulated_secret = { 0 };
-	const uint8_t *public_data = NULL;
-	const uint8_t *secret_data = NULL;
-	size_t public_length = 0U;
-	size_t secret_length = 0U;
+	struct pqcp_runtime_key_handle encapsulated_aead = { 0 };
+	struct pqcp_runtime_key_handle decapsulated_aead = { 0 };
 	size_t ciphertext_length = 0U;
 	size_t signature_length = 0U;
+	size_t confirmation_length = 0U;
+	size_t recovered_length = 0U;
 	char profile_id[PQCP_RUNTIME_PROFILE_MAX_CHARS];
 	const uint64_t session_id =
 		UINT64_C(0x5051435053454c46);
@@ -123,18 +148,6 @@ int pqcp_runtime_service_selftest(
 	}
 	ciphertext_length = job.output_length;
 	encapsulated_secret = job.secondary_key;
-	ret = pqcp_runtime_key_store_acquire(
-		&service->key_store, &encapsulated_secret,
-		PQCP_RUNTIME_USAGE_DERIVE, now_ms,
-		&public_data, &public_length,
-		&secret_data, &secret_length);
-	if (ret != 0 || secret_length != sizeof(first_secret)) {
-		ret = ret != 0 ? ret : -EBADMSG;
-		goto cleanup;
-	}
-	memcpy(first_secret, secret_data, sizeof(first_secret));
-	(void)pqcp_runtime_key_store_release(
-		&service->key_store, &encapsulated_secret);
 
 	initialize_job(
 		&job, session_id ^ 2U, session_id,
@@ -149,21 +162,48 @@ int pqcp_runtime_service_selftest(
 		goto cleanup;
 	}
 	decapsulated_secret = job.secondary_key;
-	ret = pqcp_runtime_key_store_acquire(
-		&service->key_store, &decapsulated_secret,
-		PQCP_RUNTIME_USAGE_DERIVE, now_ms,
-		&public_data, &public_length,
-		&secret_data, &secret_length);
-	if (ret != 0 || secret_length != sizeof(second_secret)) {
-		ret = ret != 0 ? ret : -EBADMSG;
-		goto cleanup;
+	derived_request.now_ms = now_ms;
+	derived_request.expires_at_ms = now_ms + 60000U;
+	ret = pqcp_runtime_key_store_derive(
+		&service->key_store, &encapsulated_secret,
+		confirmation_salt,
+		sizeof(confirmation_salt) - 1U,
+		confirmation_info,
+		sizeof(confirmation_info) - 1U,
+		&derived_request, &encapsulated_aead);
+	if (ret == 0) {
+		ret = pqcp_runtime_key_store_derive(
+			&service->key_store, &decapsulated_secret,
+			confirmation_salt,
+			sizeof(confirmation_salt) - 1U,
+			confirmation_info,
+			sizeof(confirmation_info) - 1U,
+			&derived_request, &decapsulated_aead);
 	}
-	memcpy(second_secret, secret_data, sizeof(second_secret));
-	(void)pqcp_runtime_key_store_release(
-		&service->key_store, &decapsulated_secret);
-	if (memcmp(first_secret, second_secret,
-		   sizeof(first_secret)) != 0) {
+	if (ret == 0) {
+		ret = pqcp_runtime_key_store_aead_encrypt(
+			&service->key_store, &encapsulated_aead,
+			confirmation_nonce,
+			sizeof(confirmation_nonce), NULL, 0U,
+			message, sizeof(message) - 1U,
+			confirmation, sizeof(confirmation),
+			&confirmation_length);
+	}
+	if (ret == 0) {
+		ret = pqcp_runtime_key_store_aead_decrypt(
+			&service->key_store, &decapsulated_aead,
+			confirmation_nonce,
+			sizeof(confirmation_nonce), NULL, 0U,
+			confirmation, confirmation_length,
+			recovered, sizeof(recovered),
+			&recovered_length);
+	}
+	if (ret == 0 &&
+	    (recovered_length != sizeof(message) - 1U ||
+	     memcmp(recovered, message, recovered_length) != 0)) {
 		ret = -EKEYREJECTED;
+	}
+	if (ret != 0) {
 		goto cleanup;
 	}
 
@@ -201,6 +241,18 @@ int pqcp_runtime_service_selftest(
 
 cleanup:
 	if (pqcp_runtime_key_handle_is_valid(
+		    &encapsulated_aead)) {
+		(void)pqcp_runtime_key_store_destroy(
+			&service->key_store,
+			&encapsulated_aead);
+	}
+	if (pqcp_runtime_key_handle_is_valid(
+		    &decapsulated_aead)) {
+		(void)pqcp_runtime_key_store_destroy(
+			&service->key_store,
+			&decapsulated_aead);
+	}
+	if (pqcp_runtime_key_handle_is_valid(
 		    &encapsulated_secret)) {
 		(void)pqcp_runtime_key_store_destroy(
 			&service->key_store,
@@ -215,9 +267,8 @@ cleanup:
 	(void)pqcp_runtime_controller_close_session(
 		&service->controller, session_id);
 	pqcp_runtime_secure_zero(
-		first_secret, sizeof(first_secret));
-	pqcp_runtime_secure_zero(
-		second_secret, sizeof(second_secret));
+		confirmation, sizeof(confirmation));
+	pqcp_runtime_secure_zero(recovered, sizeof(recovered));
 	pqcp_runtime_secure_zero(
 		signature, sizeof(signature));
 	pqcp_runtime_secure_zero(

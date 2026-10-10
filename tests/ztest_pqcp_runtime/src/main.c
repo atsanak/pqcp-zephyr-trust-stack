@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include <psa/crypto.h>
 #include <zephyr/ztest.h>
 
 #include <pqcp_zephyr/build_manifest.h>
@@ -193,6 +194,97 @@ ZTEST(pqcp_runtime, test_psa_persistence_fails_closed)
 		&store, &context, 0x7fff0000U, 8U,
 		bitmap, ARRAY_SIZE(bitmap)), -ENOTSUP);
 	zassert_false(pqcp_runtime_psa_persistence_available(&store));
+}
+
+ZTEST(pqcp_runtime, test_opaque_hkdf_and_aead_roundtrip)
+{
+	static const uint8_t secret[PQCP_MLKEM_SS_SIZE] = {
+		0x42, 0x11, 0x9a, 0x7c, 0x26, 0xe0, 0x55, 0xd1,
+		0x91, 0x0a, 0x6c, 0xb3, 0x71, 0x29, 0xe8, 0x4f,
+		0x13, 0xd6, 0xaa, 0x08, 0x99, 0x35, 0xf0, 0x61,
+		0x7d, 0xc2, 0x4b, 0x8e, 0x57, 0x1c, 0xa4, 0x30,
+	};
+	static const uint8_t salt[] = "fleet-hkdf-salt";
+	static const uint8_t info[] = "fleet-aead-key";
+	static const uint8_t nonce[PQCP_RUNTIME_AEAD_NONCE_BYTES] = {
+		0x10, 0x20, 0x30, 0x40, 0x50, 0x60,
+		0x70, 0x80, 0x90, 0xa0, 0xb0, 0xc0,
+	};
+	static const uint8_t aad[] = "fleet-record-v1";
+	static const uint8_t plaintext[] = "opaque runtime payload";
+	const struct pqcp_runtime_key_request secret_request = {
+		.family = PQCP_RUNTIME_KEY_SHARED_SECRET,
+		.level = 256U,
+		.usage = PQCP_RUNTIME_USAGE_DERIVE |
+			 PQCP_RUNTIME_USAGE_DESTROY,
+		.now_ms = 2000U,
+		.owner = "runtime-test",
+		.label = "shared-secret",
+	};
+	const struct pqcp_runtime_key_request aead_request = {
+		.family = PQCP_RUNTIME_KEY_AEAD,
+		.level = 256U,
+		.usage = PQCP_RUNTIME_USAGE_ENCRYPT |
+			 PQCP_RUNTIME_USAGE_DECRYPT |
+			 PQCP_RUNTIME_USAGE_DESTROY,
+		.now_ms = 2000U,
+		.owner = "runtime-test",
+		.label = "derived-aead",
+	};
+	struct pqcp_runtime_key_metadata metadata;
+	struct pqcp_runtime_key_handle shared_handle;
+	struct pqcp_runtime_key_handle aead_handle;
+	uint8_t ciphertext[sizeof(plaintext) + PQCP_RUNTIME_AEAD_TAG_BYTES];
+	uint8_t recovered[sizeof(plaintext)];
+	size_t ciphertext_length = 0U;
+	size_t recovered_length = 0U;
+
+	reset_runtime();
+	zassert_equal(psa_crypto_init(), PSA_SUCCESS);
+	zassert_ok(pqcp_runtime_key_store_create(
+		&service.key_store, &secret_request, NULL, 0U,
+		secret, sizeof(secret), &shared_handle));
+	zassert_ok(pqcp_runtime_key_store_derive(
+		&service.key_store, &shared_handle,
+		salt, sizeof(salt) - 1U, info, sizeof(info) - 1U,
+		&aead_request, &aead_handle));
+	zassert_ok(pqcp_runtime_key_store_metadata(
+		&service.key_store, &aead_handle, &metadata));
+	zassert_equal(
+		metadata.custody, PQCP_RUNTIME_CUSTODY_SOFTWARE_OPAQUE);
+	zassert_ok(pqcp_runtime_key_store_aead_encrypt(
+		&service.key_store, &aead_handle,
+		nonce, sizeof(nonce), aad, sizeof(aad) - 1U,
+		plaintext, sizeof(plaintext) - 1U,
+		ciphertext, sizeof(ciphertext), &ciphertext_length));
+	zassert_equal(
+		ciphertext_length,
+		sizeof(plaintext) - 1U + PQCP_RUNTIME_AEAD_TAG_BYTES);
+	zassert_ok(pqcp_runtime_key_store_aead_decrypt(
+		&service.key_store, &aead_handle,
+		nonce, sizeof(nonce), aad, sizeof(aad) - 1U,
+		ciphertext, ciphertext_length,
+		recovered, sizeof(recovered), &recovered_length));
+	zassert_equal(recovered_length, sizeof(plaintext) - 1U);
+	zassert_mem_equal(
+		recovered, plaintext, sizeof(plaintext) - 1U);
+
+	ciphertext[ciphertext_length - 1U] ^= 1U;
+	memset(recovered, 0xa5, sizeof(recovered));
+	zassert_equal(pqcp_runtime_key_store_aead_decrypt(
+		&service.key_store, &aead_handle,
+		nonce, sizeof(nonce), aad, sizeof(aad) - 1U,
+		ciphertext, ciphertext_length,
+		recovered, sizeof(recovered), &recovered_length),
+		-EBADMSG);
+	zassert_equal(recovered_length, 0U);
+	for (size_t index = 0U; index < sizeof(recovered); ++index) {
+		zassert_equal(recovered[index], 0U);
+	}
+	zassert_ok(pqcp_runtime_key_store_destroy(
+		&service.key_store, &aead_handle));
+	zassert_ok(pqcp_runtime_key_store_destroy(
+		&service.key_store, &shared_handle));
 }
 
 ZTEST(pqcp_runtime, test_snapshot_contains_references_not_secrets)

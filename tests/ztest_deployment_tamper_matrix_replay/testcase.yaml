@@ -1,0 +1,7 @@
+tests:
+  pqcp.deployment.tamper_matrix_replay:
+    tags: [pqcp, deployment, evidence, replay]
+    harness: ztest
+    platform_allow: [qemu_x86_64]
+    integration_platforms: [qemu_x86_64]
+    timeout: 180

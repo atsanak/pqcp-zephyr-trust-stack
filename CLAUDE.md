@@ -1092,6 +1092,78 @@ GitHub Actions billing blocker; gate currently runs the UNSIGNED chain
 profile - flipping to --signed is a one-flag decision once footprint
 and runtime are accepted.
 
+## Patch set 13 — Wave 11: adversarial self-validation + hash-chained trail
+
+Base HEAD: `b3ec730`. Final HEAD: `ccc909b`. Branch:
+`claude/competent-joliot-80d9fa` (local; not pushed). 64 files,
++11250/-377; ~26.5k lines across the 9 new C TUs + 9 new ztest suites.
+
+Mission of this wave: stop only proving the evidence chain ACCEPTS genuine
+evidence and start proving, in-image and host-replayable, that it REJECTS
+forged evidence, plus commit to the order/completeness of the terminal
+artifacts. All validated locally on macOS host + qemu_x86_64.
+
+New firmware modules (all allocation-free, printk+util only):
+- `fb1741d` capability_extension: second 32-bit evidence capability word
+  (base mask is full at bits 0..31); emits PQCP_CAPABILITY_EXTENSION
+  binding base->ext without touching the base descriptor marker.
+- `069a5b0` deployment_marker_render: renders verdict/seal/passport markers
+  into caller buffers in the exact key=value layout the replay verifiers
+  parse. Passport replay verifier gained a firmware-side
+  ingest_line/finish state machine (init/duplicate/missing), which let the
+  host tool drop its bespoke passport_parse adapter (single-source).
+- `40160e9` deployment_tamper_engine + deployment_tamper_matrix(+replay
+  +audit): 11 deterministic single-line attack classes; the matrix renders
+  each terminal marker, applies every class, feeds it back to the unmodified
+  replay verifier and requires rejection, with one genuine control cell per
+  stage requiring acceptance. 3 stages x 12 = 36 cells (3 control + 33
+  attack), 1000-permille detection, digest-bound markers, own replay+audit.
+- `46666ef` deployment_evidence_trail(+replay+audit): append-only hash
+  chain over the five terminal stage digests; genesis link bound to chain
+  identity. Replay re-derives genesis + every link and rejects gap/reorder/
+  splice/entry-tamper/head-tamper/count-drift.
+
+Integration:
+- `498710b` advisor sample runs the full self-validating chain; one QEMU
+  transcript now carries 138 PQCP markers incl. the matrix (36 cells,
+  status=PASS) and the 5-entry trail.
+- `08839f8` pqcp-evidence-verify replays matrix+trail when present and
+  requires passport->tamper and verdict-identity->trail bindings;
+  present-then-verified semantics keep old fixtures passing. Fuzzer gained
+  the passport/matrix/trail parsers (6 instrumented targets).
+- `ccc909b` novelty-claims.md claims 5+6; fuzz claim text widened; fixed two
+  PRE-EXISTING gaps found while validating (not caused by this wave):
+  evidence-quality index missing 3 prior-wave claim entries, and the
+  capability-descriptor contradiction test asserted a now-dead path (the
+  evidence-cap unknown-bit branch is unreachable once the base mask is full
+  at bits 30/31) - replaced with live contradictions.
+
+Validation performed (all green):
+- 9 new ztest suites on qemu_x86_64: capability_extension 4/4, tamper_engine
+  13/13, marker_render 6/6, tamper_matrix 6/6, tamper_matrix_replay 4/4,
+  tamper_matrix_audit 7/7, evidence_trail 7/7, evidence_trail_replay 5/5,
+  evidence_trail_audit 5/5 (57/57).
+- Regression: ztest_capability_descriptor 8/8 (after the stale-test fix),
+  ztest_deployment_assurance_passport_replay 10/10.
+- Host: pqcp-evidence-verify builds -Wall -Wextra -Werror clean;
+  test_evidence_verifier.py 28/28 (incl. 5 new full-chain + adversarial
+  cases). Fuzzer builds + gate step: 3 campaigns x 200k, PQCP_FUZZ PASS,
+  6 targets, ~548 edges, no ASan/UBSan findings.
+- Gate steps run verbatim: run_evidence_chain_replay.py CHAIN OK (unsigned
+  and --signed); manual host adversarial checks (tampered/dropped trail
+  entry, forged matrix coverage, spliced trail identity) all REJECTED.
+- run_extended_checks.py --strict: cppcheck no findings (9 new TUs clean);
+  run_local_tool_tests.py: all pass (incl. assurance ledger 45, evidence
+  pack 11, evidence quality after the fix).
+
+Open follow-ups: push the branch when ready; full release_check.py
+end-to-end on a fresh output root (long on local QEMU; every new/changed
+step validated individually); decide whether the gate's evidence-chain step
+should additionally bind a tamper-matrix/trail required-marker claim in
+assurance_claims.json (currently the host verifier enforces present->verified
+but no dedicated ledger claim ID exists yet); nucleo hardware capture; GitHub
+Actions billing blocker unchanged.
+
 ## Final rule
 
 Do not confuse motion with progress.

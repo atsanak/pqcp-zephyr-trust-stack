@@ -980,6 +980,165 @@ config PQCP_ADAPTIVE_CONTROL
 endmenu
 
 # =============================================================================
+# Firmware Capability Extension and Adversarial Evidence
+# =============================================================================
+menu "Firmware Capability Extension and Adversarial Evidence"
+
+config PQCP_CAPABILITY_EXTENSION
+	bool "Enable extended firmware capability plane"
+	depends on PQCP_CAPABILITY_DESCRIPTOR
+	default n
+	help
+	  Enable the second 32-bit evidence capability word. The base
+	  capability mask in the capability descriptor is fully allocated
+	  (bits 0..31); this option reports evidence modules introduced
+	  after the base mask filled and emits one stable
+	  PQCP_CAPABILITY_EXTENSION marker binding the base word to the
+	  extension word. The base capability descriptor marker is never
+	  altered.
+
+	  This option reports build metadata only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_MARKER_RENDER
+	bool "Enable deployment marker render-to-buffer support"
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT
+	default n
+	help
+	  Enable rendering of the terminal deployment evidence markers
+	  (final verdict, terminal seal, assurance passport) into
+	  caller-owned buffers using exactly the field layout the replay
+	  verifiers parse. This is the substrate for in-image adversarial
+	  self-validation: a rendered marker must replay cleanly and any
+	  mutation of it must be rejected.
+
+	  This option renders existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_ENGINE
+	bool "Enable deterministic evidence tamper engine"
+	default n
+	help
+	  Enable the deterministic single-line tamper engine. The engine
+	  applies one fully described, seed-reproducible mutation (digest
+	  nibble flip, status forge, score inflate, schema bump, nonce swap,
+	  profile swap, field strip, truncation, or value noise) to one
+	  key=value evidence marker line and reports exactly what changed.
+	  It is the attack half of the adversarial self-validation loop and
+	  never runs against live evidence on its own.
+
+	  This option mutates in-memory text buffers only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_MATRIX
+	bool "Enable adversarial evidence tamper detection matrix"
+	depends on PQCP_DEPLOYMENT_MARKER_RENDER
+	depends on PQCP_DEPLOYMENT_TAMPER_ENGINE
+	depends on PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY
+	depends on PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY
+	depends on PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY
+	default n
+	help
+	  Enable the in-image adversarial tamper detection matrix. For each
+	  terminal evidence stage the matrix renders the genuine marker,
+	  applies every tamper class from the tamper engine, feeds the
+	  result back into the unmodified replay verifier, and requires
+	  rejection; one control cell per stage feeds the unmodified marker
+	  and requires acceptance. The aggregated detection matrix is
+	  emitted as PQCP_DEPLOYMENT_TAMPER_CELL and
+	  PQCP_DEPLOYMENT_TAMPER_MATRIX markers digest-bound to the chain
+	  it attacked.
+
+	  This option validates existing verifiers only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY
+	bool "Enable tamper matrix replay verifier"
+	depends on PQCP_DEPLOYMENT_TAMPER_MATRIX
+	default n
+	help
+	  Enable an allocation-free replay verifier for captured
+	  PQCP_DEPLOYMENT_TAMPER_MATRIX markers. The verifier re-parses one
+	  matrix marker (or consumes an already-built matrix report),
+	  recomputes the canonical matrix digest, re-derives the count and
+	  coverage invariants, and emits one stable
+	  PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY marker.
+
+	  This option verifies existing matrix evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT
+	bool "Enable tamper matrix replay audit"
+	depends on PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  tamper matrices. The audit detects replay failure, detection
+	  weakness, coverage drift, digest drift, stage drift, and profile
+	  drift, and emits one stable PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT
+	  marker.
+
+	  This option audits existing replay results only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_TRAIL
+	bool "Enable hash-chained deployment evidence trail"
+	depends on PQCP_DEPLOYMENT_RELEASE_GATE
+	depends on PQCP_DEPLOYMENT_DEVICE_TOKEN
+	default n
+	help
+	  Enable the append-only, hash-chained evidence trail. Every
+	  terminal stage digest (verdict, seal, seal audit, passport,
+	  tamper matrix) is appended as a sequenced entry whose link digest
+	  covers the previous link, so removing, reordering, or splicing
+	  entries breaks the chain head. The trail emits
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL_ENTRY markers and one
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL head marker.
+
+	  This option commits to existing evidence only. It does not select
+	  providers, execute cryptographic operations, alter public APIs,
+	  change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY
+	bool "Enable deployment evidence trail replay verifier"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_TRAIL
+	default n
+	help
+	  Enable an allocation-free replay verifier for captured evidence
+	  trail markers. The verifier re-parses the sequenced entry markers
+	  and the head marker, recomputes the genesis link and every chained
+	  link digest, rejects sequence gaps, reordering, splicing, entry
+	  tampering, head tampering, and count drift, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY marker.
+
+	  This option verifies existing trail evidence only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+config PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT
+	bool "Enable deployment evidence trail replay audit"
+	depends on PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY
+	default n
+	help
+	  Enable allocation-free aggregation over one or more replayed
+	  evidence trails. The audit detects replay failure, trail status
+	  weakness, head digest drift, entry count drift, stage drift, and
+	  identity drift, and emits one stable
+	  PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT marker.
+
+	  This option audits existing replay results only. It does not
+	  select providers, execute cryptographic operations, alter public
+	  APIs, change ACVP wire formats, or alter benchmark marker ordering.
+
+endmenu
+
+# =============================================================================
 # Firmware Evidence Runner
 # =============================================================================
 menu "Firmware Evidence Runner"
@@ -1281,14 +1440,27 @@ endmenu
 # =============================================================================
 menu "Executable Adaptive PQC Runtime"
 
+config PQCP_MBEDTLS_THREADING
+	bool "Zephyr threading port for Mbed TLS 4 / TF-PSA-Crypto"
+	depends on MBEDTLS_VERSION_4_x && MULTITHREADING
+	default n
+	help
+	  Protect shared TF-PSA allocator, RNG and key-slot state when runtime
+	  workers and TLS endpoints execute concurrently. Installs the alternate
+	  mutex and condition-variable callbacks before the crypto heap is
+	  initialized. Do not install a second threading port in the application.
+
 config PQCP_RUNTIME
 	bool "Enable executable adaptive PQC runtime"
 	depends on PQCP_MLKEM && PQCP_MLDSA
 	depends on PQCP_ADAPTIVE_CONTROL
 	depends on MBEDTLS_PSA_CRYPTO_C
+	select PQCP_MBEDTLS_THREADING if MBEDTLS_VERSION_4_x && MULTITHREADING
 	select PSA_WANT_ALG_SHA_256
 	select PSA_WANT_ALG_HMAC
 	select PSA_WANT_ALG_HKDF
+	select PSA_WANT_KEY_TYPE_AES
+	select PSA_WANT_ALG_GCM
 	default n
 	help
 	  Enable the allocation-free PQC execution runtime. The runtime discovers
@@ -1317,6 +1489,23 @@ config PQCP_RUNTIME_KEY_STORE_PSA
 	  provisional PQC key import/open/destroy operations in the PSA application
 	  key-ID range. Unsupported platforms return -ENOTSUP. No file, settings,
 	  or plaintext raw-key persistence fallback is provided.
+
+config PQCP_RUNTIME_JOURNAL
+	bool "Enable commit-last metadata snapshot journal"
+	default n
+	help
+	  Persist secret-free runtime snapshots in two independent erase slots.
+	  Interrupted writes retain the previous checkpoint. Caller-owned buffers
+	  and storage callbacks are required; hashes are not authentication.
+
+config PQCP_RUNTIME_JOURNAL_FLASH
+	bool "Use Zephyr flash partitions for the metadata journal"
+	depends on PQCP_RUNTIME_JOURNAL && FLASH_MAP && FLASH_PAGE_LAYOUT
+	default n
+	help
+	  Bind the metadata journal to an explicitly supplied flash partition.
+	  Secret key persistence remains the responsibility of a supported PSA
+	  provider; the journal never exports or stores raw key material.
 
 config PQCP_RUNTIME_ADAPTIVE_INTEGRATION
 	bool "Feed measured operations into adaptive control"
@@ -1369,6 +1558,56 @@ endif # PQCP_RUNTIME
 endmenu
 
 # =============================================================================
+# Policy-Bound PQC Crypto Broker
+# =============================================================================
+menu "Policy-Bound PQC Crypto Broker"
+
+config PQCP_CRYPTO_BROKER
+	bool "Enable policy-bound PQC crypto broker"
+	depends on PQCP_RUNTIME
+	default n
+	help
+	  Enable the allocation-free multi-tenant crypto broker. The broker
+	  exposes opaque ML-KEM, ML-DSA, HKDF, HMAC, and AES-GCM operations through
+	  generation-tagged handles while enforcing principal quotas, grants,
+	  attenuable capabilities, deadlines, custody constraints, exact
+	  idempotency, cancellation, and chained execution receipts.
+
+config PQCP_CRYPTO_BROKER_CHANNEL
+	bool "Enable protected-channel broker protocol"
+	depends on PQCP_CRYPTO_BROKER && PQCP_PROTECTED_CHANNEL
+	default n
+	help
+	  Carry broker requests over protected-channel multiplexed streams using
+	  bounded BEGIN, CHUNK, COMMIT, RESULT, ERROR, and CANCEL messages.
+
+config PQCP_CRYPTO_BROKER_MAX_PRINCIPALS
+	int "Maximum broker principals"
+	depends on PQCP_CRYPTO_BROKER
+	range 1 64
+	default 8
+
+config PQCP_CRYPTO_BROKER_MAX_GRANTS
+	int "Maximum broker grants"
+	depends on PQCP_CRYPTO_BROKER
+	range 1 128
+	default 16
+
+config PQCP_CRYPTO_BROKER_MAX_CAPABILITIES
+	int "Maximum broker capabilities"
+	depends on PQCP_CRYPTO_BROKER
+	range 1 256
+	default 32
+
+config PQCP_CRYPTO_BROKER_MAX_TRANSACTIONS
+	int "Maximum retained broker transactions"
+	depends on PQCP_CRYPTO_BROKER
+	range 2 64
+	default 8
+
+endmenu
+
+# =============================================================================
 # Exporter-Bound Protected Channel
 # =============================================================================
 menu "Exporter-Bound PQC Protected Channel"
@@ -1401,6 +1640,7 @@ config PQCP_PROTECTED_CHANNEL_MUTUAL_AUTH
 config PQCP_PROTECTED_CHANNEL_MBEDTLS
 	bool "Enable direct mbedTLS transport adapter"
 	depends on MBEDTLS_SSL_KEYING_MATERIAL_EXPORT
+	select PQCP_MBEDTLS_THREADING if MBEDTLS_VERSION_4_x
 	select MBEDTLS_SSL_PROTO_TLS1_3
 	select MBEDTLS_SSL_SESSION_TICKETS
 	select MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED
@@ -1429,14 +1669,187 @@ config PQCP_OPERATION_CONFORMANCE_CATALOGS
 	  Compile replayable witnesses for every runtime state/command,
 	  resource/command, recovery/command, channel state/control,
 	  path/control, and fault/control decision. The optional catalogs expose
-	  3,072 stable cases with deterministic identifiers, expected results,
-	  fingerprints, and cross-audits against the executable policy tables.
+	  3,072 direct policy cases plus 2,048 composite runtime/channel planning
+	  cases with deterministic identifiers, expected results, fingerprints,
+	  and cross-audits against the executable policy tables and planners.
 
 	  This option is intended for validation firmware, partner review, and
 	  evidence capture. Leave it disabled in production images that do not
 	  need the additional read-only catalog data.
 
+config PQCP_OPERATION_SCENARIO_CATALOGS
+	bool "Enable stateful operational scenario catalogs"
+	default n
+	help
+	  Compile replayable two-operation scenarios across runtime state,
+	  resource, and recovery policy plus protected-channel state, path, and
+	  fault policy. The scenario engine propagates successful runtime and
+	  channel state transitions into the second operation, preserves the
+	  original condition after a denied transition, and records fail-fast
+	  terminal errors and aggregate reason masks.
+
+	  The optional catalogs expose 3,072 deterministic scenarios and audit
+	  every generated expectation against the executable policy lookup
+	  functions. Leave this disabled in production images that do not need
+	  stateful validation evidence.
+
+config PQCP_RUNTIME_CHANNEL_GUARD_CATALOGS
+	bool "Enable runtime and channel guard catalogs"
+	default n
+	help
+	  Compile exhaustive runtime authorization and continuity policy plus
+	  protected-channel key-epoch and stream-lifecycle policy. Composite
+	  guard evaluators combine these conditions with the existing runtime
+	  and protected-channel lifecycle tables and return one enforceable
+	  verdict, next state, delay, reason mask, and error.
+
+	  The four optional 16 by 32 catalogs are intended for validation
+	  firmware and policy review. Leave them disabled in production images
+	  that provide authorization and continuity policy elsewhere.
+
+config PQCP_OPERATION_TRANSITION_CATALOGS
+	bool "Enable composed operational transition traces"
+	default n
+	help
+	  Compile deterministic eight-step runtime and protected-channel traces.
+	  Runtime traces compose lifecycle, resource, and recovery policy;
+	  channel traces compose lifecycle, path, and fault policy. Replay
+	  verifies policy precedence, effective state propagation, permission
+	  outcomes, errors, and stable fingerprints over 1,024 traces.
+
+	  This validation-only catalog is disabled by default so normal firmware
+	  images do not carry the replay witnesses.
+
 endif # PQCP_PROTECTED_CHANNEL
+endmenu
+
+# =============================================================================
+# PQC Fleet Trust Fabric
+# =============================================================================
+menu "PQC Fleet Trust Fabric"
+
+config PQCP_FLEET_TRUST
+	bool "Enable device enrollment and fleet credential lifecycle"
+	depends on PQCP_PROTECTED_CHANNEL
+	default n
+	help
+	  Enable the allocation-free device enrollment and gateway registrar
+	  implementation. Devices authenticate a factory ML-DSA identity, generate
+	  operational keys locally, receive signed credentials and policy bundles,
+	  rotate or revoke identities, authorize managed firmware updates, and bind
+	  the resulting identity to the exporter-bound protected channel.
+
+	  Protocol messages use bounded canonical CBOR and ML-DSA-65 signatures.
+	  Firmware installation remains platform-owned. Fleet metadata is committed
+	  through a two-slot store so interruption restores either the previous
+	  complete state or the new complete state.
+
+config PQCP_FLEET_STORE_ITS
+	bool "Enable PSA Internal Trusted Storage fleet backend"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Store the two fleet metadata slots through PSA Internal Trusted Storage.
+	  Enable this only on targets that provide the ITS client API and service.
+
+config PQCP_FLEET_TRANSPARENCY
+	bool "Enable witnessed fleet transparency services"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable the host-portable, allocation-free append-only Merkle log,
+	  inclusion and consistency proofs, signed monotonic checkpoints,
+	  independent witness quorum, and signed checkpoint gossip.
+
+	  The implementation follows the RFC 9162 Merkle tree shape and domain
+	  separation. Applications provide hashing, signature, persistence,
+	  storage, and workspace callbacks so the same semantic core can be used
+	  by Zephyr firmware and hosted coordinators.
+
+config PQCP_FLEET_APPROVAL
+	bool "Enable multi-party fleet action authorization"
+	depends on PQCP_FLEET_TRANSPARENCY
+	default n
+	help
+	  Enable versioned authority sets, role and weight quorum policies,
+	  context-bound approval sessions, deterministic approval certificates,
+	  witnessed-checkpoint requirements, and fail-closed replay consumption
+	  for high-risk fleet operations.
+
+	  Sessions bind the authority-set generation, policy and revocation
+	  epochs, target, artifact digest, nonce, deadline, and transparency
+	  checkpoint so stale or cross-context approvals cannot be reused.
+
+config PQCP_FLEET_ARTIFACT_CORE
+	bool "Enable canonical COSE, EAT, and RATS artifact core"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable the host-portable canonical CBOR, COSE_Sign1, ML-DSA AKP key,
+	  EAT CWT evidence, RATS appraisal, and stable C ABI implementation.
+	  Callers provide cryptographic callbacks and caller-owned workspaces.
+
+config PQCP_FLEET_POLICY_VM
+	bool "Enable deterministic fleet policy virtual machine"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable bounded policy bytecode verification and execution, canonical
+	  module serialization, posture and rate built-ins, explainable decision
+	  traces, dual-bank durable policy storage, and guarded canary rollout.
+
+config PQCP_FLEET_CONVERGENCE
+	bool "Enable durable fleet desired-state convergence"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable artifact delivery and receipts, desired/reported state
+	  convergence, bounded caches and snapshot synchronization, transport
+	  multiplexing, and recovery orchestration for intermittently connected
+	  gateway fleets.
+
+endmenu
+
+# =============================================================================
+# Zero-Trust Edge Security Plane
+# =============================================================================
+menu "Zero-Trust Edge Security Plane"
+
+config PQCP_EDGE_SECURITY
+	bool "Enable allocation-free edge security runtime"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Enable the bounded zero-trust edge runtime. The runtime composes service
+	  identity, policy admission, durable messaging, confidential object
+	  storage, incident response, attestation, policy distribution, workload
+	  scheduling, provenance, isolation, SLA monitoring, and transactional
+	  configuration without dynamic allocation.
+
+	  Applications provide every storage array during initialization, making
+	  maximum memory use explicit and suitable for constrained Zephyr targets.
+	  The public API is experimental.
+
+endmenu
+
+# =============================================================================
+# Sovereign Runtime and Continuity
+# =============================================================================
+menu "Sovereign Runtime and Continuity"
+
+config PQCP_SOVEREIGN_RUNTIME
+	bool "Enable sovereign supply-chain and workload governance"
+	depends on PQCP_EDGE_SECURITY
+	depends on PQCP_CRYPTO_BROKER
+	depends on PQCP_PROTECTED_CHANNEL
+	default n
+	help
+	  Enable bounded tenant and namespace governance, SBOM and build
+	  attestations, release and placement policy, privacy and residency
+	  controls, key ceremonies and custody, interoperable audit export,
+	  resumable broker channels, continuity objectives, fencing, and
+	  recovery orchestration.
+
 endmenu
 
 # =============================================================================
