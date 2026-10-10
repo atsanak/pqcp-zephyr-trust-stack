@@ -293,6 +293,12 @@ int pqcp_runtime_snapshot_write(
 	uint8_t *output,
 	size_t output_capacity,
 	struct pqcp_runtime_snapshot_info *info);
+/**
+ * Restore metadata only after the complete snapshot passes validation.
+ * Failure preserves sessions, profiles and info. Input and output storage must
+ * not overlap; the caller must keep the input immutable for the entire call.
+ * The digest detects corruption, but does not authenticate the snapshot sender.
+ */
 int pqcp_runtime_snapshot_read(
 	const uint8_t *input,
 	size_t input_length,

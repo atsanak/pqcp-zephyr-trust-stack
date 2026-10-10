@@ -75,6 +75,13 @@ zephyr_include_directories(${PQCP_INC})
 # =============================================================================
 zephyr_library_named(pqcp_common)
 
+if(CONFIG_PQCP_MBEDTLS_THREADING)
+    # TF-PSA 1.x owns the threading configuration shared with Mbed TLS 4.
+    zephyr_include_directories(${PQCP_INC}/pqcp_zephyr/mbedtls_threading)
+    zephyr_compile_definitions(MBEDTLS_THREADING_C MBEDTLS_THREADING_ALT)
+    zephyr_library_sources(${PQCP_SRC}/mbedtls_threading_zephyr.c)
+endif()
+
 # RNG abstraction - select ONE backend
 if(CONFIG_PQCP_RNG_DETERMINISTIC_TEST)
     # Deterministic RNG for testing (overrides custom)
@@ -391,6 +398,13 @@ if(CONFIG_PQCP_CRYPTO_BROKER)
         ${PQCP_SRC}/crypto_broker_ledger.c
         ${PQCP_SRC}/crypto_broker_receipt.c
     )
+endif()
+
+if(CONFIG_PQCP_RUNTIME_JOURNAL)
+    zephyr_library_sources(${PQCP_SRC}/runtime_journal.c)
+endif()
+if(CONFIG_PQCP_RUNTIME_JOURNAL_FLASH)
+    zephyr_library_sources(${PQCP_SRC}/runtime_journal_flash.c)
 endif()
 
 if(CONFIG_PQCP_PROTECTED_CHANNEL)

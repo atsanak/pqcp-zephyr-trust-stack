@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+sample:
+  name: Runtime metadata recovery
+tests:
+  sample.pqcp.runtime_recovery:
+    platform_allow:
+      - qemu_x86_64
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "PQCP_RUNTIME_RECOVERY status=PASS"
+    tags:
+      - pqcp
+      - flash
