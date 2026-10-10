@@ -287,9 +287,59 @@ static int run_pair(
 		ret = k_thread_join(&server_thread, timeout);
 	}
 	if (ret != 0) {
-		return ret;
+		k_thread_abort(&client_thread);
+		k_thread_abort(&server_thread);
+		(void)k_thread_join(&client_thread, K_FOREVER);
+		(void)k_thread_join(&server_thread, K_FOREVER);
+		return -ETIMEDOUT;
 	}
 	return client_result != 0 ? client_result : server_result;
+}
+
+static int verify_tls_transport_ready(void)
+{
+	static const uint8_t client_probe[] =
+		"pqcp-client-ready";
+	static const uint8_t server_probe[] =
+		"pqcp-server-ready";
+	uint8_t received[sizeof(client_probe) > sizeof(server_probe) ?
+			 sizeof(client_probe) : sizeof(server_probe)];
+	size_t received_length = 0U;
+	int ret;
+
+	ret = client_transport.send(
+		client_transport.context, client_probe,
+		sizeof(client_probe) - 1U, DEMO_TIMEOUT_MS);
+	if (ret == 0) {
+		ret = server_transport.receive(
+			server_transport.context, received,
+			sizeof(received), &received_length,
+			DEMO_TIMEOUT_MS);
+	}
+	if (ret == 0 &&
+	    (received_length != sizeof(client_probe) - 1U ||
+	     memcmp(received, client_probe, received_length) != 0)) {
+		ret = -EBADMSG;
+	}
+	if (ret == 0) {
+		ret = server_transport.send(
+			server_transport.context, server_probe,
+			sizeof(server_probe) - 1U,
+			DEMO_TIMEOUT_MS);
+	}
+	if (ret == 0) {
+		ret = client_transport.receive(
+			client_transport.context, received,
+			sizeof(received), &received_length,
+			DEMO_TIMEOUT_MS);
+	}
+	if (ret == 0 &&
+	    (received_length != sizeof(server_probe) - 1U ||
+	     memcmp(received, server_probe, received_length) != 0)) {
+		ret = -EBADMSG;
+	}
+	pqcp_runtime_secure_zero(received, sizeof(received));
+	return ret;
 }
 
 static int configure_identities(
@@ -387,6 +437,9 @@ static int run_demo(void)
 		ret = pqcp_tls_endpoint_make_transport(
 			&server_tls, &server_transport,
 			&server_adapter, DEMO_TIMEOUT_MS);
+	}
+	if (ret == 0) {
+		ret = verify_tls_transport_ready();
 	}
 	if (ret == 0) {
 		ret = initialize_runtime(

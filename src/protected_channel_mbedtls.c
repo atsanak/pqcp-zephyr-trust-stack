@@ -208,12 +208,14 @@ int pqcp_channel_mbedtls_receive(
 }
 
 // cppcheck-suppress constParameterCallback
+// cppcheck-suppress constParameter
 int pqcp_channel_mbedtls_export(
 	void *context,
 	const char *label,
 	const uint8_t *export_context,
 	size_t export_context_length,
 	// cppcheck-suppress constParameterCallback
+	// cppcheck-suppress constParameter
 	uint8_t *output,
 	size_t output_length)
 {
@@ -251,13 +253,41 @@ int pqcp_channel_mbedtls_close(void *context)
 	}
 	if (adapter->ssl != NULL &&
 	    adapter->handshake_complete) {
-		int ret;
+		const int64_t deadline = k_uptime_get() + adapter->default_timeout_ms;
+		int ret = 0;
 
-		do {
+		for (;;) {
+			int64_t remaining = deadline - k_uptime_get();
+
+			if (remaining <= 0) {
+				result = -ETIMEDOUT;
+				break;
+			}
+#if defined(CONFIG_NET_SOCKETS)
+			/* A blocking BIO must not retain an earlier, longer timeout. */
+			result = set_socket_timeout(adapter->socket_fd,
+				ZSOCK_SO_SNDTIMEO, (uint32_t)remaining);
+			if (result == 0) {
+				result = set_socket_timeout(adapter->socket_fd,
+					ZSOCK_SO_RCVTIMEO, (uint32_t)remaining);
+			}
+			if (result != 0) {
+				break;
+			}
+#endif
 			ret = mbedtls_ssl_close_notify(adapter->ssl);
-		} while (ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+			if (k_uptime_get() >= deadline) {
+				result = -ETIMEDOUT;
+				break;
+			}
+			if (ret != MBEDTLS_ERR_SSL_WANT_WRITE &&
+			    ret != MBEDTLS_ERR_SSL_WANT_READ) {
+				break;
+			}
+			k_yield();
+		}
 		if (ret != 0 &&
-		    ret != MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
+		    ret != MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY && result == 0) {
 			result = ssl_error_to_errno(ret);
 		}
 	}

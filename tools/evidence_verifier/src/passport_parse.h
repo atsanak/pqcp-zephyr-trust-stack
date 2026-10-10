@@ -3,11 +3,9 @@
  *
  * Passport marker line -> struct reconstruction (host side).
  *
- * The passport replay verifier is struct-based; this is the host-side line
- * adapter shared by the verifier CLI and the evidence fuzzer. Field grammar
- * matches the firmware emitters: space-separated key=value tokens, keys
- * anchored at start-of-line or after a space. Digest recomputation stays in
- * the firmware .c file.
+ * Compatibility adapter retained for hosted consumers that still reconstruct
+ * the passport structure directly. New verifier and fuzzer paths use the
+ * firmware replay ingest state machine so parsing remains single-source.
  */
 
 #ifndef PQCP_EVIDENCE_VERIFIER_PASSPORT_PARSE_H_

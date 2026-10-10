@@ -23,6 +23,8 @@
 extern "C" {
 #endif
 
+struct pqcp_channel_rekey_context;
+
 #define PQCP_CHANNEL_SCHEMA_VERSION 1U
 #define PQCP_CHANNEL_MAGIC 0x50514350U
 #define PQCP_CHANNEL_EXPORTER_LABEL "EXPORTER-PQCP-CHANNEL-v1"
@@ -149,15 +151,11 @@ struct pqcp_channel_replay_state {
 
 struct pqcp_channel_keys {
 	uint8_t exporter[PQCP_CHANNEL_EXPORTER_BYTES];
-	uint8_t shared_secret[PQCP_MLKEM_SS_SIZE];
-	uint8_t client_finished[PQCP_CHANNEL_FINISHED_BYTES];
-	uint8_t server_finished[PQCP_CHANNEL_FINISHED_BYTES];
-	uint8_t client_write_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
-	uint8_t server_write_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	struct pqcp_runtime_key_handle client_write_key;
+	struct pqcp_runtime_key_handle server_write_key;
 	uint8_t client_nonce_base[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	uint8_t server_nonce_base[PQCP_CHANNEL_AEAD_NONCE_BYTES];
 	bool exporter_ready;
-	bool shared_secret_ready;
 	bool traffic_keys_ready;
 };
 
@@ -187,9 +185,11 @@ struct pqcp_channel {
 	uint8_t tx_frame[PQCP_CHANNEL_MAX_FRAME_BYTES];
 	uint8_t rx_frame[PQCP_CHANNEL_MAX_FRAME_BYTES];
 	uint8_t work_buffer[PQCP_CHANNEL_MAX_FRAME_BYTES];
+	struct pqcp_channel_rekey_context *rekey_context;
 	bool peer_authenticated;
 	bool local_authenticated;
 	bool established;
+	bool application_send_blocked;
 };
 
 const char *pqcp_channel_state_str(enum pqcp_channel_state state);
@@ -238,6 +238,10 @@ int pqcp_channel_send(
 	struct pqcp_channel *channel,
 	const uint8_t *plaintext,
 	size_t plaintext_length);
+/* For a valid established channel, any receive failure clears the supplied
+ * output buffer and length, fails the channel and discards its traffic keys.
+ * A failed channel cannot be resumed: establish a fresh TLS/PQC session.
+ */
 int pqcp_channel_receive(
 	struct pqcp_channel *channel,
 	uint8_t *plaintext,
@@ -254,6 +258,11 @@ int pqcp_channel_receive_message(
 	size_t message_capacity,
 	size_t *message_length,
 	uint32_t *message_id);
+/* Call with other channel operations quiesced. Erases active/pending/retired
+ * traffic material, but not separately provisioned identity keys. A busy key
+ * handle is retained and -EBUSY returned; release its references and retry
+ * close rather than reinitializing/discarding the channel object.
+ */
 int pqcp_channel_close(
 	struct pqcp_channel *channel);
 int pqcp_channel_audit(

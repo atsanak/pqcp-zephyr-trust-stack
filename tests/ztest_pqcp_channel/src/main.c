@@ -11,6 +11,7 @@
 #include <pqcp_zephyr/protected_channel_journal.h>
 #include <pqcp_zephyr/protected_channel_memory.h>
 #include <pqcp_zephyr/protected_channel_policy.h>
+#include <pqcp_zephyr/protected_channel_operations.h>
 #include <pqcp_zephyr/runtime_service.h>
 
 #define PIPE_BYTES 9000U
@@ -127,9 +128,38 @@ static void server_handshake_entry(
 		pqcp_channel_handshake(first);
 }
 
+static void install_record_key(
+	struct pqcp_runtime_service *service,
+	const uint8_t key[PQCP_CHANNEL_AEAD_KEY_BYTES],
+	const char *label,
+	struct pqcp_runtime_key_handle *handle)
+{
+	const struct pqcp_runtime_key_request request = {
+		.family = PQCP_RUNTIME_KEY_AEAD,
+		.level = 256U,
+		.usage = PQCP_RUNTIME_USAGE_ENCRYPT |
+			 PQCP_RUNTIME_USAGE_DECRYPT |
+			 PQCP_RUNTIME_USAGE_MAC |
+			 PQCP_RUNTIME_USAGE_DERIVE |
+			 PQCP_RUNTIME_USAGE_DESTROY,
+		.now_ms = 1000U,
+		.owner = "channel-test",
+		.label = label,
+		.persistent = false,
+		.exportable_public = false,
+	};
+
+	zassert_ok(pqcp_runtime_key_store_create(
+		&service->key_store, &request,
+		NULL, 0U, key, PQCP_CHANNEL_AEAD_KEY_BYTES,
+		handle));
+}
+
 static void initialize_record_pair(void)
 {
 	uint8_t exporter[PQCP_CHANNEL_EXPORTER_BYTES];
+	uint8_t client_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
+	uint8_t server_key[PQCP_CHANNEL_AEAD_KEY_BYTES];
 
 	for (size_t index = 0U; index < sizeof(exporter); ++index) {
 		exporter[index] = (uint8_t)(0xa0U + index);
@@ -163,6 +193,16 @@ static void initialize_record_pair(void)
 	server.config.max_payload_bytes = PQCP_CHANNEL_MAX_PAYLOAD_BYTES;
 	client.transport = client_transport;
 	server.transport = server_transport;
+	initialize_runtime_service(
+		&client_runtime, &client_adaptive,
+		&client_runtime_storage, "record-client");
+	initialize_runtime_service(
+		&server_runtime, &server_adaptive,
+		&server_runtime_storage, "record-server");
+	client.executor = &client_runtime.executor;
+	client.key_store = &client_runtime.key_store;
+	server.executor = &server_runtime.executor;
+	server.key_store = &server_runtime.key_store;
 	client.state = PQCP_CHANNEL_STATE_ESTABLISHED;
 	server.state = PQCP_CHANNEL_STATE_ESTABLISHED;
 	client.established = true;
@@ -171,15 +211,23 @@ static void initialize_record_pair(void)
 	server.keys.traffic_keys_ready = true;
 	for (size_t index = 0U;
 	     index < PQCP_CHANNEL_AEAD_KEY_BYTES; ++index) {
-		client.keys.client_write_key[index] =
-			(uint8_t)(0x10U + index);
-		server.keys.client_write_key[index] =
-			client.keys.client_write_key[index];
-		client.keys.server_write_key[index] =
-			(uint8_t)(0x80U + index);
-		server.keys.server_write_key[index] =
-			client.keys.server_write_key[index];
+		client_key[index] = (uint8_t)(0x10U + index);
+		server_key[index] = (uint8_t)(0x80U + index);
 	}
+	install_record_key(
+		&client_runtime, client_key, "client-write",
+		&client.keys.client_write_key);
+	install_record_key(
+		&client_runtime, server_key, "server-read",
+		&client.keys.server_write_key);
+	install_record_key(
+		&server_runtime, client_key, "client-read",
+		&server.keys.client_write_key);
+	install_record_key(
+		&server_runtime, server_key, "server-write",
+		&server.keys.server_write_key);
+	pqcp_runtime_secure_zero(client_key, sizeof(client_key));
+	pqcp_runtime_secure_zero(server_key, sizeof(server_key));
 	for (size_t index = 0U;
 	     index < PQCP_CHANNEL_AEAD_NONCE_BYTES; ++index) {
 		client.keys.client_nonce_base[index] =
@@ -473,6 +521,176 @@ ZTEST(pqcp_channel, test_complete_native_handshake_and_records)
 		plaintext, server_message, plaintext_length);
 	zassert_ok(pqcp_channel_emit(&handshake_client));
 	zassert_ok(pqcp_channel_emit(&handshake_server));
+}
+
+ZTEST(pqcp_channel, test_authentication_failure_erases_keys_and_output)
+{
+	uint8_t output[64];
+	size_t length = sizeof(output);
+	const uint8_t message[] = "must not escape authentication";
+
+	initialize_record_pair();
+	memset(output, 0xa5, sizeof(output));
+	zassert_ok(pqcp_channel_send(&client, message, sizeof(message)));
+	zassert_ok(pqcp_channel_memory_tamper_next(&client_to_server,
+		PQCP_CHANNEL_FRAME_HEADER_BYTES + 1U, 1U));
+	zassert_not_equal(pqcp_channel_receive(&server, output, sizeof(output), &length), 0);
+	zassert_equal(length, 0U);
+	for (size_t i = 0U; i < sizeof(output); ++i) {
+		zassert_equal(output[i], 0U);
+	}
+	zassert_false(server.established);
+	zassert_false(server.keys.traffic_keys_ready);
+	zassert_equal(server_runtime.key_store.active_count, 0U);
+	zassert_ok(pqcp_channel_close(&server));
+}
+
+ZTEST(pqcp_channel, test_close_preserves_busy_handle_for_retry)
+{
+	struct pqcp_runtime_key_handle held;
+	const uint8_t *public_data;
+	size_t public_length;
+
+	initialize_record_pair();
+	held = client.keys.client_write_key;
+	zassert_ok(pqcp_runtime_key_store_acquire(&client_runtime.key_store,
+		&held, PQCP_RUNTIME_USAGE_ENCRYPT, 1001U, &public_data, &public_length));
+	zassert_equal(pqcp_channel_close(&client), -EBUSY);
+	zassert_equal(client.state, PQCP_CHANNEL_STATE_FAILED);
+	zassert_false(client.established);
+	zassert_false(client.keys.traffic_keys_ready);
+	zassert_true(pqcp_runtime_key_handle_equal(&held, &client.keys.client_write_key));
+	zassert_equal(client_runtime.key_store.active_count, 1U);
+	zassert_ok(pqcp_runtime_key_store_release(&client_runtime.key_store, &held));
+	zassert_ok(pqcp_channel_close(&client));
+	zassert_equal(client_runtime.key_store.active_count, 0U);
+	zassert_false(pqcp_runtime_key_handle_is_valid(&client.keys.client_write_key));
+	for (size_t i = 0U; i < HANDSHAKE_KEYS; ++i) {
+		for (size_t j = 0U; j < sizeof(client_runtime_storage.key_slots[i].secret_data); ++j) {
+			zassert_equal(client_runtime_storage.key_slots[i].secret_data[j], 0U);
+		}
+	}
+}
+
+ZTEST(pqcp_channel, test_close_erases_pending_material_even_when_key_is_busy)
+{
+	struct pqcp_channel_rekey_context rekey = {0};
+	struct pqcp_channel_rekey_policy policy;
+	struct pqcp_runtime_key_handle held;
+	const uint8_t salt[PQCP_CHANNEL_REKEY_SALT_BYTES] = {0x63};
+	const uint8_t *public_data;
+	size_t public_length;
+
+	initialize_record_pair();
+	zassert_ok(pqcp_channel_rekey_policy_default(&policy));
+	zassert_ok(pqcp_channel_rekey_prepare(&client, &policy, &rekey, 2000U, 2U, salt, true));
+	client.rekey_context = &rekey;
+	held = rekey.pending_keys.client_write_key;
+	zassert_ok(pqcp_runtime_key_store_acquire(&client_runtime.key_store,
+		&held, PQCP_RUNTIME_USAGE_ENCRYPT, 2001U, &public_data, &public_length));
+	zassert_equal(pqcp_channel_close(&client), -EBUSY);
+	zassert_true(rekey.pending_cleanup);
+	zassert_equal(client_runtime.key_store.active_count, 1U);
+	zassert_true(pqcp_runtime_key_handle_equal(&held, &rekey.pending_keys.client_write_key));
+	zassert_false(rekey.pending_keys.exporter_ready);
+	zassert_false(rekey.pending_keys.traffic_keys_ready);
+	for (size_t i = 0U; i < sizeof(rekey.pending_keys.exporter); ++i) {
+		zassert_equal(rekey.pending_keys.exporter[i], 0U);
+	}
+	for (size_t i = 0U; i < sizeof(rekey.salt); ++i) {
+		zassert_equal(rekey.salt[i], 0U);
+	}
+	zassert_ok(pqcp_runtime_key_store_release(&client_runtime.key_store, &held));
+	zassert_ok(pqcp_channel_close(&client));
+	zassert_equal(client_runtime.key_store.active_count, 0U);
+	zassert_false(rekey.pending_cleanup);
+	zassert_false(pqcp_runtime_key_handle_is_valid(&rekey.pending_keys.client_write_key));
+}
+
+static int uncertain_send(void *context, const uint8_t *bytes, size_t size,
+	uint32_t timeout_ms)
+{
+	ARG_UNUSED(context);
+	ARG_UNUSED(bytes);
+	ARG_UNUSED(size);
+	ARG_UNUSED(timeout_ms);
+	/* A transport may return an error after writing an unknown prefix. */
+	return -EIO;
+}
+
+ZTEST(pqcp_channel, test_uncertain_send_is_terminal)
+{
+	const uint8_t message[] = "do not retry this nonce";
+
+	initialize_record_pair();
+	client.transport.send = uncertain_send;
+	zassert_equal(pqcp_channel_send(&client, message, sizeof(message)), -EIO);
+	zassert_equal(client.state, PQCP_CHANNEL_STATE_FAILED);
+	zassert_false(client.established);
+	zassert_equal(client_runtime.key_store.active_count, 0U);
+	zassert_not_equal(pqcp_channel_send(&client, message, sizeof(message)), 0);
+}
+
+static int slow_fragment(void *context, uint8_t *bytes, size_t capacity,
+	size_t *received, uint32_t timeout_ms)
+{
+	ARG_UNUSED(context);
+	ARG_UNUSED(capacity);
+	k_sleep(K_MSEC(MIN(timeout_ms, 10U)));
+	bytes[0] = 0U;
+	*received = 1U;
+	return 0;
+}
+
+static int late_complete_fragment(void *context, uint8_t *bytes, size_t capacity,
+	size_t *received, uint32_t timeout_ms)
+{
+	ARG_UNUSED(context);
+	k_sleep(K_MSEC(timeout_ms + 5U));
+	memset(bytes, 0, capacity);
+	*received = capacity;
+	return 0;
+}
+
+ZTEST(pqcp_channel, test_fragments_share_one_receive_deadline)
+{
+	uint8_t output[32];
+	size_t length = sizeof(output);
+	int64_t start;
+
+	initialize_record_pair();
+	server.transport.receive = slow_fragment;
+	server.config.timeout_ms = 25U;
+	start = k_uptime_get();
+	zassert_equal(pqcp_channel_receive(&server, output, sizeof(output), &length), -ETIMEDOUT);
+	zassert_true(k_uptime_get() - start >= 25);
+	zassert_true(k_uptime_get() - start < 100);
+	zassert_equal(length, 0U);
+	zassert_equal(server_runtime.key_store.active_count, 0U);
+	initialize_record_pair();
+	server.transport.receive = late_complete_fragment;
+	server.config.timeout_ms = 25U;
+	zassert_equal(pqcp_channel_receive(&server, output, sizeof(output), &length), -ETIMEDOUT);
+	zassert_equal(server_runtime.key_store.active_count, 0U);
+}
+
+ZTEST(pqcp_channel, test_sequence_exhaustion_never_wraps)
+{
+	uint8_t output[32];
+	size_t length;
+	const uint8_t message[] = "sequence exhaustion";
+
+	initialize_record_pair();
+	client.send_sequence = UINT64_MAX;
+	zassert_equal(pqcp_channel_send(&client, message, sizeof(message)), -EOVERFLOW);
+	zassert_equal(client.send_sequence, UINT64_MAX);
+	zassert_equal(client_to_server.used, 0U);
+	zassert_equal(client_runtime.key_store.active_count, 0U);
+	initialize_record_pair();
+	server.receive_sequence = UINT64_MAX;
+	zassert_equal(pqcp_channel_receive(&server, output, sizeof(output), &length), -EOVERFLOW);
+	zassert_equal(server.receive_sequence, UINT64_MAX);
+	zassert_equal(server_runtime.key_store.active_count, 0U);
 }
 
 ZTEST_SUITE(pqcp_channel, NULL, NULL, NULL, NULL, NULL);

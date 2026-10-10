@@ -75,6 +75,13 @@ zephyr_include_directories(${PQCP_INC})
 # =============================================================================
 zephyr_library_named(pqcp_common)
 
+if(CONFIG_PQCP_MBEDTLS_THREADING)
+    # TF-PSA 1.x owns the threading configuration shared with Mbed TLS 4.
+    zephyr_include_directories(${PQCP_INC}/pqcp_zephyr/mbedtls_threading)
+    zephyr_compile_definitions(MBEDTLS_THREADING_C MBEDTLS_THREADING_ALT)
+    zephyr_library_sources(${PQCP_SRC}/mbedtls_threading_zephyr.c)
+endif()
+
 # RNG abstraction - select ONE backend
 if(CONFIG_PQCP_RNG_DETERMINISTIC_TEST)
     # Deterministic RNG for testing (overrides custom)
@@ -116,6 +123,10 @@ endif()
 
 if(CONFIG_PQCP_CAPABILITY_DESCRIPTOR)
     zephyr_library_sources(${PQCP_SRC}/capability_descriptor.c)
+endif()
+
+if(CONFIG_PQCP_CAPABILITY_EXTENSION)
+    zephyr_library_sources(${PQCP_SRC}/capability_extension.c)
 endif()
 
 if(CONFIG_PQCP_FIRMWARE_SCORECARD)
@@ -242,6 +253,38 @@ if(CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE)
     zephyr_library_sources(${PQCP_SRC}/deployment_passport_signature.c)
 endif()
 
+if(CONFIG_PQCP_DEPLOYMENT_MARKER_RENDER)
+    zephyr_library_sources(${PQCP_SRC}/deployment_marker_render.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_ENGINE)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_engine.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_audit.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_replay.c)
+endif()
+
+if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT)
+    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_audit.c)
+endif()
+
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CODEC)
     zephyr_library_sources(${PQCP_SRC}/deployment_evidence_codec.c)
 endif()
@@ -314,6 +357,7 @@ if(CONFIG_PQCP_RUNTIME)
         ${PQCP_SRC}/runtime_executor.c
         ${PQCP_SRC}/runtime_executor_mlkem.c
         ${PQCP_SRC}/runtime_executor_mldsa.c
+        ${PQCP_SRC}/runtime_executor_symmetric.c
         ${PQCP_SRC}/runtime_session.c
         ${PQCP_SRC}/runtime_snapshot.c
         ${PQCP_SRC}/runtime_key_policy.c
@@ -342,7 +386,25 @@ if(CONFIG_PQCP_RUNTIME)
         ${PQCP_SRC}/runtime_policy_catalog.c
         ${PQCP_SRC}/runtime_resource_policy_catalog.c
         ${PQCP_SRC}/runtime_recovery_policy_catalog.c
+        ${PQCP_SRC}/runtime_operation_planner.c
     )
+endif()
+
+if(CONFIG_PQCP_CRYPTO_BROKER)
+    zephyr_library_sources(
+        ${PQCP_SRC}/crypto_broker.c
+        ${PQCP_SRC}/crypto_broker_authorization.c
+        ${PQCP_SRC}/crypto_broker_dispatch.c
+        ${PQCP_SRC}/crypto_broker_ledger.c
+        ${PQCP_SRC}/crypto_broker_receipt.c
+    )
+endif()
+
+if(CONFIG_PQCP_RUNTIME_JOURNAL)
+    zephyr_library_sources(${PQCP_SRC}/runtime_journal.c)
+endif()
+if(CONFIG_PQCP_RUNTIME_JOURNAL_FLASH)
+    zephyr_library_sources(${PQCP_SRC}/runtime_journal_flash.c)
 endif()
 
 if(CONFIG_PQCP_PROTECTED_CHANNEL)
@@ -370,6 +432,210 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL)
         ${PQCP_SRC}/protected_channel_policy_catalog.c
         ${PQCP_SRC}/protected_channel_path_policy_catalog.c
         ${PQCP_SRC}/protected_channel_fault_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_operation_planner.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_TRUST)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_cbor.c
+        ${PQCP_SRC}/fleet_sha256.c
+        ${PQCP_SRC}/fleet_protocol.c
+        ${PQCP_SRC}/fleet_store.c
+        ${PQCP_SRC}/fleet_enrollment.c
+        ${PQCP_SRC}/fleet_registrar.c
+        ${PQCP_SRC}/fleet_policy_engine.c
+        ${PQCP_SRC}/fleet_command_engine.c
+        ${PQCP_SRC}/fleet_update_manager.c
+        ${PQCP_SRC}/fleet_audit_ledger.c
+        ${PQCP_SRC}/fleet_journal.c
+        ${PQCP_SRC}/fleet_telemetry.c
+        ${PQCP_SRC}/fleet_attestation.c
+        ${PQCP_SRC}/fleet_reconciliation.c
+        ${PQCP_SRC}/fleet_operations.c
+        ${PQCP_SRC}/fleet_secure_time.c
+        ${PQCP_SRC}/fleet_revocation_index.c
+        ${PQCP_SRC}/fleet_rollout.c
+        ${PQCP_SRC}/fleet_health_monitor.c
+        ${PQCP_SRC}/fleet_lease_manager.c
+        ${PQCP_SRC}/fleet_recovery_manager.c
+        ${PQCP_SRC}/fleet_peer_registry.c
+        ${PQCP_SRC}/fleet_admission_controller.c
+        ${PQCP_SRC}/fleet_risk_engine.c
+        ${PQCP_SRC}/fleet_maintenance_scheduler.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_TRANSPARENCY)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_transparency_merkle.c
+        ${PQCP_SRC}/fleet_transparency_log.c
+        ${PQCP_SRC}/fleet_transparency_proof.c
+        ${PQCP_SRC}/fleet_transparency_checkpoint.c
+        ${PQCP_SRC}/fleet_transparency_witness.c
+        ${PQCP_SRC}/fleet_transparency_gossip.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_APPROVAL)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_approval_policy.c
+        ${PQCP_SRC}/fleet_approval_session.c
+        ${PQCP_SRC}/fleet_approval_receipt.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_ARTIFACT_CORE)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_cbor_map.c
+        ${PQCP_SRC}/fleet_cose_sign1.c
+        ${PQCP_SRC}/fleet_cose_key.c
+        ${PQCP_SRC}/fleet_eat_profile.c
+        ${PQCP_SRC}/fleet_rats.c
+        ${PQCP_SRC}/fleet_artifact_ffi.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_POLICY_VM)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_policy_vm.c
+        ${PQCP_SRC}/fleet_policy_verify.c
+        ${PQCP_SRC}/fleet_policy_codec.c
+        ${PQCP_SRC}/fleet_policy_builtins.c
+        ${PQCP_SRC}/fleet_policy_explain.c
+        ${PQCP_SRC}/fleet_policy_store.c
+        ${PQCP_SRC}/fleet_policy_rollout.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_CONVERGENCE)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_delivery.c
+        ${PQCP_SRC}/fleet_receipt.c
+        ${PQCP_SRC}/fleet_desired_state.c
+        ${PQCP_SRC}/fleet_convergence.c
+        ${PQCP_SRC}/fleet_artifact_cache.c
+        ${PQCP_SRC}/fleet_snapshot_sync.c
+        ${PQCP_SRC}/fleet_transport_mux.c
+        ${PQCP_SRC}/fleet_recovery_orchestrator.c
+    )
+endif()
+
+if(CONFIG_PQCP_EDGE_SECURITY)
+    zephyr_library_sources(
+        ${PQCP_SRC}/edge_security_common.c
+        ${PQCP_SRC}/edge_identity_directory.c
+        ${PQCP_SRC}/edge_service_registry.c
+        ${PQCP_SRC}/edge_access_engine.c
+        ${PQCP_SRC}/edge_route_table.c
+        ${PQCP_SRC}/edge_session_registry.c
+        ${PQCP_SRC}/edge_traffic_governor.c
+        ${PQCP_SRC}/edge_circuit_breaker.c
+        ${PQCP_SRC}/edge_message_queue.c
+        ${PQCP_SRC}/edge_replay_guard.c
+        ${PQCP_SRC}/edge_fragment_manager.c
+        ${PQCP_SRC}/edge_message_ratchet.c
+        ${PQCP_SRC}/edge_topic_registry.c
+        ${PQCP_SRC}/edge_group_manager.c
+        ${PQCP_SRC}/edge_delivery_manager.c
+        ${PQCP_SRC}/edge_vault_store.c
+        ${PQCP_SRC}/edge_vault_acl.c
+        ${PQCP_SRC}/edge_vault_version.c
+        ${PQCP_SRC}/edge_vault_lease.c
+        ${PQCP_SRC}/edge_vault_journal.c
+        ${PQCP_SRC}/edge_replication_manager.c
+        ${PQCP_SRC}/edge_snapshot_manager.c
+        ${PQCP_SRC}/edge_signal_engine.c
+        ${PQCP_SRC}/edge_incident_manager.c
+        ${PQCP_SRC}/edge_playbook_engine.c
+        ${PQCP_SRC}/edge_evidence_store.c
+        ${PQCP_SRC}/edge_containment_manager.c
+        ${PQCP_SRC}/edge_continuity_manager.c
+        ${PQCP_SRC}/edge_posture_engine.c
+        ${PQCP_SRC}/edge_attestation_manager.c
+        ${PQCP_SRC}/edge_policy_distributor.c
+        ${PQCP_SRC}/edge_rotation_manager.c
+        ${PQCP_SRC}/edge_anomaly_engine.c
+        ${PQCP_SRC}/edge_resource_monitor.c
+        ${PQCP_SRC}/edge_audit_exporter.c
+        ${PQCP_SRC}/edge_recovery_coordinator.c
+        ${PQCP_SRC}/edge_dlp_engine.c
+        ${PQCP_SRC}/edge_trust_federation.c
+        ${PQCP_SRC}/edge_credential_cache.c
+        ${PQCP_SRC}/edge_isolation_manager.c
+        ${PQCP_SRC}/edge_provenance_ledger.c
+        ${PQCP_SRC}/edge_workload_scheduler.c
+        ${PQCP_SRC}/edge_sla_monitor.c
+        ${PQCP_SRC}/edge_config_manager.c
+        ${PQCP_SRC}/edge_compliance.c
+        ${PQCP_SRC}/edge_runtime_admission.c
+        ${PQCP_SRC}/edge_security_runtime.c
+    )
+endif()
+
+if(CONFIG_PQCP_SOVEREIGN_RUNTIME)
+    zephyr_library_sources(
+        ${PQCP_SRC}/sovereign_artifact_catalog.c
+        ${PQCP_SRC}/sovereign_sbom_registry.c
+        ${PQCP_SRC}/sovereign_build_attestation.c
+        ${PQCP_SRC}/sovereign_release_policy.c
+        ${PQCP_SRC}/sovereign_transparency_log.c
+        ${PQCP_SRC}/sovereign_tenant_registry.c
+        ${PQCP_SRC}/sovereign_namespace_manager.c
+        ${PQCP_SRC}/sovereign_residency_engine.c
+        ${PQCP_SRC}/sovereign_purpose_engine.c
+        ${PQCP_SRC}/sovereign_privacy_budget.c
+        ${PQCP_SRC}/sovereign_data_contract.c
+        ${PQCP_SRC}/sovereign_consent_ledger.c
+        ${PQCP_SRC}/sovereign_retention_manager.c
+        ${PQCP_SRC}/sovereign_egress_engine.c
+        ${PQCP_SRC}/sovereign_approval_quorum.c
+        ${PQCP_SRC}/sovereign_key_ceremony.c
+        ${PQCP_SRC}/sovereign_secret_distributor.c
+        ${PQCP_SRC}/sovereign_ceremony_authorization.c
+        ${PQCP_SRC}/sovereign_custody_ledger.c
+        ${PQCP_SRC}/sovereign_event.c
+        ${PQCP_SRC}/sovereign_event_ledger.c
+        ${PQCP_SRC}/sovereign_audit_cbor.c
+        ${PQCP_SRC}/sovereign_audit_cef.c
+        ${PQCP_SRC}/sovereign_audit_ocsf.c
+        ${PQCP_SRC}/sovereign_channel_codec.c
+        ${PQCP_SRC}/sovereign_channel_assembler.c
+        ${PQCP_SRC}/sovereign_channel_flow.c
+        ${PQCP_SRC}/sovereign_channel_resume.c
+        ${PQCP_SRC}/sovereign_channel_broker.c
+        ${PQCP_SRC}/sovereign_channel_server.c
+        ${PQCP_SRC}/sovereign_channel_client.c
+        ${PQCP_SRC}/sovereign_policy_common.c
+        ${PQCP_SRC}/sovereign_network_policy.c
+        ${PQCP_SRC}/sovereign_placement_engine.c
+        ${PQCP_SRC}/sovereign_rollout_controller.c
+        ${PQCP_SRC}/sovereign_rollback_coordinator.c
+        ${PQCP_SRC}/sovereign_dependency_graph.c
+        ${PQCP_SRC}/sovereign_risk_graph.c
+        ${PQCP_SRC}/sovereign_threat_intelligence.c
+        ${PQCP_SRC}/sovereign_forensic_timeline.c
+        ${PQCP_SRC}/sovereign_control_catalog.c
+        ${PQCP_SRC}/sovereign_exception_manager.c
+        ${PQCP_SRC}/sovereign_evidence_packager.c
+        ${PQCP_SRC}/sovereign_regulator_exporter.c
+        ${PQCP_SRC}/sovereign_continuity_exerciser.c
+        ${PQCP_SRC}/sovereign_recovery_quorum.c
+        ${PQCP_SRC}/sovereign_cost_governor.c
+        ${PQCP_SRC}/sovereign_continuity_objective.c
+        ${PQCP_SRC}/sovereign_recovery_point.c
+        ${PQCP_SRC}/sovereign_authority_lease.c
+        ${PQCP_SRC}/sovereign_fencing.c
+        ${PQCP_SRC}/sovereign_recovery_plan.c
+        ${PQCP_SRC}/sovereign_recovery_orchestrator.c
+        ${PQCP_SRC}/sovereign_continuity_audit.c
+        ${PQCP_SRC}/sovereign_runtime.c
+    )
+endif()
+
+if(CONFIG_PQCP_FLEET_STORE_ITS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/fleet_store_its.c
     )
 endif()
 
@@ -382,6 +648,40 @@ if(CONFIG_PQCP_OPERATION_CONFORMANCE_CATALOGS)
         ${PQCP_SRC}/protected_channel_policy_conformance_catalog.c
         ${PQCP_SRC}/protected_channel_path_conformance_catalog.c
         ${PQCP_SRC}/protected_channel_fault_conformance_catalog.c
+        ${PQCP_SRC}/operation_plan_conformance.c
+        ${PQCP_SRC}/runtime_operation_plan_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_operation_plan_conformance_catalog.c
+    )
+endif()
+
+if(CONFIG_PQCP_OPERATION_SCENARIO_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/operation_scenario.c
+        ${PQCP_SRC}/runtime_policy_scenario_catalog.c
+        ${PQCP_SRC}/runtime_resource_scenario_catalog.c
+        ${PQCP_SRC}/runtime_recovery_scenario_catalog.c
+        ${PQCP_SRC}/protected_channel_policy_scenario_catalog.c
+        ${PQCP_SRC}/protected_channel_path_scenario_catalog.c
+        ${PQCP_SRC}/protected_channel_fault_scenario_catalog.c
+    )
+endif()
+
+if(CONFIG_PQCP_RUNTIME_CHANNEL_GUARD_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/runtime_guard.c
+        ${PQCP_SRC}/runtime_authorization_policy_catalog.c
+        ${PQCP_SRC}/runtime_continuity_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_guard.c
+        ${PQCP_SRC}/protected_channel_epoch_policy_catalog.c
+        ${PQCP_SRC}/protected_channel_stream_policy_catalog.c
+    )
+endif()
+
+if(CONFIG_PQCP_OPERATION_TRANSITION_CATALOGS)
+    zephyr_library_sources(
+        ${PQCP_SRC}/operation_transition.c
+        ${PQCP_SRC}/runtime_transition_conformance_catalog.c
+        ${PQCP_SRC}/protected_channel_transition_conformance_catalog.c
     )
 endif()
 

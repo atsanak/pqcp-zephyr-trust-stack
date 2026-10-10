@@ -1,0 +1,10 @@
+tests:
+  pqcp.fleet_trust:
+    platform_allow:
+      - qemu_x86_64
+    tags:
+      - pqcp
+      - fleet
+      - protocol
+      - storage
+    timeout: 240

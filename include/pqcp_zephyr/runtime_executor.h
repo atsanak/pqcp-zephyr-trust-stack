@@ -160,6 +160,21 @@ int pqcp_runtime_execute_mldsa_verify(
 	struct pqcp_runtime_job *job,
 	uint8_t *workspace,
 	size_t workspace_capacity);
+int pqcp_runtime_execute_hkdf_derive(
+	struct pqcp_runtime_executor *executor,
+	struct pqcp_runtime_job *job,
+	uint8_t *workspace,
+	size_t workspace_capacity);
+int pqcp_runtime_execute_aead_encrypt(
+	struct pqcp_runtime_executor *executor,
+	struct pqcp_runtime_job *job,
+	uint8_t *workspace,
+	size_t workspace_capacity);
+int pqcp_runtime_execute_aead_decrypt(
+	struct pqcp_runtime_executor *executor,
+	struct pqcp_runtime_job *job,
+	uint8_t *workspace,
+	size_t workspace_capacity);
 
 #ifdef __cplusplus
 }

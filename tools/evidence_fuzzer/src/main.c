@@ -6,7 +6,8 @@
  *
  * The marker parsers consume attacker-visible serial text, which makes
  * them a security surface. This harness drives the UNMODIFIED firmware
- * replay-verifier parsers (verdict, seal), the host passport line adapter,
+ * replay-verifier parsers (verdict, seal, passport, tamper matrix,
+ * evidence trail),
  * and the signature chunk reassembler with corpus lines mutated by a
  * seeded xorshift PRNG. Built with ASan+UBSan and
  * -fno-sanitize-recover=all, any memory error or UB aborts the run with a
@@ -35,7 +36,9 @@
 #include <pqcp_zephyr/deployment_evidence_seal_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
 
-#include "passport_parse.h"
+#include <pqcp_zephyr/deployment_assurance_passport_replay.h>
+#include <pqcp_zephyr/deployment_evidence_trail_replay.h>
+#include <pqcp_zephyr/deployment_tamper_matrix_replay.h>
 #include "signature_check.h"
 
 #define MAX_CORPUS_LINES 4096U
@@ -306,9 +309,46 @@ static void exercise_seal(const char *line)
 
 static void exercise_passport(const char *line)
 {
-	struct pqcp_deployment_assurance_passport passport;
+	static struct pqcp_deployment_assurance_passport_replay_state state;
+	struct pqcp_deployment_assurance_passport_replay_result result;
 
-	(void)parse_passport_marker(line, &passport);
+	(void)pqcp_deployment_assurance_passport_replay_init(&state);
+	(void)pqcp_deployment_assurance_passport_replay_ingest_line(&state,
+								    line);
+	if (rng_below(4U) == 0U) {
+		(void)pqcp_deployment_assurance_passport_replay_ingest_line(
+			&state, line);
+	}
+	(void)pqcp_deployment_assurance_passport_replay_finish(&state,
+							       &result);
+}
+
+static void exercise_tamper_matrix(const char *line)
+{
+	static struct pqcp_deployment_tamper_matrix_replay_state state;
+	struct pqcp_deployment_tamper_matrix_replay_result result;
+
+	(void)pqcp_deployment_tamper_matrix_replay_init(&state);
+	(void)pqcp_deployment_tamper_matrix_replay_ingest_line(&state, line);
+	if (rng_below(4U) == 0U) {
+		(void)pqcp_deployment_tamper_matrix_replay_ingest_line(&state,
+								       line);
+	}
+	(void)pqcp_deployment_tamper_matrix_replay_finish(&state, &result);
+}
+
+static void exercise_trail(const char *line)
+{
+	static struct pqcp_deployment_evidence_trail_replay_state state;
+	struct pqcp_deployment_evidence_trail_replay_result result;
+
+	(void)pqcp_deployment_evidence_trail_replay_init(&state);
+	(void)pqcp_deployment_evidence_trail_replay_ingest_line(&state, line);
+	if (rng_below(4U) == 0U) {
+		(void)pqcp_deployment_evidence_trail_replay_ingest_line(
+			&state, line);
+	}
+	(void)pqcp_deployment_evidence_trail_replay_finish(&state, &result);
 }
 
 static void exercise_signature(const char *line)
@@ -333,6 +373,8 @@ static void exercise_all(const char *line)
 	exercise_verdict(line);
 	exercise_seal(line);
 	exercise_passport(line);
+	exercise_tamper_matrix(line);
+	exercise_trail(line);
 	exercise_signature(line);
 }
 
@@ -393,7 +435,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("PQCP_FUZZ PASS targets=4 corpus_lines=%zu evolved=%zu edges_covered=%u edge_guards=%u iterations=%lu seed=0x%llx\n",
+	printf("PQCP_FUZZ PASS targets=6 corpus_lines=%zu evolved=%zu edges_covered=%u edge_guards=%u iterations=%lu seed=0x%llx\n",
 	       seed_corpus_count, corpus_count - seed_corpus_count,
 	       edges_covered, edge_guards_total, iterations,
 	       (unsigned long long)seed);

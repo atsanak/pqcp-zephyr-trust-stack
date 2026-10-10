@@ -23,7 +23,10 @@
 	 PQCP_RUNTIME_USAGE_VERIFY | \
 	 PQCP_RUNTIME_USAGE_DERIVE | \
 	 PQCP_RUNTIME_USAGE_EXPORT_PUBLIC | \
-	 PQCP_RUNTIME_USAGE_DESTROY)
+	 PQCP_RUNTIME_USAGE_DESTROY | \
+	 PQCP_RUNTIME_USAGE_ENCRYPT | \
+	 PQCP_RUNTIME_USAGE_DECRYPT | \
+	 PQCP_RUNTIME_USAGE_MAC)
 
 static bool text_character_allowed(char value)
 {
@@ -105,7 +108,7 @@ bool pqcp_runtime_internal_job_type_valid(
 	enum pqcp_runtime_job_type type)
 {
 	return type >= PQCP_RUNTIME_JOB_MLKEM_KEYGEN &&
-	       type <= PQCP_RUNTIME_JOB_MLDSA_VERIFY;
+	       type <= PQCP_RUNTIME_JOB_AEAD_DECRYPT;
 }
 
 bool pqcp_runtime_internal_priority_valid(
@@ -573,6 +576,12 @@ const char *pqcp_runtime_job_type_str(enum pqcp_runtime_job_type type)
 		return "mldsa_sign";
 	case PQCP_RUNTIME_JOB_MLDSA_VERIFY:
 		return "mldsa_verify";
+	case PQCP_RUNTIME_JOB_HKDF_DERIVE:
+		return "hkdf_derive";
+	case PQCP_RUNTIME_JOB_AEAD_ENCRYPT:
+		return "aead_encrypt";
+	case PQCP_RUNTIME_JOB_AEAD_DECRYPT:
+		return "aead_decrypt";
 	default:
 		return "unknown";
 	}

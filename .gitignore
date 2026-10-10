@@ -20,3 +20,4 @@ results/*.md
 # Built TCG plugin shared objects (rebuilt by scripts/run_ct_instruction_checks.py)
 tools/tcg_ct_plugin/*.so
 tools/tcg_ct_plugin/*.dylib
+tools/pqcp_fleet_coordinator/target/

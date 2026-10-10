@@ -683,6 +683,13 @@ int pqcp_runtime_checkpoint_store_init(
 	struct pqcp_runtime_checkpoint_store *store,
 	struct pqcp_runtime_checkpoint_slot *slots,
 	size_t slot_count);
+/* Reconstruct slot metadata from retained buffers without erasing them.
+ * A corrupt newest slot is ignored if an older verified slot survives.
+ * Call only while the store is offline and its buffers are exclusively owned.
+ */
+int pqcp_runtime_checkpoint_store_reopen(
+	struct pqcp_runtime_checkpoint_store *store,
+	struct pqcp_runtime_checkpoint_slot *slots, size_t slot_count);
 int pqcp_runtime_checkpoint_write(
 	struct pqcp_runtime_checkpoint_store *store,
 	const struct pqcp_runtime_service *service,

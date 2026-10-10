@@ -26,6 +26,13 @@ extern "C" {
 /** Schema version for deployment assurance passport replay reports. */
 #define PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_SCHEMA_VERSION 1U
 
+/** Deployment assurance passport marker was observed. */
+#define PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_MARKER_PASSPORT (1U << 0)
+
+/** All required deployment assurance passport replay marker bits. */
+#define PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_REQUIRED_MASK \
+	(PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_MARKER_PASSPORT)
+
 /** Replay error reason for deployment assurance passport evidence. */
 enum pqcp_deployment_assurance_passport_replay_error {
 	PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_NONE = 0,
@@ -37,6 +44,27 @@ enum pqcp_deployment_assurance_passport_replay_error {
 	PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_PROFILE_MISMATCH,
 	PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_MASK_RANGE,
 	PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_SCORE_RANGE,
+	PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_DUPLICATE_MARKER,
+	PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY_ERROR_MISSING_REQUIRED,
+};
+
+/** Caller-owned deployment assurance passport replay state. */
+struct pqcp_deployment_assurance_passport_replay_state {
+	/** Replay schema version. */
+	uint32_t schema_version;
+	/** Passport marker lines consumed by the verifier. */
+	uint32_t lines_seen;
+	/** Observed passport marker bits. */
+	uint32_t marker_mask;
+	/** First failing line, or zero. */
+	uint32_t first_error_line;
+	/** First replay error. */
+	enum pqcp_deployment_assurance_passport_replay_error first_error;
+	/** Passport reconstructed from the parsed marker. */
+	struct pqcp_deployment_assurance_passport passport;
+	/** Passport digest parsed from the marker. */
+	char passport_digest_observed_hex[
+		PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_DIGEST_HEX_CHARS + 1U];
 };
 
 /** Final deployment assurance passport replay result. */
@@ -77,6 +105,20 @@ struct pqcp_deployment_assurance_passport_replay_result {
 /** Convert a passport replay error to a stable diagnostic token. */
 const char *pqcp_deployment_assurance_passport_replay_error_str(
 	enum pqcp_deployment_assurance_passport_replay_error error);
+
+/** Initialize a deployment assurance passport replay state. */
+int pqcp_deployment_assurance_passport_replay_init(
+	struct pqcp_deployment_assurance_passport_replay_state *state);
+
+/** Feed one deployment assurance passport marker into the verifier. */
+int pqcp_deployment_assurance_passport_replay_ingest_line(
+	struct pqcp_deployment_assurance_passport_replay_state *state,
+	const char *line);
+
+/** Finish passport replay and verify cross-field consistency. */
+int pqcp_deployment_assurance_passport_replay_finish(
+	struct pqcp_deployment_assurance_passport_replay_state *state,
+	struct pqcp_deployment_assurance_passport_replay_result *result);
 
 /** Verify an already-built passport by recomputing its digest. */
 int pqcp_deployment_assurance_passport_replay_verify(

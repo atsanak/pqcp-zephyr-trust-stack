@@ -13,6 +13,8 @@
  */
 
 #include <pqcp_zephyr/deployment_assurance_passport.h>
+#include <pqcp_zephyr/deployment_evidence_trail.h>
+#include <pqcp_zephyr/deployment_tamper_matrix.h>
 
 const char *pqcp_deployment_release_gate_profile_str(
 	enum pqcp_deployment_release_gate_profile profile)
@@ -88,5 +90,56 @@ const char *pqcp_deployment_assurance_passport_status_str(
 		return "FAIL";
 	default:
 		return "UNKNOWN";
+	}
+}
+
+const char *pqcp_deployment_tamper_matrix_status_str(
+	enum pqcp_deployment_tamper_matrix_status status)
+{
+	switch (status) {
+	case PQCP_DEPLOYMENT_TAMPER_MATRIX_PASS:
+		return "PASS";
+	case PQCP_DEPLOYMENT_TAMPER_MATRIX_WARN:
+		return "WARN";
+	case PQCP_DEPLOYMENT_TAMPER_MATRIX_FAIL:
+		return "FAIL";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+const char *pqcp_deployment_evidence_trail_status_str(
+	enum pqcp_deployment_evidence_trail_status status)
+{
+	switch (status) {
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_PASS:
+		return "PASS";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_WARN:
+		return "WARN";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_FAIL:
+		return "FAIL";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+const char *pqcp_deployment_evidence_trail_stage_str(
+	enum pqcp_deployment_evidence_trail_stage stage)
+{
+	switch (stage) {
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_VERDICT:
+		return "verdict";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_SEAL:
+		return "seal";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_SEAL_AUDIT:
+		return "seal_audit";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_PASSPORT:
+		return "passport";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_TAMPER_MATRIX:
+		return "tamper_matrix";
+	case PQCP_DEPLOYMENT_EVIDENCE_TRAIL_STAGE_CUSTOM:
+		return "custom";
+	default:
+		return "unknown";
 	}
 }

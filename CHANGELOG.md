@@ -10,6 +10,40 @@ release tag to the validation and provider surface it introduced.
 
 ### Added
 
+- Allocation-free policy-bound crypto broker with tenant principals, quotas,
+  grants, attenuable capabilities, opaque-key dispatch, exact idempotency,
+  cancellation, custody and deadline enforcement, chained receipts, HMAC
+  authentication, and optional ML-DSA receipt signatures.
+- Canonical bounded-CBOR fleet protocol for signed enrollment requests,
+  ownership vouchers, operational credentials, policy bundles, revocation
+  updates, rotation authorization, update manifests, and command results.
+- Durable two-slot device trust state with an in-memory development backend
+  and optional PSA Internal Trusted Storage backend.
+- Device lifecycle integration for local operational-key generation, policy
+  epochs, replay protection, exporter-bound channel identity, overlapping key
+  rotation, firmware authorization, revocation, recovery, and persistent
+  decommissioning.
+- Rust `pqcp-fleet` coordinator with SQLite/WAL inventory, signed
+  firmware-compatible artifacts, deterministic canary cohorts, rollout
+  appraisal, explicit promotion/drain completion states, signed revocation
+  publication, REST/SSE endpoints, operator CLI, and an encrypted ML-DSA-65
+  policy root.
+- `samples/pqcp_fleet_trust` demonstrating factory admission through
+  decommissioning with opaque runtime key handles.
+- Fleet operations and resilience plane covering deterministic device policy,
+  idempotent command execution, update probation and rollback, tamper-evident
+  audit, telemetry summaries, signed attestation, reconciliation, uncertain
+  secure time, exact bounded revocations, rollout cohorts, health circuit
+  breaking, offline leases, evidence-chained recovery, peer trust, admission
+  control, correlated risk scoring, and maintenance conflict scheduling.
+- Allocation-free zero-trust edge security plane with bounded service mesh
+  identity and routing, composite admission, durable authenticated messaging,
+  confidential versioned object storage, incident response, evidence,
+  containment, continuity, posture and attestation, policy distribution,
+  secret rotation, anomaly and resource controls, DLP, trust federation,
+  credential caching, isolation zones, tamper-evident provenance, deadline
+  scheduling, SLA monitoring, transactional configuration, and canonical
+  compliance summaries.
 - Assurance claims catalog now exposes per-primitive KAT claims
   (`kat.mlkem_512/768/1024`, `kat.mldsa_44/65/87`), per-primitive
   benchmark claims (`benchmark.mlkem_throughput`,
@@ -25,6 +59,9 @@ release tag to the validation and provider surface it introduced.
 
 ### Changed
 
+- Runtime key-store providers now execute ML-DSA, ML-KEM, HKDF, and AES-GCM
+  operations through opaque handles; executors no longer need raw private-key
+  access for those paths.
 - Assurance claims catalog schema bumped from `schema_version=1` to
   `schema_version=2`. Both generator and verifier accept either version;
   v1 catalogs and v1 replay-only ledgers warn that they cover the
@@ -32,6 +69,18 @@ release tag to the validation and provider surface it introduced.
 - `release_check.py` and `run_extended_checks.py` now share
   `HOST_ENV_BLACKLIST`, `detect_west_root`, `discover_west`, `clean_env`,
   and `command_to_text` from `scripts/local_workflow.py`.
+
+### Security
+
+- Fleet signatures use the `PQCP-FLEET-CBOR-V1` ML-DSA context over exact
+  canonical payload bytes. Decoders reject trailing or non-canonical data,
+  and device state rejects stale policy, revocation, update, enrollment, and
+  rotation sequences.
+- Coordinator root keys are encrypted with XChaCha20-Poly1305 using an
+  Argon2id-derived key and remain permission-restricted at rest.
+- Coordinator-issued artifacts use a durable monotonic sequence allocator
+  seeded above observed device counters, preventing valid policy or
+  revocation epochs from being rejected as replayed messages.
 
 ## [1.0.0] - 2026-04-26
 

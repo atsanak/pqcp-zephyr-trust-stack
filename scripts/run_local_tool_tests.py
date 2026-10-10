@@ -74,6 +74,10 @@ TOOL_TESTS = (
 GENERATED_CHECKS = (
     "generate_runtime_channel_policy_catalogs.py",
     "generate_operation_conformance_catalogs.py",
+    "generate_operation_plan_catalogs.py",
+    "generate_operation_scenario_catalogs.py",
+    "generate_runtime_channel_guard_catalogs.py",
+    "generate_operation_transition_catalogs.py",
 )
 
 
