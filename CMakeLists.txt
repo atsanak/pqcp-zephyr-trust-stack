@@ -596,6 +596,8 @@ if(CONFIG_PQCP_SOVEREIGN_RUNTIME)
         ${PQCP_SRC}/sovereign_custody_ledger.c
         ${PQCP_SRC}/sovereign_event.c
         ${PQCP_SRC}/sovereign_event_ledger.c
+        ${PQCP_SRC}/sovereign_audit_exporter.c
+        ${PQCP_SRC}/sovereign_audit_bridge.c
         ${PQCP_SRC}/sovereign_audit_cbor.c
         ${PQCP_SRC}/sovereign_audit_cef.c
         ${PQCP_SRC}/sovereign_audit_ocsf.c
