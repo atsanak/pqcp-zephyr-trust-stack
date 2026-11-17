@@ -329,16 +329,12 @@ ZTEST(edge_security, test_vault_sealed_object_cannot_be_deleted)
 	create_obj("o1", "alice", "evidence");
 	zassert_equal(pqcp_edge_vault_seal(&vs, "o1", T0 + 1U), 0);
 	ret = pqcp_edge_vault_delete(&vs, "o1", 1U, T0 + 2U);
+	zassert_equal(ret, -EROFS);
 	zassert_equal(pqcp_edge_vault_find(&vs, "o1", &o), 0);
-	BUG_EXPECT(ret != 0 && o->state == PQCP_EDGE_VAULT_SEALED,
-		   "edge_vault_store.c pqcp_edge_vault_delete: a SEALED "
-		   "(read-only, used by incident containment to preserve "
-		   "evidence) object is accepted for deletion; the value is "
-		   "wiped and the object tombstoned although "
-		   "pqcp_edge_vault_write refuses sealed objects with "
-		   "-EROFS (design question: seal protects writes but not "
-		   "deletion)");
-	zassert_not_equal(ret, 0);
+	zassert_equal(o->state, PQCP_EDGE_VAULT_SEALED);
+	zassert_equal(o->version, 1U);
+	zassert_equal(vs.delete_count, 0U);
+	zassert_equal(pqcp_edge_vault_store_audit(&vs), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -722,15 +718,15 @@ ZTEST(edge_security, test_vault_version_restore_verifies_stored_digest)
 
 	verstore[0].value[0] ^= 0x20U;
 	ret = pqcp_edge_vault_version_restore(&vv, &vs, "o1", 1U, T0 + 2U);
-	BUG_EXPECT(ret != 0 && o->version == 2U &&
-		   pqcp_edge_vault_store_audit(&vs) == 0,
-		   "edge_vault_version.c pqcp_edge_vault_version_restore: a "
-		   "retained version whose value no longer matches its "
-		   "value_digest is restored into the live object without "
-		   "verification (returns 0, bumps the version and flips the "
-		   "object to ACTIVE), leaving a store that fails "
-		   "pqcp_edge_vault_store_audit with -EBADMSG");
-	zassert_not_equal(ret, 0);
+	zassert_equal(ret, -EBADMSG);
+	zassert_equal(o->version, 2U);
+	zassert_equal(pqcp_edge_vault_store_audit(&vs), 0);
+	/* Once the retained bytes are intact again the restore works. */
+	verstore[0].value[0] ^= 0x20U;
+	zassert_equal(pqcp_edge_vault_version_restore(&vv, &vs, "o1", 1U,
+		T0 + 3U), 0);
+	zassert_equal(o->version, 3U);
+	zassert_equal(pqcp_edge_vault_store_audit(&vs), 0);
 }
 
 ZTEST(edge_security, test_vault_version_capacity_keeps_retained_history)
@@ -748,14 +744,16 @@ ZTEST(edge_security, test_vault_version_capacity_keeps_retained_history)
 	}
 	o.version = 3U;
 	ret = pqcp_edge_vault_version_capture(&vv, &o, T0 + 3U, 100000U);
-	BUG_EXPECT(ret == -ENOSPC,
-		   "edge_vault_version.c pqcp_edge_vault_version_capture: "
-		   "when the store is full the version with the earliest "
-		   "expiry is silently overwritten even though it is still "
-		   "inside its retention window (free_version_index never "
-		   "checks expiry), so retained history is lost instead of "
-		   "returning -ENOSPC");
 	zassert_equal(ret, -ENOSPC);
+	/* Both retained versions are intact. */
+	zassert_equal(verstore[0].object_version, 1U);
+	zassert_equal(verstore[1].object_version, 2U);
+	/* An expired version may be reclaimed. */
+	ret = pqcp_edge_vault_version_capture(&vv, &o, T0 + 100001U + 1U,
+		100000U);
+	zassert_equal(ret, 0);
+	zassert_equal(verstore[0].object_version, 3U);
+	zassert_equal(verstore[1].object_version, 2U);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1033,14 +1031,6 @@ ZTEST(edge_security, test_journal_first_sequence_is_one)
 {
 	journal_setup();
 	jappend(1U);
-	BUG_EXPECT(jstore[0].sequence == 1U,
-		   "edge_security_common.c pqcp_edge_internal_next_identifier "
-		   "pre-increments, so every identifier counter that is "
-		   "initialised to 1 (journal next_sequence, session ids, "
-		   "route ids, lease ids, ...) hands out 2 first and never "
-		   "issues 1. For the vault journal this means sequence 1 "
-		   "does not exist: a consumer opening an audit export "
-		   "cursor at first_sequence=1 gets -EAGAIN forever");
 	zassert_equal(jstore[0].sequence, 1U);
 }
 
@@ -1400,13 +1390,14 @@ ZTEST(edge_security, test_replication_failed_with_retries_is_not_evicted)
 		-EIO, digest, T0 + 1U), 0);
 	/* One attempt of five used; a retry is still owed. */
 	ret = pqcp_edge_replication_schedule(&rm, &o, "b", T0 + 2U, 5U, &r2);
-	BUG_EXPECT(ret == -ENOSPC,
-		   "edge_replication_manager.c free_record_index: a FAILED "
-		   "replication that still has attempts left (and an armed "
-		   "retry_at_ms) is treated as recyclable, so scheduling a "
-		   "new replication on a full table silently destroys the "
-		   "pending retry instead of returning -ENOSPC");
 	zassert_equal(ret, -ENOSPC);
+	/* The pending retry is intact and still schedulable. */
+	zassert_equal(r->state, PQCP_EDGE_REPLICA_FAILED);
+	zassert_equal(r->attempts, 1U);
+	zassert_equal(pqcp_edge_replication_retry(&rm, r->replication_id,
+		T0 + 2U), 0);
+	zassert_equal(r->state, PQCP_EDGE_REPLICA_PENDING);
+	zassert_equal(pqcp_edge_replication_manager_audit(&rm), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1584,12 +1575,22 @@ ZTEST(edge_security, test_audit_exporter_reports_overwritten_journal_gap)
 		100000U, &c), 0);
 	ret = pqcp_edge_audit_export_batch(&ex, &journal, c->cursor_id, 10U,
 		T0 + 10U, &b);
-	BUG_EXPECT(ret != -EAGAIN,
-		   "edge_audit_exporter.c pqcp_edge_audit_export_batch: when "
-		   "the cursor's next_sequence has been overwritten by the "
-		   "journal ring (journal.dropped_count > 0) the call returns "
-		   "-EAGAIN, indistinguishable from 'no new records', so the "
-		   "consumer waits forever and the audit gap is never "
-		   "reported; records 3..5 stay unexported");
-	zassert_not_equal(ret, -EAGAIN);
+	zassert_equal(ret, -EOVERFLOW);
+	zassert_equal(b.first_sequence, 1U);
+	zassert_equal(b.last_sequence, 2U);
+	zassert_equal(b.record_count, 0U);
+	zassert_equal(c->next_sequence, 1U);
+	/* Explicitly acknowledging the gap lets the consumer resume. */
+	zassert_equal(pqcp_edge_audit_export_acknowledge(&ex, c->cursor_id,
+		b.last_sequence), 0);
+	zassert_equal(pqcp_edge_audit_export_batch(&ex, &journal,
+		c->cursor_id, 10U, T0 + 11U, &b), 0);
+	zassert_equal(b.first_sequence, 3U);
+	zassert_equal(b.last_sequence, 5U);
+	zassert_equal(b.record_count, 3U);
+	/* Caught up is still plain -EAGAIN. */
+	zassert_equal(pqcp_edge_audit_export_acknowledge(&ex, c->cursor_id,
+		5U), 0);
+	zassert_equal(pqcp_edge_audit_export_batch(&ex, &journal,
+		c->cursor_id, 10U, T0 + 12U, &b), -EAGAIN);
 }

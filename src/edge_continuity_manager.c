@@ -119,6 +119,7 @@ int pqcp_edge_continuity_register(
 	}
 	candidate = *service;
 	candidate.occupied = true;
+	candidate.mode_pinned = false;
 	if (!mode_valid(candidate.mode)) {
 		candidate.mode =
 			PQCP_EDGE_CONTINUITY_NORMAL;
@@ -156,7 +157,7 @@ int pqcp_edge_continuity_observe(
 		satisfied_dependencies &
 		service->dependency_mask;
 	mode = derive_mode(service);
-	if (mode != service->mode) {
+	if (!service->mode_pinned && mode != service->mode) {
 		service->mode = mode;
 		service->entered_at_ms = now_ms;
 		++manager->transition_count;
@@ -195,6 +196,12 @@ int pqcp_edge_continuity_set_mode(
 		ret = -EAGAIN;
 	} else {
 		service->mode = mode;
+		/* An operator-imposed non-NORMAL mode (and leaving a
+		 * latched FAILSAFE) is held until the operator returns
+		 * the service to NORMAL.
+		 */
+		service->mode_pinned =
+			mode != PQCP_EDGE_CONTINUITY_NORMAL;
 		service->entered_at_ms = now_ms;
 		++manager->transition_count;
 	}
@@ -225,14 +232,20 @@ int pqcp_edge_continuity_evaluate(
 		if (!service->occupied) {
 			continue;
 		}
-		derived = derive_mode(service);
+		derived = service->mode_pinned ?
+			service->mode : derive_mode(service);
 		if (service->maximum_duration_ms != 0U &&
 		    service->mode !=
 			    PQCP_EDGE_CONTINUITY_NORMAL &&
+		    service->mode !=
+			    PQCP_EDGE_CONTINUITY_FAILSAFE &&
+		    now_ms > service->entered_at_ms &&
 		    now_ms - service->entered_at_ms >
 			    service->maximum_duration_ms) {
+			/* Latch: only an operator set_mode leaves it. */
 			derived =
 				PQCP_EDGE_CONTINUITY_FAILSAFE;
+			service->mode_pinned = true;
 		}
 		if (derived != service->mode) {
 			service->mode = derived;

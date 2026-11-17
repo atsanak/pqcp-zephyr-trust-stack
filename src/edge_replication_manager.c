@@ -60,7 +60,9 @@ static int free_record_index(
 			return (int)index;
 		}
 		if ((record->state == PQCP_EDGE_REPLICA_APPLIED ||
-		     record->state == PQCP_EDGE_REPLICA_FAILED ||
+		     /* A FAILED record that still owes retries is live. */
+		     (record->state == PQCP_EDGE_REPLICA_FAILED &&
+		      record->attempts >= record->maximum_attempts) ||
 		     record->state == PQCP_EDGE_REPLICA_CONFLICT) &&
 		    record->scheduled_at_ms < oldest) {
 			oldest = record->scheduled_at_ms;

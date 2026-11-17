@@ -577,14 +577,6 @@ ZTEST(edge_security, test_runtime_admission_reports_posture_quarantine_verdict)
 	s_posture[0].failure_mask = 0x1U;
 	zassert_equal(pqcp_edge_runtime_authorize(&rt, &q, &res), -EACCES);
 	zassert_false(res.admitted);
-	BUG_EXPECT(res.posture_effect == PQCP_EDGE_POLICY_QUARANTINE,
-		   "edge_runtime_admission.c evaluate_posture: whenever "
-		   "pqcp_edge_posture_evaluate returns non-zero the result's "
-		   "posture_effect is overwritten with CHALLENGE, so a "
-		   "secure-boot (quarantine-class) failure is reported to the "
-		   "caller as a mere CHALLENGE verdict (and the later "
-		   "DENY/QUARANTINE branches of evaluate_posture are dead "
-		   "code); the request is still refused with -EACCES");
 	zassert_equal(res.posture_effect, PQCP_EDGE_POLICY_QUARANTINE);
 }
 
@@ -637,7 +629,8 @@ ZTEST(edge_security, test_runtime_admission_credential_and_attestation_gates)
 	/* Revoking the credential closes the door permanently. */
 	zassert_equal(pqcp_edge_credential_revoke(&rt.credentials, "cred-1",
 		7U), 0);
-	zassert_equal(pqcp_edge_runtime_authorize(&rt, &q, &res), -EACCES);
+	zassert_equal(pqcp_edge_runtime_authorize(&rt, &q, &res),
+		      -EKEYREVOKED);
 	zassert_false(res.admitted);
 	/* The request's own capability check still holds without it. */
 	q.require_credential = false;

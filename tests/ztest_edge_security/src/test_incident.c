@@ -806,15 +806,14 @@ ZTEST(edge_security, test_playbook_failed_step_does_not_strand_dependents)
 		1U, -EIO, T0 + 1U), 0);
 	zassert_equal(p->steps[0].state, PQCP_EDGE_PLAYBOOK_STEP_FAILED);
 
-	BUG_EXPECT(!p->active && pb.failed_count == 1U,
-		   "edge_playbook_engine.c: when a step fails terminally its "
-		   "dependents stay PENDING forever (nothing ever marks them "
-		   "PQCP_EDGE_PLAYBOOK_STEP_SKIPPED although that state is "
-		   "defined), all_steps_terminal() never becomes true, the "
-		   "playbook stays active, failed_count is never incremented "
-		   "and the single slot is permanently occupied (-ENOSPC for "
-		   "every later playbook)");
+	zassert_equal(p->steps[1].state, PQCP_EDGE_PLAYBOOK_STEP_SKIPPED);
 	zassert_false(p->active);
+	zassert_equal(pb.failed_count, 1U);
+	zassert_equal(pb.completed_count, 0U);
+	zassert_equal(pqcp_edge_playbook_engine_audit(&pb), 0);
+	/* The slot is released for the next playbook. */
+	zassert_equal(pqcp_edge_playbook_start(&pb, 6U, steps, 2U, T0 + 2U,
+					       &p), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1275,14 +1274,20 @@ ZTEST(edge_security, test_continuity_failsafe_escalation_is_latched)
 	/* A second evaluation must not silently walk the escalation back. */
 	zassert_equal(pqcp_edge_continuity_evaluate(&ct, T0 + 102U, &mode),
 		      0);
-	BUG_EXPECT(mode == PQCP_EDGE_CONTINUITY_FAILSAFE,
-		   "edge_continuity_manager.c pqcp_edge_continuity_evaluate: "
-		   "the maximum-duration escalation to FAILSAFE is not "
-		   "latched; the next call re-derives the mode from "
-		   "endpoint/dependency state, drops back to DEGRADED and "
-		   "restarts the duration clock, so FAILSAFE is only visible "
-		   "for a single evaluation");
 	zassert_equal(mode, PQCP_EDGE_CONTINUITY_FAILSAFE);
+	/* Fresh healthy observations do not clear the latch either. */
+	zassert_equal(pqcp_edge_continuity_observe(&ct, "svc", 2U, 0x3U,
+		T0 + 103U), 0);
+	zassert_equal(ctstore[0].mode, PQCP_EDGE_CONTINUITY_FAILSAFE);
+	zassert_equal(pqcp_edge_continuity_evaluate(&ct, T0 + 104U, &mode),
+		      0);
+	zassert_equal(mode, PQCP_EDGE_CONTINUITY_FAILSAFE);
+	/* The operator releases it explicitly once evidence supports it. */
+	zassert_equal(pqcp_edge_continuity_set_mode(&ct, "svc",
+		PQCP_EDGE_CONTINUITY_NORMAL, T0 + 105U), 0);
+	zassert_equal(pqcp_edge_continuity_evaluate(&ct, T0 + 106U, &mode),
+		      0);
+	zassert_equal(mode, PQCP_EDGE_CONTINUITY_NORMAL);
 }
 
 ZTEST(edge_security, test_continuity_operator_override_survives_evaluation)
@@ -1297,14 +1302,17 @@ ZTEST(edge_security, test_continuity_operator_override_survives_evaluation)
 	zassert_equal(pqcp_edge_continuity_set_mode(&ct, "svc",
 		PQCP_EDGE_CONTINUITY_ISOLATED, T0 + 1U), 0);
 	zassert_equal(pqcp_edge_continuity_evaluate(&ct, T0 + 2U, &mode), 0);
-	BUG_EXPECT(mode == PQCP_EDGE_CONTINUITY_ISOLATED,
-		   "edge_continuity_manager.c pqcp_edge_continuity_evaluate: "
-		   "an operator-imposed mode (pqcp_edge_continuity_set_mode "
-		   "to ISOLATED) is overwritten by the derived mode on the "
-		   "next evaluate/observe when endpoints and dependencies "
-		   "look healthy, so manual isolation silently reverts to "
-		   "NORMAL");
 	zassert_equal(mode, PQCP_EDGE_CONTINUITY_ISOLATED);
+	/* Nor does a new observation. */
+	zassert_equal(pqcp_edge_continuity_observe(&ct, "svc", 2U, 0x3U,
+		T0 + 3U), 0);
+	zassert_equal(ctstore[0].mode, PQCP_EDGE_CONTINUITY_ISOLATED);
+	/* Operator returns to NORMAL; derivation resumes. */
+	zassert_equal(pqcp_edge_continuity_set_mode(&ct, "svc",
+		PQCP_EDGE_CONTINUITY_NORMAL, T0 + 4U), 0);
+	zassert_equal(pqcp_edge_continuity_observe(&ct, "svc", 1U, 0x3U,
+		T0 + 5U), 0);
+	zassert_equal(ctstore[0].mode, PQCP_EDGE_CONTINUITY_DEGRADED);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1726,13 +1734,9 @@ ZTEST(edge_security, test_recovery_completed_plan_is_not_reopened_by_expiry)
 	 */
 	(void)pqcp_edge_recovery_advance(&rc, id,
 		PQCP_EDGE_RECOVERY_COMPLETE, T0 + 500U);
-	BUG_EXPECT(p->phase == PQCP_EDGE_RECOVERY_COMPLETE &&
-		   rc.failed_count == 0U,
-		   "edge_recovery_coordinator.c pqcp_edge_recovery_advance: "
-		   "the expiry check runs before the terminal-phase check, so "
-		   "advancing an already COMPLETE (or FAILED) plan after "
-		   "expires_at_ms rewrites its phase to FAILED and bumps "
-		   "failed_count on every call (pqcp_edge_recovery_tick "
-		   "correctly skips terminal plans)");
+	(void)pqcp_edge_recovery_advance(&rc, id,
+		PQCP_EDGE_RECOVERY_FAILED, T0 + 501U);
 	zassert_equal(p->phase, PQCP_EDGE_RECOVERY_COMPLETE);
+	zassert_equal(rc.failed_count, 0U);
+	zassert_equal(rc.completed_count, 1U);
 }

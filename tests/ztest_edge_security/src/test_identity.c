@@ -425,12 +425,10 @@ ZTEST(edge_security, test_principal_quarantine_survives_reregistration)
 	p.credential_epoch = 2U;
 	(void)pqcp_edge_principal_register(&dir, &p, T0 + 5U);
 
-	BUG_EXPECT(found->state == PQCP_EDGE_PRINCIPAL_QUARANTINED,
-		   "edge_identity_directory.c pqcp_edge_principal_register: "
-		   "re-registering a QUARANTINED principal with state=ACTIVE "
-		   "overwrites the record and silently lifts the quarantine "
-		   "(quarantine_until_ms and risk_score are taken from caller)");
 	zassert_equal(found->state, PQCP_EDGE_PRINCIPAL_QUARANTINED);
+	zassert_equal(found->quarantine_until_ms, UINT64_MAX);
+	/* The credential refresh itself is still applied. */
+	zassert_equal(found->credential_epoch, 2U);
 }
 
 ZTEST(edge_security, test_principal_quarantine_survives_credential_expiry)
@@ -444,12 +442,11 @@ ZTEST(edge_security, test_principal_quarantine_survives_credential_expiry)
 						     UINT64_MAX), 0);
 	zassert_equal(pqcp_edge_principal_tick(&dir, 3000U, &changed), 0);
 
-	BUG_EXPECT(p->state == PQCP_EDGE_PRINCIPAL_QUARANTINED,
-		   "edge_identity_directory.c pqcp_edge_principal_tick: a "
-		   "permanently QUARANTINED principal whose credential "
-		   "expires is demoted to DEGRADED, dropping the quarantine "
-		   "(tick treats credential expiry before quarantine; the "
-		   "same ordering exists in pqcp_edge_principal_observe)");
+	zassert_equal(p->state, PQCP_EDGE_PRINCIPAL_QUARANTINED);
+	zassert_equal(p->quarantine_until_ms, UINT64_MAX);
+	/* observe() on an expired credential must not demote it either. */
+	zassert_equal(pqcp_edge_principal_observe(&dir, "p1", 0U,
+		PQCP_EDGE_TRUST_ATTESTED, true, 4000U), -EACCES);
 	zassert_equal(p->state, PQCP_EDGE_PRINCIPAL_QUARANTINED);
 }
 
@@ -1909,13 +1906,11 @@ ZTEST(edge_security, test_session_double_close_keeps_principal_count)
 
 	ret = pqcp_edge_session_close(&sreg, &dir, s1->session_id, 0,
 				      T0 + 11U);
-	BUG_EXPECT(ret == -EALREADY && p->active_sessions == 1U,
-		   "edge_session_registry.c pqcp_edge_session_close: closing "
-		   "a session that is already FAILED is accepted and "
-		   "decrements the principal's active_sessions a second time "
-		   "(only CLOSED is treated as already-closed), so another "
-		   "live session stops being counted against the quota");
 	zassert_equal(ret, -EALREADY);
+	zassert_equal(p->active_sessions, 1U);
+	zassert_equal(pqcp_edge_session_close(&sreg, &dir, s1->session_id,
+		-EIO, T0 + 12U), -EALREADY);
+	zassert_equal(p->active_sessions, 1U);
 }
 
 ZTEST(edge_security, test_session_closed_slots_are_reclaimable)
@@ -1933,12 +1928,6 @@ ZTEST(edge_security, test_session_closed_slots_are_reclaimable)
 	}
 	ret = pqcp_edge_session_open(&sreg, &dir, &r, binding, true,
 				     T0 + 20U, 5000U, &extra);
-	BUG_EXPECT(ret == 0,
-		   "edge_session_registry.c: CLOSED/FAILED sessions keep "
-		   "occupied=true forever (neither pqcp_edge_session_close nor "
-		   "pqcp_edge_session_tick frees the slot), so a registry of "
-		   "capacity N permanently refuses new sessions with -ENOSPC "
-		   "after N lifetime sessions");
 	zassert_equal(ret, 0);
 }
 

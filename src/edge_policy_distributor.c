@@ -202,6 +202,19 @@ int pqcp_edge_policy_stage(
 		return -EINVAL;
 	}
 	k_mutex_lock(&distributor->lock, K_FOREVER);
+	/* Retire rolled-back bundles so their slots (and epochs) are free. */
+	for (size_t current = 0U;
+	     current < distributor->bundle_capacity; ++current) {
+		if (distributor->bundles[current].occupied &&
+		    distributor->bundles[current].stage ==
+			    PQCP_EDGE_POLICY_STAGE_ROLLBACK &&
+		    stage_transition_allowed(
+			    PQCP_EDGE_POLICY_STAGE_ROLLBACK,
+			    PQCP_EDGE_POLICY_STAGE_RETIRED)) {
+			distributor->bundles[current].stage =
+				PQCP_EDGE_POLICY_STAGE_RETIRED;
+		}
+	}
 	for (size_t current = 0U;
 	     current < distributor->bundle_capacity; ++current) {
 		if (distributor->bundles[current].occupied &&
@@ -372,8 +385,20 @@ int pqcp_edge_policy_promote(
 	case PQCP_EDGE_POLICY_STAGE_PROMOTED:
 		next = PQCP_EDGE_POLICY_STAGE_ACTIVE;
 		break;
+	case PQCP_EDGE_POLICY_STAGE_ROLLBACK:
+	case PQCP_EDGE_POLICY_STAGE_RETIRED:
+		ret = -ESTALE;
+		goto out;
 	default:
 		ret = -EALREADY;
+		goto out;
+	}
+	/* A bundle that is not newer than the active policy is stale: it
+	 * must never advance (and in particular never become ACTIVE, which
+	 * would roll the active epoch/digest back).
+	 */
+	if (bundle->policy_epoch <= distributor->active_policy_epoch) {
+		ret = -ESTALE;
 		goto out;
 	}
 	if (!stage_transition_allowed(bundle->stage, next)) {
@@ -414,6 +439,7 @@ int pqcp_edge_policy_rollback(
 	int index;
 	int ret = 0;
 
+	(void)now_ms;
 	if (distributor == NULL || !distributor->initialized ||
 	    bundle_id == 0U) {
 		return -EINVAL;
@@ -440,7 +466,10 @@ int pqcp_edge_policy_rollback(
 		       bundle->previous_digest,
 		       sizeof(distributor->active_digest));
 	}
-	bundle->expires_at_ms = now_ms;
+	/* expires_at_ms is covered by bundle_digest and must not change;
+	 * the ROLLBACK stage alone makes the bundle unusable. Its slot is
+	 * reclaimed (ROLLBACK -> RETIRED) by the next pqcp_edge_policy_stage.
+	 */
 	++distributor->rollback_count;
 out:
 	k_mutex_unlock(&distributor->lock);

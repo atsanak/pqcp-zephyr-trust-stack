@@ -235,16 +235,16 @@ ZTEST(edge_security, test_queue_resubmission_must_match_all_routing_fields)
 	SETSTR(m.consumer_id, "other-consumer");
 	SETSTR(m.topic, "other-topic");
 	ret = pqcp_edge_message_submit(&mq, &m, mkey, T0 + 1U, &replayed);
-	BUG_EXPECT(ret != 0 || !replayed,
-		   "edge_message_queue.c pqcp_edge_message_submit: a "
-		   "resubmission reusing message_id/payload/sequence/epoch "
-		   "but with a different consumer_id and topic is reported "
-		   "as an idempotent replay (ret=0, replayed=true) and "
-		   "silently dropped; only payload digest, sequence and "
-		   "epoch are compared (candidate message_digest is never "
-		   "comparable because previous_digest is the live chain "
-		   "head), so the new consumer never receives it");
 	zassert_not_equal(ret, 0);
+	zassert_false(replayed);
+	/* Only the original routing is queued; nothing was changed. */
+	zassert_equal(mq.accepted_count, 1U);
+	/* A byte-identical resubmission is still an idempotent replay. */
+	make_msg(&m, 1U, 1U, PQCP_EDGE_MESSAGE_NORMAL, "c1", "t1");
+	ret = pqcp_edge_message_submit(&mq, &m, mkey, T0 + 2U, &replayed);
+	zassert_equal(ret, 0);
+	zassert_true(replayed);
+	zassert_equal(mq.accepted_count, 1U);
 }
 
 ZTEST(edge_security, test_queue_retry_dead_letter_and_expiry)
@@ -871,14 +871,23 @@ ZTEST(edge_security, test_fragment_offset_must_match_index)
 	for (size_t i = 256U; i < 300U; ++i) {
 		unwritten += (fg_out[i] == 0xee) ? 1U : 0U;
 	}
-	BUG_EXPECT(!(complete && unwritten != 0U),
-		   "edge_fragment_manager.c pqcp_edge_fragment_accept: the "
-		   "fragment offset is never checked against "
-		   "fragment_index * PQCP_EDGE_FRAGMENT_PAYLOAD_MAX_BYTES, "
-		   "so a forged offset lets reassembly report complete=true "
-		   "while the tail of the output buffer was never written "
-		   "(stale/uninitialised bytes delivered as message data)");
 	zassert_not_equal(ret, 0);
+	zassert_false(complete);
+	zassert_equal(unwritten, 44U);
+	/* The genuine fragment 1 still completes the message. */
+	zassert_equal(pqcp_edge_message_fragment(fg_id, fg_payload, 300U,
+		1U, &f1), 0);
+	zassert_equal(pqcp_edge_fragment_accept(&fm, &f1, fg_out,
+		sizeof(fg_out), T0 + 2U, 1000U, &complete, &length), 0);
+	zassert_true(complete);
+	zassert_equal(length, 300U);
+	zassert_mem_equal(fg_out, fg_payload, 300U);
+	/* An offset beyond the slice boundary is refused as well. */
+	zassert_equal(pqcp_edge_message_fragment(fg_id, fg_payload, 300U,
+		0U, &f0), 0);
+	f0.offset = 1U;
+	zassert_not_equal(pqcp_edge_fragment_accept(&fm, &f0, fg_out,
+		sizeof(fg_out), T0 + 3U, 1000U, &complete, &length), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1074,16 +1083,11 @@ ZTEST(edge_security, test_ratchet_peers_interoperate_after_rotation)
 		&seq), 0);
 	ret = pqcp_edge_ratchet_receive(&b, epoch, seq, recv_key);
 	zassert_equal(ret, 0);
-	BUG_EXPECT(memcmp(send_key, recv_key, sizeof(send_key)) == 0,
-		   "edge_message_ratchet.c pqcp_edge_ratchet_rotate: after "
-		   "both peers rotate with the same shared secret and epoch, "
-		   "the initiator's send key does not equal the responder's "
-		   "receive key. rotate() derives send_chain_key from "
-		   "RATCHET_SEND_LABEL and receive_chain_key from "
-		   "RATCHET_RECEIVE_LABEL for BOTH roles (the struct stores "
-		   "no initiator flag, unlike pqcp_edge_ratchet_init which "
-		   "swaps them), so the two directions are crossed and the "
-		   "peers can no longer decrypt each other's traffic");
+	zassert_mem_equal(send_key, recv_key, sizeof(send_key));
+	/* And the reverse direction: responder send == initiator receive. */
+	zassert_equal(pqcp_edge_ratchet_next_send(&b, send_key, &epoch,
+		&seq), 0);
+	zassert_equal(pqcp_edge_ratchet_receive(&a, epoch, seq, recv_key), 0);
 	zassert_mem_equal(send_key, recv_key, sizeof(send_key));
 }
 
@@ -1367,15 +1371,12 @@ ZTEST(edge_security, test_topic_resubscribe_after_expiry_keeps_counts)
 		100U, 2U, &s), 0);
 
 	ret = pqcp_edge_topic_registry_audit(&treg);
-	BUG_EXPECT(ret == 0 && tpstore[0].active_subscribers == 1U,
-		   "edge_topic_registry.c pqcp_edge_topic_subscribe: "
-		   "re-subscribing over an expired (not yet ticked) "
-		   "subscription reuses the slot but still increments "
-		   "topic->active_subscribers, so the counter exceeds the "
-		   "real number of subscriptions (audit returns -EBADMSG) "
-		   "and the topic can never be removed (-EBUSY) nor reach "
-		   "its subscriber quota correctly");
 	zassert_equal(ret, 0);
+	zassert_equal(tpstore[0].active_subscribers, 1U);
+	zassert_equal(pqcp_edge_topic_unsubscribe(&treg,
+		s->subscription_id), 0);
+	zassert_equal(tpstore[0].active_subscribers, 0U);
+	zassert_equal(pqcp_edge_topic_registry_audit(&treg), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1545,14 +1546,17 @@ ZTEST(edge_security, test_group_rotation_requires_fresh_key_material)
 	 * evicted member still holds that key.
 	 */
 	ret = pqcp_edge_group_rotate(&gm, "g", key, T0 + 2U);
-	BUG_EXPECT(ret == -EALREADY && gstore[0].epoch == 1U,
-		   "edge_group_manager.c pqcp_edge_group_rotate: the "
-		   "-EALREADY branch is unreachable because key_digest() "
-		   "binds the epoch (epoch+1 vs the stored epoch), so "
-		   "rotating with the SAME key material is accepted and the "
-		   "epoch advances although no new secret was introduced; a "
-		   "removed member keeps a valid group key");
 	zassert_equal(ret, -EALREADY);
+	zassert_equal(gstore[0].epoch, 1U);
+	zassert_equal(pqcp_edge_group_manager_audit(&gm), 0);
+	/* A genuinely new key still rotates. */
+	edge_key(key, 10U);
+	zassert_equal(pqcp_edge_group_rotate(&gm, "g", key, T0 + 3U), 0);
+	zassert_equal(gstore[0].epoch, 2U);
+	/* ...and the new key cannot be replayed either. */
+	zassert_equal(pqcp_edge_group_rotate(&gm, "g", key, T0 + 4U),
+		      -EALREADY);
+	zassert_equal(gstore[0].epoch, 2U);
 }
 
 /* ------------------------------------------------------------------ */

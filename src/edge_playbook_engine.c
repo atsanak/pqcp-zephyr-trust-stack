@@ -78,12 +78,55 @@ static bool mandatory_failure(
 	for (uint32_t index = 0U;
 	     index < playbook->step_count; ++index) {
 		if (playbook->steps[index].mandatory &&
-		    playbook->steps[index].state ==
-			    PQCP_EDGE_PLAYBOOK_STEP_FAILED) {
+		    (playbook->steps[index].state ==
+			     PQCP_EDGE_PLAYBOOK_STEP_FAILED ||
+		     playbook->steps[index].state ==
+			     PQCP_EDGE_PLAYBOOK_STEP_SKIPPED)) {
 			return true;
 		}
 	}
 	return false;
+}
+
+/*
+ * Skip every not-yet-started step that (transitively) depends on a step
+ * that failed terminally or was itself skipped; such a step can never
+ * become runnable.
+ */
+static void skip_blocked_dependents(
+	struct pqcp_edge_playbook *playbook,
+	uint64_t now_ms)
+{
+	bool changed;
+
+	do {
+		uint32_t dead = playbook->failed_mask;
+
+		changed = false;
+		for (uint32_t index = 0U;
+		     index < playbook->step_count; ++index) {
+			if (playbook->steps[index].state ==
+			    PQCP_EDGE_PLAYBOOK_STEP_SKIPPED) {
+				dead |= 1U << index;
+			}
+		}
+		for (uint32_t index = 0U;
+		     index < playbook->step_count; ++index) {
+			struct pqcp_edge_playbook_step *step =
+				&playbook->steps[index];
+
+			if ((step->state ==
+				     PQCP_EDGE_PLAYBOOK_STEP_PENDING ||
+			     step->state ==
+				     PQCP_EDGE_PLAYBOOK_STEP_READY) &&
+			    (step->dependency_mask & dead) != 0U) {
+				step->state =
+					PQCP_EDGE_PLAYBOOK_STEP_SKIPPED;
+				step->completed_at_ms = now_ms;
+				changed = true;
+			}
+		}
+	} while (changed);
 }
 
 static bool all_steps_terminal(
@@ -343,6 +386,7 @@ int pqcp_edge_playbook_complete_step(
 		step->state =
 			PQCP_EDGE_PLAYBOOK_STEP_FAILED;
 		playbook->failed_mask |= 1U << step_slot;
+		skip_blocked_dependents(playbook, now_ms);
 	}
 	if (all_steps_terminal(playbook)) {
 		playbook->active = false;

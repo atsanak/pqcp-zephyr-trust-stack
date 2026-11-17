@@ -735,14 +735,8 @@ ZTEST(edge_security, test_policy_rollback_keeps_integrity_audit_clean)
 	zassert_equal(pqcp_edge_policy_rollback(&pd, b->bundle_id, T0 + 4U),
 		      0);
 	ret = pqcp_edge_policy_distributor_audit(&pd);
-	BUG_EXPECT(ret == 0,
-		   "edge_policy_distributor.c pqcp_edge_policy_rollback: the "
-		   "rollback rewrites bundle->expires_at_ms, a field covered "
-		   "by bundle_digest(), without recomputing bundle_digest, so "
-		   "pqcp_edge_policy_distributor_audit() reports -EBADMSG "
-		   "after every legitimate rollback (and therefore so does "
-		   "pqcp_edge_runtime_audit and the compliance score)");
 	zassert_equal(ret, 0);
+	zassert_equal(b->stage, PQCP_EDGE_POLICY_STAGE_ROLLBACK);
 }
 
 ZTEST(edge_security, test_policy_active_rollback_restores_previous_epoch)
@@ -795,14 +789,12 @@ ZTEST(edge_security, test_policy_older_bundle_cannot_displace_newer_epoch)
 	for (int i = 0; i < 3 && ret == 0; ++i) {
 		ret = pqcp_edge_policy_promote(&pd, a->bundle_id, T0 + 10U + i);
 	}
-	BUG_EXPECT(pd.active_policy_epoch == 6U,
-		   "edge_policy_distributor.c pqcp_edge_policy_promote: "
-		   "promotion never compares the bundle's policy_epoch with "
-		   "distributor->active_policy_epoch, so a previously staged "
-		   "older bundle (epoch 5) promoted after a newer one "
-		   "(epoch 6) became ACTIVE rolls the active epoch and "
-		   "digest back to 5 and retires the newer policy");
+	zassert_equal(ret, -ESTALE);
+	zassert_equal(a->stage, PQCP_EDGE_POLICY_STAGE_STAGED);
+	zassert_equal(b->stage, PQCP_EDGE_POLICY_STAGE_ACTIVE);
 	zassert_equal(pd.active_policy_epoch, 6U);
+	zassert_mem_equal(pd.active_digest, db, sizeof(db));
+	zassert_equal(pqcp_edge_policy_distributor_audit(&pd), 0);
 }
 
 ZTEST(edge_security, test_policy_abandoned_bundles_release_capacity)
@@ -818,16 +810,16 @@ ZTEST(edge_security, test_policy_abandoned_bundles_release_capacity)
 	edge_digest(digest, 0x56U);
 	ret = pqcp_edge_policy_stage(&pd, digest, 6U, T0 + 2U, T0 + 2U,
 		T0 + 100000U, 1U, 1U, &b);
-	BUG_EXPECT(ret == 0,
-		   "edge_policy_distributor.c: a bundle that was rolled back "
-		   "ends in PQCP_EDGE_POLICY_STAGE_ROLLBACK and "
-		   "stage_transition_allowed() only offers ROLLBACK->RETIRED, "
-		   "but no API performs that transition and "
-		   "free_bundle_index() only reclaims RETIRED bundles, so "
-		   "every rolled-back (or expired-and-abandoned) bundle "
-		   "leaks its slot; a table of N bundles accepts at most N "
-		   "rollouts over its lifetime");
 	zassert_equal(ret, 0);
+	zassert_equal(b->stage, PQCP_EDGE_POLICY_STAGE_STAGED);
+	zassert_equal(pqcp_edge_policy_distributor_audit(&pd), 0);
+	/* Repeated rollout/rollback cycles never exhaust the table. */
+	for (uint64_t e = 7U; e < 12U; ++e) {
+		zassert_equal(pqcp_edge_policy_rollback(&pd, b->bundle_id,
+			T0 + 3U), 0);
+		zassert_equal(pqcp_edge_policy_stage(&pd, digest, e,
+			T0 + 4U, T0 + 4U, T0 + 100000U, 1U, 1U, &b), 0);
+	}
 }
 
 /* ------------------------------------------------------------------ */
@@ -1821,19 +1813,20 @@ ZTEST(edge_security, test_credential_monotonic_updates_and_revocation)
 	zassert_equal(crstore[0].issuance_epoch, 2U);
 	zassert_equal(crstore[0].generation, generation);
 
-	/* Revocation epochs only move forward and strip capabilities. */
+	/* Revocation epochs only move forward; the record stays valid. */
 	zassert_equal(pqcp_edge_credential_revoke(&cc, "c1", 1U), -ESTALE);
 	zassert_equal(crstore[0].state, PQCP_EDGE_CREDENTIAL_ACTIVE);
 	zassert_equal(pqcp_edge_credential_revoke(&cc, "c1", 5U), 0);
 	zassert_equal(crstore[0].state, PQCP_EDGE_CREDENTIAL_REVOKED);
-	zassert_equal(crstore[0].capabilities, 0U);
+	zassert_not_equal(crstore[0].capabilities, 0U);
 	zassert_equal(pqcp_edge_credential_revoke(&cc, "c1", 5U), -ESTALE);
-	/* A revoked credential never authorizes (the dedicated
-	 * -EKEYREVOKED path is shadowed by the capability check, so the
-	 * caller observes -EACCES).
+	/* A revoked credential never authorizes and reports the dedicated
+	 * revocation error (not the capability mismatch).
 	 */
 	zassert_equal(pqcp_edge_credential_authorize(&cc, "c1", "p1", 0x1U,
-		2U, 1U, T0 + 2U), -EACCES);
+		2U, 1U, T0 + 2U), -EKEYREVOKED);
+	zassert_equal(pqcp_edge_credential_authorize(&cc, "c1", "p1",
+		CAP_ALL, 2U, 1U, T0 + 2U), -EKEYREVOKED);
 }
 
 ZTEST(edge_security, test_credential_audit_detects_corruption)
@@ -1865,14 +1858,6 @@ ZTEST(edge_security, test_credential_revocation_keeps_integrity_audit_clean)
 	zassert_equal(pqcp_edge_credential_put(&cc, &c, T0), 0);
 	zassert_equal(pqcp_edge_credential_revoke(&cc, "c1", 5U), 0);
 	ret = pqcp_edge_credential_cache_audit(&cc);
-	BUG_EXPECT(ret == 0,
-		   "edge_credential_cache.c: pqcp_edge_credential_revoke "
-		   "sets capabilities=0 but record_valid() (used by "
-		   "pqcp_edge_credential_cache_audit) requires "
-		   "capabilities != 0, so every legitimately revoked "
-		   "credential makes the audit - and therefore "
-		   "pqcp_edge_runtime_audit and the compliance integrity "
-		   "counter - report -EBADMSG");
 	zassert_equal(ret, 0);
 }
 
@@ -1896,28 +1881,29 @@ ZTEST(edge_security, test_credential_capacity_exhaustion)
 ZTEST(edge_security, test_credential_revocation_survives_slot_recycling)
 {
 	struct pqcp_edge_credential_record c;
-	int ret;
+	struct pqcp_edge_credential_record snap;
 
-	cred_setup(1U);
+	cred_setup(2U);
 	make_cred(&c, "c1");
 	zassert_equal(pqcp_edge_credential_put(&cc, &c, T0), 0);
 	zassert_equal(pqcp_edge_credential_revoke(&cc, "c1", 5U), 0);
-	/* Another credential recycles the revoked slot... */
 	make_cred(&c, "c2");
 	zassert_equal(pqcp_edge_credential_put(&cc, &c, T0), 0);
-	zassert_equal(pqcp_edge_credential_revoke(&cc, "c2", 5U), 0);
-	/* ... and the revoked id c1 is accepted again as a brand new one. */
+	/* The revoked slot is a tombstone: it is never handed out. */
+	make_cred(&c, "c3");
+	zassert_equal(pqcp_edge_credential_put(&cc, &c, T0), -ENOSPC);
+	/* The revoked id cannot be re-admitted, even with newer epochs. */
+	memcpy(&snap, &crstore[0], sizeof(snap));
 	make_cred(&c, "c1");
-	ret = pqcp_edge_credential_put(&cc, &c, T0);
-	BUG_EXPECT(ret != 0,
-		   "edge_credential_cache.c free_record_index: REVOKED "
-		   "records are treated as free slots, so the tombstone of a "
-		   "revoked credential disappears as soon as the cache is "
-		   "full; the same credential_id (with its original "
-		   "issuance_epoch 1 and revocation_epoch 1) is then "
-		   "re-admitted as a fresh ACTIVE credential by "
-		   "pqcp_edge_credential_put, forgetting the revocation");
-	zassert_not_equal(ret, 0);
+	zassert_equal(pqcp_edge_credential_put(&cc, &c, T0), -EKEYREVOKED);
+	c.issuance_epoch = 9U;
+	c.revocation_epoch = 9U;
+	zassert_equal(pqcp_edge_credential_put(&cc, &c, T0), -EKEYREVOKED);
+	zassert_mem_equal(&crstore[0], &snap, sizeof(snap));
+	zassert_equal(crstore[0].state, PQCP_EDGE_CREDENTIAL_REVOKED);
+	zassert_equal(pqcp_edge_credential_authorize(&cc, "c1", "p1", 0x1U,
+		1U, 1U, T0 + 1U), -EKEYREVOKED);
+	zassert_equal(pqcp_edge_credential_cache_audit(&cc), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -2152,16 +2138,12 @@ ZTEST(edge_security, test_isolation_recovery_from_failsafe_yields_consistent_zon
 	zassert_equal(pqcp_edge_isolation_transition(&iz, "z1",
 		PQCP_EDGE_ISOLATION_OPEN, 0U, T0 + 3U, 0U), 0);
 	ret = pqcp_edge_isolation_manager_audit(&iz);
-	BUG_EXPECT(ret == 0 && izstore[0].allowed_operations != 0U,
-		   "edge_isolation_manager.c pqcp_edge_isolation_transition: "
-		   "entering FAILSAFE permanently zeroes allowed_capabilities "
-		   "and allowed_operations, and the only exits "
-		   "(QUARANTINED -> RESTRICTED -> OPEN) never restore them; "
-		   "the zone ends OPEN with empty allow-lists (every request "
-		   "denied) and pqcp_edge_isolation_manager_audit() returns "
-		   "-EBADMSG because zone_shape_valid() requires OPEN zones "
-		   "to carry non-empty allow-lists");
 	zassert_equal(ret, 0);
+	zassert_equal(izstore[0].allowed_capabilities, 0xfU);
+	zassert_equal(izstore[0].allowed_operations, ALL_OPERATIONS);
+	/* The restored zone really admits requests again. */
+	zassert_equal(pqcp_edge_isolation_authorize(&iz, "z1",
+		PQCP_EDGE_OPERATION_READ, 0x1U, T0 + 4U), 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -2783,15 +2765,20 @@ ZTEST(edge_security, test_sla_ninety_nine_percent_objective_can_be_healthy)
 	}
 	zassert_equal(pqcp_edge_sla_evaluate(&sla, "svc", T0 + 2U, &state),
 		      0);
-	BUG_EXPECT(state == PQCP_EDGE_SLA_HEALTHY,
-		   "edge_sla_monitor.c evaluate_objective: the AT_RISK "
-		   "warning margins are fixed 250 basis points "
-		   "(success < minimum + 250, error + 250 > maximum), so an "
-		   "objective with minimum_success_basis_points >= 9750 or "
-		   "maximum_error_basis_points < 250 (e.g. a 99% SLO) is "
-		   "AT_RISK even with 100 successes out of 100 requests and "
-		   "can never report HEALTHY");
 	zassert_equal(state, PQCP_EDGE_SLA_HEALTHY);
+
+	/* A tight objective that is only just met is still flagged. */
+	make_sla(&o, "svc2", 9900U, 100U);
+	zassert_equal(pqcp_edge_sla_objective_put(&sla, &o, T0), 0);
+	for (int i = 0; i < 99; ++i) {
+		zassert_equal(pqcp_edge_sla_record(&sla, "svc2", true, 100U,
+			T0 + 1U), 0);
+	}
+	zassert_equal(pqcp_edge_sla_record(&sla, "svc2", false, 100U,
+		T0 + 1U), 0);
+	zassert_equal(pqcp_edge_sla_evaluate(&sla, "svc2", T0 + 2U, &state),
+		      0);
+	zassert_equal(state, PQCP_EDGE_SLA_AT_RISK);
 }
 
 /* ------------------------------------------------------------------ */

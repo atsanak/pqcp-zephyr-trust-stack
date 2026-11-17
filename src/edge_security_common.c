@@ -97,12 +97,19 @@ uint64_t pqcp_edge_internal_next_identifier(
 	if (identifier == NULL) {
 		return 0U;
 	}
-	if (*identifier == 0U || *identifier == UINT64_MAX) {
-		*identifier = 1U;
-	} else {
-		++(*identifier);
+	/*
+	 * The counter holds the next identifier to issue: hand it out
+	 * unchanged (0 means uninitialised and starts at 1) and advance
+	 * afterwards, so the first identifier is 1 and not 2. UINT64_MAX is
+	 * never issued: a counter that reached it wraps back to 1.
+	 */
+	uint64_t issued = *identifier;
+
+	if (issued == 0U || issued == UINT64_MAX) {
+		issued = 1U;
 	}
-	return *identifier;
+	*identifier = issued + 1U;
+	return issued;
 }
 
 uint64_t pqcp_edge_internal_saturating_add_u64(
