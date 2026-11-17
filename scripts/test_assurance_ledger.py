@@ -1396,6 +1396,95 @@ class AssuranceLedgerTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "fail")
 
+    def _write_coverage_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-evidence-coverage.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-11-17T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["evidence coverage audit"],
+                    "transcripts": [
+                        {
+                            "step": "evidence coverage audit",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    _COVERAGE_SPEC = {
+        "id": "release.evidence_coverage_ratchet",
+        "category": "release",
+        "claim": "x",
+        "required": True,
+    }
+
+    def test_evidence_coverage_ratchet_passes_and_records_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            body = (
+                "PQCP_EVIDENCE_COVERAGE PASS modules=350 L0=225 L1=76 "
+                "L2=34 L3=15 new_untested=0 regressions=0\n"
+                "[coverage] PASS: no module lost evidence and no new "
+                "module is untested\n"
+            )
+            manifest = self._write_coverage_transcript(Path(tmp), body)
+            result = ledger.evaluate_evidence_coverage_ratchet(
+                dict(self._COVERAGE_SPEC), transcript_manifest=manifest)
+            self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+            self.assertEqual(result["details"]["L0_untested"], 225)
+            self.assertEqual(result["details"]["modules"], 350)
+
+    def test_evidence_coverage_ratchet_fails_on_violation_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            body = (
+                "[coverage] REGRESSION runtime_lease: L1 -> L0\n"
+                "[coverage] FAIL: evidence coverage ratchet violated\n"
+            )
+            manifest = self._write_coverage_transcript(Path(tmp), body)
+            result = ledger.evaluate_evidence_coverage_ratchet(
+                dict(self._COVERAGE_SPEC), transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("PQCP_EVIDENCE_COVERAGE PASS", result["failure_reason"])
+
+    def test_evidence_coverage_ratchet_rejects_inconsistent_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            body = (
+                "PQCP_EVIDENCE_COVERAGE PASS modules=350 L0=1 L1=1 "
+                "L2=1 L3=1 new_untested=0 regressions=0\n"
+                "[coverage] PASS: ok\n"
+            )
+            manifest = self._write_coverage_transcript(Path(tmp), body)
+            result = ledger.evaluate_evidence_coverage_ratchet(
+                dict(self._COVERAGE_SPEC), transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("sum", result["failure_reason"])
+
+    def test_evidence_coverage_ratchet_fails_without_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "transcripts" / "evidence_transcript_manifest.json"
+            result = ledger.evaluate_evidence_coverage_ratchet(
+                dict(self._COVERAGE_SPEC), transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("missing or empty", result["failure_reason"])
+
     def _write_ct_smoke_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
