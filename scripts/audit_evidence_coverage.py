@@ -6,9 +6,11 @@ Every module (src/<name>.c) is assigned an evidence level:
 
   L0 untested  no ztest suite references any function the module defines
   L1 tested    at least one ztest suite calls a function the module defines
-  L2 gated     an exercising suite is wired into an automated gate
-               (extended-check compatibility targets, release_check.py,
-               or a GitHub workflow)
+  L2 gated     an exercising suite is wired into an automated gate:
+               extended-check compatibility targets, release_check.py,
+               a GitHub workflow that names it, or registration with
+               twister (testcase.yaml) while a workflow runs twister
+               over tests/ in run mode (not --build-only)
   L3 claimed   gated, and the module (or its Kconfig symbol, header, or
                exercising suite) is bound by the assurance claim catalog
                or the crypto asset trace map
@@ -127,12 +129,29 @@ def gate_surfaces(root: Path) -> dict[str, str]:
     return surfaces
 
 
+TWISTER_RE = re.compile(r"west\s+twister\b(.*?)(?:\n\s*\n|\Z)", re.S)
+
+
+def twister_runs_all_tests(surfaces: dict[str, str]) -> bool:
+    """True if a workflow runs twister over tests/ in run mode."""
+    for name, text in surfaces.items():
+        if not name.startswith("workflow:"):
+            continue
+        for command in TWISTER_RE.findall(text):
+            if "--build-only" in command:
+                continue
+            if re.search(r"-T\s+\S*tests\b", command):
+                return True
+    return False
+
+
 def build_report(root: Path) -> dict:
     src_dir = root / "src"
     headers = {p.stem for p in (root / "include/pqcp_zephyr").glob("*.h")}
     cmake_configs = parse_cmake_configs(read_text(root / "CMakeLists.txt"))
     tests = collect_tests(root)
     surfaces = gate_surfaces(root)
+    sweep = twister_runs_all_tests(surfaces)
     claim_text = (read_text(root / "scripts/assurance_claims.json") +
                   read_text(root / "scripts/pqc_asset_trace_map.json")).lower()
 
@@ -174,9 +193,11 @@ def build_report(root: Path) -> dict:
             test for test, info in tests.items()
             if symbols & info["idents"])
 
-        gated_by = sorted({
-            surface for test in exercisers
-            for surface, text in surfaces.items() if test in text})
+        gated = {surface for test in exercisers
+                 for surface, text in surfaces.items() if test in text}
+        if sweep and any(tests[t]["twister"] for t in exercisers):
+            gated.add("twister-run")
+        gated_by = sorted(gated)
 
         probes = {name.lower()}
         if header:

@@ -85,6 +85,38 @@ class CoverageLevels(unittest.TestCase):
         self.assertEqual(summary["modules"], 6)
 
 
+class TwisterGating(unittest.TestCase):
+    RUN = ('      - run: |\n          west twister \\\n'
+           '            -T "$GITHUB_WORKSPACE/tests" \\\n'
+           '            -p qemu_x86_64 \\\n'
+           '            --outdir out\n')
+    BUILD_ONLY = RUN.replace("--outdir", "--build-only \\\n            --outdir")
+
+    def test_run_mode_sweep_over_tests_is_detected(self) -> None:
+        self.assertTrue(cov.twister_runs_all_tests({"workflow:ci.yml": self.RUN}))
+
+    def test_build_only_sweep_does_not_count(self) -> None:
+        self.assertFalse(
+            cov.twister_runs_all_tests({"workflow:ci.yml": self.BUILD_ONLY}))
+
+    def test_non_workflow_surfaces_are_ignored(self) -> None:
+        self.assertFalse(
+            cov.twister_runs_all_tests({"release_check": self.RUN}))
+
+    def test_registered_suite_is_gated_only_when_sweep_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write(root, "src/zed.c", "int zed_run(void)\n{\n\treturn 0;\n}\n")
+            write(root, "tests/ztest_zed/src/main.c",
+                  "void t(void) { zed_run(); }\n")
+            write(root, "tests/ztest_zed/testcase.yaml", "tests: {}\n")
+            write(root, ".github/workflows/ci.yml", self.BUILD_ONLY)
+            before = cov.build_report(root)["modules"][0]["level"]
+            write(root, ".github/workflows/ci.yml", self.RUN)
+            after = cov.build_report(root)["modules"][0]["level"]
+            self.assertEqual((before, after), (1, 2))
+
+
 class CmakeConfigParsing(unittest.TestCase):
     def test_nested_if_frames_are_collected(self) -> None:
         text = (
