@@ -45,6 +45,7 @@ DEF_RE = re.compile(
     r"^(?!static\b|typedef\b|extern\b|#|//|/\*|\*)"
     r"[A-Za-z_][\w \t\*]*?[ \t\*]([A-Za-z_]\w*)\s*\(",
     re.MULTILINE)
+NAME_FIRST_RE = re.compile(r"^([a-z_][a-z0-9_]*)\s*\(", re.MULTILINE)
 KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "else"}
 
 
@@ -83,8 +84,10 @@ def parse_cmake_configs(cmake_text: str) -> dict[str, list[str]]:
 
 def defined_symbols(source_text: str) -> set[str]:
     """Names of the non-static functions this translation unit defines."""
-    return {name for name in DEF_RE.findall(source_text)
-            if name not in KEYWORDS}
+    names = set(DEF_RE.findall(source_text))
+    # Return type on the previous line, name alone at column 0.
+    names.update(NAME_FIRST_RE.findall(source_text))
+    return {name for name in names if name not in KEYWORDS}
 
 
 def implemented_header(module: str, source_text: str,
