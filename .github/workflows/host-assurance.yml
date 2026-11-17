@@ -49,6 +49,7 @@ jobs:
 
       - name: Upload host assurance report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: host-assurance-report
@@ -91,6 +92,7 @@ jobs:
         run: python scripts/package_evidence_verifier.py --output-dir "$RUNNER_TEMP/dist"
 
       - name: Upload kit artifact
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: pqcp-evidence-verifier-kit
