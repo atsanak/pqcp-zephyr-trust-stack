@@ -262,6 +262,103 @@ def main() -> int:
         check("stripped wave-11 layers keep core chain verifiable",
               result.returncode == 0)
 
+
+        # ------------------------------------------------------------
+        # Single-check isolation and cross-run splices. Defense in depth
+        # means ordinary tamper tests are caught by several checks at once
+        # and would stay green if any ONE check were deleted. These cases
+        # are built so exactly one check can catch the forgery; the
+        # mutation runner (scripts/run_mutation_checks.py) proves it.
+        # ------------------------------------------------------------
+        def lines_with(text: str, *prefixes: str) -> list[str]:
+            return [line for line in text.splitlines()
+                    if line.startswith(prefixes)]
+
+        VERDICT = ("PQCP_DEPLOYMENT_EVIDENCE_VERDICT ",)
+        SEAL = ("PQCP_DEPLOYMENT_EVIDENCE_SEAL ",)
+        PASSPORT = ("PQCP_DEPLOYMENT_ASSURANCE_PASSPORT ",)
+        MATRIX = ("PQCP_DEPLOYMENT_TAMPER_CELL ",
+                  "PQCP_DEPLOYMENT_TAMPER_MATRIX ")
+        TRAIL = ("PQCP_DEPLOYMENT_EVIDENCE_TRAIL_ENTRY ",
+                 "PQCP_DEPLOYMENT_EVIDENCE_TRAIL ")
+
+        def lenient_rc(name: str, lines: list[str]) -> int:
+            path = write_variant(workdir, name, "\n".join(lines) + "\n")
+            return run_tool(binary, path, "--lenient", "--quiet").returncode
+
+        def tamper_first(lines: list[str], index: int, old: str,
+                         new: str) -> list[str]:
+            assert old in lines[index], (old, lines[index][:120])
+            changed = list(lines)
+            changed[index] = lines[index].replace(old, new, 1)
+            return changed
+
+        # --- single-layer digest recomputation -----------------------
+        verdict_a = lines_with(full_text, *VERDICT)
+        seal_a = lines_with(full_text, *SEAL)
+        check("control: verdict-only transcript verifies (lenient)",
+              lenient_rc("v_ctrl.log", verdict_a) == 0)
+        check("verdict digest alone rejects a covered-field forgery",
+              lenient_rc("v_forged.log",
+                         tamper_first(verdict_a, 0, " score=0 ",
+                                      " score=1 ")) == 1)
+        check("control: seal-only transcript verifies (lenient)",
+              lenient_rc("s_ctrl.log", seal_a) == 0)
+        check("seal digest alone rejects a covered-field forgery",
+              lenient_rc("s_forged.log",
+                         tamper_first(seal_a, 0, " score=0 ",
+                                      " score=1 ")) == 1)
+
+        trail_a = lines_with(full_text, *TRAIL)
+        check("control: verdict+trail transcript verifies (lenient)",
+              lenient_rc("t_ctrl.log", verdict_a + trail_a) == 0)
+        entry_index = next(i for i, line in enumerate(trail_a)
+                           if " seq=1 " in line)
+        link_value = trail_a[entry_index].split(" link=")[1].split()[0]
+        flipped_link = ("0" if link_value[0] != "0" else "1") + link_value[1:]
+        check("hash-chain link check rejects a forged stored link",
+              lenient_rc("t_forged.log", verdict_a + tamper_first(
+                  trail_a, entry_index, " link=" + link_value,
+                  " link=" + flipped_link)) == 1)
+
+        matrix_a = lines_with(full_text, *MATRIX)
+        passport_a = lines_with(full_text, *PASSPORT)
+        check("control: passport+matrix transcript verifies (lenient)",
+              lenient_rc("m_ctrl.log", passport_a + matrix_a) == 0)
+        matrix_index = next(i for i, line in enumerate(matrix_a)
+                            if line.startswith(MATRIX[1]))
+        check("matrix digest alone rejects a covered-field forgery",
+              lenient_rc("m_forged.log", passport_a + tamper_first(
+                  matrix_a, matrix_index, " profile=product ",
+                  " profile=partner ")) == 1)
+
+        # --- cross-run splices: each layer valid on its own ----------
+        verdict_b = lines_with(signed_text, *VERDICT)
+        seal_b = lines_with(signed_text, *SEAL)
+        passport_b = lines_with(signed_text, *PASSPORT)
+        check("control: run-B verdict+seal verify together",
+              lenient_rc("sp1_ctrl.log", verdict_b + seal_b) == 0)
+        check("splice: verdict(A)+seal(B) is rejected by the binding",
+              lenient_rc("sp1.log", verdict_a + seal_b) == 1)
+        check("control: run-B seal+passport verify together",
+              lenient_rc("sp2_ctrl.log", seal_b + passport_b) == 0)
+        check("splice: seal(A)+passport(B) is rejected by the binding",
+              lenient_rc("sp2.log", seal_a + passport_b) == 1)
+        check("control: run-A passport+matrix verify together",
+              lenient_rc("sp3_ctrl.log", passport_a + matrix_a) == 0)
+        check("splice: passport(B)+matrix(A) is rejected by the binding",
+              lenient_rc("sp3.log", passport_b + matrix_a) == 1)
+        signature_b = lines_with(
+            signed_text, "PQCP_DEPLOYMENT_PASSPORT_SIGNATURE ",
+            "PQCP_DEPLOYMENT_PASSPORT_PK_CHUNK ",
+            "PQCP_DEPLOYMENT_PASSPORT_SIG_CHUNK ")
+        spliced_sig = write_variant(
+            workdir, "sp4.log",
+            "\n".join(passport_a + signature_b) + "\n")
+        check("splice: passport(A)+signature(B) is rejected",
+              run_tool(binary, spliced_sig, "--lenient",
+                       "--require-signature", "--quiet").returncode == 1)
+
     if failures:
         print(f"\n{len(failures)} test(s) failed")
         return 1
