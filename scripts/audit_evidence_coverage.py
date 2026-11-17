@@ -21,6 +21,9 @@ fails if any module regresses or if a NEW module appears untested. Levels
 can only go up unless the baseline is deliberately rewritten.
 
 Stdlib only; reads source text, never executes anything from the tree.
+Evidence is a static symbol-reference heuristic, not execution coverage:
+comments, literals, directives and function signatures are excluded, but
+preprocessor branches, macro expansion and callback execution are not resolved.
 """
 
 import argparse
@@ -39,14 +42,61 @@ CMAKE_SRC_RE = re.compile(r"\$\{PQCP_SRC\}/([A-Za-z0-9_]+)\.c")
 CMAKE_IF_RE = re.compile(r"^\s*if\s*\((.*)\)\s*$")
 CONFIG_RE = re.compile(r"\bCONFIG_[A-Z0-9_]+\b")
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-# A non-static function definition: starts at column 0 with a return type
-# and an identifier followed by '(' (return type on the same line).
-DEF_RE = re.compile(
-    r"^(?!static\b|typedef\b|extern\b|#|//|/\*|\*)"
-    r"[A-Za-z_][\w \t\*]*?[ \t\*]([A-Za-z_]\w*)\s*\(",
-    re.MULTILINE)
-NAME_FIRST_RE = re.compile(r"^([a-z_][a-z0-9_]*)\s*\(", re.MULTILINE)
+C_NONCODE_RE = re.compile(
+    r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+    re.DOTALL)
+C_DIRECTIVE_RE = re.compile(r"^[ \t]*#[^\n]*", re.MULTILINE)
+# Ordinary typed C function signatures, including split return types and
+# nested callback parameters. Attribute-decorated and macro-generated
+# signatures are deliberately outside this lightweight scanner's contract.
+C_SIGNATURE_RE = re.compile(
+    r"(?:^|(?<=[;{}]))\s*"
+    r"((?:[A-Za-z_]\w*[\s*]+)+?)([A-Za-z_]\w*)\s*\(")
 KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "else"}
+
+
+def blank_code(text: str) -> str:
+    return re.sub(r"[^\n]", " ", text)
+
+
+def c_code(text: str) -> str:
+    """Mask non-code without joining tokens; splice before lexing, as C does."""
+    text = re.sub(r"\\\r?\n", "", text)
+    text = C_NONCODE_RE.sub(lambda m: blank_code(m.group()), text)
+    return C_DIRECTIVE_RE.sub(lambda m: blank_code(m.group()), text)
+
+
+def function_signatures(code: str):
+    """Yield (name, type tokens, start, end, definition) for ordinary C."""
+    for match in C_SIGNATURE_RE.finditer(code):
+        types = set(IDENT_RE.findall(match.group(1)))
+        if types & KEYWORDS:
+            continue
+        depth = 1
+        end = match.end()
+        while end < len(code) and depth:
+            if code[end] == "(":
+                depth += 1
+            elif code[end] == ")":
+                depth -= 1
+            end += 1
+        tail = end
+        while tail < len(code) and code[tail].isspace():
+            tail += 1
+        if not depth and tail < len(code) and code[tail] in ";{":
+            yield match.group(2), types, match.start(), end, code[tail] == "{"
+
+
+def referenced_symbols(source_text: str) -> set[str]:
+    """References in code, including callback values but excluding signatures."""
+    code = c_code(source_text)
+    pieces = []
+    end = 0
+    for _, _, start, stop, _ in function_signatures(code):
+        pieces.append(code[end:start])
+        end = stop
+    pieces.append(code[end:])
+    return set(IDENT_RE.findall(" ".join(pieces)))
 
 
 def read_text(path: Path) -> str:
@@ -84,10 +134,9 @@ def parse_cmake_configs(cmake_text: str) -> dict[str, list[str]]:
 
 def defined_symbols(source_text: str) -> set[str]:
     """Names of the non-static functions this translation unit defines."""
-    names = set(DEF_RE.findall(source_text))
-    # Return type on the previous line, name alone at column 0.
-    names.update(NAME_FIRST_RE.findall(source_text))
-    return {name for name in names if name not in KEYWORDS}
+    return {name for name, types, _, _, definition in
+            function_signatures(c_code(source_text))
+            if definition and not types & {"static", "typedef"}}
 
 
 def implemented_header(module: str, source_text: str,
@@ -112,7 +161,7 @@ def collect_tests(root: Path) -> dict[str, dict]:
             continue
         idents: set[str] = set()
         for source in test_dir.rglob("*.c"):
-            idents.update(IDENT_RE.findall(read_text(source)))
+            idents.update(referenced_symbols(read_text(source)))
         tests[test_dir.name] = {
             "idents": idents,
             "prj_conf": read_text(test_dir / "prj.conf"),
@@ -164,7 +213,7 @@ def build_report(root: Path) -> dict:
         text = read_text(source)
         symbols = defined_symbols(text)
         raw[source.stem] = {"text": text, "symbols": symbols,
-                            "idents": set(IDENT_RE.findall(text))}
+                            "idents": referenced_symbols(text)}
         for symbol in symbols:
             owner.setdefault(symbol, source.stem)
 
