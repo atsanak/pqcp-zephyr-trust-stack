@@ -10,7 +10,8 @@ green job. Needs only Python 3, cmake and a C compiler:
   3. evidence-coverage ratchet
   4. local tool regression tests
   5. host evidence verifier tests (builds the unmodified firmware verifier)
-  6. coverage-guided evidence-grammar fuzz under ASan+UBSan
+  6. mutation checks: weakened verifier security checks must be caught
+  7. coverage-guided evidence-grammar fuzz under ASan+UBSan
 
 Writes host_assurance_report.json and, under GitHub Actions, a markdown
 job summary. Exits nonzero if any step failed; every step still runs so one
@@ -43,6 +44,8 @@ def step_commands(output_dir: Path, fuzz_iterations: int) -> list[tuple[str, lis
          [py, str(SCRIPTS / "run_local_tool_tests.py")]),
         ("evidence verifier tests",
          [py, str(SCRIPTS / "test_evidence_verifier.py")]),
+        ("verifier mutation checks",
+         [py, str(SCRIPTS / "run_mutation_checks.py")]),
         ("evidence parser fuzz",
          [py, str(SCRIPTS / "run_fuzz_checks.py"),
           "--build-dir", str(output_dir / "fuzz-build"),
