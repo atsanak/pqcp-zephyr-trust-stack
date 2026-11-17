@@ -1,0 +1,24 @@
+{
+  "functions": {
+    "sovereign_audit.h": [
+      "pqcp_sovereign_audit_bridge_broker_receipt",
+      "pqcp_sovereign_audit_bridge_ceremony",
+      "pqcp_sovereign_audit_bridge_continuity",
+      "pqcp_sovereign_audit_bridge_deployment",
+      "pqcp_sovereign_audit_bridge_edge_incident",
+      "pqcp_sovereign_audit_bridge_erasure",
+      "pqcp_sovereign_audit_bridge_fleet_journal",
+      "pqcp_sovereign_audit_bridge_privacy_budget",
+      "pqcp_sovereign_audit_bridge_recovery",
+      "pqcp_sovereign_audit_export_acknowledge",
+      "pqcp_sovereign_audit_export_close",
+      "pqcp_sovereign_audit_export_expire",
+      "pqcp_sovereign_audit_export_open",
+      "pqcp_sovereign_audit_export_prepare",
+      "pqcp_sovereign_audit_exporter_audit",
+      "pqcp_sovereign_audit_exporter_init"
+    ]
+  },
+  "note": "Known declared-but-undefined functions. Fix by implementing or deleting the declaration, then rewrite with --update-baseline.",
+  "schema_version": 1
+}
