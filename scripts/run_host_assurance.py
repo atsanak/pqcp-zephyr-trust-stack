@@ -7,7 +7,7 @@ green job. Needs only Python 3, cmake and a C compiler:
 
   1. py_compile every script
   2. ztest suites are all registered with twister
-  3. evidence-coverage ratchet
+  3. declared-but-undefined ratchet, then evidence-coverage ratchet
   4. local tool regression tests
   5. host evidence verifier tests (builds the unmodified firmware verifier)
   6. mutation checks: weakened verifier security checks must be caught
@@ -37,6 +37,8 @@ def step_commands(output_dir: Path, fuzz_iterations: int) -> list[tuple[str, lis
          [py, "-m", "py_compile", *sorted(str(p) for p in SCRIPTS.glob("*.py"))]),
         ("testcase registry",
          [py, str(SCRIPTS / "generate_testcase_yaml.py"), "--check"]),
+        ("declared-but-undefined ratchet",
+         [py, str(SCRIPTS / "check_declared_defined.py"), "--check"]),
         ("evidence coverage ratchet",
          [py, str(SCRIPTS / "audit_evidence_coverage.py"), "--check",
           "--json", str(output_dir / "evidence_coverage.json")]),
