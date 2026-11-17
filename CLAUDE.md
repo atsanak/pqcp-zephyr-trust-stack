@@ -1164,6 +1164,39 @@ assurance_claims.json (currently the host verifier enforces present->verified
 but no dedicated ledger claim ID exists yet); nucleo hardware capture; GitHub
 Actions billing blocker unchanged.
 
+## Patch set 14 — evidence-coverage ratchet + CI/CD hardening (2026-11-17)
+
+PRs: #6 `claude/evidence-coverage-ratchet` (base main), #7
+`claude/ci-cd-hardening` (stacked on #6). Python/YAML only; no firmware C.
+
+- Coverage ratchet: scripts/audit_evidence_coverage.py assigns every
+  src/*.c module L0 untested / L1 tested / L2 gated / L3 claimed using
+  defined-symbol references (header-include matching undercounts the newer
+  families, which implement via *_internal.h) plus a call-graph pass.
+  Baseline: scripts/evidence_coverage_baseline.json. Claim
+  release.evidence_coverage_ratchet (claims schema 9). At #6: L0=224 L1=76
+  L2=34 L3=15 of 349 modules; 176 modules (37% of 362k lines) unreachable
+  from any ztest; sovereign (55) and edge (47) have NO tests, fleet 2/56.
+- CI finding: only 24 of 74 tests/ztest_* had testcase.yaml, so twister
+  silently skipped 50 suites (nearly the whole deployment evidence chain);
+  no workflow ran any host tooling. Fixes in #7: generate_testcase_yaml.py
+  (+ --check), host-assurance.yml (run_host_assurance.py: ~42s, validated on
+  ubuntu:22.04/gcc11/py3.10 and python:3.12-bookworm/gcc12), ci.yml
+  twister job now RUNS suites (was --build-only).
+- Full local twister sweep (qemu_x86_64, all registered suites): 91/91
+  configurations, 995/995 test cases passed in 299s. Baseline raised to
+  L2=104 L3=21 (76 modules moved up).
+- CD: package_evidence_verifier.py builds a smoke-tested (accepts signed
+  transcript, rejects tampered) verifier tarball + sha256; host-assurance.yml
+  uploads it on main/v* tags and attaches it to releases on tags; nightly
+  2M-iteration fuzz.
+
+Open: CI verdicts on #6/#7 (runs were queued/in progress at write time);
+untested families (sovereign/edge/fleet) need ztest suites - the ratchet
+will fail any NEW module without a test, including the uncommitted
+evidence_continuity_* WIP in the shared checkout; RFC 9052/CBOR/RFC 6962
+external vectors; mutation testing of verifiers/ratchet.
+
 ## Final rule
 
 Do not confuse motion with progress.
