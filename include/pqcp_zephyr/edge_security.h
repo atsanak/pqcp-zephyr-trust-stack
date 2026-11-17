@@ -391,6 +391,8 @@ struct pqcp_edge_session {
 	enum pqcp_edge_session_state state;
 	uint8_t binding_digest[PQCP_EDGE_DIGEST_BYTES];
 	bool mutually_authenticated;
+	/* The principal's active_sessions quota slot was given back. */
+	bool principal_released;
 	bool occupied;
 };
 
@@ -603,6 +605,7 @@ struct pqcp_edge_ratchet {
 	uint8_t root_digest[PQCP_EDGE_DIGEST_BYTES];
 	uint64_t last_rotated_ms;
 	uint32_t skipped_messages;
+	bool initiator;
 	bool initialized;
 };
 
@@ -1168,6 +1171,10 @@ struct pqcp_edge_continuity_service {
 	uint32_t priority;
 	uint64_t dependency_mask;
 	uint64_t satisfied_dependencies;
+	/* Mode is held by an operator override or a latched FAILSAFE
+	 * escalation; observe/evaluate must not re-derive it.
+	 */
+	bool mode_pinned;
 	bool occupied;
 };
 
@@ -1652,6 +1659,11 @@ struct pqcp_edge_isolation_zone {
 	uint32_t reason_mask;
 	uint32_t active_workloads;
 	uint32_t maximum_workloads;
+	/* Allow-lists in force before FAILSAFE zeroed them; restored when
+	 * the zone leaves FAILSAFE. Meaningful only while FAILSAFE.
+	 */
+	uint64_t saved_allowed_capabilities;
+	uint64_t saved_allowed_operations;
 	bool occupied;
 };
 
@@ -2993,6 +3005,16 @@ int pqcp_edge_audit_export_open(
 	uint64_t now_ms,
 	uint64_t lifetime_ms,
 	struct pqcp_edge_export_cursor **cursor);
+/*
+ * Export the next batch for a cursor. Returns 0 with a populated batch,
+ * -EAGAIN when the cursor is caught up (no new records yet), and
+ * -EOVERFLOW when the journal ring overwrote records the cursor had not
+ * exported (audit gap). On -EOVERFLOW, batch->first_sequence and
+ * batch->last_sequence give the inclusive range of lost sequences,
+ * record_count is 0, and the cursor is NOT advanced: the consumer must
+ * record the gap and explicitly skip it with
+ * pqcp_edge_audit_export_acknowledge(cursor, batch->last_sequence).
+ */
 int pqcp_edge_audit_export_batch(
 	struct pqcp_edge_audit_exporter *exporter,
 	struct pqcp_edge_vault_journal *journal,

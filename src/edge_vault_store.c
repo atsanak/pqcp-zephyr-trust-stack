@@ -369,6 +369,15 @@ int pqcp_edge_vault_delete(
 		ret = -EALREADY;
 		goto out;
 	}
+	/* Sealed objects are read-only evidence: deletion (which wipes the
+	 * value) is refused just like writes. There is no unseal API, so a
+	 * sealed object is retained.
+	 */
+	if (store->objects[index].state ==
+	    PQCP_EDGE_VAULT_SEALED) {
+		ret = -EROFS;
+		goto out;
+	}
 	candidate = store->objects[index];
 	candidate.state =
 		PQCP_EDGE_VAULT_TOMBSTONED;

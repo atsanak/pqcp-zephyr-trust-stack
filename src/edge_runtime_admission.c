@@ -118,9 +118,14 @@ static int evaluate_posture(
 		&result->posture_effect,
 		&result->posture_failure_mask,
 		&result->posture_risk_score);
-	if (ret != 0) {
+	if (ret == -EINVAL) {
+		/* No verdict was produced: fail closed to CHALLENGE. */
 		result->posture_effect =
 			PQCP_EDGE_POLICY_CHALLENGE;
+		return ret;
+	}
+	if (ret != 0) {
+		/* Keep the true effect reported by the posture engine. */
 		return ret;
 	}
 	if (result->posture_effect ==

@@ -10,7 +10,8 @@
 #include "edge_security_internal.h"
 
 static int free_version_index(
-	const struct pqcp_edge_vault_version_store *store)
+	const struct pqcp_edge_vault_version_store *store,
+	uint64_t now_ms)
 {
 	int oldest = -1;
 	uint64_t oldest_expiry = UINT64_MAX;
@@ -20,8 +21,10 @@ static int free_version_index(
 		if (!store->versions[index].occupied) {
 			return (int)index;
 		}
-		if (store->versions[index].expires_at_ms <
-		    oldest_expiry) {
+		/* Only an already expired version may be evicted. */
+		if (store->versions[index].expires_at_ms <= now_ms &&
+		    store->versions[index].expires_at_ms <
+			    oldest_expiry) {
 			oldest_expiry =
 				store->versions[index].expires_at_ms;
 			oldest = (int)index;
@@ -108,7 +111,7 @@ int pqcp_edge_vault_version_capture(
 		k_mutex_unlock(&store->lock);
 		return -EALREADY;
 	}
-	index = free_version_index(store);
+	index = free_version_index(store, now_ms);
 	if (index < 0) {
 		k_mutex_unlock(&store->lock);
 		return index;
@@ -150,6 +153,7 @@ int pqcp_edge_vault_version_restore(
 {
 	struct pqcp_edge_vault_object candidate;
 	const struct pqcp_edge_vault_version *version;
+	uint8_t digest[PQCP_EDGE_DIGEST_BYTES];
 	int version_slot;
 	int object_slot;
 	int ret;
@@ -180,6 +184,20 @@ int pqcp_edge_vault_version_restore(
 	if (objects->objects[object_slot].state ==
 	    PQCP_EDGE_VAULT_QUARANTINED) {
 		ret = -EACCES;
+		goto out;
+	}
+	/* The retained value must still match its digest before it can be
+	 * written back into the live object.
+	 */
+	if (version->value_length == 0U ||
+	    version->value_length > sizeof(version->value) ||
+	    pqcp_edge_internal_sha256(
+		    version->value, version->value_length,
+		    digest) != 0 ||
+	    !pqcp_edge_internal_equal(
+		    digest, version->value_digest,
+		    sizeof(digest))) {
+		ret = -EBADMSG;
 		goto out;
 	}
 	candidate = objects->objects[object_slot];
