@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+tests:
+  pqcp.deployment_passport_signature:
+    tags:
+      - pqcp
+      - deployment
+      - evidence
+      - crypto
+    harness: ztest
+    platform_allow:
+      - qemu_x86_64
+    integration_platforms:
+      - qemu_x86_64
+    timeout: 300
