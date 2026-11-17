@@ -1191,6 +1191,21 @@ PRs: #6 `claude/evidence-coverage-ratchet` (base main), #7
   uploads it on main/v* tags and attaches it to releases on tags; nightly
   2M-iteration fuzz.
 
+Later in the same patch set (#7): 5 new ztest suites (sovereign policy 71,
+sovereign audit 33, fleet transparency 70 with RFC 6962 vectors, fleet
+artifact core 88, edge security 229) found and fixed 29 firmware defects with
+hard regression tests, incl. egress cap wraparound, revoked-contract
+reactivation, EAT claims encoder emitting invalid CBOR, quarantine lift in the
+edge identity directory, asymmetric ratchet rotate, forged fragment offsets,
+revoked credential recycling and stale policy rollback. Also: verifier
+mutation testing (run_mutation_checks.py, 14 mutants, 11 killed + 3 documented
+allowed), declared-but-undefined ratchet (16 sovereign_audit.h functions
+baselined, unimplemented), CI disk-reclaim + twister summarizer. Full local
+sweep: 96/96 configurations, 1486/1486 cases. Baseline now L0=145 L2=183 L3=21.
+Remaining: split release-gate into parallel jobs, fuzz CBOR/policy/channel
+parsers, sign release kit + provenance, implement or delete the 16 undeclared
+sovereign_audit functions, ztest for evidence_continuity WIP before landing.
+
 Open: CI verdicts on #6/#7 (runs were queued/in progress at write time);
 untested families (sovereign/edge/fleet) need ztest suites - the ratchet
 will fail any NEW module without a test, including the uncommitted
