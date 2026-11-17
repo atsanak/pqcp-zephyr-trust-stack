@@ -4,11 +4,7 @@
  * Sovereign audit event, hash-chained ledger, and CBOR/CEF/OCSF exporter
  * contract tests.
  *
- * Scope note: the public header also declares the cursor-based exporter
- * (pqcp_sovereign_audit_exporter_init/export_*), the export-policy filter and
- * the nine pqcp_sovereign_audit_bridge_* adapters, but no translation unit in
- * the module defines them. They cannot be linked and are therefore not
- * exercised here; see the report accompanying this suite.
+ * Source adapters and signed cross-plane export flows are in bridge.c.
  */
 
 #include <errno.h>
@@ -20,6 +16,10 @@
 #include <zephyr/ztest.h>
 
 #include <pqcp_zephyr/sovereign_audit.h>
+#include <pqcp_zephyr/runtime_key_store.h>
+#include <psa/crypto.h>
+
+#include "../../../src/sovereign_audit_internal.h"
 
 #define DIGEST_BYTES PQCP_SOVEREIGN_AUDIT_DIGEST_BYTES
 #define LEDGER_CAP_MAX 16U
@@ -643,6 +643,447 @@ static void batch_encoder_negatives(encode_batch_fn fn)
 }
 
 ZTEST_SUITE(pqcp_sovereign_audit, NULL, suite_setup, before_case, NULL, NULL);
+
+static struct pqcp_sovereign_audit_exporter exporter;
+static struct pqcp_sovereign_audit_cursor export_cursors[2];
+static struct pqcp_sovereign_event export_workspace[2];
+static struct pqcp_sovereign_audit_export_policy export_policy;
+static struct pqcp_sovereign_audit_export_config export_config;
+static const struct pqcp_sovereign_audit_export_storage export_storage = {
+	.cursors = export_cursors,
+	.cursor_capacity = ARRAY_SIZE(export_cursors),
+	.workspace_events = export_workspace,
+	.workspace_event_capacity = ARRAY_SIZE(export_workspace),
+};
+
+static void reset_exporter(void)
+{
+	memset(&export_config, 0, sizeof(export_config));
+	export_config.maximum_cursor_lifetime_ms = 10000U;
+	export_config.maximum_batch_events = 2U;
+	memset(&export_policy, 0, sizeof(export_policy));
+	strcpy(export_policy.tenant_id, "tenant-a");
+	export_policy.policy_epoch = 7U;
+	export_policy.maximum_events = 2U;
+	export_policy.maximum_data_class = PQCP_SOVEREIGN_AUDIT_DATA_SECRET;
+	export_policy.include_attributes = true;
+	export_policy.include_reasons = true;
+	zassert_ok(pqcp_sovereign_audit_exporter_init(
+		&exporter, &ledger, &export_config, &export_storage));
+}
+
+static uint64_t open_export(void)
+{
+	uint64_t id = 0U;
+
+	zassert_ok(pqcp_sovereign_audit_export_open(
+		&exporter, "consumer", "tenant-a", 0U, 2000U, 9000U, 7U, &id));
+	return id;
+}
+
+static int prepare_export(uint64_t id, uint64_t now)
+{
+	return pqcp_sovereign_audit_export_prepare(&exporter, id, &export_policy,
+		now, out_buf, sizeof(out_buf), &batch);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_exact_ack_and_chained_batches)
+{
+	uint8_t digest[DIGEST_BYTES];
+
+	append_events(0U, 3U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2001U));
+	zassert_equal(batch.event_count, 2U);
+	zassert_equal(batch.first_sequence, 1U);
+	zassert_equal(batch.last_sequence, 2U);
+	zassert_false(batch.complete);
+	zassert_false(batch.resumed);
+	memcpy(digest, batch.batch_digest, sizeof(digest));
+	digest[0] ^= 1U;
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 2U, digest, 2002U), -EBADMSG);
+	digest[0] ^= 1U;
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 3U, digest, 2002U), -EBADMSG);
+	zassert_equal(export_cursors[0].next_sequence, 1U);
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+	zassert_ok(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 2U, digest, 2002U));
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 2U, digest, 2002U), -EBADMSG);
+	zassert_ok(prepare_export(id, 2003U));
+	zassert_equal(batch.event_count, 1U);
+	zassert_equal(batch.first_sequence, 3U);
+	zassert_true(batch.complete);
+	zassert_mem_equal(batch.previous_batch_digest, digest, sizeof(digest));
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_retry_freezes_bytes_after_eviction)
+{
+	append_events(0U, 2U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2001U));
+	size_t length = batch.encoded_length;
+
+	memcpy(ref_buf, out_buf, length);
+	append_events(10U, 10U, NULL);
+	zassert_ok(prepare_export(id, 2050U));
+	zassert_true(batch.resumed);
+	zassert_equal(batch.created_at_ms, 2001U);
+	zassert_equal(batch.encoded_length, length);
+	zassert_mem_equal(out_buf, ref_buf, length);
+	export_policy.include_reasons = false;
+	zassert_equal(prepare_export(id, 2051U), -ESTALE);
+	export_policy.include_reasons = true;
+	zassert_ok(prepare_export(id, 2052U));
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_tenant_filters_and_redaction)
+{
+	struct pqcp_sovereign_event_draft draft;
+	struct pqcp_sovereign_event event;
+
+	fill_draft(&draft, 0U);
+	draft.tenant_id = "tenant-b";
+	zassert_ok(pqcp_sovereign_event_init(&event, &draft));
+	zassert_ok(pqcp_sovereign_event_ledger_append(&ledger, &event, NULL));
+	make_event(&event, 1U);
+	add_rich_attributes(&event);
+	zassert_ok(pqcp_sovereign_event_ledger_append(&ledger, &event, NULL));
+	reset_exporter();
+	uint64_t id = open_export();
+
+	strcpy(export_policy.tenant_id, "tenant-b");
+	zassert_equal(prepare_export(id, 2001U), -EACCES);
+	strcpy(export_policy.tenant_id, "tenant-a");
+	export_policy.policy_epoch++;
+	zassert_equal(prepare_export(id, 2001U), -EACCES);
+	export_policy.policy_epoch--;
+	strcpy(export_policy.realm, "us");
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	strcpy(export_policy.realm, "eu");
+	export_policy.redaction = PQCP_SOVEREIGN_AUDIT_REDACTION_STRICT;
+	export_policy.include_attributes = false;
+	export_policy.include_reasons = false;
+	export_policy.format = PQCP_SOVEREIGN_AUDIT_FORMAT_OCSF_JSON;
+	zassert_ok(prepare_export(id, 2002U));
+	zassert_equal(batch.first_sequence, 2U);
+	zassert_equal(batch.event_count, 1U);
+	zassert_equal(batch.events[0].attribute_count, 0U);
+	zassert_is_null(find_bytes(out_buf, batch.encoded_length, "alice"));
+	zassert_is_null(find_bytes(out_buf, batch.encoded_length, "because"));
+	zassert_is_null(find_bytes(out_buf, batch.encoded_length, "tenant-b"));
+	/* A projection retains its source commitment; the batch authenticates
+	 * the redacted representation separately.
+	 */
+	zassert_mem_equal(batch.events[0].event_digest, physical_event(2U)->event_digest, DIGEST_BYTES);
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+	zassert_ok(prepare_export(id, 2003U));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_policy_masks_flags_and_classification)
+{
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	export_policy.class_mask = 1ULL << PQCP_SOVEREIGN_AUDIT_CLASS_CRYPTO_OPERATION;
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	export_policy.class_mask = 1ULL << PQCP_SOVEREIGN_AUDIT_CLASS_DEPLOYMENT;
+	export_policy.activity_mask = 1ULL << PQCP_SOVEREIGN_AUDIT_ACTIVITY_READ;
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	export_policy.activity_mask = 1ULL << PQCP_SOVEREIGN_AUDIT_ACTIVITY_DEPLOY;
+	export_policy.minimum_severity = PQCP_SOVEREIGN_AUDIT_SEVERITY_CRITICAL;
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	export_policy.minimum_severity = PQCP_SOVEREIGN_AUDIT_SEVERITY_HIGH;
+	export_policy.maximum_data_class = PQCP_SOVEREIGN_AUDIT_DATA_PUBLIC;
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	export_policy.maximum_data_class = PQCP_SOVEREIGN_AUDIT_DATA_CONFIDENTIAL;
+	export_policy.forbidden_flags = PQCP_SOVEREIGN_AUDIT_EVENT_REGULATORY;
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	export_policy.forbidden_flags = 0U;
+	export_policy.required_flags = PQCP_SOVEREIGN_AUDIT_EVENT_CHECKPOINT;
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	export_policy.required_flags = PQCP_SOVEREIGN_AUDIT_EVENT_REGULATORY;
+	zassert_ok(prepare_export(id, 2001U));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_small_buffer_never_commits_or_drops_retry)
+{
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_equal(pqcp_sovereign_audit_export_prepare(&exporter, id, &export_policy,
+		2001U, out_buf, 1U, &batch), -ENOSPC);
+	zassert_equal(out_buf[0], 0U);
+	zassert_equal(batch.encoded_length, 0U);
+	zassert_equal(export_cursors[0].state, PQCP_SOVEREIGN_AUDIT_CURSOR_ACTIVE);
+	zassert_equal(exporter.pending_batch.cursor_id, 0U);
+	zassert_ok(prepare_export(id, 2002U));
+	size_t length = batch.encoded_length;
+
+	memcpy(ref_buf, out_buf, length);
+	zassert_equal(pqcp_sovereign_audit_export_prepare(&exporter, id, &export_policy,
+		2003U, out_buf, 1U, &batch), -ENOSPC);
+	zassert_ok(prepare_export(id, 2004U));
+	zassert_mem_equal(out_buf, ref_buf, length);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_shared_workspace_close_and_expiry)
+{
+	uint32_t expired = 0U;
+
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	uint64_t a = open_export();
+	uint64_t b = open_export();
+	uint64_t third = 0U;
+
+	zassert_equal(pqcp_sovereign_audit_export_open(&exporter, "third", "tenant-a",
+		0U, 2000U, 9000U, 7U, &third), -ENOSPC);
+	zassert_ok(prepare_export(a, 2001U));
+	zassert_equal(prepare_export(b, 2002U), -EBUSY);
+	zassert_ok(pqcp_sovereign_audit_export_close(&exporter, a));
+	zassert_ok(prepare_export(b, 2003U));
+	zassert_equal(prepare_export(a, 2004U), -ENOENT);
+	zassert_equal(prepare_export(b, 9000U), -ETIMEDOUT);
+	zassert_ok(pqcp_sovereign_audit_export_expire(&exporter, 9000U, &expired));
+	zassert_equal(expired, 1U);
+	zassert_equal(exporter.pending_batch.cursor_id, 0U);
+	zassert_mem_equal(export_workspace, (uint8_t[sizeof(export_workspace)]){0}, sizeof(export_workspace));
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+	uint64_t replacement = open_export();
+
+	zassert_true(replacement > b);
+	zassert_ok(prepare_export(replacement, 2001U));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_rejects_evicted_and_corrupt_history)
+{
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_equal(prepare_export(id, 2001U), -ENOENT);
+	append_events(0U, 10U, NULL);
+	zassert_equal(prepare_export(id, 2002U), -ESTALE);
+	zassert_ok(pqcp_sovereign_audit_export_close(&exporter, id));
+	id = open_export();
+	physical_event(3U)->reason[0] ^= 1U;
+	zassert_not_equal(prepare_export(id, 2003U), 0);
+	zassert_equal(exporter.pending_batch.cursor_id, 0U);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_all_formats_and_unsupported_signature)
+{
+	append_events(0U, 1U, NULL);
+	for (unsigned int format = 0U; format <= PQCP_SOVEREIGN_AUDIT_FORMAT_OCSF_JSON; ++format) {
+		reset_exporter();
+		uint64_t id = open_export();
+
+		export_policy.require_signature = true;
+		zassert_equal(prepare_export(id, 2001U), -ENOTSUP);
+		export_policy.require_signature = false;
+		export_policy.format = (enum pqcp_sovereign_audit_format)format;
+		zassert_ok(prepare_export(id, 2002U));
+		zassert_true(batch.encoded_length > 0U);
+		zassert_equal(batch.format, format);
+		zassert_equal(batch.signature_length, 0U);
+	}
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_empty_realm_is_included_by_wildcard)
+{
+	struct pqcp_sovereign_event_draft draft;
+	struct pqcp_sovereign_event event;
+
+	fill_draft(&draft, 0U);
+	draft.realm = "";
+	zassert_ok(pqcp_sovereign_event_init(&event, &draft));
+	zassert_ok(pqcp_sovereign_event_ledger_append(&ledger, &event, NULL));
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2001U));
+	zassert_equal(batch.event_count, 1U);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_invalid_policy_time_and_exhaustion)
+{
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_equal(prepare_export(id, 1999U), -EINVAL);
+	export_policy.format = (enum pqcp_sovereign_audit_format)-1;
+	zassert_equal(prepare_export(id, 2001U), -EINVAL);
+	export_policy.format = PQCP_SOVEREIGN_AUDIT_FORMAT_CBOR;
+	export_policy.activity_mask = 1ULL << 63U;
+	zassert_equal(prepare_export(id, 2001U), -EINVAL);
+	export_policy.activity_mask = 0U;
+	export_policy.required_flags = 1U << 31U;
+	zassert_equal(prepare_export(id, 2001U), -EINVAL);
+	export_policy.required_flags = 0U;
+	export_policy.maximum_events = 0U;
+	zassert_equal(prepare_export(id, 2001U), -EINVAL);
+	exporter.next_cursor_id = UINT64_MAX;
+	zassert_equal(pqcp_sovereign_audit_export_open(&exporter, "c", "tenant-a",
+		0U, 2000U, 9000U, 7U, &id), -EOVERFLOW);
+	exporter.next_cursor_id = 2U;
+	zassert_equal(pqcp_sovereign_audit_export_open(&exporter, "c", "tenant-a",
+		0U, 2000U, 12001U, 7U, &id), -ERANGE);
+	export_config.signature_required = true;
+	zassert_equal(pqcp_sovereign_audit_exporter_init(&exporter, &ledger,
+		&export_config, &export_storage), -EINVAL);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_audit_detects_cursor_corruption)
+{
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2001U));
+	export_cursors[0].outstanding_batch_digest[0] ^= 1U;
+	zassert_equal(pqcp_sovereign_audit_exporter_audit(&exporter), -EBADMSG);
+	export_cursors[0].outstanding_batch_digest[0] ^= 1U;
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+	export_cursors[0].next_sequence++;
+	zassert_equal(pqcp_sovereign_audit_exporter_audit(&exporter), -EBADMSG);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_frozen_state_tamper_cannot_be_retried_or_acked)
+{
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2002U));
+	uint8_t digest[DIGEST_BYTES];
+
+	memcpy(digest, batch.batch_digest, sizeof(digest));
+	export_workspace[0].reason[0] ^= 1U;
+	zassert_equal(prepare_export(id, 2003U), -EBADMSG);
+	zassert_equal(pqcp_sovereign_audit_exporter_audit(&exporter), -EBADMSG);
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 1U, digest, 2003U), -EBADMSG);
+	export_workspace[0].reason[0] ^= 1U;
+	exporter.pending_batch.source_chain_head[0] ^= 1U;
+	zassert_equal(prepare_export(id, 2003U), -EBADMSG);
+	zassert_equal(pqcp_sovereign_audit_exporter_audit(&exporter), -EBADMSG);
+	exporter.pending_batch.source_chain_head[0] ^= 1U;
+	export_cursors[0].outstanding_scanned_sequence++;
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 1U, digest, 2003U), -EBADMSG);
+	export_cursors[0].outstanding_scanned_sequence--;
+	zassert_ok(prepare_export(id, 2003U));
+	zassert_ok(pqcp_sovereign_audit_exporter_audit(&exporter));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_no_time_rollback_or_buffer_alias)
+{
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2002U));
+	uint8_t digest[DIGEST_BYTES];
+
+	memcpy(digest, batch.batch_digest, sizeof(digest));
+	zassert_equal(prepare_export(id, 2001U), -EINVAL);
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 1U, digest, 2001U), -EINVAL);
+	zassert_equal(pqcp_sovereign_audit_export_prepare(&exporter, id, &export_policy,
+		2003U, (uint8_t *)export_workspace, sizeof(export_workspace), &batch), -EINVAL);
+	zassert_ok(prepare_export(id, 2003U));
+	zassert_equal(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 1U, digest, 9000U), -ETIMEDOUT);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_digest_binds_canonical_projection_and_domain)
+{
+	psa_hash_operation_t hash = PSA_HASH_OPERATION_INIT;
+	uint8_t expected[DIGEST_BYTES];
+	size_t body_length, hash_length;
+	static const uint8_t domain[] = "PQCP-SOVEREIGN-AUDIT-BATCH-V1";
+
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	export_policy.redaction = PQCP_SOVEREIGN_AUDIT_REDACTION_STRICT;
+	export_policy.include_reasons = false;
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2002U));
+	zassert_ok(pqcp_sovereign_audit_cbor_encode_batch_body(
+		&batch, ref_buf, sizeof(ref_buf), &body_length));
+	zassert_equal(psa_hash_setup(&hash, PSA_ALG_SHA_256), PSA_SUCCESS);
+	zassert_equal(psa_hash_update(&hash, domain, sizeof(domain) - 1U), PSA_SUCCESS);
+	zassert_equal(psa_hash_update(&hash, ref_buf, body_length), PSA_SUCCESS);
+	zassert_equal(psa_hash_finish(&hash, expected, sizeof(expected), &hash_length), PSA_SUCCESS);
+	zassert_equal(hash_length, DIGEST_BYTES);
+	zassert_mem_equal(expected, batch.batch_digest, sizeof(expected));
+	/* Even a metadata change has a different canonical commitment. */
+	batch.policy_epoch++;
+	zassert_ok(pqcp_sovereign_audit_cbor_encode_batch_body(
+		&batch, ref_buf, sizeof(ref_buf), &body_length));
+	zassert_equal(psa_hash_setup(&hash, PSA_ALG_SHA_256), PSA_SUCCESS);
+	zassert_equal(psa_hash_update(&hash, domain, sizeof(domain) - 1U), PSA_SUCCESS);
+	zassert_equal(psa_hash_update(&hash, ref_buf, body_length), PSA_SUCCESS);
+	zassert_equal(psa_hash_finish(&hash, expected, sizeof(expected), &hash_length), PSA_SUCCESS);
+	zassert_not_equal(memcmp(expected, batch.batch_digest, sizeof(expected)), 0);
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_real_mldsa_signature_and_failure_atomicity)
+{
+	static struct pqcp_runtime_key_store store;
+	static struct pqcp_runtime_volatile_context context;
+	static struct pqcp_runtime_volatile_slot slots[1];
+	const struct pqcp_runtime_key_request request = {
+		.family = PQCP_RUNTIME_KEY_MLDSA_KEYPAIR,
+		.level = 65U,
+		.usage = PQCP_RUNTIME_USAGE_SIGN | PQCP_RUNTIME_USAGE_VERIFY | PQCP_RUNTIME_USAGE_DESTROY,
+		.now_ms = 1000U,
+		.owner = "audit-test", .label = "audit-signing",
+	};
+
+	append_events(0U, 1U, NULL);
+	reset_exporter();
+	zassert_ok(pqcp_runtime_volatile_store_init(&store, &context, slots, ARRAY_SIZE(slots)));
+	export_config.key_store = &store;
+	export_config.signing_enabled = true;
+	export_config.signature_required = true;
+	zassert_ok(pqcp_runtime_key_store_generate(&store, &request, &export_config.signing_key));
+	zassert_ok(pqcp_sovereign_audit_exporter_init(&exporter, &ledger, &export_config, &export_storage));
+	uint64_t id = open_export();
+
+	zassert_ok(prepare_export(id, 2001U));
+	zassert_equal(batch.signature_algorithm, PQCP_SOVEREIGN_AUDIT_SIGNATURE_MLDSA);
+	zassert_true(batch.signature_length > 0U);
+	zassert_ok(pqcp_runtime_key_store_verify(&store, &export_config.signing_key,
+		batch.batch_digest, DIGEST_BYTES, (const uint8_t *)PQCP_SOVEREIGN_AUDIT_SIGNATURE_CONTEXT,
+		sizeof(PQCP_SOVEREIGN_AUDIT_SIGNATURE_CONTEXT) - 1U, batch.signature, batch.signature_length));
+	size_t length = batch.encoded_length;
+
+	memcpy(ref_buf, out_buf, length);
+	zassert_ok(prepare_export(id, 2002U));
+	zassert_mem_equal(out_buf, ref_buf, length);
+	batch.batch_digest[0] ^= 1U;
+	zassert_not_equal(pqcp_runtime_key_store_verify(&store, &export_config.signing_key,
+		batch.batch_digest, DIGEST_BYTES, (const uint8_t *)PQCP_SOVEREIGN_AUDIT_SIGNATURE_CONTEXT,
+		sizeof(PQCP_SOVEREIGN_AUDIT_SIGNATURE_CONTEXT) - 1U, batch.signature, batch.signature_length), 0);
+	zassert_ok(pqcp_sovereign_audit_export_close(&exporter, id));
+	zassert_ok(pqcp_runtime_key_store_destroy(&store, &export_config.signing_key));
+	id = open_export();
+	zassert_not_equal(prepare_export(id, 2003U), 0);
+	zassert_equal(export_cursors[0].state, PQCP_SOVEREIGN_AUDIT_CURSOR_ACTIVE);
+	zassert_equal(exporter.pending_batch.cursor_id, 0U);
+}
 
 /* ------------------------------------------------------------------ */
 /* Enum stringification                                                */

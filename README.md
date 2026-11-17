@@ -12,9 +12,15 @@ An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum
 ## What is novel here?
 
 This repository is intentionally not "another PQC sample". The
-engineering bar is set by four properties that, together, are unusual
+engineering bar is set by the following properties that, together, are unusual
 for a Zephyr module:
 
+- **Signed audit delivery across subsystems.** Nine typed adapters project
+  broker, fleet, edge and sovereign snapshots into one tenant-scoped event
+  chain. The exporter supports ML-DSA-signed CBOR/CEF/OCSF batches, frozen
+  retransmission and exact acknowledgements. QEMU tests exercise source
+  tampering, tenant isolation and redaction. State is currently volatile;
+  see [the protocol and trust boundaries](docs/sovereign-audit-export.md).
 - **Claim-to-evidence assurance ledger.** Every release-relevant
   behaviour ("ML-DSA-65 KAT vectors match the header", "the ACVP
   harness rejects malformed input", "the benchmark CSV is bound to its

@@ -1212,6 +1212,37 @@ will fail any NEW module without a test, including the uncommitted
 evidence_continuity_* WIP in the shared checkout; RFC 9052/CBOR/RFC 6962
 external vectors; mutation testing of verifiers/ratchet.
 
+## Sovereign audit delivery follow-up (2026-11-17)
+
+- Implemented the seven missing sovereign audit exporter functions and nine
+  source adapters. Export uses exact acknowledgements, tenant/epoch fencing,
+  canonical CBOR batch commitments, optional ML-DSA signatures and a frozen
+  retry workspace. Source snapshots project into CBOR/CEF/OCSF without
+  inferring source authentication from a signature-presence flag.
+- Adapters preserve source commitments and bind projected attributes into
+  observation IDs. Re-ingestion time does not alter identity where the API
+  has a separate source timestamp. No automatic duplicate suppression.
+- QEMU audit suite: 62/62 cases, including all nine sources exported as three
+  signed batches, exact retransmission, forged-ack rejection and source-tamper
+  detection. Details and boundaries: docs/sovereign-audit-export.md.
+- Sovereign policy regression 71/71; all 57 local tooling suites pass. Both
+  new modules compile with -Wall -Wextra -Werror for Cortex-M7 and x86_64;
+  focused cppcheck has no findings. Snapshot validation excluding unrelated
+  untracked WIP passes the undefined-function, coverage and testcase gates.
+- Coverage now 351 modules: L0=144, L2=186, L3=21; the new bridge also directly
+  exercises fleet_journal. This remains static evidence mapping, not runtime
+  statement/branch coverage or a proof of reachability under every Kconfig.
+- All 16 previously baselined sovereign_audit.h functions now have definitions.
+  Unrelated untracked evidence_continuity files remain unfinished and are NOT
+  included in the lowered undefined-function or evidence-coverage baselines.
+- Earlier coverage scanner hardening excludes non-code and declarations from
+  evidence references, retaining direct calls and callback references.
+- Remaining: durable cursor/checkpoint recovery, an independent batch-wire
+  verifier, source authentication at adapter call sites, then fault injection
+  across restart/rollback boundaries. Frozen retries currently survive source
+  ledger changes, not reboot. Sonnet CLI authentication was expired; this
+  implementation was performed and verified by Codex.
+
 ## Final rule
 
 Do not confuse motion with progress.
