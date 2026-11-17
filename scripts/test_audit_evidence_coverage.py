@@ -117,6 +117,80 @@ class TwisterGating(unittest.TestCase):
             self.assertEqual((before, after), (1, 2))
 
 
+class CSourceEvidence(unittest.TestCase):
+    FALSE_REFERENCES = (
+        "// victim_run();\n",
+        "/* documentation\n victim_run(); */\n",
+        'const char *s = "victim_run()";\n',
+        "int c = 'victim_run';\n",
+        "int victim_run(void);\n",
+        "extern int\nvictim_run(void);\n",
+        "int register_cb(int (*victim_run)(void));\n",
+        "#define UNUSED() victim_run()\n",
+        "#define UNUSED() \\\n victim_run()\n",
+        "// continued comment \\\n victim_run();\n",
+        "victim_/* token boundary */run();\n",
+    )
+
+    def test_noncode_and_declarations_cannot_promote_evidence(self) -> None:
+        for fake in self.FALSE_REFERENCES:
+            with self.subTest(fake=fake), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                write(root, "src/victim.c",
+                      "int victim_run(void) { return 0; }\n")
+                write(root, "src/driver.c",
+                      fake + "int driver_run(void) { return 0; }\n")
+                write(root, "tests/ztest_driver/src/main.c",
+                      fake + "void test(void) { driver_run(); }\n")
+                report = cov.build_report(root)
+                victim = next(m for m in report["modules"]
+                              if m["module"] == "victim")
+                self.assertEqual(victim["level"], 0)
+                self.assertEqual(victim["reach"], "none")
+                self.assertEqual(victim["exercised_by"], [])
+                _, orphans, _ = cov.check_ratchet(report, {"driver": 1})
+                self.assertEqual(orphans, ["victim"])
+
+    def test_only_real_external_definitions_are_owned(self) -> None:
+        source = '''
+/* int commented(void) { return 0; } */
+const char *s = "int quoted(void) { return 0; }";
+int prototype(void);
+static int hidden(void) { return 0; }
+static\nint\nhidden_split(void) { return 0; }
+static inline int also_hidden(void) { return 0; }
+int ordinary(void) { return 0; }
+const char *\nname_first(int code) { return s; }
+int with_callback(int (*callback)(void)) { return callback(); }
+'''
+        self.assertEqual(cov.defined_symbols(source),
+                         {"ordinary", "name_first", "with_callback"})
+
+    def test_test_function_definition_is_not_an_exerciser(self) -> None:
+        self.assertNotIn("victim_run", cov.referenced_symbols(
+            "int victim_run(void) { return 0; }\n"))
+
+    def test_real_calls_and_callback_values_are_references(self) -> None:
+        for code in (
+                "void test(void) { victim_run(); }",
+                "void test(void) { int (*cb)(void) = victim_run; cb(); }",
+                "void test(void) { register_cb(&victim_run); }",
+                "int (*callbacks[])(void) = { victim_run };",
+                "int driver_run(void) { return victim_run(); }"):
+            with self.subTest(code=code):
+                self.assertIn("victim_run", cov.referenced_symbols(code))
+
+    def test_escaped_literals_do_not_expose_fake_code(self) -> None:
+        code = r'''const char *s = "escaped \" victim_run() /*";
+char quote = '\'';
+char slash = '\\';
+void test(void) { real_run(); }
+'''
+        refs = cov.referenced_symbols(code)
+        self.assertNotIn("victim_run", refs)
+        self.assertIn("real_run", refs)
+
+
 class CmakeConfigParsing(unittest.TestCase):
     def test_nested_if_frames_are_collected(self) -> None:
         text = (
