@@ -306,9 +306,15 @@ jobs:
             -T "$GITHUB_WORKSPACE/tests" \
             -p qemu_x86_64 \
             --inline-logs \
+            --timeout-multiplier 3 \
             -j "$(nproc)" \
             -x=ZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE" \
             --outdir "$RUNNER_TEMP/twister-out"
+
+      - name: Summarize Twister results
+        if: always()
+        continue-on-error: true
+        run: python "$GITHUB_WORKSPACE/scripts/summarize_twister.py" --outdir "$RUNNER_TEMP/twister-out"
 
       - name: Upload Twister results
         if: always()
