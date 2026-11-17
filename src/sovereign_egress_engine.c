@@ -386,7 +386,12 @@ int pqcp_sovereign_egress_authorize(
 	if (ret != 0) {
 		goto out;
 	}
-	if (bytes >
+	/* A rule re-put with a cap below the bytes already used in this
+	 * window must deny at once: the unsigned subtraction below would
+	 * otherwise wrap and admit an arbitrary transfer.
+	 */
+	if (usage->bytes_used > rule->maximum_bytes_per_window ||
+	    bytes >
 	    rule->maximum_bytes_per_window - usage->bytes_used) {
 		ret = -EDQUOT;
 		goto out;
