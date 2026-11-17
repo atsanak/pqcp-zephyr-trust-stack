@@ -8,6 +8,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -42,7 +43,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1398,6 +1399,87 @@ def evaluate_ct_instruction_count(
     )
 
 
+def evaluate_evidence_coverage_ratchet(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind release.evidence_coverage_ratchet to the captured audit step.
+
+    The audit exits nonzero on any regression or new untested module, so
+    the PASS marker is only printed when the ratchet held. The evaluator
+    additionally parses the marker so the measured level counts land in
+    the ledger details instead of a bare pass.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "scripts/audit_evidence_coverage.py",
+        "scripts/evidence_coverage_baseline.json",
+    ]
+    commands = ["python3 scripts/audit_evidence_coverage.py --check"]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "evidence coverage audit"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence coverage audit transcript missing or empty in "
+                f"transcript manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="evidence coverage audit transcript"))
+
+    marker = re.search(
+        r"PQCP_EVIDENCE_COVERAGE PASS modules=(\d+) L0=(\d+) L1=(\d+) "
+        r"L2=(\d+) L3=(\d+) new_untested=0 regressions=0",
+        transcript_body,
+    )
+    details = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+    }
+    if marker is None or "[coverage] PASS:" not in transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence coverage audit transcript lacks the "
+                "PQCP_EVIDENCE_COVERAGE PASS marker (new_untested=0 "
+                "regressions=0) or the aggregate [coverage] PASS line"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    modules, l0, l1, l2, l3 = (int(g) for g in marker.groups())
+    if l0 + l1 + l2 + l3 != modules:
+        return fail_claim(
+            spec,
+            reason="evidence coverage level counts do not sum to module count",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    details.update({
+        "modules": modules,
+        "L0_untested": l0,
+        "L1_tested": l1,
+        "L2_gated": l2,
+        "L3_claimed": l3,
+    })
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 def evaluate_asan_clean(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2219,6 +2301,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "firmware.evidence_chain_replay": lambda spec: evaluate_firmware_evidence_chain_replay(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "release.evidence_coverage_ratchet": lambda spec: evaluate_evidence_coverage_ratchet(
             spec, transcript_manifest=transcript_manifest,
         ),
         "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(

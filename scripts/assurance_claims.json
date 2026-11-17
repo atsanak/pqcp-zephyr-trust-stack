@@ -1,5 +1,5 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -375,6 +375,13 @@
       "claim": "Under the pqcp_ct_insn QEMU TCG plugin (tools/tcg_ct_plugin), every ML-KEM-768 decapsulation in tests/ztest_ct_instr executes the identical number of guest instructions AND the identical number of guest memory accesses (loads and stores counted separately) for a valid ciphertext and for a corrupted (implicit-rejection) ciphertext: scripts/run_ct_instruction_checks.py brackets each decapsulation between two marker addresses resolved from the ELF symbol table, the plugin counts guest instructions and data memory operations between the markers, and the runner requires exact (insns, loads, stores) tuple equality across all valid and corrupted regions. This proves control flow and memory-operation counts are input-independent at guest granularity; which addresses are accessed and microarchitectural timing remain out of scope, and the project does not claim a formal constant-time proof.",
       "required": true,
       "schema_version_added": 8
+    },
+    {
+      "id": "release.evidence_coverage_ratchet",
+      "category": "release",
+      "claim": "Every src/*.c module is assigned a measured evidence level by scripts/audit_evidence_coverage.py: L0 untested (no ztest suite references a function the module defines), L1 tested, L2 gated (an exercising suite is wired into extended checks, release_check, or a workflow), L3 claimed (also bound by the claim catalog or asset trace map). A call-graph pass separates modules that are only reached through another tested module from modules unreachable from every test. The audit is a ratchet against scripts/evidence_coverage_baseline.json: the release gate fails if any module's level drops or if a NEW module appears with no test. The claim states measured coverage, not completeness: modules recorded as L0 in the baseline are known-unproven and stay visible in the transcript summary.",
+      "required": true,
+      "schema_version_added": 9
     }
   ]
 }

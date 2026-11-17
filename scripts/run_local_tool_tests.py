@@ -17,6 +17,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 TOOL_TESTS = (
     "test_acvp_negative_scenario_floor.py",
     "test_pqc_asset_trace_map.py",
+    "test_audit_evidence_coverage.py",
     "test_pqc_evidence_graph.py",
     "test_firmware_assurance_digest.py",
     "test_assurance_ledger.py",

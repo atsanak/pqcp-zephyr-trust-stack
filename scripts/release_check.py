@@ -44,6 +44,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP serial negative ztest run",
     "ACVP KAT ztest run",
     "boot KAT self-verify ztest run",
+    "evidence coverage audit",
     "evidence chain host replay",
     "evidence parser fuzz",
     "ct instruction-count",
@@ -63,6 +64,7 @@ CI_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP serial negative ztest build",
     "ACVP serial negative ztest run",
     "kat_provenance",
+    "evidence coverage audit",
 )
 
 CI_FAST_GATE_STEPS = (
@@ -74,6 +76,7 @@ CI_FAST_GATE_STEPS = (
     "ACVP serial negative ztest build",
     "ACVP serial negative ztest run",
     "kat_provenance",
+    "evidence coverage audit",
 )
 
 
@@ -584,6 +587,7 @@ def main() -> int:
     boot_verify_build_dir = output_root / "ztest_kat_boot_verify_qemu"
     evidence_chain_output_dir = output_root / "evidence_chain_replay"
     evidence_fuzz_build_dir = output_root / "evidence_fuzz"
+    evidence_coverage_report = output_root / "evidence_coverage.json"
     ct_instruction_output_dir = output_root / "ct_instruction"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
@@ -1927,6 +1931,22 @@ def main() -> int:
             success_markers=(
                 "pqcp-evidence-verify: CHAIN OK",
                 "[evidence-chain] PASS: device evidence chain replayed on host",
+            ),
+        ),
+        Step(
+            name="evidence coverage audit",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/audit_evidence_coverage.py"),
+                "--check",
+                "--json",
+                str(evidence_coverage_report),
+            ],
+            cwd=module_path,
+            timeout=120,
+            success_markers=(
+                "PQCP_EVIDENCE_COVERAGE PASS",
+                "[coverage] PASS:",
             ),
         ),
         Step(
