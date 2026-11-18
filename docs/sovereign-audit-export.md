@@ -114,12 +114,43 @@ redaction, source-history eviction, buffer failures and tampering. The integrati
 case exports all nine sources as three linked signed batches and detects source
 corruption on the next scan while preserving an already frozen retransmission.
 
+## Firmware checkpoint recovery
+
+Restore the source ledger and signing key first. Initialize the exporter, then
+call `pqcp_sovereign_audit_exporter_recover` before opening cursors. A pair of
+empty slots returns `-ENOENT` and binds the store for the first save. Allocate
+one scratch buffer and two independent durable slots, each sized by
+`pqcp_sovereign_audit_exporter_checkpoint_capacity`. Give the store a stable
+binding for the firmware image and stream/key identity.
+
+Save after opening a cursor before advertising its ID. After prepare, save
+before handing the bytes to transport. After acknowledge, close, or expiry,
+save before acting on the new state. If a save fails, retry it before proceeding
+or restart and recover the last committed state. Serialize these operations
+at the application layer. Store callbacks must report success only after the
+write is durable and must preserve the other slot through an interrupted write.
+
+Recovery selects the newest intact slot and refuses a rollback below the
+caller-provided generation floor. It rejects an older source ledger or a
+different source head at the same retained position. Keep the signing key and
+time basis stable across reboot. Slots contain sensitive projected events and
+use an image-local format with a corruption checksum. Trust the storage and
+protect access to it. An independent generation floor is needed to detect
+rollback of both slots. If an older source head has already been evicted, the
+restored ledger's continuity relies on the source storage.
+
+## Verification
+
 The host regression consumes three signed batches and the temporary signing
 key's public half captured from the QEMU cross-plane test at `55e01b2`. It
 terminates the collector mid-transaction and checks that restart recovers the
 previous receipt. It also resubmits a committed batch to simulate a lost
-acknowledgement. Firmware cursor state remains volatile, and caller
-authorization and source authentication remain responsibilities of the
-integrating application. `complete` and `resumed` are local delivery metadata
-outside the authenticated body. Device-side recovery requires durable cursor
-and pending batch storage.
+acknowledgement and rejects a subsequently altered journal head.
+
+QEMU tests simulate a torn checkpoint write and a restart with new exporter
+RAM. The restored batch retains its original ML-DSA signature and identical
+wire bytes, even after the original events leave the ledger. Board integration
+provides the durable slot callbacks and protects the source ledger. Caller
+authorization and source authentication remain application responsibilities.
+`complete` and `resumed` are local delivery metadata outside the authenticated
+body.

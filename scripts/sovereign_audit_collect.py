@@ -125,9 +125,9 @@ def validate_pins(db, stream, tenant, cursor, epoch, first):
         or not uint(cursor) or not cursor or not uint(epoch) or not epoch or not uint(first) or not first):
         raise Invalid("invalid durable database or stream pins")
 
-def verify_wire(wire, public_key, verifier, tenant, cursor, epoch):
-    if not 0 < len(wire) <= MAX_WIRE or len(public_key) != 1952:
-        raise Invalid("invalid wire or public key length")
+def decode_batch(wire):
+    if not 0 < len(wire) <= MAX_WIRE:
+        raise Invalid("invalid wire length")
     # The outer map header must be the canonical single-byte 19-field map.
     if wire[0] != 0xb3:
         raise Invalid("invalid batch map")
@@ -144,9 +144,19 @@ def verify_wire(wire, public_key, verifier, tenant, cursor, epoch):
             body_end = reader.pos
     if reader.pos != len(wire):
         raise Invalid("trailing bytes")
+    digest = hashlib.sha256(DOMAIN + b'\xb0' + wire[1:body_end]).digest()
+    if digest != batch[17]:
+        raise Invalid("batch digest mismatch")
+    return batch
+
+def verify_wire(wire, public_key, verifier, tenant, cursor, epoch):
+    if len(public_key) != 1952:
+        raise Invalid("invalid public key length")
+    batch = decode_batch(wire)
     if (any(not uint(batch[k]) for k in list(range(1, 11)) + [18]) or batch[1] != 1
         or batch[2] != cursor or batch[3] == 0 or batch[4] != epoch
         or batch[5] == 0 or batch[6] < batch[5] or batch[7] < batch[6]
+        or batch[7] == 0xffffffffffffffff
         or batch[8] == 0 or batch[9] != 0 or batch[10] > 3 or batch[11] != tenant
         or not text(batch[11], 48) or any(not blob(batch[k], 32) for k in range(12, 16))
         or type(batch[16]) is not list or len(batch[16]) != batch[8]
@@ -157,12 +167,9 @@ def verify_wire(wire, public_key, verifier, tenant, cursor, epoch):
     seq = [event[3] for event in batch[16]]
     if seq[0] != batch[5] or seq[-1] != batch[6] or any(a >= b for a, b in zip(seq, seq[1:])):
         raise Invalid("invalid event sequence")
-    digest = hashlib.sha256(DOMAIN + b'\xb0' + wire[1:body_end]).digest()
-    if digest != batch[17]:
-        raise Invalid("batch digest mismatch")
     try:
         result = subprocess.run(
-            [str(verifier)], input=public_key + digest + batch[19],
+            [str(verifier)], input=public_key + batch[17] + batch[19],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=30, check=False,
         )
@@ -210,9 +217,8 @@ def collect(db, stream, tenant, cursor, epoch, first, public_key, wire, batch):
             ).fetchone()
             if saved is None:
                 raise Invalid("inconsistent journal")
-            prior_reader = Reader(saved[0])
-            prior = prior_reader.read()
-            if (prior_reader.pos != len(saved[0]) or not shape(prior, 19) or prior[17] != row[7]
+            prior = decode_batch(saved[0])
+            if (prior[17] != row[7]
                 or str(prior[7]) != row[5] or str(prior[3]) != row[6]
                 or str(prior[5]) != saved[1] or str(prior[6]) != saved[2]):
                 raise Invalid("inconsistent journal")

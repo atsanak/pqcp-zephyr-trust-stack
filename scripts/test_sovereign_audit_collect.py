@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
 """Parser and transactional collector regression tests."""
+import hashlib
 import sqlite3
 import tempfile
 import unittest
@@ -31,8 +32,12 @@ class CollectorTests(unittest.TestCase):
                         return bytes([0x58, len(v)]) + v
                     raise AssertionError(v)
                 fields = {k: batch.get(k, 0) for k in range(1, 20)}
+                body = b''.join(enc(k) + enc(fields[k]) for k in range(1, 17))
+                fields[17] = batch[17] = hashlib.sha256(c.DOMAIN + b'\xb0' + body).digest()
                 return b'\xb3' + b''.join(enc(k) + enc(v) for k, v in fields.items())
-            one_wire, two_wire = wire(one), wire(two)
+            one_wire = wire(one)
+            two[14] = one[17]
+            two_wire = wire(two)
             put(one, one_wire)
             put(one, one_wire)  # a lost acknowledgement is safe to retry
             with self.assertRaises(c.Invalid): put(one, b'changed')
