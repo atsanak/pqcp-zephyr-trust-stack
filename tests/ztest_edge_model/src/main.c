@@ -76,3 +76,13 @@ ZTEST(edge_model, test_session_model)
 {
 	model_run_module(&model_session_vt, MODEL_INDEX_SESSION);
 }
+
+ZTEST(edge_model, test_credential_model)
+{
+	model_run_module(&model_credential_vt, MODEL_INDEX_CREDENTIAL);
+}
+
+ZTEST(edge_model, test_policy_model)
+{
+	model_run_module(&model_policy_vt, MODEL_INDEX_POLICY);
+}

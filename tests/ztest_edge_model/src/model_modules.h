@@ -23,6 +23,8 @@ enum {
 
 extern const struct model_vtable model_principal_vt;
 extern const struct model_vtable model_session_vt;
+extern const struct model_vtable model_credential_vt;
+extern const struct model_vtable model_policy_vt;
 
 /* Run one module for MODEL_SEEDS traces; fails the calling test on a violation. */
 void model_run_module(const struct model_vtable *vt, uint32_t index);
