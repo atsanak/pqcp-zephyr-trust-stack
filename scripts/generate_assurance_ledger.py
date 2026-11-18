@@ -27,6 +27,7 @@ from check_version_consistency import (  # noqa: E402
     parse_header_version,
     validate_changelog,
 )
+import run_model_checks as model_checks  # noqa: E402
 from export_results import (  # noqa: E402
     validate_benchmark_csv,
     validate_benchmark_metadata_document,
@@ -43,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1400,6 +1401,158 @@ def evaluate_transparent_appraisal_receipt(
     )
 
 
+# Floor on the seeded traces each model module must run. Pinned here so a
+# harness that quietly drops to a handful of seeds cannot satisfy the claim.
+# Update together with tests/ztest_edge_model.
+MODEL_MIN_SEEDS_PER_MODULE = 64
+DEFAULT_MODEL_BASELINE = SCRIPT_DIR / "model_rediscovery_baseline.json"
+
+
+def evaluate_state_machine_model_conformance(
+    spec: dict[str, Any],
+    *,
+    transcript_manifest: Path,
+    baseline_path: Path = DEFAULT_MODEL_BASELINE,
+) -> dict[str, object]:
+    """Bind security.state_machine_model_conformance to the model step.
+
+    Two facts must both be in the captured transcript: the unmutated edge
+    firmware conformed to its abstract models on every seeded trace (one PASS
+    CHECK marker per module, a clean SUMMARY, no counterexample), and the
+    same models rediscovered at least the baseline number of historical
+    defects re-injected into private source copies. The second fact is the
+    measure of the first: a model that cannot find known bugs proves little.
+    Parsing is shared with scripts/run_model_checks.py, which is the only
+    producer of the PQCP_MODEL_REDISCOVERY and PQCP_MODEL_DEFECT lines.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tests/ztest_edge_model",
+        "scripts/run_model_checks.py",
+        "scripts/model_rediscovery_baseline.json",
+    ]
+    commands = ["python3 scripts/run_model_checks.py --rediscover"]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "edge model conformance"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "edge model conformance transcript missing or empty in "
+                f"transcript manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="edge model conformance transcript"))
+    artifacts.append(artifact(baseline_path, label="model rediscovery baseline"))
+
+    details: dict[str, Any] = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "min_seeds_per_module": MODEL_MIN_SEEDS_PER_MODULE,
+    }
+    try:
+        baseline = model_checks.load_baseline(baseline_path)
+    except (OSError, ValueError) as exc:
+        return fail_claim(
+            spec,
+            reason=f"model rediscovery baseline unusable: {exc}",
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    details["baseline_rediscovered_min"] = baseline["rediscovered_min"]
+    details["baseline_defects_total"] = baseline.get("defects_total")
+
+    parsed = model_checks.parse_transcript(transcript_body)
+    problems = model_checks.assess_conformance(parsed)
+    for check in parsed.checks:
+        if check.seeds < MODEL_MIN_SEEDS_PER_MODULE:
+            problems.append(
+                f"module {check.module} ran {check.seeds} seeds, expected at "
+                f"least {MODEL_MIN_SEEDS_PER_MODULE}"
+            )
+    if parsed.summaries:
+        summary = parsed.summaries[0]
+        details.update({
+            "modules": summary.modules,
+            "traces": summary.traces,
+            "ops": summary.ops,
+            "violations": summary.violations,
+        })
+
+    marker = model_checks.REDISCOVERY_RE.search(transcript_body)
+    defect_lines = model_checks.DEFECT_LINE_RE.findall(transcript_body)
+    if marker is None:
+        problems.append(
+            "transcript lacks the PQCP_MODEL_REDISCOVERY PASS marker "
+            "(rediscovered=K/N allowed=A)"
+        )
+    else:
+        rediscovered, total, allowed = (int(g) for g in marker.groups())
+        details.update({
+            "rediscovered": rediscovered,
+            "defects_total": total,
+            "allowed_misses": allowed,
+        })
+        if rediscovered < baseline["rediscovered_min"]:
+            problems.append(
+                f"rediscovered {rediscovered} is below the baseline "
+                f"{baseline['rediscovered_min']}"
+            )
+        expected_total = baseline.get("defects_total")
+        if expected_total is not None and total < expected_total:
+            problems.append(
+                f"historical defect list shrank to {total} "
+                f"(baseline {expected_total})"
+            )
+        statuses = [status for _, _, status in defect_lines]
+        if len(defect_lines) != total:
+            problems.append(
+                f"{len(defect_lines)} PQCP_MODEL_DEFECT lines but the marker "
+                f"reports {total} defects"
+            )
+        if statuses.count("rediscovered") != rediscovered:
+            problems.append(
+                f"{statuses.count('rediscovered')} defect lines are "
+                f"rediscovered but the marker reports {rediscovered}"
+            )
+        if statuses.count("allowed") != allowed:
+            problems.append(
+                f"{statuses.count('allowed')} defect lines are allowed but "
+                f"the marker reports {allowed}"
+            )
+        bad = [f"{i}={s}" for i, _, s in defect_lines
+               if s not in ("rediscovered", "allowed")]
+        if bad:
+            problems.append("unresolved historical defects: " + ", ".join(bad))
+        if rediscovered + allowed != total:
+            problems.append("rediscovered plus allowed misses does not equal "
+                            "the defect count")
+
+    if problems:
+        return fail_claim(
+            spec,
+            reason="edge model conformance: " + "; ".join(problems),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 # Text replay parsers (verdict, seal, passport, tamper matrix, trail,
 # signature reassembler) plus fleet CBOR, COSE_Sign1, COSE_Key and the
 # policy module codec. Keep in sync with tools/evidence_fuzzer.
@@ -2491,6 +2644,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "supply_chain.transparent_appraisal_receipt": lambda spec: evaluate_transparent_appraisal_receipt(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.state_machine_model_conformance": lambda spec: evaluate_state_machine_model_conformance(
             spec, transcript_manifest=transcript_manifest,
         ),
         "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(

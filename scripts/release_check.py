@@ -48,6 +48,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "evidence chain host replay",
     "transparent appraisal receipt",
     "evidence parser fuzz",
+    "edge model conformance",
     "ct instruction-count",
     "ct smoke ztest run",
     "ct instruction policy",
@@ -592,6 +593,7 @@ def main() -> int:
     evidence_fuzz_build_dir = output_root / "evidence_fuzz"
     evidence_coverage_report = output_root / "evidence_coverage.json"
     transparent_appraisal_output_dir = output_root / "transparent_appraisal"
+    edge_model_output_dir = output_root / "edge_model"
     ct_instruction_output_dir = output_root / "ct_instruction"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
@@ -1978,6 +1980,26 @@ def main() -> int:
             success_markers=(
                 "PQCP_FUZZ PASS",
                 "[fuzz] PASS:",
+            ),
+        ),
+        # Full gate only (not CI_FAST_GATE_STEPS): the rediscovery half
+        # rebuilds the model app once per historical defect.
+        Step(
+            name="edge model conformance",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_model_checks.py"),
+                "--rediscover",
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(edge_model_output_dir),
+            ],
+            cwd=module_path,
+            timeout=3600,
+            success_markers=(
+                "PQCP_MODEL_SUMMARY",
+                "PQCP_MODEL_REDISCOVERY PASS",
             ),
         ),
         Step(
