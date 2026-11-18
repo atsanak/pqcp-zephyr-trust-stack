@@ -33,6 +33,7 @@ target_compile_definitions(mldsa65_register PUBLIC
 
 add_executable(pqcp-evidence-register
     src/main.c
+    src/kit_sign.c
     ${PQCP_VERIFIER_DIR}/src/host_sha256.c
     ${PQCP_VERIFIER_DIR}/src/receipt_mldsa_ops.c
     ${PQCP_VERIFIER_DIR}/src/receipt_codec.c

@@ -9,6 +9,8 @@
  *   checkpoint        sign a checkpoint over the log (optionally at a prefix)
  *   receipt           emit an inclusion receipt against a signed checkpoint
  *   prove-consistency emit a consistency file between two checkpoints
+ *   sign-file         sign a file's bytes (kit provenance, own ML-DSA context)
+ *   verify-file       verify such a signature against a public key
  *
  * Everything is deterministic and seed-file driven: this tool never reads
  * randomness (the linked randombytes stub aborts if anything tries).
@@ -26,6 +28,7 @@
 #include <pqcp_zephyr/fleet_transparency.h>
 
 #include "host_sha256.h"
+#include "kit_sign.h"
 #include "receipt_codec.h"
 #include "receipt_mldsa_ops.h"
 
@@ -687,6 +690,99 @@ static int cmd_prove_consistency(const struct opts *o)
 	return 0;
 }
 
+/* The kit-provenance context is the default. The log context is reachable
+ * only through this explicit fixture flag so tests can prove a checkpoint-
+ * context signature is refused by the default verify-file.
+ */
+static const char *file_context(const struct opts *o)
+{
+	return opt_flag(o, "--fixture-log-context") ? RECEIPT_MLDSA_CONTEXT :
+						      KIT_SIGN_CONTEXT_KIT;
+}
+
+static int cmd_sign_file(const struct opts *o)
+{
+	static const char *const valued[] = {
+		"--seed-file", "--in", "--out", NULL
+	};
+	static const char *const flags[] = { "--fixture-log-context", NULL };
+	uint8_t seed[32];
+	struct receipt_mldsa_ctx *kctx = calloc(1U, sizeof(*kctx));
+	uint8_t sig[RECEIPT_MLDSA_SIG_BYTES];
+	uint8_t *data = NULL;
+	size_t length = 0U;
+	char hex[65];
+
+	opts_check(o, valued, flags);
+	if (kctx == NULL) {
+		die("out of memory%s", "");
+	}
+	read_seed(opt_require(o, "--seed-file"), seed);
+	if (receipt_mldsa_ctx_init_sign(kctx, seed) != 0) {
+		die("keypair derivation failed%s", "");
+	}
+	if (read_file(opt_require(o, "--in"), &data, &length) != 0) {
+		die("cannot read input %s", opt_get(o, "--in"));
+	}
+	if (kit_sign_message(kctx, file_context(o), data, length, sig) != 0) {
+		die("signing failed%s", "");
+	}
+	if (write_file(opt_require(o, "--out"), sig, sizeof(sig), "wb") != 0) {
+		die("cannot write %s", opt_get(o, "--out"));
+	}
+	hex_of(kctx->key_id, 32U, hex);
+	printf("PQCP_REGISTER SIGN-FILE key_id=%s bytes=%zu sig_bytes=%u\n",
+	       hex, length, RECEIPT_MLDSA_SIG_BYTES);
+	memset(kctx, 0, sizeof(*kctx));
+	free(kctx);
+	free(data);
+	return 0;
+}
+
+static int cmd_verify_file(const struct opts *o)
+{
+	static const char *const valued[] = { "--pk", "--in", "--sig", NULL };
+	static const char *const flags[] = { "--fixture-log-context", NULL };
+	uint8_t pk[RECEIPT_MLDSA_PK_BYTES];
+	uint8_t key_id[32];
+	uint8_t *data = NULL;
+	uint8_t *sig = NULL;
+	size_t length = 0U;
+	size_t sig_len = 0U;
+	char hex[65];
+
+	opts_check(o, valued, flags);
+	read_pk(opt_require(o, "--pk"), pk);
+	receipt_mldsa_key_id(pk, key_id);
+	hex_of(key_id, 32U, hex);
+	if (read_file(opt_require(o, "--in"), &data, &length) != 0) {
+		die("cannot read input %s", opt_get(o, "--in"));
+	}
+	if (read_file(opt_require(o, "--sig"), &sig, &sig_len) != 0) {
+		die("cannot read signature %s", opt_get(o, "--sig"));
+	}
+	if (sig_len != RECEIPT_MLDSA_SIG_BYTES) {
+		printf("PQCP_REGISTER VERIFY-FILE REJECT reason=sig_malformed key_id=%s\n",
+		       hex);
+		free(data);
+		free(sig);
+		return 1;
+	}
+	if (kit_verify_message(pk, file_context(o), data, length, sig,
+			       sig_len) != 0) {
+		printf("PQCP_REGISTER VERIFY-FILE REJECT reason=bad_signature key_id=%s\n",
+		       hex);
+		free(data);
+		free(sig);
+		return 1;
+	}
+	printf("PQCP_REGISTER VERIFY-FILE PASS key_id=%s bytes=%zu\n", hex,
+	       length);
+	free(data);
+	free(sig);
+	return 0;
+}
+
 static void usage(const char *argv0)
 {
 	fprintf(stderr,
@@ -699,6 +795,9 @@ static void usage(const char *argv0)
 		"          [--allow-mismatch]\n"
 		"  prove-consistency --log-dir D --old-checkpoint O --new-checkpoint N\n"
 		"          --out C.cbor [--allow-mismatch]\n"
+		"  sign-file --seed-file S --in F --out SIG\n"
+		"  verify-file --pk P --in F --sig SIG\n"
+		"          (ML-DSA-65, context PQCP-KIT-PROVENANCE-V1, deterministic)\n"
 		"Seed files are 32 raw bytes; no command reads randomness.\n"
 		"Exit 0 ok, 1 operation or option error, 2 usage (no/unknown command).\n",
 		argv0);
@@ -728,6 +827,12 @@ int main(int argc, char **argv)
 	}
 	if (strcmp(argv[1], "prove-consistency") == 0) {
 		return cmd_prove_consistency(&o);
+	}
+	if (strcmp(argv[1], "sign-file") == 0) {
+		return cmd_sign_file(&o);
+	}
+	if (strcmp(argv[1], "verify-file") == 0) {
+		return cmd_verify_file(&o);
 	}
 	usage(argv[0]);
 	return 2;
