@@ -48,5 +48,25 @@ class ApplyEdit(unittest.TestCase):
                     self.assertEqual(len(hits), 1, (mutant.name, path))
 
 
+class SuiteSelection(unittest.TestCase):
+    def test_every_mutant_names_a_known_suite(self) -> None:
+        for mutant in mut.MUTANTS:
+            self.assertIn(mutant.suite, mut.SUITES, mutant.name)
+
+    def test_receipt_mutants_are_judged_by_the_appraisal_driver(self) -> None:
+        receipt = [m for m in mut.MUTANTS
+                   if m.path.endswith("receipt_verify.c")]
+        self.assertGreaterEqual(len(receipt), 5)
+        for mutant in receipt:
+            self.assertEqual(mutant.suite, "appraisal", mutant.name)
+
+    def test_existing_mutants_keep_the_verifier_suite(self) -> None:
+        legacy = [m for m in mut.MUTANTS
+                  if not m.path.endswith("receipt_verify.c")]
+        self.assertEqual(len(legacy), 14)
+        for mutant in legacy:
+            self.assertEqual(mutant.suite, "verifier", mutant.name)
+
+
 if __name__ == "__main__":
     unittest.main()
