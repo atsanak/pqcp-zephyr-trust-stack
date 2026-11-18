@@ -217,6 +217,19 @@ int pqcp_edge_principal_register(
 				candidate.state =
 					PQCP_EDGE_PRINCIPAL_ACTIVE;
 			}
+			if (current->state ==
+			    PQCP_EDGE_PRINCIPAL_QUARANTINED) {
+				/*
+				 * Re-registration may refresh the credential
+				 * but must never lift a quarantine: state,
+				 * deadline and risk stay with the directory.
+				 */
+				candidate.state = current->state;
+				candidate.quarantine_until_ms =
+					current->quarantine_until_ms;
+				candidate.risk_score =
+					current->risk_score;
+			}
 			*current = candidate;
 			++directory->registration_count;
 		}
@@ -274,19 +287,20 @@ int pqcp_edge_principal_observe(
 		ret = -EKEYREVOKED;
 		goto out;
 	}
+	/* An active quarantine is sticky: credential expiry must not demote it. */
+	if (principal->state ==
+		    PQCP_EDGE_PRINCIPAL_QUARANTINED &&
+	    (principal->quarantine_until_ms == 0U ||
+	     now_ms < principal->quarantine_until_ms)) {
+		ret = -EACCES;
+		goto out;
+	}
 	if (principal->credential_expires_at_ms <= now_ms) {
 		principal->state =
 			PQCP_EDGE_PRINCIPAL_DEGRADED;
 		principal->trust =
 			PQCP_EDGE_TRUST_OBSERVED;
 		ret = -EKEYEXPIRED;
-		goto out;
-	}
-	if (principal->state ==
-		    PQCP_EDGE_PRINCIPAL_QUARANTINED &&
-	    (principal->quarantine_until_ms == 0U ||
-	     now_ms < principal->quarantine_until_ms)) {
-		ret = -EACCES;
 		goto out;
 	}
 	if (principal->state ==
@@ -490,7 +504,9 @@ int pqcp_edge_principal_tick(
 		if (principal->credential_expires_at_ms <=
 			    now_ms &&
 		    principal->state !=
-			    PQCP_EDGE_PRINCIPAL_DEGRADED) {
+			    PQCP_EDGE_PRINCIPAL_DEGRADED &&
+		    principal->state !=
+			    PQCP_EDGE_PRINCIPAL_QUARANTINED) {
 			principal->state =
 				PQCP_EDGE_PRINCIPAL_DEGRADED;
 			principal->trust =

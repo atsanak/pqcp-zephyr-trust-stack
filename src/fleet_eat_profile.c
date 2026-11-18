@@ -298,7 +298,10 @@ static size_t claims_field_count(
 	}
 	COUNT_TEXT(claims->hardware_version);
 	COUNT_PRESENT(claims->uptime_present);
-	count++;
+	/* oem_boot is written unconditionally and is already part of the
+	 * base count; counting it again produced a map head one pair too
+	 * large, so no encoded claims map was valid CBOR.
+	 */
 	COUNT_PRESENT(claims->debug_status_present);
 	COUNT_PRESENT(claims->boot_count_present);
 	COUNT_TEXT(claims->software_name);
@@ -822,6 +825,13 @@ static int copy_text(
 	    slice->length == 0U ||
 	    slice->length >= capacity) {
 		return PQCP_FLEET_COSE_ERR_CAPACITY;
+	}
+	/* Text claims are consumed as C strings (the profile claim is
+	 * compared with strcmp). An embedded NUL would decode to a truncated
+	 * string that re-encodes to different bytes than the signed payload.
+	 */
+	if (memchr(slice->data, '\0', slice->length) != NULL) {
+		return PQCP_FLEET_COSE_ERR_ENCODING;
 	}
 	memcpy(output, slice->data, slice->length);
 	output[slice->length] = '\0';

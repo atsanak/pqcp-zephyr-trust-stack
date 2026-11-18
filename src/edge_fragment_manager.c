@@ -28,9 +28,27 @@ static bool fragment_shape_valid(
 		    sizeof(fragment->payload)) {
 		return false;
 	}
+	/*
+	 * Fragments are fixed-size slices: the offset must be exactly
+	 * index * fragment size, so that distinct indices can never overlap
+	 * and a full bitmap implies every output byte was written.
+	 */
+	if ((uint64_t)fragment->offset !=
+	    (uint64_t)fragment->fragment_index *
+		    PQCP_EDGE_FRAGMENT_PAYLOAD_MAX_BYTES) {
+		return false;
+	}
 	end = (uint64_t)fragment->offset +
 		fragment->payload_length;
-	return end <= fragment->total_length;
+	if (end > fragment->total_length) {
+		return false;
+	}
+	/* Every fragment but the last is full; the last ends the message. */
+	if (fragment->fragment_index + 1U < fragment->fragment_count) {
+		return fragment->payload_length ==
+			PQCP_EDGE_FRAGMENT_PAYLOAD_MAX_BYTES;
+	}
+	return end == fragment->total_length;
 }
 
 static int assembly_index(

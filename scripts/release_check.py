@@ -46,6 +46,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "boot KAT self-verify ztest run",
     "evidence coverage audit",
     "evidence chain host replay",
+    "transparent appraisal receipt",
     "evidence parser fuzz",
     "ct instruction-count",
     "ct smoke ztest run",
@@ -65,6 +66,7 @@ CI_EVIDENCE_TRANSCRIPT_STEPS = (
     "ACVP serial negative ztest run",
     "kat_provenance",
     "evidence coverage audit",
+    "transparent appraisal receipt",
 )
 
 CI_FAST_GATE_STEPS = (
@@ -77,6 +79,7 @@ CI_FAST_GATE_STEPS = (
     "ACVP serial negative ztest run",
     "kat_provenance",
     "evidence coverage audit",
+    "transparent appraisal receipt",
 )
 
 
@@ -588,6 +591,7 @@ def main() -> int:
     evidence_chain_output_dir = output_root / "evidence_chain_replay"
     evidence_fuzz_build_dir = output_root / "evidence_fuzz"
     evidence_coverage_report = output_root / "evidence_coverage.json"
+    transparent_appraisal_output_dir = output_root / "transparent_appraisal"
     ct_instruction_output_dir = output_root / "ct_instruction"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
@@ -1932,6 +1936,18 @@ def main() -> int:
                 "pqcp-evidence-verify: CHAIN OK",
                 "[evidence-chain] PASS: device evidence chain replayed on host",
             ),
+        ),
+        Step(
+            name="transparent appraisal receipt",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_transparent_appraisal.py"),
+                "--output-dir",
+                str(transparent_appraisal_output_dir),
+            ],
+            cwd=module_path,
+            timeout=900,
+            success_markers=("PQCP_APPRAISAL_RECEIPT PASS",),
         ),
         Step(
             name="evidence coverage audit",

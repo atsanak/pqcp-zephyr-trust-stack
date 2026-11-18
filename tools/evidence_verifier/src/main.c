@@ -27,6 +27,10 @@
 #include <pqcp_zephyr/deployment_evidence_trail_replay.h>
 #include <pqcp_zephyr/deployment_evidence_verdict_replay.h>
 #include <pqcp_zephyr/deployment_tamper_matrix_replay.h>
+#include "host_sha256.h"
+#include "receipt_codec.h"
+#include "receipt_mldsa_ops.h"
+#include "receipt_verify.h"
 #include "signature_check.h"
 
 #define LINE_MAX_CHARS 4096U
@@ -51,6 +55,9 @@ struct transcript_summary {
 	bool signature_complete;
 	bool signature_digest_bound;
 	bool signature_verified;
+	/** SHA-256 of the reassembled device public key (when complete). */
+	bool device_pk_hashed;
+	uint8_t device_pk_hash[32];
 	struct pqcp_deployment_evidence_verdict_replay_result verdict;
 	struct pqcp_deployment_evidence_seal_replay_result seal;
 	struct pqcp_deployment_assurance_passport_replay_result passport;
@@ -170,6 +177,11 @@ static int process_transcript(FILE *input, bool lenient,
 
 	summary->signature_present = sig_capture.present;
 	summary->signature_complete = signature_capture_complete(&sig_capture);
+	if (summary->signature_complete) {
+		host_sha256(sig_capture.public_key, SIGNATURE_PK_BYTES,
+			    summary->device_pk_hash);
+		summary->device_pk_hashed = true;
+	}
 	if (summary->signature_complete && summary->passport_passed) {
 		summary->signature_digest_bound =
 			strcmp(sig_capture.passport_digest_hex,
@@ -366,10 +378,318 @@ static int write_json(const char *path,
 	return fclose(out) == 0 ? 0 : -EIO;
 }
 
+/* ------------------------------------------------------------------ */
+/* Transparent appraisal: statement emission, receipt, consistency      */
+/* ------------------------------------------------------------------ */
+
+#define PK_FILE_BYTES RECEIPT_MLDSA_PK_BYTES
+
+/* Returns 0 or -EIO. Caller frees *data. */
+static int slurp(const char *path, size_t max, uint8_t **data, size_t *length)
+{
+	FILE *f = fopen(path, "rb");
+	long size;
+	uint8_t *buf;
+
+	if (f == NULL) {
+		return -EIO;
+	}
+	if (fseek(f, 0, SEEK_END) != 0 || (size = ftell(f)) < 0 ||
+	    (unsigned long)size > max || fseek(f, 0, SEEK_SET) != 0) {
+		(void)fclose(f);
+		return -EIO;
+	}
+	buf = malloc((size_t)size + 1U);
+	if (buf == NULL || fread(buf, 1U, (size_t)size, f) != (size_t)size) {
+		free(buf);
+		(void)fclose(f);
+		return -EIO;
+	}
+	(void)fclose(f);
+	*data = buf;
+	*length = (size_t)size;
+	return 0;
+}
+
+static int hash_file(const char *path, uint8_t digest[32])
+{
+	struct host_sha256_ctx ctx;
+	uint8_t buf[4096];
+	FILE *f = fopen(path, "rb");
+	size_t n;
+
+	if (f == NULL) {
+		return -EIO;
+	}
+	host_sha256_init(&ctx);
+	while ((n = fread(buf, 1U, sizeof(buf), f)) > 0U) {
+		host_sha256_update(&ctx, buf, n);
+	}
+	if (ferror(f)) {
+		(void)fclose(f);
+		return -EIO;
+	}
+	(void)fclose(f);
+	host_sha256_final(&ctx, digest);
+	return 0;
+}
+
+static void hex_bytes(const uint8_t *in, size_t length, char *out)
+{
+	static const char hex[] = "0123456789abcdef";
+
+	for (size_t i = 0U; i < length; ++i) {
+		out[2U * i] = hex[in[i] >> 4];
+		out[2U * i + 1U] = hex[in[i] & 0x0fU];
+	}
+	out[2U * length] = '\0';
+}
+
+/* Fresh appraisal statement fields derived from the replayed transcript. */
+static void build_statement(const struct transcript_summary *summary,
+			    bool chain_ok, const uint8_t transcript_sha[32],
+			    const uint8_t verifier_sha[32],
+			    struct rc_statement *out)
+{
+	memset(out, 0, sizeof(*out));
+	if (summary->passport_passed) {
+		(void)snprintf(out->passport_digest_hex,
+			       sizeof(out->passport_digest_hex), "%s",
+			       summary->passport.computed_digest_hex);
+	}
+	if (summary->trail_markers != 0U && summary->trail_passed) {
+		(void)snprintf(out->trail_head_hex,
+			       sizeof(out->trail_head_hex), "%s",
+			       summary->trail.computed_head_digest_hex);
+	}
+	if (summary->device_pk_hashed) {
+		out->has_device_pk_hash = true;
+		memcpy(out->device_pk_hash, summary->device_pk_hash, 32U);
+	}
+	(void)snprintf(out->verdict, sizeof(out->verdict), "%s",
+		       chain_ok ? RC_VERDICT_OK : RC_VERDICT_REJECT);
+	memcpy(out->verifier_sha256, verifier_sha, 32U);
+	out->signature_verified = summary->signature_verified;
+	memcpy(out->transcript_sha256, transcript_sha, 32U);
+}
+
+static int emit_statement(const char *path, const struct rc_statement *s)
+{
+	uint8_t buf[RC_MAX_STATEMENT_BYTES];
+	size_t length = 0U;
+	FILE *f;
+
+	if (rc_statement_encode(s, buf, sizeof(buf), &length) != 0) {
+		return -EINVAL;
+	}
+	f = fopen(path, "wb");
+	if (f == NULL) {
+		return -EIO;
+	}
+	if (fwrite(buf, 1U, length, f) != length) {
+		(void)fclose(f);
+		return -EIO;
+	}
+	return fclose(f) == 0 ? 0 : -EIO;
+}
+
+static int load_log_pk(const char *path, uint8_t pk[PK_FILE_BYTES])
+{
+	uint8_t *data = NULL;
+	size_t length = 0U;
+
+	if (slurp(path, PK_FILE_BYTES, &data, &length) != 0) {
+		return -EIO;
+	}
+	if (length != PK_FILE_BYTES) {
+		free(data);
+		return -EBADMSG;
+	}
+	memcpy(pk, data, length);
+	free(data);
+	return 0;
+}
+
+static int reject_line(const char *marker, const char *reason)
+{
+	printf("%s REJECT reason=%s\n", marker, reason);
+	return 1;
+}
+
+static bool statement_matches(const struct rc_statement *a,
+			      const struct rc_statement *b, const char **why)
+{
+	if (strcmp(a->passport_digest_hex, b->passport_digest_hex) != 0) {
+		*why = "passport_digest_mismatch";
+	} else if (strcmp(a->trail_head_hex, b->trail_head_hex) != 0) {
+		*why = "trail_head_mismatch";
+	} else if (memcmp(a->transcript_sha256, b->transcript_sha256, 32U) !=
+		   0) {
+		*why = "transcript_hash_mismatch";
+	} else if (a->has_device_pk_hash != b->has_device_pk_hash ||
+		   (a->has_device_pk_hash &&
+		    memcmp(a->device_pk_hash, b->device_pk_hash, 32U) != 0)) {
+		*why = "device_pk_mismatch";
+	} else if (a->signature_verified != b->signature_verified) {
+		*why = "signature_flag_mismatch";
+	} else if (strcmp(a->verdict, b->verdict) != 0) {
+		*why = "verdict_mismatch";
+	} else {
+		return true;
+	}
+	return false;
+}
+
+/* Receipt verification bound to a fresh replay. Returns 0 PASS, 1 REJECT,
+ * 2 I/O error. Always prints exactly one PQCP_APPRAISAL_RECEIPT line.
+ */
+static int run_receipt(const char *receipt_path, const char *pk_path,
+		       const struct transcript_summary *summary,
+		       bool chain_ok, const uint8_t transcript_sha[32],
+		       const char *verifier_bin)
+{
+	static const char marker[] = "PQCP_APPRAISAL_RECEIPT";
+	uint8_t pk[PK_FILE_BYTES];
+	uint8_t leaf_hash[32];
+	uint8_t verifier_sha[32] = { 0 };
+	struct rc_receipt *receipt = NULL;
+	struct rc_statement *fresh = NULL;
+	struct rc_statement *claimed = NULL;
+	uint8_t *data = NULL;
+	size_t length = 0U;
+	const char *why = NULL;
+	enum rv_reason reason;
+	char id_hex[65];
+	int ret = 1;
+	int rc;
+
+	rc = load_log_pk(pk_path, pk);
+	if (rc == -EBADMSG) {
+		return reject_line(marker, "log_pk_malformed");
+	}
+	if (rc != 0) {
+		fprintf(stderr, "pqcp-evidence-verify: cannot read %s\n",
+			pk_path);
+		return 2;
+	}
+	if (slurp(receipt_path, RC_MAX_RECEIPT_BYTES, &data, &length) != 0) {
+		fprintf(stderr, "pqcp-evidence-verify: cannot read %s\n",
+			receipt_path);
+		return 2;
+	}
+	receipt = calloc(1U, sizeof(*receipt));
+	fresh = calloc(1U, sizeof(*fresh));
+	claimed = calloc(1U, sizeof(*claimed));
+	if (receipt == NULL || fresh == NULL || claimed == NULL) {
+		ret = 2;
+		goto out;
+	}
+	if (rc_receipt_decode(data, length, receipt) != 0) {
+		ret = reject_line(marker, "malformed");
+		goto out;
+	}
+	reason = rv_verify_receipt(receipt, pk, leaf_hash);
+	if (reason != RV_OK) {
+		ret = reject_line(marker, rv_reason_str(reason));
+		goto out;
+	}
+	/* Invariant 4: the statement must match a fresh replay of the
+	 * supplied transcript.
+	 */
+	if (rc_statement_decode(receipt->statement, receipt->statement_length,
+				claimed) != 0) {
+		ret = reject_line(marker, "statement_malformed");
+		goto out;
+	}
+	if (verifier_bin != NULL) {
+		if (hash_file(verifier_bin, verifier_sha) != 0) {
+			fprintf(stderr,
+				"pqcp-evidence-verify: cannot read %s\n",
+				verifier_bin);
+			ret = 2;
+			goto out;
+		}
+		if (memcmp(claimed->verifier_sha256, verifier_sha, 32U) != 0) {
+			ret = reject_line(marker, "verifier_hash_mismatch");
+			goto out;
+		}
+	} else {
+		memcpy(verifier_sha, claimed->verifier_sha256, 32U);
+	}
+	build_statement(summary, chain_ok, transcript_sha, verifier_sha,
+			fresh);
+	if (!statement_matches(claimed, fresh, &why)) {
+		ret = reject_line(marker, why);
+		goto out;
+	}
+	hex_bytes(receipt->checkpoint.log_id, 32U, id_hex);
+	printf("%s PASS leaf_index=%llu tree_size=%llu verdict=%s log_id=%s\n",
+	       marker, (unsigned long long)receipt->leaf_index,
+	       (unsigned long long)receipt->tree_size, claimed->verdict,
+	       id_hex);
+	ret = 0;
+out:
+	free(receipt);
+	free(fresh);
+	free(claimed);
+	free(data);
+	return ret;
+}
+
+static int run_consistency(const char *path, const char *pk_path)
+{
+	static const char marker[] = "PQCP_APPRAISAL_CONSISTENCY";
+	uint8_t pk[PK_FILE_BYTES];
+	struct rc_consistency *c;
+	uint8_t *data = NULL;
+	size_t length = 0U;
+	enum rv_reason reason;
+	int rc;
+	int ret;
+
+	rc = load_log_pk(pk_path, pk);
+	if (rc == -EBADMSG) {
+		return reject_line(marker, "log_pk_malformed");
+	}
+	if (rc != 0) {
+		fprintf(stderr, "pqcp-evidence-verify: cannot read %s\n",
+			pk_path);
+		return 2;
+	}
+	if (slurp(path, RC_MAX_CONSISTENCY_BYTES, &data, &length) != 0) {
+		fprintf(stderr, "pqcp-evidence-verify: cannot read %s\n", path);
+		return 2;
+	}
+	c = calloc(1U, sizeof(*c));
+	if (c == NULL) {
+		free(data);
+		return 2;
+	}
+	if (rc_consistency_decode(data, length, c) != 0) {
+		ret = reject_line(marker, "malformed");
+	} else {
+		reason = rv_verify_consistency(c, pk);
+		if (reason == RV_OK) {
+			printf("%s PASS consistency=ok old_size=%llu new_size=%llu\n",
+			       marker, (unsigned long long)c->old_size,
+			       (unsigned long long)c->new_size);
+			ret = 0;
+		} else {
+			ret = reject_line(marker, rv_reason_str(reason));
+		}
+	}
+	free(c);
+	free(data);
+	return ret;
+}
+
 static void usage(const char *argv0)
 {
 	fprintf(stderr,
-		"usage: %s [--lenient] [--require-signature] [--quiet] [--json <path>] <transcript.log>\n"
+		"usage: %s [--lenient] [--require-signature] [--quiet] [--json <path>]\n"
+		"          [--verifier-bin <path>] [--emit-statement <path>]\n"
+		"          [--receipt <path> --log-pk <path>] <transcript.log>\n"
+		"       %s --consistency <path> --log-pk <path>\n"
 		"\n"
 		"Replays the firmware deployment evidence chain from a captured\n"
 		"device transcript using the unmodified firmware verifier code.\n"
@@ -384,8 +704,25 @@ static void usage(const char *argv0)
 		"  --require-signature  fail unless an ML-DSA-65 passport\n"
 		"             signature is present and verifies\n"
 		"  --quiet    suppress the human-readable summary\n"
-		"  --json     also write a machine-readable JSON summary\n",
-		argv0);
+		"  --json     also write a machine-readable JSON summary\n"
+		"\n"
+		"Transparent appraisal (docs/transparent-appraisal-format.md):\n"
+		"  --emit-statement <path>  write the appraisal statement (CBOR) for\n"
+		"             this transcript; written for REJECT verdicts too, exit\n"
+		"             code still reflects the chain verdict\n"
+		"  --verifier-bin <path>    binary whose SHA-256 is recorded in the\n"
+		"             statement (default argv[0]); with --receipt it is\n"
+		"             compared to the statement's recorded verifier hash\n"
+		"  --receipt <path>  verify an inclusion receipt against the pinned\n"
+		"             --log-pk and bind its statement to a fresh replay of\n"
+		"             <transcript.log>. Prints PQCP_APPRAISAL_RECEIPT PASS|REJECT\n"
+		"             reason=<token>; exit 0 only on PASS (the chain verdict is\n"
+		"             reported in verdict=, not in the exit code)\n"
+		"  --consistency <path>  verify an append-only consistency file\n"
+		"             (no transcript). Prints PQCP_APPRAISAL_CONSISTENCY\n"
+		"             PASS consistency=ok | REJECT reason=<token>\n"
+		"  --log-pk   raw 1952-byte ML-DSA-65 log public key (pinned)\n",
+		argv0, argv0);
 }
 
 int main(int argc, char **argv)
@@ -393,10 +730,17 @@ int main(int argc, char **argv)
 	static struct transcript_summary summary;
 	const char *transcript_path = NULL;
 	const char *json_path = NULL;
+	const char *emit_path = NULL;
+	const char *verifier_bin = NULL;
+	const char *receipt_path = NULL;
+	const char *consistency_path = NULL;
+	const char *log_pk_path = NULL;
 	bool lenient = false;
 	bool require_signature = false;
 	bool quiet = false;
-	bool chain_ok;
+	bool chain_ok = false;
+	uint8_t transcript_sha[32];
+	int exit_code = 0;
 	FILE *input;
 	int ret;
 
@@ -409,6 +753,19 @@ int main(int argc, char **argv)
 			quiet = true;
 		} else if (strcmp(argv[i], "--json") == 0 && i + 1 < argc) {
 			json_path = argv[++i];
+		} else if (strcmp(argv[i], "--emit-statement") == 0 &&
+			   i + 1 < argc) {
+			emit_path = argv[++i];
+		} else if (strcmp(argv[i], "--verifier-bin") == 0 &&
+			   i + 1 < argc) {
+			verifier_bin = argv[++i];
+		} else if (strcmp(argv[i], "--receipt") == 0 && i + 1 < argc) {
+			receipt_path = argv[++i];
+		} else if (strcmp(argv[i], "--consistency") == 0 &&
+			   i + 1 < argc) {
+			consistency_path = argv[++i];
+		} else if (strcmp(argv[i], "--log-pk") == 0 && i + 1 < argc) {
+			log_pk_path = argv[++i];
 		} else if (strcmp(argv[i], "--help") == 0 ||
 			   strcmp(argv[i], "-h") == 0) {
 			usage(argv[0]);
@@ -422,6 +779,22 @@ int main(int argc, char **argv)
 			usage(argv[0]);
 			return 2;
 		}
+	}
+
+	if ((receipt_path != NULL || consistency_path != NULL) &&
+	    log_pk_path == NULL) {
+		fprintf(stderr,
+			"pqcp-evidence-verify: --receipt/--consistency need --log-pk\n");
+		return 2;
+	}
+	if (consistency_path != NULL) {
+		if (receipt_path != NULL || emit_path != NULL ||
+		    transcript_path != NULL) {
+			fprintf(stderr,
+				"pqcp-evidence-verify: --consistency takes no transcript, --receipt or --emit-statement\n");
+			return 2;
+		}
+		return run_consistency(consistency_path, log_pk_path);
 	}
 
 	if (transcript_path == NULL) {
@@ -455,5 +828,43 @@ int main(int argc, char **argv)
 		return 2;
 	}
 
-	return chain_ok ? 0 : 1;
+	if (emit_path != NULL || receipt_path != NULL) {
+		if (hash_file(transcript_path, transcript_sha) != 0) {
+			fprintf(stderr,
+				"pqcp-evidence-verify: cannot hash %s\n",
+				transcript_path);
+			return 2;
+		}
+	}
+	if (emit_path != NULL) {
+		static struct rc_statement statement;
+		uint8_t verifier_sha[32];
+		const char *bin = verifier_bin != NULL ? verifier_bin :
+							 argv[0];
+
+		if (hash_file(bin, verifier_sha) != 0) {
+			fprintf(stderr,
+				"pqcp-evidence-verify: cannot hash verifier binary %s (use --verifier-bin)\n",
+				bin);
+			return 2;
+		}
+		build_statement(&summary, chain_ok, transcript_sha,
+				verifier_sha, &statement);
+		if (emit_statement(emit_path, &statement) != 0) {
+			fprintf(stderr,
+				"pqcp-evidence-verify: cannot write %s\n",
+				emit_path);
+			return 2;
+		}
+		printf("PQCP_APPRAISAL_STATEMENT written verdict=%s\n",
+		       statement.verdict);
+	}
+	if (receipt_path != NULL) {
+		/* The exit code of a receipt run is the receipt verdict. */
+		return run_receipt(receipt_path, log_pk_path, &summary,
+				   chain_ok, transcript_sha, verifier_bin);
+	}
+
+	exit_code = chain_ok ? 0 : 1;
+	return exit_code;
 }

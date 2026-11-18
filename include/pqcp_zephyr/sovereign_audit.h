@@ -378,6 +378,20 @@ struct pqcp_sovereign_audit_export_config {
 	bool signature_required;
 };
 
+/* Independent durable slots. A write replaces only the requested slot. A
+ * successful write must have reached durable storage. Read returns -ENOENT
+ * for an empty slot and -ENOSPC if the supplied buffer is too small.
+ * Set binding to a stable digest of the firmware image and stream/key identity.
+ */
+struct pqcp_sovereign_audit_checkpoint_store {
+	void *context;
+	int (*read)(void *context, unsigned int slot, uint8_t *buffer,
+		    size_t capacity, size_t *length);
+	int (*write)(void *context, unsigned int slot, const uint8_t *buffer,
+		     size_t length);
+	uint8_t binding[PQCP_SOVEREIGN_AUDIT_DIGEST_BYTES];
+};
+
 struct pqcp_sovereign_audit_exporter {
 	uint32_t schema_version;
 	struct pqcp_sovereign_event_ledger *ledger;
@@ -389,6 +403,12 @@ struct pqcp_sovereign_audit_exporter {
 	uint64_t resumed_batches;
 	uint64_t acknowledged_batches;
 	uint64_t rejected_batches;
+	/* One frozen batch owns the shared workspace until ack/close/expiry. */
+	struct pqcp_sovereign_export_batch pending_batch;
+	struct pqcp_sovereign_audit_export_policy pending_policy;
+	uint8_t pending_snapshot_digest[PQCP_SOVEREIGN_AUDIT_DIGEST_BYTES];
+	struct pqcp_sovereign_audit_checkpoint_store checkpoint_store;
+	uint64_t checkpoint_generation;
 	struct k_mutex lock;
 	bool initialized;
 };
@@ -502,6 +522,21 @@ int pqcp_sovereign_audit_ocsf_encode_batch(
 	size_t output_capacity,
 	size_t *output_length);
 
+/* Allocation-free, in-memory retry protocol. The caller authorizes the tenant,
+ * consumer and policy before calling; cursor IDs are not bearer credentials.
+ * Caller-owned storage must remain live and must not alias arguments/output.
+ * Multiple cursors may be open, but only one batch may be outstanding globally
+ * (-EBUSY otherwise). A successful prepare freezes bytes, signature and policy:
+ * repeat it to retransmit, then acknowledge the exact range and digest.
+ * batch.events is read-only and valid until acknowledge/close/expiry or reinit.
+ * Projections retain source event_digest values; authenticate their changed
+ * fields with the batch commitment/signature, not event_verify(projected).
+ * batch_digest = SHA256("PQCP-SOVEREIGN-AUDIT-BATCH-V1" || canonical CBOR body).
+ * first_sequence=0 selects the oldest retained event. Evicted history yields
+ * -ESTALE; no matching events yields -ENOENT without advancing the cursor.
+ * For reboot recovery, persist the exporter state with the checkpoint API
+ * before transmitting a batch.
+ */
 int pqcp_sovereign_audit_exporter_init(
 	struct pqcp_sovereign_audit_exporter *exporter,
 	struct pqcp_sovereign_event_ledger *ledger,
@@ -541,6 +576,37 @@ int pqcp_sovereign_audit_export_expire(
 int pqcp_sovereign_audit_exporter_audit(
 	struct pqcp_sovereign_audit_exporter *exporter);
 
+/* Call recover on a fresh exporter with a restored ledger before opening any
+ * cursor. On two empty slots it binds the store and returns -ENOENT when
+ * minimum_generation is zero. An optional
+ * trusted generation floor rejects older snapshots. Call checkpoint after
+ * prepare and before releasing the bytes, and after acknowledge/close/expire
+ * before acting on the new state. Retry a failed save before proceeding.
+ * Both calls need scratch disjoint from exporter, ledger and their storage.
+ * Slots are trusted local storage, with corruption detection. Their native
+ * layout is private to a firmware image. Serialize application transactions
+ * and storage access, and retain the signing key and time basis across reboot.
+ */
+int pqcp_sovereign_audit_exporter_recover(
+	struct pqcp_sovereign_audit_exporter *exporter,
+	const struct pqcp_sovereign_audit_checkpoint_store *store,
+	uint64_t minimum_generation, uint8_t *scratch, size_t capacity);
+int pqcp_sovereign_audit_exporter_checkpoint(
+	struct pqcp_sovereign_audit_exporter *exporter,
+	uint8_t *scratch, size_t capacity);
+/* Worst-case scratch and slot size for this initialized exporter; zero on error. */
+size_t pqcp_sovereign_audit_exporter_checkpoint_capacity(
+	const struct pqcp_sovereign_audit_exporter *exporter);
+
+/* Snapshot adapters: the caller authenticates source provenance and tenant
+ * ownership (several source types carry no tenant). Fleet entries additionally
+ * undergo entry-digest verification; broker signatures need a broker context
+ * and are NOT verified by these adapters. SIGNED_SOURCE is never inferred.
+ * The caller supplies a stable snapshot. No source state is modified; output
+ * is unchanged on error. Event IDs bind the normalized projection including
+ * attributes, excluding ingestion time.
+ * They identify observations, not an authorization token or deduplication DB.
+ */
 int pqcp_sovereign_audit_bridge_broker_receipt(
 	const char *tenant_id,
 	const char *realm,

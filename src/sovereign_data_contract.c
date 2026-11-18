@@ -165,6 +165,14 @@ int pqcp_sovereign_data_contract_put(
 			k_mutex_unlock(&manager->lock);
 			return -EACCES;
 		}
+		/* Revocation is terminal: a higher-epoch put must never
+		 * resurrect a revoked contract.
+		 */
+		if (existing->state == PQCP_SOVEREIGN_LIFECYCLE_REVOKED) {
+			manager->denial_count++;
+			k_mutex_unlock(&manager->lock);
+			return -EACCES;
+		}
 		if (contract->policy_epoch <= existing->policy_epoch ||
 		    contract->maximum_records <
 			    existing->records_used ||
@@ -202,6 +210,18 @@ int pqcp_sovereign_data_contract_put(
 	} else if (existing != NULL) {
 		candidate.records_used = existing->records_used;
 		candidate.bytes_used = existing->bytes_used;
+	} else {
+		/* A caller-chosen id for a new contract must be reserved, or a
+		 * later auto-assigned id would be handed out equal to it.
+		 */
+		if (candidate.contract_id == UINT64_MAX) {
+			manager->denial_count++;
+			k_mutex_unlock(&manager->lock);
+			return -EOVERFLOW;
+		}
+		if (candidate.contract_id >= manager->next_contract_id) {
+			manager->next_contract_id = candidate.contract_id + 1U;
+		}
 	}
 	candidate.state = PQCP_SOVEREIGN_LIFECYCLE_ACTIVE;
 	candidate.occupied = true;

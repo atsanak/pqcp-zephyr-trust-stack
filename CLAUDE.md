@@ -1164,6 +1164,95 @@ assurance_claims.json (currently the host verifier enforces present->verified
 but no dedicated ledger claim ID exists yet); nucleo hardware capture; GitHub
 Actions billing blocker unchanged.
 
+## Patch set 14 — evidence-coverage ratchet + CI/CD hardening (2026-11-17)
+
+PRs: #6 `claude/evidence-coverage-ratchet` (base main), #7
+`claude/ci-cd-hardening` (stacked on #6). Python/YAML only; no firmware C.
+
+- Coverage ratchet: scripts/audit_evidence_coverage.py assigns every
+  src/*.c module L0 untested / L1 tested / L2 gated / L3 claimed using
+  defined-symbol references (header-include matching undercounts the newer
+  families, which implement via *_internal.h) plus a call-graph pass.
+  Baseline: scripts/evidence_coverage_baseline.json. Claim
+  release.evidence_coverage_ratchet (claims schema 9). At #6: L0=224 L1=76
+  L2=34 L3=15 of 349 modules; 176 modules (37% of 362k lines) unreachable
+  from any ztest; sovereign (55) and edge (47) have NO tests, fleet 2/56.
+- CI finding: only 24 of 74 tests/ztest_* had testcase.yaml, so twister
+  silently skipped 50 suites (nearly the whole deployment evidence chain);
+  no workflow ran any host tooling. Fixes in #7: generate_testcase_yaml.py
+  (+ --check), host-assurance.yml (run_host_assurance.py: ~42s, validated on
+  ubuntu:22.04/gcc11/py3.10 and python:3.12-bookworm/gcc12), ci.yml
+  twister job now RUNS suites (was --build-only).
+- Full local twister sweep (qemu_x86_64, all registered suites): 91/91
+  configurations, 995/995 test cases passed in 299s. Baseline raised to
+  L2=104 L3=21 (76 modules moved up).
+- CD: package_evidence_verifier.py builds a smoke-tested (accepts signed
+  transcript, rejects tampered) verifier tarball + sha256; host-assurance.yml
+  uploads it on main/v* tags and attaches it to releases on tags; nightly
+  2M-iteration fuzz.
+
+Later in the same patch set (#7): 5 new ztest suites (sovereign policy 71,
+sovereign audit 33, fleet transparency 70 with RFC 6962 vectors, fleet
+artifact core 88, edge security 229) found and fixed 29 firmware defects with
+hard regression tests, incl. egress cap wraparound, revoked-contract
+reactivation, EAT claims encoder emitting invalid CBOR, quarantine lift in the
+edge identity directory, asymmetric ratchet rotate, forged fragment offsets,
+revoked credential recycling and stale policy rollback. Also: verifier
+mutation testing (run_mutation_checks.py, 14 mutants, 11 killed + 3 documented
+allowed), declared-but-undefined ratchet (16 sovereign_audit.h functions
+baselined, unimplemented), CI disk-reclaim + twister summarizer. Full local
+sweep: 96/96 configurations, 1486/1486 cases. Baseline now L0=145 L2=183 L3=21.
+Remaining: split release-gate into parallel jobs, fuzz CBOR/policy/channel
+parsers, sign release kit + provenance, implement or delete the 16 undeclared
+sovereign_audit functions, ztest for evidence_continuity WIP before landing.
+
+Wave 12 (same branch): fuzzer extended to 10 targets (CBOR, COSE_Sign1,
+COSE_Key, fleet policy codec; 4 COSE decode defects fixed); transparent
+appraisal receipts (tools/evidence_register, receipt_* in evidence_verifier,
+scripts/rfc9162_reference.py, run_transparent_appraisal.py: 169/169
+differential, 156/156 forgeries, claim supply_chain.transparent_appraisal_receipt,
+schema 10); mutation runner 19 mutants (16 killed, 3 allowed); signed release
+kit provenance (docs/kit-provenance.md, demo custody, UNSIGNED when no seed).
+Release-gate split deliberately NOT done (ledger needs one output root).
+CI is red only from the GitHub billing/spending-limit block (0-step jobs).
+
+Open: CI verdicts on #6/#7 (runs were queued/in progress at write time);
+untested families (sovereign/edge/fleet) need ztest suites - the ratchet
+will fail any NEW module without a test, including the uncommitted
+evidence_continuity_* WIP in the shared checkout; RFC 9052/CBOR/RFC 6962
+external vectors; mutation testing of verifiers/ratchet.
+
+## Sovereign audit delivery follow-up (2026-11-17)
+
+- Implemented the seven missing sovereign audit exporter functions and nine
+  source adapters. Export uses exact acknowledgements, tenant/epoch fencing,
+  canonical CBOR batch commitments, optional ML-DSA signatures and a frozen
+  retry workspace. Source snapshots project into CBOR/CEF/OCSF without
+  inferring source authentication from a signature-presence flag.
+- Adapters preserve source commitments and bind projected attributes into
+  observation IDs. Re-ingestion time does not alter identity where the API
+  has a separate source timestamp. No automatic duplicate suppression.
+- QEMU audit suite: 62/62 cases, including all nine sources exported as three
+  signed batches, exact retransmission, forged-ack rejection and source-tamper
+  detection. Details and boundaries: docs/sovereign-audit-export.md.
+- Sovereign policy regression 71/71; all 57 local tooling suites pass. Both
+  new modules compile with -Wall -Wextra -Werror for Cortex-M7 and x86_64;
+  focused cppcheck has no findings. Snapshot validation excluding unrelated
+  untracked WIP passes the undefined-function, coverage and testcase gates.
+- Coverage now 351 modules: L0=144, L2=186, L3=21; the new bridge also directly
+  exercises fleet_journal. This remains static evidence mapping, not runtime
+  statement/branch coverage or a proof of reachability under every Kconfig.
+- All 16 previously baselined sovereign_audit.h functions now have definitions.
+  Unrelated untracked evidence_continuity files remain unfinished and are NOT
+  included in the lowered undefined-function or evidence-coverage baselines.
+- Earlier coverage scanner hardening excludes non-code and declarations from
+  evidence references, retaining direct calls and callback references.
+- Remaining: durable cursor/checkpoint recovery, an independent batch-wire
+  verifier, source authentication at adapter call sites, then fault injection
+  across restart/rollback boundaries. Frozen retries currently survive source
+  ledger changes, not reboot. Sonnet CLI authentication was expired; this
+  implementation was performed and verified by Codex.
+
 ## Final rule
 
 Do not confuse motion with progress.

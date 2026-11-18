@@ -277,6 +277,7 @@ int pqcp_edge_topic_subscribe(
 	struct pqcp_edge_topic *entry;
 	int topic_slot;
 	int slot;
+	bool replacing;
 	int ret = 0;
 
 	if (registry == NULL || !registry->initialized ||
@@ -314,8 +315,15 @@ int pqcp_edge_topic_subscribe(
 		ret = slot;
 		goto out;
 	}
-	if (entry->active_subscribers >=
-	    entry->maximum_subscribers) {
+	/*
+	 * An expired, not yet ticked subscription still counts toward
+	 * active_subscribers; replacing it in place must neither be refused
+	 * by the quota nor count a second time.
+	 */
+	replacing = slot >= 0;
+	if (!replacing &&
+	    entry->active_subscribers >=
+		    entry->maximum_subscribers) {
 		ret = -EDQUOT;
 		goto out;
 	}
@@ -351,7 +359,9 @@ int pqcp_edge_topic_subscribe(
 	candidate.maximum_inflight = maximum_inflight;
 	candidate.occupied = true;
 	registry->subscriptions[slot] = candidate;
-	++entry->active_subscribers;
+	if (!replacing) {
+		++entry->active_subscribers;
+	}
 	*subscription = &registry->subscriptions[slot];
 out:
 	k_mutex_unlock(&registry->lock);

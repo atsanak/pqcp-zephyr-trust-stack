@@ -366,19 +366,17 @@ int pqcp_fleet_cbor_write_encoded(
 	const uint8_t *encoded,
 	size_t encoded_length)
 {
-	struct pqcp_fleet_cbor_reader reader;
 	int ret;
 
 	if (encoded == NULL || encoded_length == 0U) {
 		return writer_fail(
 			writer, PQCP_FLEET_COSE_ERR_ARGUMENT);
 	}
-	pqcp_fleet_cbor_reader_init(
-		&reader, encoded, encoded_length);
-	ret = pqcp_fleet_cbor_skip(&reader);
-	if (ret == 0) {
-		ret = pqcp_fleet_cbor_reader_finish(&reader);
-	}
+	/* Splicing into deterministic output must refuse anything the strict
+	 * validator refuses; the skipping reader accepted unsorted and
+	 * duplicate map keys.
+	 */
+	ret = pqcp_fleet_cbor_validate(encoded, encoded_length);
 	if (ret == 0) {
 		ret = writer_copy(
 			writer, encoded, encoded_length);

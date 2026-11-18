@@ -134,6 +134,7 @@ int pqcp_edge_ratchet_init(
 	}
 	ratchet->schema_version =
 		PQCP_EDGE_SCHEMA_VERSION;
+	ratchet->initiator = initiator;
 	ratchet->send_epoch = 1U;
 	ratchet->receive_epoch = 1U;
 	ratchet->last_rotated_ms = now_ms;
@@ -269,13 +270,22 @@ int pqcp_edge_ratchet_rotate(
 	ret = pqcp_edge_internal_sha256_parts(
 		parts, lengths, 2U, root);
 	if (ret == 0) {
+		/*
+		 * Direction labels are role dependent, mirroring init():
+		 * the initiator's send chain is the responder's receive
+		 * chain and vice versa.
+		 */
 		ret = derive_labeled_key(
-			root, RATCHET_SEND_LABEL,
+			root,
+			ratchet->initiator ? RATCHET_SEND_LABEL :
+					     RATCHET_RECEIVE_LABEL,
 			next_epoch, 0U, send);
 	}
 	if (ret == 0) {
 		ret = derive_labeled_key(
-			root, RATCHET_RECEIVE_LABEL,
+			root,
+			ratchet->initiator ? RATCHET_RECEIVE_LABEL :
+					     RATCHET_SEND_LABEL,
 			next_epoch, 0U, receive);
 	}
 	if (ret == 0) {

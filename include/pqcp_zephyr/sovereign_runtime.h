@@ -968,6 +968,10 @@ struct pqcp_sovereign_placement_reservation {
 	uint32_t schema_version;
 	uint64_t reservation_id;
 	char workload_id[PQCP_SOVEREIGN_ID_MAX_CHARS];
+	/* Tenant owning the reserved node; a node is identified by tenant and
+	 * node id, so restoring by node id alone could credit another tenant.
+	 */
+	char tenant_id[PQCP_SOVEREIGN_ID_MAX_CHARS];
 	char node_id[PQCP_SOVEREIGN_ID_MAX_CHARS];
 	uint64_t compute_units;
 	uint64_t memory_bytes;

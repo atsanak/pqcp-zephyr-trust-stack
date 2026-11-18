@@ -29,9 +29,8 @@ static int free_record_index(
 {
 	for (size_t index = 0U;
 	     index < cache->capacity; ++index) {
-		if (!cache->records[index].occupied ||
-		    cache->records[index].state ==
-			    PQCP_EDGE_CREDENTIAL_REVOKED) {
+		/* Revoked records are tombstones and are never recycled. */
+		if (!cache->records[index].occupied) {
 			return (int)index;
 		}
 	}
@@ -103,6 +102,14 @@ int pqcp_edge_credential_put(
 	k_mutex_lock(&cache->lock, K_FOREVER);
 	index = record_index(cache, record->credential_id);
 	if (index >= 0) {
+		/* A revoked id stays revoked until an explicit policy
+		 * (none exists) clears the tombstone.
+		 */
+		if (cache->records[index].state ==
+		    PQCP_EDGE_CREDENTIAL_REVOKED) {
+			ret = -EKEYREVOKED;
+			goto reject;
+		}
 		if (record->issuance_epoch <=
 			    cache->records[index].issuance_epoch ||
 		    record->policy_epoch <
@@ -174,13 +181,14 @@ int pqcp_edge_credential_authorize(
 		goto reject;
 	}
 	record = &cache->records[index];
-	if (strcmp(record->principal_id, principal_id) != 0 ||
-	    (record->capabilities & required_capabilities) !=
-		    required_capabilities) {
+	if (strcmp(record->principal_id, principal_id) != 0) {
 		ret = -EACCES;
 	} else if (record->state ==
 		   PQCP_EDGE_CREDENTIAL_REVOKED) {
 		ret = -EKEYREVOKED;
+	} else if ((record->capabilities & required_capabilities) !=
+		   required_capabilities) {
+		ret = -EACCES;
 	} else if (record->expires_at_ms <= now_ms) {
 		ret = -EKEYEXPIRED;
 	} else if (record->policy_epoch < policy_epoch ||
@@ -224,7 +232,6 @@ int pqcp_edge_credential_revoke(
 			revocation_epoch;
 		cache->records[index].state =
 			PQCP_EDGE_CREDENTIAL_REVOKED;
-		cache->records[index].capabilities = 0U;
 	}
 	k_mutex_unlock(&cache->lock);
 	return ret;

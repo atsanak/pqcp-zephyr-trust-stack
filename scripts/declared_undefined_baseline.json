@@ -1,0 +1,5 @@
+{
+  "functions": {},
+  "note": "Known declared-but-undefined functions. Fix by implementing or deleting the declaration, then rewrite with --update-baseline.",
+  "schema_version": 1
+}
