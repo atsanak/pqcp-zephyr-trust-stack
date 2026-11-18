@@ -71,3 +71,8 @@ ZTEST(edge_model, test_principal_model)
 {
 	model_run_module(&model_principal_vt, MODEL_INDEX_PRINCIPAL);
 }
+
+ZTEST(edge_model, test_session_model)
+{
+	model_run_module(&model_session_vt, MODEL_INDEX_SESSION);
+}
