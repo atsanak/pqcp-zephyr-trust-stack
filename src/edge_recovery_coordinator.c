@@ -221,8 +221,15 @@ int pqcp_edge_recovery_advance(
 		goto out;
 	}
 	plan = &coordinator->plans[index];
+	if (plan->phase == PQCP_EDGE_RECOVERY_COMPLETE ||
+	    plan->phase == PQCP_EDGE_RECOVERY_FAILED) {
+		/* Terminal phases are immutable. */
+		ret = plan->phase == phase ? -EALREADY : -EPERM;
+		goto out;
+	}
 	if (plan->expires_at_ms <= now_ms) {
 		plan->phase = PQCP_EDGE_RECOVERY_FAILED;
+		plan->updated_at_ms = now_ms;
 		++coordinator->failed_count;
 		ret = -ETIMEDOUT;
 		goto out;

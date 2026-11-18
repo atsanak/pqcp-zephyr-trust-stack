@@ -92,6 +92,21 @@ static int free_reservation_index(
 			return (int)index;
 		}
 	}
+	/* Released (RETIRED) and expired (REVOKED) reservations hold no
+	 * resources and ids are never reused, so their slots can be recycled.
+	 * Without this every reserve/release cycle leaked a slot until the
+	 * table reported -ENOSPC forever.
+	 */
+	for (size_t index = 0U;
+	     index < engine->reservation_capacity; ++index) {
+		const enum pqcp_sovereign_lifecycle_state state =
+			engine->reservations[index].state;
+
+		if (state == PQCP_SOVEREIGN_LIFECYCLE_RETIRED ||
+		    state == PQCP_SOVEREIGN_LIFECYCLE_REVOKED) {
+			return (int)index;
+		}
+	}
 	return -1;
 }
 
@@ -104,6 +119,7 @@ static void restore_reservation(
 			&engine->nodes[index];
 
 		if (!node->occupied ||
+		    strcmp(node->tenant_id, reservation->tenant_id) != 0 ||
 		    strcmp(node->node_id, reservation->node_id) != 0) {
 			continue;
 		}
@@ -287,6 +303,9 @@ int pqcp_sovereign_placement_reserve(
 		slot->workload_id, sizeof(slot->workload_id),
 		request->workload_id);
 	(void)pqcp_sovereign_policy_copy_text(
+		slot->tenant_id, sizeof(slot->tenant_id),
+		selected->tenant_id);
+	(void)pqcp_sovereign_policy_copy_text(
 		slot->node_id, sizeof(slot->node_id),
 		selected->node_id);
 	slot->compute_units = request->compute_units;
@@ -452,6 +471,8 @@ int pqcp_sovereign_placement_engine_audit(
 			    entry->workload_id,
 			    sizeof(entry->workload_id)) ||
 		    !pqcp_sovereign_policy_text_valid(
+			    entry->tenant_id, sizeof(entry->tenant_id)) ||
+		    !pqcp_sovereign_policy_text_valid(
 			    entry->node_id, sizeof(entry->node_id)) ||
 		    entry->compute_units == 0U ||
 		    entry->memory_bytes == 0U ||
@@ -462,6 +483,8 @@ int pqcp_sovereign_placement_engine_audit(
 		}
 		for (size_t node = 0U; node < engine->node_capacity; ++node) {
 			if (engine->nodes[node].occupied &&
+			    strcmp(engine->nodes[node].tenant_id,
+				   entry->tenant_id) == 0 &&
 			    strcmp(engine->nodes[node].node_id,
 				   entry->node_id) == 0) {
 				found = true;

@@ -184,11 +184,33 @@ int pqcp_edge_audit_export_batch(
 		}
 		++sequence;
 	}
-	k_mutex_unlock(&journal->lock);
 	if (ret == 0 && count == 0U) {
-		ret = -EAGAIN;
+		/* Distinguish "caught up" from "records were overwritten":
+		 * if the oldest retained entry is newer than the cursor, the
+		 * ring dropped the records in between.
+		 */
+		uint64_t oldest = UINT64_MAX;
+
+		for (size_t index = 0U;
+		     index < journal->capacity; ++index) {
+			if (journal->entries[index].occupied &&
+			    journal->entries[index].sequence < oldest) {
+				oldest = journal->entries[index].sequence;
+			}
+		}
+		if (oldest != UINT64_MAX &&
+		    oldest > cursor->next_sequence) {
+			batch->cursor_id = cursor_id;
+			batch->first_sequence = cursor->next_sequence;
+			batch->last_sequence = oldest - 1U;
+			ret = -EOVERFLOW;
+		} else {
+			ret = -EAGAIN;
+		}
+		k_mutex_unlock(&journal->lock);
 		goto exporter_out;
 	}
+	k_mutex_unlock(&journal->lock);
 	if (ret == 0) {
 		batch->cursor_id = cursor_id;
 		batch->first_sequence = cursor->next_sequence;

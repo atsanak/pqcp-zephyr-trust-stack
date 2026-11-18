@@ -122,9 +122,24 @@ static uint32_t ratio_basis_points(
 		10000U : (uint32_t)scaled;
 }
 
+/*
+ * AT_RISK warning margin: at most 250 basis points, but never more than half
+ * of the headroom between the objective and the 100% / 0% extreme, so a
+ * tight objective (e.g. a 99% success floor) can still report HEALTHY when
+ * it is fully met.
+ */
+static uint32_t warning_margin(uint32_t headroom_basis_points)
+{
+	const uint32_t half = headroom_basis_points / 2U;
+
+	return half < 250U ? half : 250U;
+}
+
 static enum pqcp_edge_sla_state evaluate_objective(
 	const struct pqcp_edge_sla_objective *objective)
 {
+	uint32_t success_margin;
+	uint32_t error_margin;
 	uint32_t success_basis_points;
 	uint32_t error_basis_points;
 	uint64_t average_latency;
@@ -157,14 +172,21 @@ static enum pqcp_edge_sla_state evaluate_objective(
 	if (hard_failure) {
 		return PQCP_EDGE_SLA_BREACHED;
 	}
+	success_margin = warning_margin(
+		objective->minimum_success_basis_points < 10000U ?
+		10000U -
+			objective->minimum_success_basis_points : 0U);
+	error_margin = warning_margin(
+		objective->maximum_error_basis_points);
 	warning =
 		success_basis_points <
 			objective->
 				minimum_success_basis_points +
-				250U ||
-		error_basis_points + 250U >
+				success_margin ||
+		error_basis_points >
 			objective->
-				maximum_error_basis_points ||
+				maximum_error_basis_points -
+				error_margin ||
 		average_latency >
 			(objective->maximum_latency_us *
 			 9U) /

@@ -109,14 +109,26 @@ with a C compiler and a fixed seed reproduces any run — and it is
 coverage-guided without a fuzzer runtime: the target parsers carry
 SanitizerCoverage edge instrumentation, the harness implements the
 `trace_pc_guard` callbacks itself, and any input reaching a new edge is
-promoted into the corpus (measured: 785 instrumented edges, ~449 covered,
-165 evolved corpus entries per 200k-iteration campaign). Multi-campaign
-runs produced zero findings.
+promoted into the corpus. The same driver also fuzzes the host-portable
+fleet wire parsers (deterministic CBOR, COSE_Sign1, COSE_Key, and the
+policy module codec with its verifier and VM) with binary inputs seeded
+from the real encoders. Those targets assert decode(encode(x)) round
+trips, rejected-input hygiene and verifier/VM agreement on top of the
+sanitizers (measured: ~1,400 covered edges and ~370 evolved corpus
+entries per 200k-iteration campaign across all 10 targets). Its first
+runs found four defects in `src/fleet_cose_sign1.c`: an unprotected-bucket
+map head parsed with a one-byte rewind (so a `map(160)` bucket decoded as
+an empty bucket), embedded NULs in a content-type string, an empty `kid`
+that decoded to "no kid", and half-built output left behind on rejection.
+All are fixed with regression cases in `tests/ztest_fleet_artifact_core`.
 
 **Non-claims.** Coverage-guided evolution explores deeper parser states
 than a fixed corpus, but absence of findings is still not absence of
 bugs; the crypto backend is deliberately uninstrumented and is not the
-fuzz target.
+fuzz target. The protected-channel and sovereign-channel frame codecs are
+not fuzzed: they reach `runtime_internal.h`, which needs a fake
+`zephyr/kernel.h` and PSA-backed helpers, a larger shim than the
+printk-only alias this harness permits.
 
 ## Claim 5 — In-image adversarial self-validation of the evidence chain
 
@@ -178,6 +190,60 @@ digests. It is scoped to one boot; cross-boot continuity remains future
 work. Signing the trail head falls under the existing demo-custody
 signature discussion.
 
+## Claim 7 — Transparent appraisal receipts (a logged, verifier-bound verdict)
+
+**Claim.** Every artifact in the stack used to be checked by one party,
+the host verifier, and nothing made that verifier's VERDICT accountable:
+a relying party could not tell which verifier build said "CHAIN OK", nor
+whether an operator showed different verdicts to different auditors. The
+host appraisal of firmware-emitted evidence is now a registered,
+RATS-style Attestation Result. `pqcp-evidence-verify --emit-statement`
+writes a deterministic CBOR statement binding the passport digest, the
+SHA-256 of the device ML-DSA public key, the evidence trail head, the
+verdict (CHAIN OK or REJECT), the SHA-256 of the verifier binary that
+produced it, and the SHA-256 of the transcript. `pqcp-evidence-register`
+appends statements to an RFC 9162 Merkle log built from the unmodified
+firmware transparency code (`fleet_transparency_*`), signs its
+checkpoints with ML-DSA-65 (the vendored mldsa-native, FIPS 204
+deterministic variant), and emits inclusion receipts and
+release-to-release consistency proofs. The verifier re-checks a receipt
+offline against a pinned log key AND against a fresh replay of the
+supplied transcript, and rejects equivocation (two validly signed
+checkpoints of one log that disagree), history rewrite and rollback.
+`scripts/run_transparent_appraisal.py` then runs two independently
+written Merkle verifiers (the single-source C and
+`scripts/rfc9162_reference.py`, stdlib only, no shared code) on every
+case, requires accept/reject agreement, and requires each forgery in a
+fixed list to be rejected with the expected reason, with one positive
+control per class (`docs/transparent-appraisal-format.md` is the
+byte-level contract both sides implement). Python cannot verify ML-DSA, so
+signature-byte flips must be rejected by the C verifier while python
+reports the signature as delegated; those cases sit outside the
+differential count. A mutation run removes each receipt and consistency
+security check in turn and the driver must notice.
+
+**Prior art.** SCITT (IETF transparency for signed statements), Sigstore
+Rekor and Certificate Transparency / Trillian log signed statements,
+signatures or certificates in Merkle logs with inclusion and consistency
+proofs; RFC 9162 specifies the log. IETF RATS defines Attestation Results
+but no transparency or anti-equivocation story for them. SCITT receipt
+profiles and Rekor use classical signatures. Differential testing of two
+independent implementations is established practice (Frankencerts for
+certificate validation, Cryptofuzz, Wycheproof). The contribution is
+integration depth, not a new data structure: an appraisal result bound to
+the identity of the verifier that produced it, logged, countersigned with
+the PQC the stack ships, and cross-checked by a second Merkle
+implementation inside the release gate.
+
+**Non-claims.** The log key is a demo key derived from a fixed public
+seed, not production custody. There is no witness cosigning and no
+quorum: the log is single-operator, so a split view is detected only by a
+party that holds two of its checkpoints. The verifier binary hash
+identifies the verifier; it does not prove the verifier correct. A
+receipt shows the verdict was logged, not that the device is genuine
+(the device passport signature is still demo custody, see claim 2).
+Python agreement covers structure and Merkle math, not authenticity.
+
 ## Combined novelty
 
 Taken together, the repository demonstrates — to our knowledge for the
@@ -187,7 +253,10 @@ every terminal artifact is independently re-verifiable from a serial
 transcript with nothing but a C compiler, backed by instruction-count CT
 evidence, a fuzzed parser surface, an in-image adversarial detection
 matrix over its own verifiers, and a hash-chained sequence commitment
-over the terminal artifacts. The honest framing of each
+over the terminal artifacts, and whose host verdict is itself logged in a
+post-quantum-countersigned Merkle log, bound to the verifier build and
+cross-checked by a second, independent Merkle implementation. The honest
+framing of each
 non-claim is itself part of the contribution: the stack is designed to be
 hard to overclaim.
 
@@ -201,8 +270,12 @@ hard to overclaim.
 | 4 | `python3 scripts/run_fuzz_checks.py` | `PQCP_FUZZ PASS` per seed |
 | 5 | `samples/pqcp_deployment_advisor` + host replay | `PQCP_DEPLOYMENT_TAMPER_MATRIX ... coverage_permille=1000` |
 | 6 | `samples/pqcp_deployment_advisor` + host replay | `trail_replay=true ... trail_identity_binding=true` |
+| 7 | `python3 scripts/run_transparent_appraisal.py` | `PQCP_APPRAISAL_RECEIPT PASS consistency=ok differential_agree=169/169 forgeries_rejected=156/156 controls=11/11` |
 
 Claims 1–4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
 the same `evidence chain host replay` gate step: the host verifier fails
 the step if tamper matrix or trail markers are present but inconsistent.
+Claim 7 is the required claim `supply_chain.transparent_appraisal_receipt`
+(schema 10) and the `transparent appraisal receipt` step of
+`scripts/release_check.py`, which runs after `evidence chain host replay`.

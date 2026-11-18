@@ -325,14 +325,24 @@ int pqcp_edge_group_rotate(
 		k_mutex_unlock(&manager->lock);
 		return -EOVERFLOW;
 	}
+	/*
+	 * The stored digest binds the current epoch, so identical key
+	 * material must be detected against that epoch: a rotation that
+	 * introduces no new secret leaves removed members with a valid key.
+	 */
 	ret = key_digest(
 		key_material, group->group_id,
-		group->epoch + 1U, digest);
+		group->epoch, digest);
 	if (ret == 0 &&
 	    pqcp_edge_internal_equal(
 		    digest, group->key_digest,
 		    sizeof(digest))) {
 		ret = -EALREADY;
+	}
+	if (ret == 0) {
+		ret = key_digest(
+			key_material, group->group_id,
+			group->epoch + 1U, digest);
 	}
 	if (ret == 0) {
 		++group->epoch;

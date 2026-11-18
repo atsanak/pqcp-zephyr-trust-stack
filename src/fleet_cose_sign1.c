@@ -361,6 +361,14 @@ static int read_content_type(
 	    text.length >= sizeof(headers->content_type_text)) {
 		return PQCP_FLEET_COSE_ERR_CAPACITY;
 	}
+	/* The decoded type is a C string. An embedded NUL would make the
+	 * string callers compare shorter than the signed header bytes, so
+	 * two different protected headers would decode to the same type and
+	 * the codec could not round-trip. Refuse it outright.
+	 */
+	if (memchr(text.data, 0, text.length) != NULL) {
+		return PQCP_FLEET_COSE_ERR_ENCODING;
+	}
 	memcpy(headers->content_type_text, text.data, text.length);
 	headers->content_type_text[text.length] = '\0';
 	headers->content_type_kind =
@@ -451,6 +459,14 @@ static int decode_headers_map(
 		case PQCP_FLEET_COSE_HEADER_KID:
 			ret = pqcp_fleet_cbor_read_bytes(
 				reader, &bytes);
+			if (ret == 0 && bytes.length == 0U) {
+				/* An empty kid decodes to "no kid", so the
+				 * signed header bytes and the decoded view
+				 * would disagree and verify() would fall back
+				 * to the unprotected kid. Reject it.
+				 */
+				ret = PQCP_FLEET_COSE_ERR_ENCODING;
+			}
 			if (ret == 0) {
 				ret = copy_slice(
 					&bytes, headers->kid,
@@ -486,6 +502,10 @@ int pqcp_fleet_cose_protected_decode(
 	ret = decode_headers_map(&reader, true, headers);
 	if (ret == 0) {
 		ret = pqcp_fleet_cbor_reader_finish(&reader);
+	}
+	if (ret != 0) {
+		/* Never hand back partially decoded header fields. */
+		memset(headers, 0, sizeof(*headers));
 	}
 	return ret;
 }
@@ -681,7 +701,7 @@ static int decode_payload_or_null(
 		reader, &message->payload);
 }
 
-int pqcp_fleet_cose_sign1_decode(
+static int sign1_decode_fields(
 	const uint8_t *encoded,
 	size_t encoded_length,
 	struct pqcp_fleet_cose_sign1 *message)
@@ -690,7 +710,6 @@ int pqcp_fleet_cose_sign1_decode(
 	struct pqcp_fleet_cbor_reader probe;
 	struct pqcp_fleet_cbor_head head;
 	struct pqcp_fleet_cbor_slice protected_bytes;
-	struct pqcp_fleet_cbor_map_cursor cursor;
 	size_t count;
 	int ret;
 
@@ -736,15 +755,13 @@ int pqcp_fleet_cose_sign1_decode(
 	if (ret != 0) {
 		return ret;
 	}
-	ret = pqcp_fleet_cbor_read_map(&reader, &cursor);
-	if (ret != 0) {
-		return ret;
-	}
 	/*
-	 * The generic decoder expects to consume the map head itself. Rewind
-	 * to the map start and decode the full unprotected bucket.
+	 * decode_headers_map() consumes the map head itself. The head is 1 to
+	 * 9 bytes depending on the entry count, so never pre-read it and
+	 * rewind by a fixed amount: that left the reader inside a multi-byte
+	 * head and parsed its count bytes as the map, letting a token with a
+	 * "map(161)" bucket decode as an empty bucket plus smuggled fields.
 	 */
-	reader.offset -= 1U;
 	ret = decode_headers_map(
 		&reader, false,
 		&message->unprotected_headers);
@@ -770,6 +787,24 @@ int pqcp_fleet_cose_sign1_decode(
 	}
 	if (ret == 0) {
 		ret = pqcp_fleet_cbor_reader_finish(&reader);
+	}
+	return ret;
+}
+
+int pqcp_fleet_cose_sign1_decode(
+	const uint8_t *encoded,
+	size_t encoded_length,
+	struct pqcp_fleet_cose_sign1 *message)
+{
+	int ret = sign1_decode_fields(
+		encoded, encoded_length, message);
+
+	/* A rejected token must not leave a half-built message (protected
+	 * slice, partly decoded headers) that a caller ignoring the status
+	 * could mistake for decoded input.
+	 */
+	if (ret != 0 && message != NULL) {
+		memset(message, 0, sizeof(*message));
 	}
 	return ret;
 }

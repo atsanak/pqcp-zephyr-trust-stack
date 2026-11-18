@@ -157,9 +157,16 @@ int pqcp_edge_isolation_zone_put(
 	}
 	candidate = *zone;
 	candidate.occupied = true;
+	candidate.saved_allowed_capabilities = 0U;
+	candidate.saved_allowed_operations = 0U;
 	k_mutex_lock(&manager->lock, K_FOREVER);
 	index = zone_index(manager, candidate.zone_id);
 	if (index >= 0) {
+		const struct pqcp_edge_isolation_zone *old =
+			&manager->zones[index];
+		const bool old_failsafe =
+			old->state == PQCP_EDGE_ISOLATION_FAILSAFE;
+
 		if (manager->zones[index].active_workloads !=
 			    candidate.active_workloads &&
 		    manager->zones[index].active_workloads != 0U) {
@@ -171,6 +178,23 @@ int pqcp_edge_isolation_zone_put(
 			    candidate.state)) {
 			k_mutex_unlock(&manager->lock);
 			return -EPERM;
+		}
+		if (candidate.state == PQCP_EDGE_ISOLATION_FAILSAFE) {
+			candidate.saved_allowed_capabilities =
+				old_failsafe ?
+				old->saved_allowed_capabilities :
+				old->allowed_capabilities;
+			candidate.saved_allowed_operations =
+				old_failsafe ?
+				old->saved_allowed_operations :
+				old->allowed_operations;
+		} else if (old_failsafe &&
+			   candidate.allowed_capabilities == 0U &&
+			   candidate.allowed_operations == 0U) {
+			candidate.allowed_capabilities =
+				old->saved_allowed_capabilities;
+			candidate.allowed_operations =
+				old->saved_allowed_operations;
 		}
 	} else if (index == -ENOENT) {
 		index = free_zone_index(manager);
@@ -226,8 +250,28 @@ int pqcp_edge_isolation_transition(
 		k_mutex_unlock(&manager->lock);
 		return -EBUSY;
 	}
+	if (state == PQCP_EDGE_ISOLATION_OPEN &&
+	    zone->state != PQCP_EDGE_ISOLATION_FAILSAFE &&
+	    (zone->allowed_capabilities == 0U ||
+	     zone->allowed_operations == 0U)) {
+		/* An OPEN zone with empty allow-lists is malformed. */
+		k_mutex_unlock(&manager->lock);
+		return -EPERM;
+	}
 	if (zone->state != state) {
 		++manager->transition_count;
+	}
+	if (zone->state == PQCP_EDGE_ISOLATION_FAILSAFE &&
+	    state != PQCP_EDGE_ISOLATION_FAILSAFE) {
+		/* Leaving FAILSAFE restores the pre-FAILSAFE allow-lists;
+		 * the new state still gates which operations are allowed.
+		 */
+		zone->allowed_capabilities =
+			zone->saved_allowed_capabilities;
+		zone->allowed_operations =
+			zone->saved_allowed_operations;
+		zone->saved_allowed_capabilities = 0U;
+		zone->saved_allowed_operations = 0U;
 	}
 	zone->state = state;
 	zone->reason_mask =
@@ -238,6 +282,13 @@ int pqcp_edge_isolation_transition(
 		state == PQCP_EDGE_ISOLATION_OPEN ?
 			0U : expires_at_ms;
 	if (state == PQCP_EDGE_ISOLATION_FAILSAFE) {
+		if (zone->allowed_capabilities != 0U ||
+		    zone->allowed_operations != 0U) {
+			zone->saved_allowed_capabilities =
+				zone->allowed_capabilities;
+			zone->saved_allowed_operations =
+				zone->allowed_operations;
+		}
 		zone->allowed_capabilities = 0U;
 		zone->allowed_operations = 0U;
 	}

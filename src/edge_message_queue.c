@@ -343,7 +343,17 @@ int pqcp_edge_message_submit(
 			    queue->messages[index].sequence &&
 		    candidate.producer_epoch ==
 			    queue->messages[index].
-				    producer_epoch) {
+				    producer_epoch &&
+		    /* Routing is part of the replay identity. */
+		    strncmp(candidate.producer_id,
+			    queue->messages[index].producer_id,
+			    sizeof(candidate.producer_id)) == 0 &&
+		    strncmp(candidate.consumer_id,
+			    queue->messages[index].consumer_id,
+			    sizeof(candidate.consumer_id)) == 0 &&
+		    strncmp(candidate.topic,
+			    queue->messages[index].topic,
+			    sizeof(candidate.topic)) == 0) {
 			*replayed = true;
 			ret = 0;
 		} else if (ret == 0) {

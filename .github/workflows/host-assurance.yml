@@ -1,0 +1,138 @@
+name: Host Assurance
+
+# Fast, Zephyr-free checks (about 5 minutes) that give a verdict on every
+# push and PR, independent of the long west-workspace jobs in ci.yml.
+# Also the continuous-delivery lane for the evidence verifier kit and a
+# nightly long fuzz campaign.
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly: long coverage-guided fuzz campaign over the evidence grammar.
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: host-assurance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-assurance:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out module repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install host toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc g++ make
+
+      - name: Run host assurance
+        run: |
+          python scripts/run_host_assurance.py \
+            --output-dir "$RUNNER_TEMP/host-assurance" \
+            --fuzz-iterations "${{ github.event_name == 'schedule' && '2000000' || '50000' }}"
+
+      - name: Upload host assurance report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-assurance-report
+          path: |
+            ${{ runner.temp }}/host-assurance/host_assurance_report.json
+            ${{ runner.temp }}/host-assurance/evidence_coverage.json
+          if-no-files-found: warn
+
+  verifier-kit:
+    # Continuous delivery: every merge to main (and every release tag)
+    # produces a smoke-tested, checksummed verifier kit; tags attach it to
+    # the GitHub release so a third party can verify a device with nothing
+    # but the binary.
+    needs: host-assurance
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out module repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install host toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc g++ make
+
+      - name: Prepare kit signing seed
+        # The demo signing seed lives only in the KIT_SIGNING_SEED repository
+        # secret (base64 of 32 raw bytes); it is never in the repo. Without
+        # the secret the kit is still built and its provenance is emitted
+        # UNSIGNED, which the packager and verifier both say explicitly.
+        env:
+          KIT_SIGNING_SEED: ${{ secrets.KIT_SIGNING_SEED }}
+        run: |
+          if [ -n "$KIT_SIGNING_SEED" ]; then
+            umask 077
+            printf '%s' "$KIT_SIGNING_SEED" | base64 -d > "$RUNNER_TEMP/kit-signing.seed"
+            echo "PQCP_KIT_SIGNING_SEED_FILE=$RUNNER_TEMP/kit-signing.seed" >> "$GITHUB_ENV"
+          else
+            echo "::warning::KIT_SIGNING_SEED secret not set; kit provenance will be UNSIGNED"
+          fi
+
+      - name: Package evidence verifier kit
+        run: python scripts/package_evidence_verifier.py --output-dir "$RUNNER_TEMP/dist"
+
+      - name: Verify kit provenance
+        # Optional repository variable KIT_SIGNING_KEY_ID pins the expected
+        # signer (SHA-256 of the public key). Unsigned provenance is reported
+        # as UNSIGNED and does not fail the job.
+        env:
+          KIT_SIGNING_KEY_ID: ${{ vars.KIT_SIGNING_KEY_ID }}
+        run: |
+          pin=()
+          if [ -n "$KIT_SIGNING_KEY_ID" ]; then pin=(--pin-key-id "$KIT_SIGNING_KEY_ID"); fi
+          python scripts/verify_kit_provenance.py "$RUNNER_TEMP"/dist/*.tar.gz "${pin[@]}"
+
+      - name: Remove kit signing seed
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kit-signing.seed"
+
+      - name: Upload kit artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: pqcp-evidence-verifier-kit
+          # tarball, .sha256, .provenance.json and (when signed) .provenance.sig.json
+          path: ${{ runner.temp }}/dist/*
+
+      - name: Attach kit to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          # tarball, .sha256, .provenance.json and (when signed) .provenance.sig.json
+          files: ${{ runner.temp }}/dist/*

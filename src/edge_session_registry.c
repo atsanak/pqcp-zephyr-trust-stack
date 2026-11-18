@@ -31,16 +31,37 @@ static int session_index(
 	return -ENOENT;
 }
 
+static bool session_reclaimable(
+	const struct pqcp_edge_session *session)
+{
+	/* Finished sessions whose principal quota was already returned. */
+	return session->occupied && session->principal_released &&
+	       (session->state == PQCP_EDGE_SESSION_CLOSED ||
+		session->state == PQCP_EDGE_SESSION_FAILED);
+}
+
 static int free_session_index(
 	const struct pqcp_edge_session_registry *registry)
 {
+	int reclaim = -1;
+
 	for (size_t index = 0U;
 	     index < registry->capacity; ++index) {
-		if (!registry->sessions[index].occupied) {
+		const struct pqcp_edge_session *session =
+			&registry->sessions[index];
+
+		if (!session->occupied) {
 			return (int)index;
 		}
+		if (session_reclaimable(session) &&
+		    (reclaim < 0 ||
+		     session->last_activity_ms <
+			     registry->sessions[reclaim].
+				     last_activity_ms)) {
+			reclaim = (int)index;
+		}
 	}
-	return -ENOSPC;
+	return reclaim >= 0 ? reclaim : -ENOSPC;
 }
 
 static int principal_index_locked(
@@ -339,7 +360,8 @@ int pqcp_edge_session_close(
 		goto out;
 	}
 	session = &registry->sessions[index];
-	if (session->state == PQCP_EDGE_SESSION_CLOSED) {
+	if (session->state == PQCP_EDGE_SESSION_CLOSED ||
+	    session->principal_released) {
 		ret = -EALREADY;
 		goto out;
 	}
@@ -351,6 +373,7 @@ int pqcp_edge_session_close(
 		--principals->principals[principal_slot].
 			active_sessions;
 	}
+	session->principal_released = true;
 	session->state = result == 0 ?
 		PQCP_EDGE_SESSION_CLOSED :
 		PQCP_EDGE_SESSION_FAILED;

@@ -371,9 +371,19 @@ size_t pqcp_fleet_artifact_required_workspace(
 		overhead = ARTIFACT_SIGN1_OVERHEAD;
 		break;
 	case PQCP_FLEET_ARTIFACT_OP_EAT_SIGN:
+	case PQCP_FLEET_ARTIFACT_OP_EAT_RESULT_SIGN:
+		/* Signing keeps the encoded claims AND an equally large
+		 * Sig_structure in the workspace, plus the signature, so the
+		 * payload counts twice; sizing it once under-allocated for
+		 * claims above ~2.7 KiB.
+		 */
+		overhead = ARTIFACT_EAT_OVERHEAD;
+		if (payload_length > (SIZE_MAX - overhead) / 2U) {
+			return 0U;
+		}
+		return (payload_length * 2U) + overhead;
 	case PQCP_FLEET_ARTIFACT_OP_EAT_VERIFY:
 	case PQCP_FLEET_ARTIFACT_OP_EAT_APPRAISE:
-	case PQCP_FLEET_ARTIFACT_OP_EAT_RESULT_SIGN:
 		overhead = ARTIFACT_EAT_OVERHEAD;
 		break;
 	case PQCP_FLEET_ARTIFACT_OP_VALIDATE_CBOR:
