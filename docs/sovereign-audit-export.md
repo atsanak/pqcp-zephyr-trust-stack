@@ -74,6 +74,38 @@ event verifier on a changed projection cannot validate that source commitment.
 The exporter also checks a process-local frozen-state hash before retries,
 acknowledgement and exporter audits. That memory hash is not a wire format.
 
+## Durable host collection
+
+Build the host signature verifier with CMake, then submit the raw signed CBOR
+batch. Provision the public key and stream pins from a trusted source.
+
+```sh
+cmake -S tools/evidence_verifier -B build-host-verifier
+cmake --build build-host-verifier --target pqcp-sovereign-signature-verify
+python3 scripts/sovereign_audit_collect.py \
+  --database collector.db --stream-id deployment-7 \
+  --tenant tenant-a --cursor 1 --policy-epoch 7 --first-sequence 1 \
+  --public-key public-key.bin \
+  --verifier ./build-host-verifier/pqcp-sovereign-signature-verify batch.cbor
+```
+
+The collector independently parses canonical CBOR, recomputes the commitment
+from the wire bytes, verifies ML-DSA-65 with the pinned key, and checks the
+previous digest and sequence high-water mark. One SQLite transaction stores
+both the complete wire batch and the stream checkpoint. Standard output carries
+the sender's exact acknowledgement fields (`first_sequence`, `last_sequence`,
+and `batch_digest`) only after the transaction commits. If the process exits
+after commit but before the sender receives the acknowledgement, submitting the
+same latest batch returns the same acknowledgement. Older replays and forks
+are rejected.
+
+`--first-sequence` is a floor. Filtering permits gaps, and the wire commits to
+the scanned-through sequence but carries no scan-start field. A successful
+receipt therefore authenticates the transmitted projection and its order in the
+stream. Source completeness requires separate evidence. Retain the trusted
+SQLite database across restarts. Rollback of the database itself requires an
+external checkpoint or anchor.
+
 ## Tested behavior and limits
 
 `tests/ztest_sovereign_audit` covers all nine adapters, event identities, malformed
@@ -82,9 +114,12 @@ redaction, source-history eviction, buffer failures and tampering. The integrati
 case exports all nine sources as three linked signed batches and detects source
 corruption on the next scan while preserving an already frozen retransmission.
 
-State is volatile. This work does not provide reboot persistence, a remote
-collector, authorization of callers, source-signature verification for every
-source type, or an independent parser/verifier for exported batch bytes.
-`complete` and `resumed` are local delivery metadata, not authenticated body fields.
-Persisted cursor checkpoints and an independent collector verifier are the next
-hardware-free steps toward crash-safe evidence delivery.
+The host regression consumes three signed batches and the temporary signing
+key's public half captured from the QEMU cross-plane test at `55e01b2`. It
+terminates the collector mid-transaction and checks that restart recovers the
+previous receipt. It also resubmits a committed batch to simulate a lost
+acknowledgement. Firmware cursor state remains volatile, and caller
+authorization and source authentication remain responsibilities of the
+integrating application. `complete` and `resumed` are local delivery metadata
+outside the authenticated body. Device-side recovery requires durable cursor
+and pending batch storage.

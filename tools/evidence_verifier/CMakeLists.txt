@@ -50,3 +50,7 @@ target_include_directories(pqcp-evidence-verify PRIVATE
 
 target_link_libraries(pqcp-evidence-verify PRIVATE mldsa65_host)
 target_compile_options(pqcp-evidence-verify PRIVATE -Wall -Wextra -Werror)
+
+add_executable(pqcp-sovereign-signature-verify src/sovereign_signature_verify.c)
+target_link_libraries(pqcp-sovereign-signature-verify PRIVATE mldsa65_host)
+target_compile_options(pqcp-sovereign-signature-verify PRIVATE -Wall -Wextra -Werror)
