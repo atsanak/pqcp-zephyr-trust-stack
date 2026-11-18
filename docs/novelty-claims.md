@@ -271,6 +271,7 @@ hard to overclaim.
 | 5 | `samples/pqcp_deployment_advisor` + host replay | `PQCP_DEPLOYMENT_TAMPER_MATRIX ... coverage_permille=1000` |
 | 6 | `samples/pqcp_deployment_advisor` + host replay | `trail_replay=true ... trail_identity_binding=true` |
 | 7 | `python3 scripts/run_transparent_appraisal.py` | `PQCP_APPRAISAL_RECEIPT PASS consistency=ok differential_agree=169/169 forgeries_rejected=156/156 controls=11/11` |
+| 8 | `python3 scripts/run_model_checks.py --rediscover` | `PQCP_MODEL_REDISCOVERY PASS rediscovered=10/10` |
 
 Claims 1–4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
@@ -279,3 +280,28 @@ the step if tamper matrix or trail markers are present but inconsistent.
 Claim 7 is the required claim `supply_chain.transparent_appraisal_receipt`
 (schema 10) and the `transparent appraisal receipt` step of
 `scripts/release_check.py`, which runs after `evidence chain host replay`.
+Claim 8 is the required claim `security.state_machine_model_conformance`
+(schema 11) and the `edge model conformance` step, which is full-gate only
+because rediscovery needs ten QEMU builds.
+
+## Claim 8: measured defect-finding power of in-image model-based testing
+
+The stack tests its zero-trust edge state machines against abstract models
+inside the firmware image (qemu_x86_64), shrinks any counterexample on the
+device and prints it as a replayable marker. The power of the oracle is
+measured, not assumed: ten defects this project found by hand
+(commit `b7d4cc1`) are re-injected one at a time into a private copy of the
+sources, and the models must rediscover each one automatically. The count
+(10/10) is ratcheted by `scripts/model_rediscovery_baseline.json`.
+
+Prior art: QuickCheck state-machine testing, Hypothesis stateful testing,
+Jepsen/Knossos, and re-injected-fault studies (Defects4J, Magma, Just et
+al. FSE 2014). Not new: model-based testing itself. New here: it runs in
+the target image against PQC trust-plane firmware, and its sensitivity is a
+ledger claim that can fail.
+
+Non-claims: bounded traces (at most 64 ops, 64 seeds per module); four
+modules only (principal directory, session registry, credential cache,
+policy distributor); abstract models are not full specifications; no
+concurrency interleavings; rediscovery of known bug classes shows
+sensitivity, not absence of other defects.
