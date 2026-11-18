@@ -1206,6 +1206,16 @@ Remaining: split release-gate into parallel jobs, fuzz CBOR/policy/channel
 parsers, sign release kit + provenance, implement or delete the 16 undeclared
 sovereign_audit functions, ztest for evidence_continuity WIP before landing.
 
+Wave 12 (same branch): fuzzer extended to 10 targets (CBOR, COSE_Sign1,
+COSE_Key, fleet policy codec; 4 COSE decode defects fixed); transparent
+appraisal receipts (tools/evidence_register, receipt_* in evidence_verifier,
+scripts/rfc9162_reference.py, run_transparent_appraisal.py: 169/169
+differential, 156/156 forgeries, claim supply_chain.transparent_appraisal_receipt,
+schema 10); mutation runner 19 mutants (16 killed, 3 allowed); signed release
+kit provenance (docs/kit-provenance.md, demo custody, UNSIGNED when no seed).
+Release-gate split deliberately NOT done (ledger needs one output root).
+CI is red only from the GitHub billing/spending-limit block (0-step jobs).
+
 Open: CI verdicts on #6/#7 (runs were queued/in progress at write time);
 untested families (sovereign/edge/fleet) need ztest suites - the ratchet
 will fail any NEW module without a test, including the uncommitted
