@@ -13,6 +13,16 @@
 #define MODEL_SEEDS 64U
 #define MODEL_MODULE_COUNT 4U
 
+/* Stable module indices: they seed the per-module trace streams. */
+enum {
+	MODEL_INDEX_PRINCIPAL,
+	MODEL_INDEX_SESSION,
+	MODEL_INDEX_CREDENTIAL,
+	MODEL_INDEX_POLICY,
+};
+
+extern const struct model_vtable model_principal_vt;
+
 /* Run one module for MODEL_SEEDS traces; fails the calling test on a violation. */
 void model_run_module(const struct model_vtable *vt, uint32_t index);
 

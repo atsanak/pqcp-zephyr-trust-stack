@@ -11,6 +11,9 @@
 
 #include "model_harness.h"
 
+const char *model_fail_check = "";
+int model_fail_line;
+
 #define MODEL_SEED_BASE 0x5051435046454D31ULL
 
 static uint64_t splitmix64(uint64_t x)
@@ -85,6 +88,8 @@ int model_run_trace(const struct model_vtable *vt,
 		++done;
 		if (code == 0 && vt->audit != NULL &&
 		    vt->audit() != 0) {
+			model_fail_check = "module audit";
+			model_fail_line = 0;
 			code = MODEL_VIOLATION_AUDIT;
 		}
 	}
@@ -197,11 +202,16 @@ uint32_t model_check(const struct model_vtable *vt, uint32_t module_index,
 				model_shrink(vt, trace, length, code);
 
 			model_trace_hex(trace, shrunk, hex, sizeof(hex));
+			model_fail_check = "";
+			model_fail_line = 0;
+			(void)model_run_trace(vt, trace, shrunk, NULL);
 			printk("PQCP_MODEL_COUNTEREXAMPLE module=%s "
 			       "seed=%08x%08x violation=%d ops=%u "
 			       "trace=%s\n",
 			       vt->name, (uint32_t)(seed >> 32),
 			       (uint32_t)seed, code, shrunk, hex);
+			printk("PQCP_MODEL_NOTE module=%s line=%d check=%s\n",
+			       vt->name, model_fail_line, model_fail_check);
 			++printed;
 		}
 	}

@@ -66,3 +66,8 @@ void model_run_module(const struct model_vtable *vt, uint32_t index)
 		      0U);
 	zassert_equal(second.ops, first.ops);
 }
+
+ZTEST(edge_model, test_principal_model)
+{
+	model_run_module(&model_principal_vt, MODEL_INDEX_PRINCIPAL);
+}

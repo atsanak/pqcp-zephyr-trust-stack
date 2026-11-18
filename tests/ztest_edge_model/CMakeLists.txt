@@ -17,4 +17,5 @@ target_include_directories(app PRIVATE
 target_sources(app PRIVATE
     src/main.c
     src/model_harness.c
+    src/model_principal.c
     src/test_harness.c)

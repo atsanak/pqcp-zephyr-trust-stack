@@ -25,6 +25,11 @@
  * per op: kind, a, b, then dt as little-endian u32. <seed> reproduces the
  * unshrunk trace. The positive-control test prints PQCP_MODEL_CONTROL
  * lines instead, so it can never be mistaken for a module counterexample.
+ *
+ * A counterexample is followed by an advisory diagnostic line (not part of
+ * the contract) naming the violated check:
+ *
+ *   PQCP_MODEL_NOTE module=<m> line=<n> check=<expression>
  */
 
 #ifndef MODEL_HARNESS_H_
@@ -38,6 +43,18 @@
 #define MODEL_VIOLATION_AUDIT 1
 #define MODEL_MAX_COUNTEREXAMPLES 3U
 #define MODEL_HEX_PER_OP 14U
+
+/* Record which property fired, then return its violation code. */
+extern const char *model_fail_check;
+extern int model_fail_line;
+#define MODEL_REQUIRE(cond, code)                                     \
+	do {                                                          \
+		if (!(cond)) {                                        \
+			model_fail_check = #cond;                     \
+			model_fail_line = __LINE__;                   \
+			return (code);                                \
+		}                                                     \
+	} while (0)
 
 struct model_op {
 	uint8_t kind;
