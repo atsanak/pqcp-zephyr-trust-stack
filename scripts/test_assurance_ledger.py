@@ -1359,42 +1359,89 @@ class AssuranceLedgerTests(unittest.TestCase):
         )
         return manifest_path
 
+    FUZZ_ACCEPTED = (
+        "PQCP_FUZZ BINARY_ACCEPTED cbor=4454 cose_sign1=1494 cose_key=2340 "
+        "policy=2424 policy_verified=143 policy_vm_decided=73\n"
+    )
+    FUZZ_AGGREGATE = (
+        "[fuzz] PASS: 1 campaign(s) x 200000 iterations, no sanitizer findings\n"
+    )
+
+    def _fuzz_spec(self) -> dict:
+        return {
+            "id": "security.evidence_parser_fuzzed",
+            "category": "security",
+            "claim": "x",
+            "required": True,
+        }
+
     def test_evidence_parser_fuzzed_passes_with_markers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             body = (
-                "PQCP_FUZZ PASS targets=4 corpus_lines=193 iterations=200000 seed=0x1\n"
-                "PQCP_FUZZ PASS targets=4 corpus_lines=193 iterations=200000 seed=0xdeadbeef\n"
+                self.FUZZ_ACCEPTED
+                + "PQCP_FUZZ PASS targets=10 corpus_lines=247 evolved=183 "
+                "binary_seeds=80 binary_evolved=188 edges_covered=1391 "
+                "edge_guards=4037 iterations=200000 seed=0x1\n"
+                + self.FUZZ_ACCEPTED
+                + "PQCP_FUZZ PASS targets=10 corpus_lines=247 evolved=186 "
+                "binary_seeds=80 binary_evolved=182 edges_covered=1381 "
+                "edge_guards=4037 iterations=200000 seed=0xdeadbeef\n"
                 "[fuzz] PASS: 2 campaign(s) x 200000 iterations, no sanitizer findings\n"
             )
             manifest = self._write_fuzz_transcript(root, body)
-            spec = {
-                "id": "security.evidence_parser_fuzzed",
-                "category": "security",
-                "claim": "x",
-                "required": True,
-            }
             result = ledger.evaluate_evidence_parser_fuzzed(
-                spec, transcript_manifest=manifest
+                self._fuzz_spec(), transcript_manifest=manifest
             )
             self.assertEqual(result["status"], "pass", result.get("failure_reason"))
             self.assertEqual(result["details"]["fuzz_pass_markers"], 2)
+            self.assertEqual(result["details"]["fuzz_target_counts"], [10, 10])
 
     def test_evidence_parser_fuzzed_fails_without_aggregate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            body = "PQCP_FUZZ PASS targets=4 iterations=200000 seed=0x1\n"
+            body = (
+                self.FUZZ_ACCEPTED
+                + "PQCP_FUZZ PASS targets=10 iterations=200000 seed=0x1\n"
+            )
             manifest = self._write_fuzz_transcript(root, body)
-            spec = {
-                "id": "security.evidence_parser_fuzzed",
-                "category": "security",
-                "claim": "x",
-                "required": True,
-            }
             result = ledger.evaluate_evidence_parser_fuzzed(
-                spec, transcript_manifest=manifest
+                self._fuzz_spec(), transcript_manifest=manifest
             )
             self.assertEqual(result["status"], "fail")
+
+    def test_evidence_parser_fuzzed_fails_when_targets_dropped(self) -> None:
+        for marker in (
+            "PQCP_FUZZ PASS targets=6 iterations=200000 seed=0x1\n",
+            "PQCP_FUZZ PASS iterations=200000 seed=0x1\n",
+        ):
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest = self._write_fuzz_transcript(
+                    Path(tmp),
+                    self.FUZZ_ACCEPTED + marker + self.FUZZ_AGGREGATE,
+                )
+                result = ledger.evaluate_evidence_parser_fuzzed(
+                    self._fuzz_spec(), transcript_manifest=manifest
+                )
+                self.assertEqual(result["status"], "fail", marker)
+                self.assertIn("targets>=10", result["failure_reason"])
+
+    def test_evidence_parser_fuzzed_fails_without_binary_acceptance(self) -> None:
+        marker = "PQCP_FUZZ PASS targets=10 iterations=200000 seed=0x1\n"
+        zero = (
+            "PQCP_FUZZ BINARY_ACCEPTED cbor=10 cose_sign1=0 cose_key=5 "
+            "policy=3 policy_verified=3 policy_vm_decided=2\n"
+        )
+        for accepted in ("", zero):
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest = self._write_fuzz_transcript(
+                    Path(tmp), accepted + marker + self.FUZZ_AGGREGATE
+                )
+                result = ledger.evaluate_evidence_parser_fuzzed(
+                    self._fuzz_spec(), transcript_manifest=manifest
+                )
+                self.assertEqual(result["status"], "fail")
+                self.assertIn("BINARY_ACCEPTED", result["failure_reason"])
 
     def _write_coverage_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"

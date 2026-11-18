@@ -50,6 +50,14 @@ add_library(fuzz_targets OBJECT
     ${PQCP_MODULE_ROOT}/src/deployment_assurance_passport_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_tamper_matrix_replay.c
     ${PQCP_MODULE_ROOT}/src/deployment_evidence_trail_replay.c
+    # Host-portable fleet parsers (no Zephyr/PSA dependencies): CBOR,
+    # COSE_Sign1/COSE_Key, and the policy bytecode codec/verifier/VM.
+    ${PQCP_MODULE_ROOT}/src/fleet_cbor_map.c
+    ${PQCP_MODULE_ROOT}/src/fleet_cose_sign1.c
+    ${PQCP_MODULE_ROOT}/src/fleet_cose_key.c
+    ${PQCP_MODULE_ROOT}/src/fleet_policy_codec.c
+    ${PQCP_MODULE_ROOT}/src/fleet_policy_verify.c
+    ${PQCP_MODULE_ROOT}/src/fleet_policy_vm.c
 )
 target_include_directories(fuzz_targets PRIVATE
     ${PQCP_VERIFIER_DIR}/shim
@@ -62,6 +70,7 @@ target_compile_options(fuzz_targets PRIVATE -Wall -Wextra -Werror
 
 add_executable(pqcp-evidence-fuzz
     src/main.c
+    src/binary_targets.c
     $<TARGET_OBJECTS:fuzz_targets>
 )
 

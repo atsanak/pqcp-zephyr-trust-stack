@@ -3,13 +3,17 @@
 """Build and run the evidence-grammar fuzzer under ASan+UBSan.
 
 Orchestration only: tools/evidence_fuzzer drives the unmodified firmware
-marker parsers with mutated transcript lines; sanitizers turn any memory
-error or UB into a nonzero exit. A clean run prints one PQCP_FUZZ PASS
-marker per seed, which the release gate hash-binds into the assurance
-ledger.
+marker parsers with mutated transcript lines, plus the host-portable fleet
+parsers (deterministic CBOR, COSE_Sign1, COSE_Key, policy module codec)
+with mutated binary inputs seeded from the real encoders. Sanitizers turn
+any memory error or UB into a nonzero exit, and the binary targets also
+assert round-trip and rejected-input invariants. A clean run prints one
+PQCP_FUZZ PASS marker per seed (plus a PQCP_FUZZ BINARY_ACCEPTED line),
+which the release gate hash-binds into the assurance ledger.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +30,37 @@ DEFAULT_CORPUS = (
     MODULE_PATH / "tools/evidence_verifier/testdata/signed_passport_transcript.log",
 )
 DEFAULT_SEEDS = ("0x1", "0xdeadbeef", "0x9e3779b97f4a7c15")
+
+# 6 text replay parsers + fleet CBOR, COSE_Sign1, COSE_Key, policy codec.
+# generate_assurance_ledger.EVIDENCE_FUZZ_MIN_TARGETS must match.
+EXPECTED_TARGETS = 10
+BINARY_ACCEPTED_RE = re.compile(
+    r"PQCP_FUZZ BINARY_ACCEPTED cbor=(\d+) cose_sign1=(\d+) cose_key=(\d+) "
+    r"policy=(\d+) policy_verified=(\d+) policy_vm_decided=(\d+)"
+)
+TARGETS_RE = re.compile(r"PQCP_FUZZ PASS targets=(\d+)\b")
+
+
+def check_campaign_output(stdout: str) -> str | None:
+    """Return a failure reason, or None when the campaign marker is sound."""
+    marker = TARGETS_RE.search(stdout)
+    if marker is None:
+        return "PQCP_FUZZ PASS marker lacks a targets= field"
+    if int(marker.group(1)) != EXPECTED_TARGETS:
+        return (
+            f"PQCP_FUZZ PASS reports targets={marker.group(1)}, "
+            f"expected {EXPECTED_TARGETS}"
+        )
+    accepted = BINARY_ACCEPTED_RE.search(stdout)
+    if accepted is None:
+        return "missing PQCP_FUZZ BINARY_ACCEPTED line"
+    if any(int(count) == 0 for count in accepted.groups()):
+        return (
+            "a binary parser accepted no inputs "
+            f"({accepted.group(0)}); the campaign never got past the "
+            "rejection gates"
+        )
+    return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -91,6 +126,10 @@ def main() -> int:
         if result.returncode != 0 or "PQCP_FUZZ PASS" not in result.stdout:
             print(f"[fuzz] FAIL: campaign seed={seed} exited "
                   f"{result.returncode}")
+            return 1
+        problem = check_campaign_output(result.stdout)
+        if problem is not None:
+            print(f"[fuzz] FAIL: campaign seed={seed}: {problem}")
             return 1
 
     print(f"[fuzz] PASS: {len(args.seeds)} campaign(s) x "
