@@ -37,6 +37,7 @@ static struct pqcp_edge_credential_record store[CAPACITY];
 static struct pqcp_edge_credential_cache cache;
 static bool revoked[IDS];
 static uint32_t revoked_count;
+static uint64_t repoch;
 static uint64_t epoch;
 static uint64_t now;
 
@@ -44,6 +45,7 @@ static void reset(void)
 {
 	memset(revoked, 0, sizeof(revoked));
 	revoked_count = 0U;
+	repoch = 1U;
 	epoch = 1U;
 	now = T0;
 	zassert_equal(pqcp_edge_credential_cache_init(
@@ -63,7 +65,7 @@ static void fill(struct pqcp_edge_credential_record *c, uint32_t i)
 	SETSTR(c->issuer_domain, "dom-a");
 	c->issuance_epoch = epoch;
 	c->policy_epoch = 2U;
-	c->revocation_epoch = 3U;
+	c->revocation_epoch = repoch;
 	c->issued_at_ms = now;
 	c->refresh_at_ms = now + 500U;
 	c->expires_at_ms = now + 1000U;
@@ -94,7 +96,12 @@ static int apply(const struct model_op *op)
 		break;
 	}
 	case OP_REVOKE:
-		if (pqcp_edge_credential_revoke(&cache, cids[i], 3U) == 0 &&
+		/* Revocation needs an epoch newer than the record's; later
+		 * puts carry the current epoch, so a put over a revoked id is
+		 * rejected by revocation itself and not by staleness.
+		 */
+		++repoch;
+		if (pqcp_edge_credential_revoke(&cache, cids[i], repoch) == 0 &&
 		    !revoked[i]) {
 			revoked[i] = true;
 			++revoked_count;
