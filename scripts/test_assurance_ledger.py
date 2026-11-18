@@ -1654,6 +1654,195 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("missing or empty", result["failure_reason"])
 
+    def _write_model_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-edge-model.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-11-18T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["edge model conformance"],
+                    "transcripts": [
+                        {
+                            "step": "edge model conformance",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    _MODEL_SPEC = {
+        "id": "security.state_machine_model_conformance",
+        "category": "security",
+        "claim": "x",
+        "required": True,
+    }
+    _MODEL_MODULES = ("principal", "session", "credential", "policy")
+
+    def _model_body(self, *, seeds: int = 64, ops: int = 1000,
+                    violations: int = 0, summary_violations: int = 0,
+                    cex: str = "", rediscovered: int = 8, allowed: int = 2,
+                    total: int = 10, marker: str | None = None,
+                    defect_statuses: list[str] | None = None,
+                    summary: bool = True) -> str:
+        lines = []
+        for module in self._MODEL_MODULES:
+            status = "PASS" if violations == 0 else "FAIL"
+            lines.append(
+                f"PQCP_MODEL_CHECK module={module} seeds={seeds} ops={ops} "
+                f"violations={violations} status={status}")
+        if cex:
+            lines.append(cex)
+        if summary:
+            lines.append(
+                f"PQCP_MODEL_SUMMARY modules=4 traces={4 * seeds} "
+                f"ops={4 * ops} violations={summary_violations} "
+                f"status={'PASS' if summary_violations == 0 else 'FAIL'}")
+        lines.append("PROJECT EXECUTION SUCCESSFUL")
+        if defect_statuses is None:
+            defect_statuses = (["rediscovered"] * rediscovered +
+                               ["allowed"] * allowed)
+        for index, status in enumerate(defect_statuses):
+            lines.append(
+                f"PQCP_MODEL_DEFECT id=H{index + 1} module=policy "
+                f"status={status}")
+        if marker is None:
+            marker = (f"PQCP_MODEL_REDISCOVERY PASS "
+                      f"rediscovered={rediscovered}/{total} allowed={allowed}")
+        if marker:
+            lines.append(marker)
+        return "\n".join(lines) + "\n"
+
+    def _evaluate_model(self, body: str, *, minimum: int = 8,
+                        total: int | None = 10) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self._write_model_transcript(root, body)
+            baseline = root / "baseline.json"
+            data = {"rediscovered_min": minimum}
+            if total is not None:
+                data["defects_total"] = total
+            baseline.write_text(json.dumps(data), encoding="utf-8")
+            return ledger.evaluate_state_machine_model_conformance(
+                dict(self._MODEL_SPEC), transcript_manifest=manifest,
+                baseline_path=baseline)
+
+    def test_state_machine_model_conformance_passes_and_records_counts(self) -> None:
+        result = self._evaluate_model(self._model_body())
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        details = result["details"]
+        self.assertEqual(details["modules"], 4)
+        self.assertEqual(details["traces"], 256)
+        self.assertEqual(details["rediscovered"], 8)
+        self.assertEqual(details["defects_total"], 10)
+        self.assertEqual(details["allowed_misses"], 2)
+        self.assertEqual(details["baseline_rediscovered_min"], 8)
+
+    def test_state_machine_model_conformance_fails_on_violations(self) -> None:
+        result = self._evaluate_model(
+            self._model_body(violations=1, summary_violations=1))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("status=FAIL", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_on_clean_run_counterexample(
+            self) -> None:
+        cex = ("PQCP_MODEL_COUNTEREXAMPLE module=policy seed=00000000deadbeef "
+               "violation=2 ops=3 trace=010203")
+        result = self._evaluate_model(self._model_body(cex=cex))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("counterexample for module policy",
+                      result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_without_summary(self) -> None:
+        result = self._evaluate_model(self._model_body(summary=False))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("PQCP_MODEL_SUMMARY", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_on_reduced_seeds(self) -> None:
+        result = self._evaluate_model(self._model_body(seeds=8))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("ran 8 seeds", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_without_rediscovery_marker(
+            self) -> None:
+        result = self._evaluate_model(self._model_body(marker=""))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("PQCP_MODEL_REDISCOVERY PASS", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_on_rediscovery_fail_marker(
+            self) -> None:
+        marker = "PQCP_MODEL_REDISCOVERY FAIL rediscovered=6/10 allowed=0"
+        result = self._evaluate_model(self._model_body(marker=marker))
+        self.assertEqual(result["status"], "fail")
+
+    def test_state_machine_model_conformance_fails_below_baseline(self) -> None:
+        result = self._evaluate_model(
+            self._model_body(rediscovered=7, allowed=3))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("below the baseline 8", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_when_defect_list_shrinks(
+            self) -> None:
+        result = self._evaluate_model(
+            self._model_body(rediscovered=8, allowed=0, total=8))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("shrank to 8", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_on_marker_defect_mismatch(
+            self) -> None:
+        statuses = ["rediscovered"] * 7 + ["allowed"] * 3
+        result = self._evaluate_model(
+            self._model_body(defect_statuses=statuses))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("defect lines are rediscovered",
+                      result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_on_unresolved_defect(
+            self) -> None:
+        statuses = ["rediscovered"] * 8 + ["allowed", "missed"]
+        result = self._evaluate_model(
+            self._model_body(defect_statuses=statuses))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("unresolved historical defects",
+                      result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_without_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "transcripts" / "evidence_transcript_manifest.json"
+            result = ledger.evaluate_state_machine_model_conformance(
+                dict(self._MODEL_SPEC), transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("missing or empty", result["failure_reason"])
+
+    def test_state_machine_model_conformance_fails_on_bad_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self._write_model_transcript(root, self._model_body())
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"rediscovered_min": "x"}))
+            result = ledger.evaluate_state_machine_model_conformance(
+                dict(self._MODEL_SPEC), transcript_manifest=manifest,
+                baseline_path=baseline)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("baseline unusable", result["failure_reason"])
+
     def _write_ct_smoke_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
