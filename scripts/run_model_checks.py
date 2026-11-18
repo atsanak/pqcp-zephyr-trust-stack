@@ -445,9 +445,14 @@ def build_tree(destination: Path) -> None:
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         if source.is_dir():
+            # Skip only build output directories: a bare "build*" pattern
+            # also dropped the real source file src/build_manifest.c.
             shutil.copytree(
                 source, target,
-                ignore=shutil.ignore_patterns("__pycache__", "build*"))
+                ignore=lambda d, names: [
+                    n for n in names
+                    if n == "__pycache__" or
+                    (n.startswith("build") and (Path(d) / n).is_dir())])
         else:
             shutil.copy2(source, target)
     for relative in LINK_PATHS:
