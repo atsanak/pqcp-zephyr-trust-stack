@@ -1692,6 +1692,16 @@ ZTEST(pqcp_fleet_artifact_core, test_cose_protected_decode_rejections)
 		{ "a2 013830 03 20", E_ENC },      /* ct negative int */
 		{ "a2 013830 03 60", E_CAP },      /* ct empty text */
 		{ "a2 013830 04 6161", E_ENC },    /* kid as text */
+		/* Found by pqcp-evidence-fuzz: an empty kid decoded to "no kid"
+		 * and the header could not round-trip.
+		 */
+		{ "a2 013830 04 40", E_ENC },
+		/* Found by pqcp-evidence-fuzz: a content type with an embedded
+		 * NUL decoded to a shorter C string than the signed bytes.
+		 */
+		{ "a2 013830 03 62 6100", E_ENC },
+		{ "a2 013830 03 66 6170706c00ff", E_ENC },
+		{ "a2 013830 03 61 00", E_ENC },
 		{ "81 00", E_ENC },                /* not a map */
 		{ "f6", E_ENC },
 		{ "a1 013830 ff", E_TRAIL },
@@ -2249,6 +2259,15 @@ ZTEST(pqcp_fleet_artifact_core, test_cose_sign1_decode_rejections)
 		{ S1_ARR S1_PROT "a2 04 4131 03 183c " S1_PAY S1_SIG, 3309,
 		  E_NONCAN },
 		{ S1_ARR S1_PROT "a1 02 81 01 " S1_PAY S1_SIG, 3309, E_POLICY },
+		/* Found by pqcp-evidence-fuzz: the unprotected bucket head was
+		 * "un-read" by exactly one byte, so a multi-byte map head
+		 * (here map(160)) decoded as an empty bucket and its count
+		 * byte as the first entry. Such a bucket must be rejected.
+		 */
+		{ S1_ARR S1_PROT "b8 a0 " S1_PAY S1_SIG, 3309, E_UNSUP },
+		{ S1_ARR S1_PROT "b8 a1 04 41 31 " S1_PAY S1_SIG, 3309, E_UNSUP },
+		{ S1_ARR S1_PROT "b9 00 01 " S1_PAY S1_SIG, 3309, E_NONCAN },
+		{ S1_ARR S1_PROT "a1 04 40 " S1_PAY S1_SIG, 3309, E_ENC },
 		/* kid present in both buckets */
 		{ S1_ARR "48 a2013830 04423131 a1 04 42 3232 " S1_PAY S1_SIG,
 		  3309, E_DUP },
@@ -2287,6 +2306,35 @@ ZTEST(pqcp_fleet_artifact_core, test_cose_sign1_decode_rejections)
 		EXPECT_RC(E_ARG, pqcp_fleet_cose_sign1_decode(NULL, 8, &msg));
 		EXPECT_RC(E_ARG, pqcp_fleet_cose_sign1_decode(vb, 8, NULL));
 	}
+}
+
+ZTEST(pqcp_fleet_artifact_core, test_cose_decode_rejection_leaves_no_partial_output)
+{
+	static const uint8_t zero[sizeof(struct pqcp_fleet_cose_sign1)];
+	struct pqcp_fleet_cose_headers h;
+	struct pqcp_fleet_cose_sign1 msg;
+	size_t n;
+
+	/* The algorithm is decoded before the bad content type is seen. */
+	memset(&h, 0xA5, sizeof(h));
+	n = vdec("a2 013830 03 f5");
+	EXPECT_RC(E_ENC, pqcp_fleet_cose_protected_decode(vb, n, &h));
+	zassert_equal(0, memcmp(&h, zero, sizeof(h)),
+		      "rejected protected headers must be zeroed");
+
+	/* Valid protected bucket, then a rejected unprotected bucket. */
+	memset(&msg, 0xA5, sizeof(msg));
+	n = make_sign1(S1_ARR S1_PROT "a1 013830 " S1_PAY S1_SIG, 3309);
+	EXPECT_RC(E_POLICY, pqcp_fleet_cose_sign1_decode(vb, n, &msg));
+	zassert_equal(0, memcmp(&msg, zero, sizeof(msg)),
+		      "rejected COSE_Sign1 must be zeroed");
+
+	/* A bad signature length is only seen after every field decoded. */
+	memset(&msg, 0xA5, sizeof(msg));
+	n = make_sign1(S1_ARR S1_PROT S1_UNP S1_PAY "590cec", 3308);
+	EXPECT_RC(E_SIG, pqcp_fleet_cose_sign1_decode(vb, n, &msg));
+	zassert_equal(0, memcmp(&msg, zero, sizeof(msg)),
+		      "late-rejected COSE_Sign1 must be zeroed");
 }
 
 ZTEST(pqcp_fleet_artifact_core, test_cose_sign1_decode_ml_dsa_44_and_87_sizes)

@@ -109,14 +109,26 @@ with a C compiler and a fixed seed reproduces any run — and it is
 coverage-guided without a fuzzer runtime: the target parsers carry
 SanitizerCoverage edge instrumentation, the harness implements the
 `trace_pc_guard` callbacks itself, and any input reaching a new edge is
-promoted into the corpus (measured: 785 instrumented edges, ~449 covered,
-165 evolved corpus entries per 200k-iteration campaign). Multi-campaign
-runs produced zero findings.
+promoted into the corpus. The same driver also fuzzes the host-portable
+fleet wire parsers (deterministic CBOR, COSE_Sign1, COSE_Key, and the
+policy module codec with its verifier and VM) with binary inputs seeded
+from the real encoders. Those targets assert decode(encode(x)) round
+trips, rejected-input hygiene and verifier/VM agreement on top of the
+sanitizers (measured: ~1,400 covered edges and ~370 evolved corpus
+entries per 200k-iteration campaign across all 10 targets). Its first
+runs found four defects in `src/fleet_cose_sign1.c`: an unprotected-bucket
+map head parsed with a one-byte rewind (so a `map(160)` bucket decoded as
+an empty bucket), embedded NULs in a content-type string, an empty `kid`
+that decoded to "no kid", and half-built output left behind on rejection.
+All are fixed with regression cases in `tests/ztest_fleet_artifact_core`.
 
 **Non-claims.** Coverage-guided evolution explores deeper parser states
 than a fixed corpus, but absence of findings is still not absence of
 bugs; the crypto backend is deliberately uninstrumented and is not the
-fuzz target.
+fuzz target. The protected-channel and sovereign-channel frame codecs are
+not fuzzed: they reach `runtime_internal.h`, which needs a fake
+`zephyr/kernel.h` and PSA-backed helpers, a larger shim than the
+printk-only alias this harness permits.
 
 ## Claim 5 — In-image adversarial self-validation of the evidence chain
 

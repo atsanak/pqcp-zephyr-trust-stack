@@ -9,7 +9,9 @@
  * replay-verifier parsers (verdict, seal, passport, tamper matrix,
  * evidence trail),
  * and the signature chunk reassembler with corpus lines mutated by a
- * seeded xorshift PRNG. Built with ASan+UBSan and
+ * seeded xorshift PRNG. Four binary parsers (fleet CBOR, COSE_Sign1,
+ * COSE_Key, policy module codec) run as a second campaign in
+ * binary_targets.c. Built with ASan+UBSan and
  * -fno-sanitize-recover=all, any memory error or UB aborts the run with a
  * nonzero exit; a clean run prints one stable PQCP_FUZZ PASS marker.
  *
@@ -39,8 +41,10 @@
 #include <pqcp_zephyr/deployment_assurance_passport_replay.h>
 #include <pqcp_zephyr/deployment_evidence_trail_replay.h>
 #include <pqcp_zephyr/deployment_tamper_matrix_replay.h>
+#include "fuzz_common.h"
 #include "signature_check.h"
 
+#define TEXT_TARGET_COUNT 6U
 #define MAX_CORPUS_LINES 4096U
 #define MAX_LINE_CHARS 4096U
 
@@ -64,7 +68,7 @@ static uint64_t rng_state;
 static uint8_t edge_seen[EDGE_MAP_SLOTS];
 static uint32_t edge_guards_total;
 static uint32_t edges_covered;
-static volatile int new_edge_this_run;
+volatile int new_edge_this_run;
 
 void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop);
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard);
@@ -114,7 +118,7 @@ void __sanitizer_cov_trace_pc(void)
 	}
 }
 
-static uint64_t rng_next(void)
+uint64_t rng_next(void)
 {
 	uint64_t x = rng_state;
 
@@ -125,7 +129,7 @@ static uint64_t rng_next(void)
 	return x;
 }
 
-static uint32_t rng_below(uint32_t bound)
+uint32_t rng_below(uint32_t bound)
 {
 	return bound == 0U ? 0U : (uint32_t)(rng_next() % bound);
 }
@@ -435,8 +439,23 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("PQCP_FUZZ PASS targets=6 corpus_lines=%zu evolved=%zu edges_covered=%u edge_guards=%u iterations=%lu seed=0x%llx\n",
+	/* Binary targets: fleet CBOR, COSE_Sign1, COSE_Key, policy codec.
+	 * Same PRNG stream, same edge map, separate length-delimited corpus.
+	 */
+	if (binary_seed_corpus() != 0) {
+		fprintf(stderr,
+			"pqcp-evidence-fuzz: binary seed corpus failed\n");
+		return 2;
+	}
+	const size_t binary_seed_count = binary_corpus_size();
+
+	binary_campaign(iterations);
+
+	binary_print_stats();
+	printf("PQCP_FUZZ PASS targets=%u corpus_lines=%zu evolved=%zu binary_seeds=%zu binary_evolved=%zu edges_covered=%u edge_guards=%u iterations=%lu seed=0x%llx\n",
+	       TEXT_TARGET_COUNT + BINARY_TARGET_COUNT,
 	       seed_corpus_count, corpus_count - seed_corpus_count,
+	       binary_seed_count, binary_corpus_size() - binary_seed_count,
 	       edges_covered, edge_guards_total, iterations,
 	       (unsigned long long)seed);
 	return 0;

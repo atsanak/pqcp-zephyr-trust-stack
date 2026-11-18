@@ -1276,6 +1276,12 @@ def evaluate_firmware_evidence_chain_replay(
     )
 
 
+# Text replay parsers (verdict, seal, passport, tamper matrix, trail,
+# signature reassembler) plus fleet CBOR, COSE_Sign1, COSE_Key and the
+# policy module codec. Keep in sync with tools/evidence_fuzzer.
+EVIDENCE_FUZZ_MIN_TARGETS = 10
+
+
 def evaluate_evidence_parser_fuzzed(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -1311,10 +1317,23 @@ def evaluate_evidence_parser_fuzzed(
     artifacts.append(artifact(transcript_path, label="evidence parser fuzz transcript"))
 
     pass_markers = transcript_body.count("PQCP_FUZZ PASS")
+    target_counts = [
+        int(match)
+        for match in re.findall(
+            r"PQCP_FUZZ PASS targets=(\d+)\b", transcript_body
+        )
+    ]
+    accepted_lines = re.findall(
+        r"PQCP_FUZZ BINARY_ACCEPTED ((?:[a-z_0-9]+=\d+ ?)+)",
+        transcript_body,
+    )
     details = {
         "transcript_path": str(transcript_path),
         "transcript_sha256": transcript_sha,
         "fuzz_pass_markers": pass_markers,
+        "fuzz_target_counts": target_counts,
+        "fuzz_min_targets_required": EVIDENCE_FUZZ_MIN_TARGETS,
+        "fuzz_binary_accepted_lines": len(accepted_lines),
     }
     if pass_markers < 1 or "[fuzz] PASS:" not in transcript_body:
         return fail_claim(
@@ -1322,6 +1341,47 @@ def evaluate_evidence_parser_fuzzed(
             reason=(
                 "evidence parser fuzz transcript lacks PQCP_FUZZ PASS "
                 "markers or the aggregate [fuzz] PASS line"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    # Every campaign must report the full target set: a marker without a
+    # targets= field, or one below the floor, means parsers were dropped
+    # from the harness.
+    if (
+        len(target_counts) != pass_markers
+        or min(target_counts) < EVIDENCE_FUZZ_MIN_TARGETS
+    ):
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence parser fuzz markers must each report "
+                f"targets>={EVIDENCE_FUZZ_MIN_TARGETS} (text replay parsers "
+                "plus the fleet CBOR, COSE_Sign1, COSE_Key and policy codec "
+                f"targets); saw {target_counts}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    # The binary campaigns must have gotten past the rejection gates: each
+    # BINARY_ACCEPTED line needs a positive count for every binary parser.
+    accepted_ok = len(accepted_lines) == pass_markers and all(
+        len(fields) == 6 and all(int(v) > 0 for v in fields)
+        for fields in (
+            re.findall(r"=(\d+)", line) for line in accepted_lines
+        )
+    )
+    if not accepted_ok:
+        return fail_claim(
+            spec,
+            reason=(
+                "evidence parser fuzz transcript lacks a BINARY_ACCEPTED "
+                "line with positive counts for every binary parser per "
+                "campaign"
             ),
             validators=validators,
             evidence_artifacts=artifacts,
