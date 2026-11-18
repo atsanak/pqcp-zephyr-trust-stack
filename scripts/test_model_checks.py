@@ -25,10 +25,12 @@ def check_line(module: str, seeds: int = 64, ops: int = 1000,
             f"violations={violations} status={status}\n")
 
 
-def cex_line(module: str, violation: str = "3", ops: int = 4) -> str:
+def cex_line(module: str, violation: str = "3", ops: int = 4,
+             trace_ops: int | None = None) -> str:
+    trace = "01020304050607" * (ops if trace_ops is None else trace_ops)
     return (f"PQCP_MODEL_COUNTEREXAMPLE module={module} "
             f"seed=00000000deadbeef violation={violation} ops={ops} "
-            f"trace=0102030405060708\n")
+            f"trace={trace}\n")
 
 
 def summary_line(traces: int = 256, ops: int = 4000, violations: int = 0,
@@ -132,6 +134,16 @@ class ClassificationTests(unittest.TestCase):
             "principal", cex_line("session") + "PROJECT EXECUTION FAILED\n")
         self.assertEqual(status, "missed")
         self.assertIn("not principal", note)
+
+    def test_counterexample_with_inconsistent_trace_does_not_count(self) -> None:
+        status, _ = self.classify(
+            "policy", cex_line("policy", ops=4, trace_ops=3) +
+            "PROJECT EXECUTION FAILED\n")
+        self.assertEqual(status, "missed")
+        status, _ = self.classify(
+            "policy", cex_line("policy", ops=0, trace_ops=0).replace(
+                "trace=", "trace=00") + "PROJECT EXECUTION FAILED\n")
+        self.assertEqual(status, "missed")
 
     def test_wrong_module_alongside_right_module_counts(self) -> None:
         text = cex_line("session") + cex_line("principal")
