@@ -105,6 +105,9 @@ DEFECT_LINE_RE = re.compile(
 REDISCOVERY_RE = re.compile(
     r"PQCP_MODEL_REDISCOVERY PASS rediscovered=(\d+)/(\d+) allowed=(\d+)")
 
+# The device encodes each shrunk op as 7 bytes (kind, a, b, u32 dt).
+HEX_PER_OP = 14
+
 EXECUTION_OK = "PROJECT EXECUTION SUCCESSFUL"
 EXECUTION_FAILED = "PROJECT EXECUTION FAILED"
 
@@ -217,9 +220,11 @@ def classify_defect(expected_module: str, parsed: Parsed) -> tuple[str, str]:
 
     Only a COUNTEREXAMPLE naming the defect's own module is a rediscovery.
     """
-    own = [c for c in parsed.counterexamples if c.module == expected_module]
+    own = [c for c in parsed.counterexamples
+           if c.module == expected_module and c.ops >= 1 and
+           len(c.trace) == c.ops * HEX_PER_OP]
     others = sorted({c.module for c in parsed.counterexamples
-                     if c.module != expected_module})
+                     if c not in own})
     if own:
         if any(s.status == "PASS" for s in parsed.summaries):
             return "ERROR", ("counterexample marker alongside a PASS "
