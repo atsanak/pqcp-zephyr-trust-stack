@@ -36,12 +36,14 @@ static const char *const cids[IDS] = { "c0", "c1", "c2" };
 static struct pqcp_edge_credential_record store[CAPACITY];
 static struct pqcp_edge_credential_cache cache;
 static bool revoked[IDS];
+static uint32_t revoked_count;
 static uint64_t epoch;
 static uint64_t now;
 
 static void reset(void)
 {
 	memset(revoked, 0, sizeof(revoked));
+	revoked_count = 0U;
 	epoch = 1U;
 	now = T0;
 	zassert_equal(pqcp_edge_credential_cache_init(
@@ -61,7 +63,7 @@ static void fill(struct pqcp_edge_credential_record *c, uint32_t i)
 	SETSTR(c->issuer_domain, "dom-a");
 	c->issuance_epoch = epoch;
 	c->policy_epoch = 2U;
-	c->revocation_epoch = 1U;
+	c->revocation_epoch = 3U;
 	c->issued_at_ms = now;
 	c->refresh_at_ms = now + 500U;
 	c->expires_at_ms = now + 1000U;
@@ -85,12 +87,17 @@ static int apply(const struct model_op *op)
 		rc = pqcp_edge_credential_put(&cache, &c, now);
 		if (revoked[i]) {
 			MODEL_REQUIRE(rc != 0, C_PUT);
+		} else if (revoked_count >= CAPACITY) {
+			/* C3: every slot holds a tombstone; none is recycled. */
+			MODEL_REQUIRE(rc != 0, C_PUT);
 		}
 		break;
 	}
 	case OP_REVOKE:
-		if (pqcp_edge_credential_revoke(&cache, cids[i], 1U) == 0) {
+		if (pqcp_edge_credential_revoke(&cache, cids[i], 3U) == 0 &&
+		    !revoked[i]) {
 			revoked[i] = true;
+			++revoked_count;
 		}
 		break;
 	case OP_AUTH: {

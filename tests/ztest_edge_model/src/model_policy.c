@@ -24,7 +24,7 @@
 #define ACKS 8U
 #define KNOWN 16U
 
-enum { D_EPOCH = 61, D_STALE = 62, D_RESULT = 64 };
+enum { D_EPOCH = 61, D_STALE = 62, D_ID = 63, D_RESULT = 64 };
 
 enum { OP_STAGE, OP_ACK, OP_PROMOTE, OP_ROLLBACK, OP_WAIT };
 
@@ -41,7 +41,9 @@ static uint8_t base_digest[PQCP_EDGE_DIGEST_BYTES];
 struct known {
 	uint64_t id;
 	uint64_t epoch;
+	uint8_t seed;
 };
+static uint64_t staged_total;
 
 static struct known known[KNOWN];
 static uint32_t nknown;
@@ -53,6 +55,7 @@ static void reset(void)
 {
 	memset(known, 0, sizeof(known));
 	nknown = 0U;
+	staged_total = 0U;
 	nhistory = 0U;
 	history[nhistory++] = 1U;
 	now = T0;
@@ -98,10 +101,16 @@ static int apply(const struct model_op *op)
 		edge_digest(digest, (uint8_t)(0x40U + op->b));
 		if (pqcp_edge_policy_stage(&pd, digest, e, now, now,
 					   now + 100000U, 1U, 2U, &b) == 0 &&
-		    b != NULL && nknown < KNOWN) {
-			known[nknown].id = b->bundle_id;
-			known[nknown].epoch = b->policy_epoch;
-			++nknown;
+		    b != NULL) {
+			/* ID1: ids are issued 1, 2, 3, ... in staging order. */
+			++staged_total;
+			MODEL_REQUIRE(b->bundle_id == staged_total, D_ID);
+			if (nknown < KNOWN) {
+				known[nknown].id = b->bundle_id;
+				known[nknown].epoch = b->policy_epoch;
+				known[nknown].seed = (uint8_t)(0x40U + op->b);
+				++nknown;
+			}
 		}
 		break;
 	}
@@ -109,9 +118,13 @@ static int apply(const struct model_op *op)
 		if (k != NULL) {
 			uint8_t digest[PQCP_EDGE_DIGEST_BYTES];
 
-			edge_digest(digest, 0x50U);
+			/* Acknowledge with the digest the bundle carries, so
+			 * promotion can really reach ACTIVE.
+			 */
+			edge_digest(digest, k->seed);
 			(void)pqcp_edge_policy_acknowledge(
-				&pd, k->id, "ack-a", digest, 0, now);
+				&pd, k->id, op->b % 2U ? "ack-a" : "ack-b",
+				digest, 0, now);
 		}
 		break;
 	case OP_PROMOTE:
