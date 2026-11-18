@@ -80,6 +80,21 @@ class FirmwareConformance(unittest.TestCase):
             second = run(batches[1])
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertNotEqual(run(batches[0]).returncode, 0)
+
+            # Damage a previously accepted projection without changing its stored
+            # receipt metadata. A subsequent intake must stop at the damaged head.
+            head_wire = batches[1].read_bytes()
+            damaged_head = head_wire.replace(b'redacted', b'sedacted', 1)
+            self.assertNotEqual(damaged_head, head_wire)
+            with sqlite3.connect(db) as con:
+                con.execute('UPDATE receipts SET wire=? WHERE wire=?', (damaged_head, head_wire))
+            stopped = run(batches[2])
+            self.assertNotEqual(stopped.returncode, 0)
+            self.assertIn('batch digest mismatch', stopped.stderr)
+            self.assertEqual(stopped.stdout, '')
+            with sqlite3.connect(db) as con:
+                con.execute('UPDATE receipts SET wire=? WHERE wire=?', (head_wire, damaged_head))
+
             tampered = tmp / 'tampered.cbor'
             altered = bytearray(batches[2].read_bytes())
             altered[-1] ^= 1

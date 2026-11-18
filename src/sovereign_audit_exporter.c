@@ -602,15 +602,10 @@ int pqcp_sovereign_audit_export_expire(struct pqcp_sovereign_audit_exporter *x,
 	return 0;
 }
 
-int pqcp_sovereign_audit_exporter_audit(struct pqcp_sovereign_audit_exporter *x)
+static int audit_locked(struct pqcp_sovereign_audit_exporter *x)
 {
 	size_t outstanding = 0U;
-	int ret = exporter_lock(x);
-
-	if (ret != 0) {
-		return ret;
-	}
-	ret = pqcp_sovereign_event_ledger_verify(x->ledger);
+	int ret = pqcp_sovereign_event_ledger_verify(x->ledger);
 	for (size_t i = 0U; ret == 0 && i < x->storage.cursor_capacity; ++i) {
 		const struct pqcp_sovereign_audit_cursor *c = &x->storage.cursors[i];
 
@@ -654,6 +649,343 @@ int pqcp_sovereign_audit_exporter_audit(struct pqcp_sovereign_audit_exporter *x)
 	if (outstanding > 1U || ((x->pending_batch.cursor_id != 0U) != (outstanding == 1U))) {
 		ret = -EBADMSG;
 	}
+	return ret;
+}
+
+int pqcp_sovereign_audit_exporter_audit(struct pqcp_sovereign_audit_exporter *x)
+{
+	int ret = exporter_lock(x);
+
+	if (ret != 0) {
+		return ret;
+	}
+	ret = audit_locked(x);
+	(void)k_mutex_unlock(&x->lock);
+	return ret;
+}
+
+/* Local snapshot format, pinned to an image and stream by the store binding.
+ * The batch prefix ends before its first pointer. Rebuild all live pointers,
+ * locks and the in-RAM checksum after loading.
+ */
+#define CHECKPOINT_VERSION 1U
+#define BATCH_PREFIX offsetof(struct pqcp_sovereign_export_batch, events)
+
+struct checkpoint_header {
+	uint64_t generation;
+	uint64_t next_cursor_id;
+	uint64_t ledger_next_sequence;
+	uint64_t encoded_length;
+	uint32_t next_generation;
+	uint32_t cursor_count;
+	uint32_t event_count;
+	uint32_t version;
+	uint8_t binding[DIGEST_BYTES];
+	uint8_t ledger_head[DIGEST_BYTES];
+	uint8_t complete;
+};
+
+static size_t checkpoint_size(size_t cursors, size_t events)
+{
+	size_t fixed = sizeof(struct checkpoint_header) + BATCH_PREFIX +
+		sizeof(struct pqcp_sovereign_audit_export_policy) + DIGEST_BYTES;
+
+	if (cursors > UINT32_MAX ||
+	    cursors > (SIZE_MAX - fixed) / sizeof(struct pqcp_sovereign_audit_cursor)) {
+		return 0;
+	}
+	fixed += cursors * sizeof(struct pqcp_sovereign_audit_cursor);
+	if (events > (SIZE_MAX - fixed) / sizeof(struct pqcp_sovereign_event)) {
+		return 0;
+	}
+	return fixed + events * sizeof(struct pqcp_sovereign_event);
+}
+
+size_t pqcp_sovereign_audit_exporter_checkpoint_capacity(
+	const struct pqcp_sovereign_audit_exporter *x)
+{
+	return x != NULL && x->initialized ?
+		checkpoint_size(x->storage.cursor_capacity, x->config.maximum_batch_events) : 0U;
+}
+
+static bool checkpoint_scratch_valid(const struct pqcp_sovereign_audit_exporter *x,
+	const uint8_t *scratch, size_t capacity)
+{
+	return scratch != NULL && capacity != 0U &&
+	       !overlaps(scratch, capacity, x, sizeof(*x)) &&
+	       !overlaps(scratch, capacity, x->ledger, sizeof(*x->ledger)) &&
+	       !overlaps(scratch, capacity, x->ledger->events,
+			 x->ledger->capacity * sizeof(*x->ledger->events)) &&
+	       !overlaps(scratch, capacity, x->storage.cursors,
+			 x->storage.cursor_capacity * sizeof(*x->storage.cursors)) &&
+	       !overlaps(scratch, capacity, x->storage.workspace_events,
+			 x->storage.workspace_event_capacity * sizeof(*x->storage.workspace_events));
+}
+
+static int checkpoint_hash(const uint8_t *data, size_t length, uint8_t digest[DIGEST_BYTES])
+{
+	static const uint8_t domain[] = "PQCP-SOVEREIGN-EXPORT-CHECKPOINT-V1";
+	const uint8_t *parts[] = {domain, data};
+	const size_t lengths[] = {sizeof(domain) - 1U, length};
+
+	return pqcp_sovereign_audit_internal_sha256_parts(parts, lengths, ARRAY_SIZE(parts), digest);
+}
+
+static int read_slot(const struct pqcp_sovereign_audit_checkpoint_store *store,
+	unsigned int slot, uint8_t *scratch, size_t capacity, struct checkpoint_header *header)
+{
+	uint8_t digest[DIGEST_BYTES];
+	size_t length = 0;
+	int ret = store->read(store->context, slot, scratch, capacity, &length);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (length < sizeof(*header) + DIGEST_BYTES || length > capacity) {
+		return -EBADMSG;
+	}
+	ret = checkpoint_hash(scratch, length - DIGEST_BYTES, digest);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!pqcp_sovereign_audit_internal_equal(
+		    digest, scratch + length - DIGEST_BYTES, DIGEST_BYTES)) {
+		return -EBADMSG;
+	}
+	memcpy(header, scratch, sizeof(*header));
+	if (header->version != CHECKPOINT_VERSION ||
+	    !pqcp_sovereign_audit_internal_equal(header->binding, store->binding, DIGEST_BYTES)) {
+		return -ESTALE;
+	}
+	if (header->generation == 0U || (header->generation & 1U) != slot ||
+	    checkpoint_size(header->cursor_count, header->event_count) != length) {
+		return -EBADMSG;
+	}
+	return 0;
+}
+
+static int source_checkpoint(struct pqcp_sovereign_event_ledger *ledger,
+	struct checkpoint_header *write, const struct checkpoint_header *read)
+{
+	int ret = k_mutex_lock(&ledger->lock, K_FOREVER);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (write != NULL) {
+		write->ledger_next_sequence = ledger->next_sequence;
+		memcpy(write->ledger_head, ledger->chain_head, DIGEST_BYTES);
+	} else if (read->ledger_next_sequence == 0U ||
+		   read->ledger_next_sequence > ledger->next_sequence) {
+		ret = -ESTALE;
+	} else {
+		const uint8_t *known_head = NULL;
+		size_t index;
+
+		if (read->ledger_next_sequence == ledger->next_sequence) {
+			known_head = ledger->chain_head;
+		} else {
+			uint64_t predecessor = read->ledger_next_sequence - 1U;
+			const struct pqcp_sovereign_event *oldest =
+				pqcp_sovereign_audit_internal_logical_event(ledger, 0U);
+
+			if (oldest != NULL && oldest->sequence == read->ledger_next_sequence) {
+				known_head = ledger->anchor_digest;
+			} else if (pqcp_sovereign_audit_internal_find_sequence(
+					   ledger, predecessor, &index) == 0) {
+				known_head = pqcp_sovereign_audit_internal_logical_event(
+					ledger, index)->event_digest;
+			}
+		}
+		if (known_head != NULL &&
+		    !pqcp_sovereign_audit_internal_equal(known_head, read->ledger_head, DIGEST_BYTES)) {
+			ret = -ESTALE;
+		}
+	}
+	(void)k_mutex_unlock(&ledger->lock);
+	return ret;
+}
+
+static int restore_locked(struct pqcp_sovereign_audit_exporter *x,
+	const struct checkpoint_header *header, const uint8_t *data)
+{
+	size_t cursors_size = x->storage.cursor_capacity * sizeof(*x->storage.cursors);
+	int ret;
+
+	if (header->cursor_count != x->storage.cursor_capacity ||
+	    header->event_count > x->config.maximum_batch_events ||
+	    header->encoded_length > SIZE_MAX || header->complete > 1U ||
+	    header->next_cursor_id == 0U || header->next_generation == 0U) {
+		return -EBADMSG;
+	}
+	ret = source_checkpoint(x->ledger, NULL, header);
+	if (ret != 0) {
+		return ret;
+	}
+	x->next_cursor_id = header->next_cursor_id;
+	x->next_generation = header->next_generation;
+	memcpy(x->storage.cursors, data, cursors_size);
+	data += cursors_size;
+	memcpy(&x->pending_batch, data, BATCH_PREFIX);
+	data += BATCH_PREFIX;
+	memcpy(&x->pending_policy, data, sizeof(x->pending_policy));
+	data += sizeof(x->pending_policy);
+
+	if (x->pending_batch.event_count != header->event_count ||
+	    ((x->pending_batch.cursor_id != 0U) != (header->event_count != 0U)) ||
+	    ((header->encoded_length != 0U) != (header->event_count != 0U))) {
+		ret = -EBADMSG;
+	} else if (header->event_count != 0U) {
+		memcpy(x->storage.workspace_events, data,
+		       header->event_count * sizeof(*x->storage.workspace_events));
+		x->pending_batch.events = x->storage.workspace_events;
+		x->pending_batch.encoded_length = (size_t)header->encoded_length;
+		x->pending_batch.complete = header->complete != 0U;
+		ret = snapshot_digest(x, x->pending_snapshot_digest);
+	}
+	if (ret == 0) {
+		ret = audit_locked(x);
+	}
+	if (ret != 0) {
+		memset(x->storage.cursors, 0, cursors_size);
+		release_pending(x);
+		x->next_cursor_id = 1U;
+		x->next_generation = 1U;
+	}
+	return ret;
+}
+
+int pqcp_sovereign_audit_exporter_recover(struct pqcp_sovereign_audit_exporter *x,
+	const struct pqcp_sovereign_audit_checkpoint_store *store,
+	uint64_t minimum_generation, uint8_t *scratch, size_t capacity)
+{
+	struct checkpoint_header header;
+	uint64_t newest = 0U;
+	bool damaged = false;
+	int ret;
+
+	if (store == NULL || store->read == NULL || store->write == NULL ||
+	    pqcp_sovereign_audit_internal_all_zero(store->binding, DIGEST_BYTES) ||
+	    overlaps(store, sizeof(*store), scratch, capacity)) {
+		return -EINVAL;
+	}
+	ret = exporter_lock(x);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!checkpoint_scratch_valid(x, scratch, capacity) ||
+	    pqcp_sovereign_audit_exporter_checkpoint_capacity(x) == 0U) {
+		ret = -EINVAL;
+		goto out;
+	}
+	if (x->checkpoint_store.read != NULL || x->next_cursor_id != 1U) {
+		ret = -EBUSY;
+		goto out;
+	}
+	for (unsigned int slot = 0U; slot < 2U; ++slot) {
+		ret = read_slot(store, slot, scratch, capacity, &header);
+		if (ret == 0) {
+			newest = MAX(newest, header.generation);
+		} else if (ret == -EBADMSG) {
+			damaged = true;
+		} else if (ret != -ENOENT) {
+			goto wipe;
+		}
+	}
+	if (newest < minimum_generation) {
+		ret = -ESTALE;
+		goto wipe;
+	}
+	if (newest == 0U) {
+		ret = damaged ? -EBADMSG : -ENOENT;
+	} else {
+		ret = read_slot(store, newest & 1U, scratch, capacity, &header);
+		if (ret == 0) {
+			ret = header.generation == newest ?
+				restore_locked(x, &header, scratch + sizeof(header)) : -ESTALE;
+		}
+		/* A slot that disappears during recovery is an I/O failure, not
+		 * an empty journal the caller may initialize.
+		 */
+		if (ret == -ENOENT) {
+			ret = -EIO;
+		}
+	}
+	if (ret == 0 || ret == -ENOENT) {
+		x->checkpoint_store = *store;
+		x->checkpoint_generation = newest;
+	}
+wipe:
+	pqcp_runtime_secure_zero(scratch, capacity);
+out:
+	(void)k_mutex_unlock(&x->lock);
+	return ret;
+}
+
+int pqcp_sovereign_audit_exporter_checkpoint(struct pqcp_sovereign_audit_exporter *x,
+	uint8_t *scratch, size_t capacity)
+{
+	struct checkpoint_header header;
+	size_t length, cursors_size;
+	uint8_t *data;
+	int ret = exporter_lock(x);
+
+	if (ret != 0) {
+		return ret;
+	}
+	if (x->checkpoint_store.write == NULL || !checkpoint_scratch_valid(x, scratch, capacity)) {
+		ret = -EINVAL;
+		goto out;
+	}
+	if (x->checkpoint_generation == UINT64_MAX) {
+		ret = -EOVERFLOW;
+		goto out;
+	}
+	ret = audit_locked(x);
+	if (ret != 0) {
+		goto out;
+	}
+	length = checkpoint_size(x->storage.cursor_capacity, x->pending_batch.event_count);
+	if (length == 0U || length > capacity) {
+		ret = -ENOSPC;
+		goto out;
+	}
+	memset(&header, 0, sizeof(header));
+	header.generation = x->checkpoint_generation + 1U;
+	header.next_cursor_id = x->next_cursor_id;
+	header.encoded_length = x->pending_batch.encoded_length;
+	header.next_generation = x->next_generation;
+	header.cursor_count = x->storage.cursor_capacity;
+	header.event_count = x->pending_batch.event_count;
+	header.version = CHECKPOINT_VERSION;
+	memcpy(header.binding, x->checkpoint_store.binding, DIGEST_BYTES);
+	header.complete = x->pending_batch.complete;
+	ret = source_checkpoint(x->ledger, &header, NULL);
+	if (ret != 0) {
+		goto out;
+	}
+	cursors_size = x->storage.cursor_capacity * sizeof(*x->storage.cursors);
+	data = scratch;
+	memcpy(data, &header, sizeof(header));
+	data += sizeof(header);
+	memcpy(data, x->storage.cursors, cursors_size);
+	data += cursors_size;
+	memcpy(data, &x->pending_batch, BATCH_PREFIX);
+	data += BATCH_PREFIX;
+	memcpy(data, &x->pending_policy, sizeof(x->pending_policy));
+	data += sizeof(x->pending_policy);
+	memcpy(data, x->storage.workspace_events,
+	       header.event_count * sizeof(*x->storage.workspace_events));
+	ret = checkpoint_hash(scratch, length - DIGEST_BYTES, scratch + length - DIGEST_BYTES);
+	if (ret == 0) {
+		ret = x->checkpoint_store.write(x->checkpoint_store.context,
+				header.generation & 1U, scratch, length);
+	}
+	if (ret == 0) {
+		x->checkpoint_generation = header.generation;
+	}
+	pqcp_runtime_secure_zero(scratch, length);
+out:
 	(void)k_mutex_unlock(&x->lock);
 	return ret;
 }

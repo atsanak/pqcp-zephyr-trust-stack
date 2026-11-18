@@ -1039,6 +1039,105 @@ ZTEST(pqcp_sovereign_audit, test_export_digest_binds_canonical_projection_and_do
 	zassert_not_equal(memcmp(expected, batch.batch_digest, sizeof(expected)), 0);
 }
 
+static uint8_t checkpoint_scratch[OUT_CAPACITY];
+static uint8_t checkpoint_slots[2][OUT_CAPACITY];
+static size_t checkpoint_lengths[2];
+static bool tear_checkpoint;
+
+static int read_checkpoint(void *context, unsigned int slot, uint8_t *buffer,
+	size_t capacity, size_t *length)
+{
+	ARG_UNUSED(context);
+	*length = checkpoint_lengths[slot];
+	if (*length == 0U) {
+		return -ENOENT;
+	}
+	if (*length > capacity) {
+		return -ENOSPC;
+	}
+	memcpy(buffer, checkpoint_slots[slot], *length);
+	return 0;
+}
+
+static int write_checkpoint(void *context, unsigned int slot, const uint8_t *buffer,
+	size_t length)
+{
+	ARG_UNUSED(context);
+	zassert_true(length <= sizeof(checkpoint_slots[slot]));
+	checkpoint_lengths[slot] = tear_checkpoint ? length / 2U : length;
+	memcpy(checkpoint_slots[slot], buffer, checkpoint_lengths[slot]);
+	return tear_checkpoint ? -EIO : 0;
+}
+
+static const struct pqcp_sovereign_audit_checkpoint_store checkpoint_store = {
+	.read = read_checkpoint,
+	.write = write_checkpoint,
+	.binding = { 0xA5U },
+};
+
+static int recover_exporter(uint64_t minimum_generation)
+{
+	zassert_ok(pqcp_sovereign_audit_exporter_init(
+		&exporter, &ledger, &export_config, &export_storage));
+	return pqcp_sovereign_audit_exporter_recover(&exporter, &checkpoint_store,
+		minimum_generation, checkpoint_scratch, sizeof(checkpoint_scratch));
+}
+
+static int save_exporter(void)
+{
+	return pqcp_sovereign_audit_exporter_checkpoint(
+		&exporter, checkpoint_scratch, sizeof(checkpoint_scratch));
+}
+
+ZTEST(pqcp_sovereign_audit, test_export_checkpoint_torn_slot_and_ack_restart)
+{
+	uint8_t digest[DIGEST_BYTES];
+	uint64_t id;
+	size_t length;
+
+	append_events(0U, 3U, NULL);
+	reset_exporter();
+	memset(checkpoint_lengths, 0, sizeof(checkpoint_lengths));
+	tear_checkpoint = false;
+	zassert_equal(recover_exporter(0U), -ENOENT);
+	id = open_export();
+	zassert_ok(prepare_export(id, 2001U));
+	length = batch.encoded_length;
+	memcpy(ref_buf, out_buf, length);
+	memcpy(digest, batch.batch_digest, sizeof(digest));
+	zassert_ok(save_exporter());
+	zassert_ok(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 2U, digest, 2002U));
+	tear_checkpoint = true;
+	zassert_equal(save_exporter(), -EIO);
+	tear_checkpoint = false;
+
+	zassert_equal(recover_exporter(2U), -ESTALE);
+	zassert_ok(recover_exporter(1U));
+	zassert_ok(prepare_export(id, 2003U));
+	zassert_true(batch.resumed);
+	zassert_equal(batch.encoded_length, length);
+	zassert_mem_equal(out_buf, ref_buf, length);
+	zassert_ok(pqcp_sovereign_audit_export_acknowledge(
+		&exporter, id, 1U, 2U, digest, 2004U));
+	zassert_ok(save_exporter());
+	zassert_ok(recover_exporter(2U));
+	zassert_ok(prepare_export(id, 2005U));
+	zassert_equal(batch.first_sequence, 3U);
+	zassert_mem_equal(batch.previous_batch_digest, digest, sizeof(digest));
+	zassert_equal(pqcp_sovereign_audit_exporter_recover(&exporter, &checkpoint_store,
+		0U, checkpoint_scratch, sizeof(checkpoint_scratch)), -EBUSY);
+	zassert_ok(pqcp_sovereign_audit_export_close(&exporter, id));
+	zassert_ok(save_exporter());
+	zassert_ok(recover_exporter(3U));
+	zassert_equal(prepare_export(id, 2006U), -ENOENT);
+	zassert_true(open_export() > id);
+	reset_ledger(8U, 1U);
+	zassert_equal(recover_exporter(3U), -ESTALE);
+	append_events(10U, 3U, NULL);
+	zassert_equal(recover_exporter(3U), -ESTALE);
+}
+
 ZTEST(pqcp_sovereign_audit, test_export_real_mldsa_signature_and_failure_atomicity)
 {
 	static struct pqcp_runtime_key_store store;
@@ -1059,7 +1158,9 @@ ZTEST(pqcp_sovereign_audit, test_export_real_mldsa_signature_and_failure_atomici
 	export_config.signing_enabled = true;
 	export_config.signature_required = true;
 	zassert_ok(pqcp_runtime_key_store_generate(&store, &request, &export_config.signing_key));
-	zassert_ok(pqcp_sovereign_audit_exporter_init(&exporter, &ledger, &export_config, &export_storage));
+	memset(checkpoint_lengths, 0, sizeof(checkpoint_lengths));
+	tear_checkpoint = false;
+	zassert_equal(recover_exporter(0U), -ENOENT);
 	uint64_t id = open_export();
 
 	zassert_ok(prepare_export(id, 2001U));
@@ -1071,7 +1172,23 @@ ZTEST(pqcp_sovereign_audit, test_export_real_mldsa_signature_and_failure_atomici
 	size_t length = batch.encoded_length;
 
 	memcpy(ref_buf, out_buf, length);
+	zassert_true(pqcp_sovereign_audit_exporter_checkpoint_capacity(&exporter) <=
+		     sizeof(checkpoint_scratch));
+	zassert_ok(save_exporter());
+	/* New exporter RAM and a new live event buffer. The signed projected
+	 * batch survives even when the original event is no longer retained.
+	 */
+	static struct pqcp_sovereign_event restarted_events[2];
+	struct pqcp_sovereign_audit_export_storage restarted_storage = export_storage;
+
+	restarted_storage.workspace_events = restarted_events;
+	append_events(10U, 10U, NULL);
+	zassert_ok(pqcp_sovereign_audit_exporter_init(
+		&exporter, &ledger, &export_config, &restarted_storage));
+	zassert_ok(pqcp_sovereign_audit_exporter_recover(&exporter, &checkpoint_store,
+		1U, checkpoint_scratch, sizeof(checkpoint_scratch)));
 	zassert_ok(prepare_export(id, 2002U));
+	zassert_equal_ptr(batch.events, restarted_events);
 	zassert_mem_equal(out_buf, ref_buf, length);
 	batch.batch_digest[0] ^= 1U;
 	zassert_not_equal(pqcp_runtime_key_store_verify(&store, &export_config.signing_key,
