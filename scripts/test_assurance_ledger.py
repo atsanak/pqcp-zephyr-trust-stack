@@ -1532,6 +1532,128 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("missing or empty", result["failure_reason"])
 
+    def _write_appraisal_transcript(self, root: Path, body: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path = manifest_path.parent / "01-transparent-appraisal.log"
+        transcript_path.write_text(body, encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "generated_at": "2026-11-18T00:00:00+00:00",
+                    "generator": "scripts/release_check.py",
+                    "required_steps": ["transparent appraisal receipt"],
+                    "transcripts": [
+                        {
+                            "step": "transparent appraisal receipt",
+                            "command": ["true"],
+                            "command_text": "true",
+                            "cwd": str(root),
+                            "returncode": 0,
+                            "duration_seconds": 0.1,
+                            "transcript_path": transcript_path.name,
+                            "sha256": sha256(transcript_path),
+                            "size_bytes": transcript_path.stat().st_size,
+                        }
+                    ],
+                    "qemu_stdout_transcripts": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path
+
+    _APPRAISAL_SPEC = {
+        "id": "supply_chain.transparent_appraisal_receipt",
+        "category": "supply_chain",
+        "claim": "x",
+        "required": True,
+    }
+
+    def _appraisal_marker(self, diff: str = "169/169", forgeries: str = "156/156",
+                          controls: str = "11/11") -> str:
+        return (
+            "PQCP_APPRAISAL_RECEIPT PASS consistency=ok "
+            f"differential_agree={diff} forgeries_rejected={forgeries} "
+            f"controls={controls}\n"
+        )
+
+    def _evaluate_appraisal(self, body: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self._write_appraisal_transcript(Path(tmp), body)
+            return ledger.evaluate_transparent_appraisal_receipt(
+                dict(self._APPRAISAL_SPEC), transcript_manifest=manifest)
+
+    def test_transparent_appraisal_receipt_passes_and_records_counts(self) -> None:
+        result = self._evaluate_appraisal(self._appraisal_marker())
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["forgeries_rejected"], 156)
+        self.assertEqual(result["details"]["differential_total"], 169)
+        self.assertEqual(result["details"]["controls_ok"], 11)
+
+    def test_transparent_appraisal_receipt_fails_on_short_forgery_count(self) -> None:
+        result = self._evaluate_appraisal(
+            self._appraisal_marker(forgeries="150/150"))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("forgery list has 150", result["failure_reason"])
+
+    def test_transparent_appraisal_receipt_fails_on_unrejected_forgery(self) -> None:
+        result = self._evaluate_appraisal(
+            self._appraisal_marker(forgeries="155/156"))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("not all rejected", result["failure_reason"])
+
+    def test_transparent_appraisal_receipt_fails_on_missing_differential(self) -> None:
+        body = (
+            "PQCP_APPRAISAL_RECEIPT PASS consistency=ok "
+            "forgeries_rejected=156/156 controls=11/11\n"
+        )
+        result = self._evaluate_appraisal(body)
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("differential_agree=N/N", result["failure_reason"])
+
+    def test_transparent_appraisal_receipt_fails_on_differential_disagreement(
+            self) -> None:
+        result = self._evaluate_appraisal(
+            self._appraisal_marker(diff="168/169"))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("differential disagreement", result["failure_reason"])
+
+    def test_transparent_appraisal_receipt_fails_on_shrunk_differential(self) -> None:
+        result = self._evaluate_appraisal(
+            self._appraisal_marker(diff="100/100"))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("differential covers 100", result["failure_reason"])
+
+    def test_transparent_appraisal_receipt_fails_without_controls(self) -> None:
+        result = self._evaluate_appraisal(
+            self._appraisal_marker(controls="0/0"))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("positive controls", result["failure_reason"])
+
+    def test_transparent_appraisal_receipt_fails_on_driver_fail_marker(self) -> None:
+        result = self._evaluate_appraisal(
+            "PQCP_APPRAISAL_RECEIPT FAIL consistency=ok "
+            "differential_agree=167/169 forgeries_rejected=153/156 "
+            "controls=11/11\n")
+        self.assertEqual(result["status"], "fail")
+
+    def test_transparent_appraisal_receipt_fails_without_consistency_ok(self) -> None:
+        body = self._appraisal_marker().replace("consistency=ok ", "")
+        result = self._evaluate_appraisal(body)
+        self.assertEqual(result["status"], "fail")
+
+    def test_transparent_appraisal_receipt_fails_without_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "transcripts" / "evidence_transcript_manifest.json"
+            result = ledger.evaluate_transparent_appraisal_receipt(
+                dict(self._APPRAISAL_SPEC), transcript_manifest=manifest)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("missing or empty", result["failure_reason"])
+
     def _write_ct_smoke_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)

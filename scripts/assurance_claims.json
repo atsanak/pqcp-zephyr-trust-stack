@@ -1,5 +1,5 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -382,6 +382,13 @@
       "claim": "Every src/*.c module is assigned a measured evidence level by scripts/audit_evidence_coverage.py: L0 untested (no ztest suite references a function the module defines), L1 tested, L2 gated (an exercising suite is wired into extended checks, release_check, or a workflow), L3 claimed (also bound by the claim catalog or asset trace map). A call-graph pass separates modules that are only reached through another tested module from modules unreachable from every test. The audit is a ratchet against scripts/evidence_coverage_baseline.json: the release gate fails if any module's level drops or if a NEW module appears with no test. The claim states measured coverage, not completeness: modules recorded as L0 in the baseline are known-unproven and stay visible in the transcript summary.",
       "required": true,
       "schema_version_added": 9
+    },
+    {
+      "id": "supply_chain.transparent_appraisal_receipt",
+      "category": "supply_chain",
+      "claim": "The host appraisal of firmware-emitted evidence is a registered, verifier-bound, post-quantum-countersigned Attestation Result. scripts/run_transparent_appraisal.py builds tools/evidence_verifier (pqcp-evidence-verify) and tools/evidence_register, replays the committed device transcripts (signed fixture included), and emits for each a deterministic CBOR statement binding the passport digest, the device ML-DSA public key hash, the evidence trail head, the verdict (CHAIN OK or REJECT), the SHA-256 of the verifier binary that produced it, and the SHA-256 of the transcript. Statements are appended to an RFC 9162 Merkle log built from the unmodified firmware transparency code (include/pqcp_zephyr/fleet_transparency.h, src/fleet_transparency_*.c), whose checkpoints are signed with ML-DSA-65 (vendored mldsa-native, FIPS 204 deterministic variant). Inclusion receipts and release-to-release consistency proofs are re-verified offline against a pinned log key, and the receipt's statement is re-checked against a fresh replay of the supplied transcript. Two independently written verifiers check the Merkle math: the single-source C and scripts/rfc9162_reference.py (stdlib only, no shared code); the driver runs both on every case and requires accept/reject agreement. It then requires every forgery in a fixed list to be REJECTED by the C verifier with the expected reason (bit flips in statement, path node, leaf index, tree size, checkpoint root and signature; wrong log key; an older signed checkpoint with a newer claimed size; a receipt proof from a forked tree under a valid checkpoint; a registered forged verdict and a statement from another verifier build; a tampered transcript; equivocation by two validly signed checkpoints of one log; history rewrite; rollback and replayed checkpoints; truncated, trailing-byte and non-canonical CBOR; seeded random bit sweeps), plus one positive control per class so a verifier that rejects everything cannot pass. Python cannot verify ML-DSA, so for signature-byte flips the C verifier must reject while python reports the signature as delegated; those cases are excluded from the differential count. Proven by the captured step transcript containing PQCP_APPRAISAL_RECEIPT PASS with consistency=ok, differential_agree=169/169, forgeries_rejected=156/156 and controls=11/11. Not claimed: the demo log key is generated from a public seed and is not production custody; there is no witness cosigning or quorum, and the log is single-operator, so a log that equivocates is detected only by a party that holds two of its checkpoints; the verifier binary hash identifies the verifier, it does not prove the verifier correct.",
+      "required": true,
+      "schema_version_added": 10
     }
   ]
 }

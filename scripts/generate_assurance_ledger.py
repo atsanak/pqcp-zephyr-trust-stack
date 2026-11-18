@@ -43,7 +43,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1276,6 +1276,130 @@ def evaluate_firmware_evidence_chain_replay(
     )
 
 
+# Exact counts printed by scripts/run_transparent_appraisal.py with its
+# default seed and sweep size. They are pinned here so a driver that silently
+# drops cases (a shorter forgery list, a differential over fewer inputs, a
+# missing positive control) fails the claim instead of passing with a smaller
+# denominator. Update together with the driver's case list.
+APPRAISAL_EXPECTED_DIFFERENTIAL = 169
+APPRAISAL_EXPECTED_FORGERIES = 156
+APPRAISAL_EXPECTED_CONTROLS = 11
+APPRAISAL_MARKER_RE = re.compile(
+    r"PQCP_APPRAISAL_RECEIPT PASS consistency=ok "
+    r"differential_agree=(\d+)/(\d+) forgeries_rejected=(\d+)/(\d+) "
+    r"controls=(\d+)/(\d+)"
+)
+
+
+def evaluate_transparent_appraisal_receipt(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind supply_chain.transparent_appraisal_receipt to the driver step.
+
+    The driver exits nonzero unless every forgery is rejected, every control
+    is accepted and the C and python verifiers agree on every comparable
+    case, so the PASS marker is only printed when all of that held. The
+    evaluator re-parses the marker and pins the exact counts so the claim
+    cannot be satisfied by a weakened (smaller) case list.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/evidence_verifier::pqcp-evidence-verify",
+        "tools/evidence_register::pqcp-evidence-register",
+        "scripts/rfc9162_reference.py",
+        "scripts/run_transparent_appraisal.py",
+    ]
+    commands = ["python3 scripts/run_transparent_appraisal.py"]
+
+    transcript_path, transcript_sha, transcript_body = _read_named_transcript(
+        transcript_manifest, "transparent appraisal receipt"
+    )
+    if transcript_path is None or not transcript_body:
+        return fail_claim(
+            spec,
+            reason=(
+                "transparent appraisal receipt transcript missing or empty in "
+                f"transcript manifest {transcript_manifest}"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+        )
+    artifacts.append(artifact(transcript_path, label="transparent appraisal receipt transcript"))
+
+    details: dict[str, Any] = {
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_sha,
+        "expected_differential": APPRAISAL_EXPECTED_DIFFERENTIAL,
+        "expected_forgeries": APPRAISAL_EXPECTED_FORGERIES,
+        "expected_controls": APPRAISAL_EXPECTED_CONTROLS,
+    }
+    marker = APPRAISAL_MARKER_RE.search(transcript_body)
+    if marker is None:
+        return fail_claim(
+            spec,
+            reason=(
+                "transparent appraisal receipt transcript lacks the "
+                "PQCP_APPRAISAL_RECEIPT PASS marker with consistency=ok, "
+                "differential_agree=N/N, forgeries_rejected=K/K and "
+                "controls=C/C"
+            ),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    agree, diff_total, rejected, forgery_total, ok, control_total = (
+        int(g) for g in marker.groups()
+    )
+    details.update({
+        "differential_agree": agree,
+        "differential_total": diff_total,
+        "forgeries_rejected": rejected,
+        "forgeries_total": forgery_total,
+        "controls_ok": ok,
+        "controls_total": control_total,
+    })
+    problems = []
+    if agree != diff_total:
+        problems.append(f"differential disagreement {agree}/{diff_total}")
+    if rejected != forgery_total:
+        problems.append(f"forgeries not all rejected {rejected}/{forgery_total}")
+    if ok != control_total:
+        problems.append(f"positive controls not all accepted {ok}/{control_total}")
+    if diff_total != APPRAISAL_EXPECTED_DIFFERENTIAL:
+        problems.append(
+            f"differential covers {diff_total} cases, expected "
+            f"{APPRAISAL_EXPECTED_DIFFERENTIAL}"
+        )
+    if forgery_total != APPRAISAL_EXPECTED_FORGERIES:
+        problems.append(
+            f"forgery list has {forgery_total} cases, expected "
+            f"{APPRAISAL_EXPECTED_FORGERIES}"
+        )
+    if control_total != APPRAISAL_EXPECTED_CONTROLS:
+        problems.append(
+            f"{control_total} positive controls, expected "
+            f"{APPRAISAL_EXPECTED_CONTROLS}"
+        )
+    if problems:
+        return fail_claim(
+            spec,
+            reason="transparent appraisal receipt: " + "; ".join(problems),
+            validators=validators,
+            evidence_artifacts=artifacts,
+            commands=commands,
+            details=details,
+        )
+    return pass_claim(
+        spec,
+        validators=validators,
+        evidence_artifacts=artifacts,
+        commands=commands,
+        details=details,
+    )
+
+
 # Text replay parsers (verdict, seal, passport, tamper matrix, trail,
 # signature reassembler) plus fleet CBOR, COSE_Sign1, COSE_Key and the
 # policy module codec. Keep in sync with tools/evidence_fuzzer.
@@ -2364,6 +2488,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest,
         ),
         "release.evidence_coverage_ratchet": lambda spec: evaluate_evidence_coverage_ratchet(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "supply_chain.transparent_appraisal_receipt": lambda spec: evaluate_transparent_appraisal_receipt(
             spec, transcript_manifest=transcript_manifest,
         ),
         "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(
