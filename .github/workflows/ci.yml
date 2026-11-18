@@ -601,7 +601,11 @@ jobs:
       - name: Run release gate (release_check.py)
         working-directory: ${{ env.ZEPHYR_WORKSPACE }}
         shell: bash
-        timeout-minutes: 8
+        # The fast gate now also builds and runs the host receipt tools
+        # (cmake + differential suite); 8 minutes no longer fits. Splitting
+        # the gate across jobs is deliberately not done: the transcript-bound
+        # ledger needs every step's transcript in one output root.
+        timeout-minutes: 20
         run: |
           set -o pipefail
           python "$GITHUB_WORKSPACE/scripts/release_check.py" \
