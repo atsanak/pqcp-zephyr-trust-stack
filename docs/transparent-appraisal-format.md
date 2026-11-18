@@ -158,10 +158,17 @@ pqcp-evidence-register register --log-dir D --log-pk P --statement STMT.cbor [--
 pqcp-evidence-register checkpoint --log-dir D --seed-file S --sequence N [--timestamp-ms T] [--tree-size K] --out CKPT.cbor
 pqcp-evidence-register receipt --log-dir D --checkpoint CKPT.cbor --leaf-index I --out R.cbor [--allow-mismatch]
 pqcp-evidence-register prove-consistency --log-dir D --old-checkpoint OLD.cbor --new-checkpoint NEW.cbor --out C.cbor [--allow-mismatch]
+pqcp-evidence-register sign-file --seed-file S --in F --out SIG
+pqcp-evidence-register verify-file --pk P --in F --sig SIG
 pqcp-evidence-verify --emit-statement STMT.cbor [--verifier-bin B] transcript.log
 pqcp-evidence-verify --receipt R.cbor --log-pk P [--verifier-bin B] transcript.log
 pqcp-evidence-verify --consistency C.cbor --log-pk P
 ```
+
+`sign-file` / `verify-file` are not part of the log: they sign arbitrary file
+bytes (kit provenance, `docs/kit-provenance.md`) with deterministic ML-DSA-65
+under the separate context `PQCP-KIT-PROVENANCE-V1`; the raw signature file is
+3309 bytes. The checkpoint context above is never accepted by `verify-file`.
 
 Seed files are exactly 32 raw bytes; no tool in this chain ever reads
 randomness. Statements for REJECT verdicts are emitted too (the verifier exits 1
