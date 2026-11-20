@@ -272,7 +272,7 @@ hard to overclaim.
 | 6 | `samples/pqcp_deployment_advisor` + host replay | `trail_replay=true ... trail_identity_binding=true` |
 | 7 | `python3 scripts/run_transparent_appraisal.py` | `PQCP_APPRAISAL_RECEIPT PASS consistency=ok differential_agree=169/169 forgeries_rejected=156/156 controls=11/11` |
 | 8 | `python3 scripts/run_model_checks.py --rediscover` | `PQCP_MODEL_REDISCOVERY PASS rediscovered=10/10` |
-| 9 | `python3 scripts/run_ct_trace_checks.py --opt default` and `--rediscover` | `PQCP_CT_TRACE PASS ... distinct=1` and `PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3` |
+| 9 | `python3 scripts/run_ct_trace_checks.py --opt default --opt speed --opt debug` and `--rediscover` | `PQCP_CT_TRACE PASS ... distinct=1` and `PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3` |
 
 Claims 1–4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
@@ -344,8 +344,7 @@ Non-claims: not a constant-time proof; sampled keys and ciphertexts only
 (8 keys x 6 ciphertexts); x86_64 under emulation, no cache replacement,
 speculation or power model, no Cortex-M timing; ML-KEM decapsulation only
 (ML-DSA needs upstream declassification points and is future work); the
-optimisation matrix is not claimed (the size-optimisation setting produced
-identical instruction counts, so only the default build is claimed);
+the clean test holds at three optimisation levels (Zephyr's default -Os, -O2, -Og; 48 regions each) but the leak re-injection runs at the default level only;
 clangover itself is a Clang code-generation bug and the SDK uses GCC, so
 only its source pattern is injected; the leak list is the project's own and
 shows sensitivity to those patterns, not to every leak class.
