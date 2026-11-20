@@ -271,6 +271,8 @@ hard to overclaim.
 | 5 | `samples/pqcp_deployment_advisor` + host replay | `PQCP_DEPLOYMENT_TAMPER_MATRIX ... coverage_permille=1000` |
 | 6 | `samples/pqcp_deployment_advisor` + host replay | `trail_replay=true ... trail_identity_binding=true` |
 | 7 | `python3 scripts/run_transparent_appraisal.py` | `PQCP_APPRAISAL_RECEIPT PASS consistency=ok differential_agree=169/169 forgeries_rejected=156/156 controls=11/11` |
+| 8 | `python3 scripts/run_model_checks.py --rediscover` | `PQCP_MODEL_REDISCOVERY PASS rediscovered=10/10` |
+| 9 | `python3 scripts/run_ct_trace_checks.py --opt default` and `--rediscover` | `PQCP_CT_TRACE PASS ... distinct=1` and `PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3` |
 
 Claims 1–4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
@@ -279,3 +281,71 @@ the step if tamper matrix or trail markers are present but inconsistent.
 Claim 7 is the required claim `supply_chain.transparent_appraisal_receipt`
 (schema 10) and the `transparent appraisal receipt` step of
 `scripts/release_check.py`, which runs after `evidence chain host replay`.
+Claim 8 is the required claim `security.state_machine_model_conformance`
+(schema 11) and the `edge model conformance` step, which is full-gate only
+because rediscovery needs ten QEMU builds.
+
+## Claim 8: measured defect-finding power of in-image model-based testing
+
+The stack tests its zero-trust edge state machines against abstract models
+inside the firmware image (qemu_x86_64), shrinks any counterexample on the
+device and prints it as a replayable marker. The power of the oracle is
+measured, not assumed: ten defects this project found by hand
+(commit `b7d4cc1`) are re-injected one at a time into a private copy of the
+sources, and the models must rediscover each one automatically. The count
+(10/10) is ratcheted by `scripts/model_rediscovery_baseline.json`.
+
+Prior art: QuickCheck state-machine testing, Hypothesis stateful testing,
+Jepsen/Knossos, and re-injected-fault studies (Defects4J, Magma, Just et
+al. FSE 2014). Not new: model-based testing itself. New here: it runs in
+the target image against PQC trust-plane firmware, and its sensitivity is a
+ledger claim that can fail.
+
+Non-claims: bounded traces (at most 64 ops, 64 seeds per module); four
+modules only (principal directory, session registry, credential cache,
+policy distributor); abstract models are not full specifications; no
+concurrency interleavings; rediscovery of known bug classes shows
+sensitivity, not absence of other defects.
+Claim 9 is the required claim `security.ct_trace_relational` (schema 12);
+its two gate steps (`ct trace relational`, `ct leak rediscovery`) run in the
+full gate only.
+
+## Claim 9: relational leakage testing of the deployed image, with measured power
+
+A QEMU TCG plugin fingerprints four observation channels while the shipped
+qemu_x86_64 image decapsulates ML-KEM-768: executed instruction addresses,
+exact data addresses, data addresses at cache-line granularity, and the
+dividend of every `div`/`idiv` (decoded from opcode bytes). For a fixed key,
+a valid ciphertext and several corruptions must leave an identical
+fingerprint on every channel. Variation across keys (rejection sampling of
+the public matrix) is reported, not judged.
+
+The detector is calibrated: five known PQC timing-leak patterns (clangover-
+style secret branch, secret-indexed table lookup, KyberSlash-style division,
+early-exit ciphertext compare, secret-dependent early `continue`) are
+injected into a private copy of mlkem-native and must each be rediscovered,
+while three harmless rewrites must not be flagged. Measured: 5/5
+rediscovered, 0/3 false positives. The earlier counts-only evidence
+(claim 3) would have missed 2/5 (the table lookup and the division), which
+quantifies what the address and div channels add.
+
+Prior art, to the best of a literature search (2024-2026): KyberSlash
+(Bernstein et al., TCHES 2025) found the division leaks with a patched
+Valgrind on host builds; LmSpec/LmTest (Barthe et al., CCS 2024) tests host
+libraries under hypothetical leakage models; "Breaking Bad" (Schneider et
+al., ASIA CCS 2025) shows compilers introduce violations; MicroWalk and DATA
+compare binary traces on host binaries. Not new: trace comparison, fault
+injection into detectors, declassification. New here: relational multi-channel
+testing of the cross-compiled Zephyr image under whole-system emulation,
+with the detector's sensitivity and specificity measured by re-injected PQC
+leak patterns and enforced in the release ledger.
+
+Non-claims: not a constant-time proof; sampled keys and ciphertexts only
+(8 keys x 6 ciphertexts); x86_64 under emulation, no cache replacement,
+speculation or power model, no Cortex-M timing; ML-KEM decapsulation only
+(ML-DSA needs upstream declassification points and is future work); the
+optimisation matrix is not claimed (the size-optimisation setting produced
+identical instruction counts, so only the default build is claimed);
+clangover itself is a Clang code-generation bug and the SDK uses GCC, so
+only its source pattern is injected; the leak list is the project's own and
+shows sensitivity to those patterns, not to every leak class.

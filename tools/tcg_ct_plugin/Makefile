@@ -9,6 +9,9 @@
 
 QEMU_PLUGIN_INC ?= /usr/include
 GLIB_CFLAGS ?= $(shell pkg-config --cflags glib-2.0 2>/dev/null)
+# The trace plugin needs GByteArray for qemu_plugin_read_register; the QEMU
+# host binary does not export glib symbols, so the plugin links glib itself.
+GLIB_LIBS ?= $(shell pkg-config --libs glib-2.0 2>/dev/null)
 
 CC ?= cc
 CFLAGS ?= -O2 -Wall -Wextra -fPIC
@@ -24,13 +27,17 @@ LDFLAGS := -shared
 endif
 
 PLUGIN := libpqcp_ct_insn.$(PLUGIN_EXT)
+TRACE_PLUGIN := libpqcp_ct_trace.$(PLUGIN_EXT)
 
-all: $(PLUGIN)
+all: $(PLUGIN) $(TRACE_PLUGIN)
 
 $(PLUGIN): src/ct_insn_plugin.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(LDFLAGS) $< -o $@
 
+$(TRACE_PLUGIN): src/ct_trace_plugin.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(LDFLAGS) $< $(GLIB_LIBS) -o $@
+
 clean:
-	rm -f $(PLUGIN)
+	rm -f $(PLUGIN) $(TRACE_PLUGIN)
 
 .PHONY: all clean
