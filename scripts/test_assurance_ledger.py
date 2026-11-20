@@ -1325,6 +1325,69 @@ class AssuranceLedgerTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "fail")
 
+    CLEAN_TRACE = (
+        "PQCP_CT_TRACE PASS alg=MLKEM-768 opt=default regions=48 groups=8 "
+        "channels=pc,addr,line,div distinct=1 bits=0.00 miss_bound_95=0.062\n"
+        "[ct-trace] PASS: every region is indistinguishable\n"
+    )
+    REDISCOVERY = (
+        "PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3 "
+        "missed_by_counts_only=2/5\n"
+    )
+
+    def _write_ct_trace_transcripts(self, root: Path, clean: str, redis: str) -> Path:
+        manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        entries = []
+        for step, body, name in (
+            ("ct trace relational", clean, "01-ct-trace.log"),
+            ("ct leak rediscovery", redis, "02-ct-leak.log"),
+        ):
+            path = manifest_path.parent / name
+            path.write_text(body, encoding="utf-8")
+            entries.append({
+                "step": step, "transcript_path": name,
+                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                "size_bytes": len(body.encode()), "returncode": 0,
+            })
+        manifest_path.write_text(
+            json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+            encoding="utf-8")
+        return manifest_path
+
+    def _eval_ct_trace(self, clean: str, redis: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self._write_ct_trace_transcripts(Path(tmp), clean, redis)
+            spec = {"id": "security.ct_trace_relational", "category": "security",
+                    "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_relational(
+                spec, transcript_manifest=manifest)
+
+    def test_ct_trace_relational_passes_with_both_markers(self) -> None:
+        result = self._eval_ct_trace(self.CLEAN_TRACE, self.REDISCOVERY)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["leaks_rediscovered"], "5/5")
+
+    def test_ct_trace_relational_fails_when_a_leak_is_missed(self) -> None:
+        for redis in (
+            self.REDISCOVERY.replace("leaks=5/5", "leaks=4/5"),
+            self.REDISCOVERY.replace("benign_flagged=0/3", "benign_flagged=1/3"),
+            self.REDISCOVERY.replace("PASS", "FAIL"),
+            "",
+        ):
+            result = self._eval_ct_trace(self.CLEAN_TRACE, redis or "noise\n")
+            self.assertEqual(result["status"], "fail", redis)
+
+    def test_ct_trace_relational_fails_without_clean_run_evidence(self) -> None:
+        for clean in (
+            self.CLEAN_TRACE.replace("distinct=1", "distinct=2"),
+            self.CLEAN_TRACE.replace("PASS", "FAIL"),
+            self.CLEAN_TRACE.replace("groups=8", "groups=1"),
+            self.CLEAN_TRACE.replace("channels=pc,addr,line,div", "channels=pc"),
+        ):
+            result = self._eval_ct_trace(clean, self.REDISCOVERY)
+            self.assertEqual(result["status"], "fail", clean)
+
     def _write_fuzz_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)

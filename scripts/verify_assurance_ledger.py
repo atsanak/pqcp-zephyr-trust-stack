@@ -16,7 +16,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 
 VALID_STATUSES = {"pass", "fail", "not_applicable"}
 SUPPORTED_LEDGER_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
 POST_LEDGER_CLAIMS = {
     "release.reference_values",
     "firmware.assurance_status_report",
