@@ -24,13 +24,17 @@ LDFLAGS := -shared
 endif
 
 PLUGIN := libpqcp_ct_insn.$(PLUGIN_EXT)
+TRACE_PLUGIN := libpqcp_ct_trace.$(PLUGIN_EXT)
 
-all: $(PLUGIN)
+all: $(PLUGIN) $(TRACE_PLUGIN)
 
 $(PLUGIN): src/ct_insn_plugin.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(LDFLAGS) $< -o $@
 
+$(TRACE_PLUGIN): src/ct_trace_plugin.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(LDFLAGS) $< -o $@
+
 clean:
-	rm -f $(PLUGIN)
+	rm -f $(PLUGIN) $(TRACE_PLUGIN)
 
 .PHONY: all clean
