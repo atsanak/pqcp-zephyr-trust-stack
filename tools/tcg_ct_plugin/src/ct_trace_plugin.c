@@ -68,16 +68,24 @@ static void reset_region(void)
 	h_pc = h_addr = h_line = h_div = FNV_OFFSET;
 }
 
+/*
+ * One scratch buffer for the whole run. The QEMU host binary exports no glib
+ * symbols, so the plugin links glib itself (GLIB_LIBS in the Makefile).
+ */
+static GByteArray *scratch;
+
 static uint64_t read_reg(struct qemu_plugin_register *reg)
 {
-	GByteArray *buf = g_byte_array_new();
 	uint64_t value = 0U;
 
-	if (reg != NULL && qemu_plugin_read_register(reg, buf) > 0 &&
-	    buf->len >= 8U) {
-		memcpy(&value, buf->data, 8U);
+	if (scratch == NULL) {
+		scratch = g_byte_array_new();
 	}
-	g_byte_array_free(buf, TRUE);
+	scratch->len = 0U;
+	if (reg != NULL && qemu_plugin_read_register(reg, scratch) > 0 &&
+	    scratch->len >= 8U) {
+		memcpy(&value, scratch->data, 8U);
+	}
 	return value;
 }
 
