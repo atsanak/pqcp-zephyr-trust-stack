@@ -1,0 +1,4 @@
+{
+  "leaks_rediscovered_min": 5,
+  "benign_false_positives_max": 0
+}
