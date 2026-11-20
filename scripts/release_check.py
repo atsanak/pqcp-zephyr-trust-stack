@@ -50,6 +50,8 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "evidence parser fuzz",
     "edge model conformance",
     "ct instruction-count",
+    "ct trace relational",
+    "ct leak rediscovery",
     "ct smoke ztest run",
     "ct instruction policy",
     "benchmark_csv",
@@ -595,6 +597,7 @@ def main() -> int:
     transparent_appraisal_output_dir = output_root / "transparent_appraisal"
     edge_model_output_dir = output_root / "edge_model"
     ct_instruction_output_dir = output_root / "ct_instruction"
+    ct_trace_output_dir = output_root / "ct_trace"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
@@ -2018,6 +2021,42 @@ def main() -> int:
                 "PQCP_CT_INSTRUCTION_COUNT PASS",
                 "[ct-insn] PASS:",
             ),
+        ),
+        Step(
+            name="ct trace relational",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_ct_trace_checks.py"),
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(ct_trace_output_dir / "clean"),
+                "--opt",
+                "default",
+            ],
+            cwd=module_path,
+            timeout=900,
+            success_markers=(
+                "PQCP_CT_TRACE PASS",
+                "[ct-trace] PASS:",
+            ),
+        ),
+        Step(
+            name="ct leak rediscovery",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_ct_trace_checks.py"),
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(ct_trace_output_dir / "rediscovery"),
+                "--rediscover",
+                "--opt",
+                "default",
+            ],
+            cwd=module_path,
+            timeout=3600,
+            success_markers=("PQCP_CT_TRACE_REDISCOVERY PASS",),
         ),
         Step(
             name="ct smoke ztest build",

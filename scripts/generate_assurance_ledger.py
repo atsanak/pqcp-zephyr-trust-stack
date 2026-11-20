@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1736,6 +1736,78 @@ def evaluate_ct_instruction_count(
     )
 
 
+def evaluate_ct_trace_relational(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind security.ct_trace_relational to the clean run AND the rediscovery.
+
+    The clean run must show one fingerprint per channel within every key
+    group; the rediscovery run must show every injected leak found and no
+    benign change flagged, so the detector's sensitivity and specificity are
+    part of the evidence, not assumed.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/tcg_ct_plugin::pqcp_ct_trace",
+        "scripts/run_ct_trace_checks.py",
+        "scripts/ct_leak_rediscovery.py",
+    ]
+    commands = [
+        "python3 scripts/run_ct_trace_checks.py --opt default",
+        "python3 scripts/run_ct_trace_checks.py --rediscover --opt default",
+    ]
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in ("ct trace relational", "ct leak rediscovery"):
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+
+    clean = re.search(
+        r"PQCP_CT_TRACE PASS alg=MLKEM-768 opt=\S+ regions=(\d+) groups=(\d+) "
+        r"channels=pc,addr,line,div distinct=1 bits=0\.00",
+        bodies["ct trace relational"])
+    redis = re.search(
+        r"PQCP_CT_TRACE_REDISCOVERY PASS leaks=(\d+)/(\d+) "
+        r"benign_flagged=0/(\d+) missed_by_counts_only=(\d+)/(\d+)",
+        bodies["ct leak rediscovery"])
+    problems = []
+    if clean is None:
+        problems.append("no clean-run PQCP_CT_TRACE PASS marker with "
+                        "distinct=1 on all four channels")
+    elif int(clean.group(2)) < 2 or int(clean.group(1)) < 12:
+        problems.append("clean run covered too few keys or regions")
+    if redis is None:
+        problems.append("no PQCP_CT_TRACE_REDISCOVERY PASS marker with "
+                        "every leak found and no benign change flagged")
+    else:
+        found, total, benign = (int(redis.group(i)) for i in (1, 2, 3))
+        if found != total or total < 5 or benign < 3:
+            problems.append(
+                f"rediscovery incomplete: leaks={found}/{total}, "
+                f"benign controls={benign}")
+        details["leaks_rediscovered"] = f"{found}/{total}"
+        details["missed_by_counts_only"] = (
+            f"{redis.group(4)}/{redis.group(5)}")
+    if clean is not None:
+        details["regions"] = int(clean.group(1))
+        details["key_groups"] = int(clean.group(2))
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_evidence_coverage_ratchet(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2651,6 +2723,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         ),
         "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(
             spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.ct_trace_relational": lambda spec: evaluate_ct_trace_relational(
+            spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(
             spec, transcript_manifest=transcript_manifest,
