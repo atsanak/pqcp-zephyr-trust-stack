@@ -1325,11 +1325,11 @@ class AssuranceLedgerTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "fail")
 
-    CLEAN_TRACE = (
-        "PQCP_CT_TRACE PASS alg=MLKEM-768 opt=default regions=48 groups=8 "
+    CLEAN_TRACE = "".join(
+        f"PQCP_CT_TRACE PASS alg=MLKEM-768 opt={opt} regions=48 groups=8 "
         "channels=pc,addr,line,div distinct=1 bits=0.00 miss_bound_95=0.062\n"
-        "[ct-trace] PASS: every region is indistinguishable\n"
-    )
+        for opt in ("default", "speed", "debug")
+    ) + "[ct-trace] PASS: every region is indistinguishable\n"
     REDISCOVERY = (
         "PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3 "
         "missed_by_counts_only=2/5\n"
@@ -1384,6 +1384,8 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.CLEAN_TRACE.replace("PASS", "FAIL"),
             self.CLEAN_TRACE.replace("groups=8", "groups=1"),
             self.CLEAN_TRACE.replace("channels=pc,addr,line,div", "channels=pc"),
+            self.CLEAN_TRACE.replace("opt=debug", "opt=default"),
+            self.CLEAN_TRACE.replace("opt=speed", "opt=default"),
         ):
             result = self._eval_ct_trace(clean, self.REDISCOVERY)
             self.assertEqual(result["status"], "fail", clean)
