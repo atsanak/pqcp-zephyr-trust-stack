@@ -109,6 +109,9 @@ def main() -> int:
     parser.add_argument("--west")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--qemu-plugin-inc", type=Path)
+    parser.add_argument("--rediscover", action="store_true",
+                        help="re-inject known leak patterns and require the "
+                             "test to catch them (sensitivity/specificity)")
     parser.add_argument("--opt", action="append",
                         choices=sorted(OPT_FLAGS), default=None,
                         help="optimisation level(s); default: default,size")
@@ -127,6 +130,18 @@ def main() -> int:
     west_root = detect_west_root(args.west_root or MODULE_PATH)
     west_cmd = discover_west(args.west, west_root, MODULE_PATH)
     plugin = build_plugin(inc, env)
+
+    if args.rediscover:
+        import ct_leak_rediscovery as leaks  # noqa: PLC0415
+
+        def run_trace(tree, build_dir, outfile, opt):
+            return trace_once(tree, build_dir, outfile, opt=opt,
+                              west_root=west_root, west_cmd=west_cmd,
+                              env=env, plugin=plugin)
+
+        only = set(os.environ.get("PQCP_CT_LEAK_ONLY", "").split(",")) - {""}
+        return leaks.rediscover(run_trace, (args.opt or ["default"])[0],
+                                only or None)
 
     failed = False
     for opt in args.opt or ["default", "size"]:

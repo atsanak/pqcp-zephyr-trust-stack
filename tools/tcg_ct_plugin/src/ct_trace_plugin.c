@@ -187,12 +187,37 @@ static void mem_access(unsigned int cpu_index, qemu_plugin_meminfo_t info,
 	h_line = mix(h_line, vaddr >> 6);
 }
 
-static int is_div(const char *disas)
+/*
+ * x86 DIV/IDIV are opcode F6/F7 with ModRM.reg = 6 (DIV) or 7 (IDIV). The
+ * mnemonic is not used: the SDK's QEMU is built without a disassembler, so
+ * qemu_plugin_insn_disas() cannot be relied on. Legacy prefixes and REX are
+ * skipped first.
+ */
+static int insn_is_div(struct qemu_plugin_insn *insn)
 {
-	while (*disas == ' ' || *disas == '\t') {
-		disas++;
+	uint8_t buf[16];
+	size_t len = qemu_plugin_insn_data(insn, buf, sizeof(buf));
+	size_t i = 0U;
+
+	while (i < len) {
+		const uint8_t b = buf[i];
+
+		if (b == 0x66U || b == 0x67U || b == 0xF2U || b == 0xF3U ||
+		    b == 0x2EU || b == 0x36U || b == 0x3EU || b == 0x26U ||
+		    b == 0x64U || b == 0x65U || (b >= 0x40U && b <= 0x4FU)) {
+			i++;
+			continue;
+		}
+		break;
 	}
-	return strncmp(disas, "div", 3) == 0 || strncmp(disas, "idiv", 4) == 0;
+	if (i + 1U >= len || (buf[i] != 0xF6U && buf[i] != 0xF7U)) {
+		return 0;
+	}
+	{
+		const unsigned int reg = (buf[i + 1U] >> 3) & 7U;
+
+		return reg == 6U || reg == 7U;
+	}
 }
 
 static void tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
@@ -204,10 +229,8 @@ static void tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 		struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
 		const uint64_t vaddr = qemu_plugin_insn_vaddr(insn);
 		void *ud = (void *)(uintptr_t)vaddr;
-		char *disas = qemu_plugin_insn_disas(insn);
-		const int divide = disas != NULL && is_div(disas);
+		const int divide = insn_is_div(insn);
 
-		g_free(disas);
 		if (vaddr == begin_addr) {
 			/* Begin must read rdi at the instruction itself. */
 			qemu_plugin_register_vcpu_insn_exec_cb(
