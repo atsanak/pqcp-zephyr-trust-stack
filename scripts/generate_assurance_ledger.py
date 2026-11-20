@@ -1770,19 +1770,29 @@ def evaluate_ct_trace_relational(
         details[f"{step} transcript_sha256"] = sha
         bodies[step] = body
 
-    clean = re.search(
-        r"PQCP_CT_TRACE PASS alg=MLKEM-768 opt=\S+ regions=(\d+) groups=(\d+) "
-        r"channels=pc,addr,line,div distinct=1 bits=0\.00",
-        bodies["ct trace relational"])
+    clean_opts = set()
+    clean_regions = 0
+    clean_groups = 0
+    for m in re.finditer(
+            r"PQCP_CT_TRACE PASS alg=MLKEM-768 opt=(\S+) regions=(\d+) "
+            r"groups=(\d+) channels=pc,addr,line,div distinct=1 "
+            r"bits=0\.00", bodies["ct trace relational"]):
+        clean_opts.add(m.group(1))
+        clean_regions = max(clean_regions, int(m.group(2)))
+        clean_groups = max(clean_groups, int(m.group(3)))
     redis = re.search(
         r"PQCP_CT_TRACE_REDISCOVERY PASS leaks=(\d+)/(\d+) "
         r"benign_flagged=0/(\d+) missed_by_counts_only=(\d+)/(\d+)",
         bodies["ct leak rediscovery"])
     problems = []
-    if clean is None:
+    required_opts = {"default", "speed", "debug"}
+    if not clean_opts:
         problems.append("no clean-run PQCP_CT_TRACE PASS marker with "
                         "distinct=1 on all four channels")
-    elif int(clean.group(2)) < 2 or int(clean.group(1)) < 12:
+    elif not required_opts <= clean_opts:
+        problems.append("clean run lacks optimisation level(s): "
+                        + ", ".join(sorted(required_opts - clean_opts)))
+    elif clean_groups < 2 or clean_regions < 12:
         problems.append("clean run covered too few keys or regions")
     if redis is None:
         problems.append("no PQCP_CT_TRACE_REDISCOVERY PASS marker with "
@@ -1796,9 +1806,10 @@ def evaluate_ct_trace_relational(
         details["leaks_rediscovered"] = f"{found}/{total}"
         details["missed_by_counts_only"] = (
             f"{redis.group(4)}/{redis.group(5)}")
-    if clean is not None:
-        details["regions"] = int(clean.group(1))
-        details["key_groups"] = int(clean.group(2))
+    if clean_opts:
+        details["regions"] = clean_regions
+        details["key_groups"] = clean_groups
+        details["optimisation_levels"] = sorted(clean_opts)
     if problems:
         return fail_claim(
             spec, reason="; ".join(problems), validators=validators,

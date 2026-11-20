@@ -37,7 +37,7 @@ DEVICE_MARKER = "PQCP_CT_TRACE_APP alg=MLKEM-768"
 ALG = "MLKEM-768"
 OPT_FLAGS = {
     "default": [],
-    "size": ["-DCONFIG_SIZE_OPTIMIZATIONS=y"],
+    # Zephyr's default is already -Os, so "default" covers size.
     "speed": ["-DCONFIG_SPEED_OPTIMIZATIONS=y"],
     "debug": ["-DCONFIG_DEBUG_OPTIMIZATIONS=y"],
 }
@@ -114,7 +114,7 @@ def main() -> int:
                              "test to catch them (sensitivity/specificity)")
     parser.add_argument("--opt", action="append",
                         choices=sorted(OPT_FLAGS), default=None,
-                        help="optimisation level(s); default: default,size")
+                        help="optimisation level(s); default: default,speed,debug")
     args = parser.parse_args()
 
     if shutil.which("make") is None:
@@ -144,7 +144,7 @@ def main() -> int:
                                 only or None)
 
     failed = False
-    for opt in args.opt or ["default", "size"]:
+    for opt in args.opt or ["default", "speed", "debug"]:
         print(f"[ct-trace] ML-KEM-768 decapsulation, optimisation={opt}")
         text = trace_once(MODULE_PATH, out / f"build-{opt}",
                           out / f"trace-{opt}.txt", opt=opt,
