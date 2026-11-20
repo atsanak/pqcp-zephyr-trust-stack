@@ -23,3 +23,8 @@ symbols (the plugin links glib itself) and has no disassembler (x86 div is
 decoded from opcode bytes); traces of different keys differ because the
 public matrix is expanded by rejection sampling, so the relation is checked
 within a key. See docs/novelty-claims.md claim 9 for scope and non-claims.
+
+Optimisation levels: the clean test runs at Zephyr's default (-Os), speed
+(-O2) and debug (-Og); instruction counts per region differ (about 814k,
+787k, 974k) so these are genuinely different builds. An earlier `size`
+level was the same build as the default and was removed.
