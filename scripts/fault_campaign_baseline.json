@@ -1,0 +1,5 @@
+{
+  "min_sites": 300,
+  "boot_exploitable_min": 1,
+  "boot_negative_exploitable_max": 0
+}
