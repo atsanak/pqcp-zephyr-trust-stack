@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1819,6 +1819,66 @@ def evaluate_ct_trace_relational(
         commands=commands, details=details)
 
 
+def evaluate_fault_campaign_boot_selftest(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind security.fault_campaign_boot_selftest to the fault gate step.
+
+    The gate prints PQCP_FAULT_GATE PASS only when the campaign was calibrated,
+    still found exploitable sites on the valid-only boot image, and found none
+    once the boot self-test carries negative vectors; the evaluator re-parses
+    the numbers so a weakened gate cannot pass silently.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "scripts/run_fault_campaign.py",
+        "scripts/run_fault_gate.py",
+        "scripts/fault_oracle.py",
+        "scripts/fault_inject.py",
+    ]
+    commands = ["python3 scripts/run_fault_gate.py --output-dir <dir>"]
+    path, sha, body = _read_named_transcript(transcript_manifest, "fault campaign")
+    if path is None or not body:
+        return fail_claim(
+            spec, reason=f"fault campaign transcript missing or empty in {transcript_manifest}",
+            validators=validators, evidence_artifacts=artifacts, commands=commands)
+    artifacts.append(artifact(path, label="fault campaign transcript"))
+    details: dict[str, object] = {"transcript_sha256": sha}
+    gate = re.search(
+        r"PQCP_FAULT_GATE PASS sites=(\d+) exploitable_boot=(\d+) "
+        r"exploitable_boot_negative=(\d+) detected_boot=(\d+) "
+        r"detected_boot_negative=(\d+)", body)
+    problems = []
+    if gate is None:
+        problems.append("no PQCP_FAULT_GATE PASS marker")
+    else:
+        sites, boot, neg, det, det_neg = (int(g) for g in gate.groups())
+        details.update({"sites": sites, "exploitable_valid_only_boot": boot,
+                        "exploitable_negative_boot": neg,
+                        "detected_valid_only_boot": det,
+                        "detected_negative_boot": det_neg})
+        if sites < 300:
+            problems.append(f"campaign too small ({sites} sites)")
+        if boot < 1:
+            problems.append("campaign found no exploitable site on the "
+                            "valid-only boot image (not sensitive)")
+        if neg != 0:
+            problems.append(f"{neg} exploitable site(s) survive negative vectors")
+        if det_neg <= det:
+            problems.append("negative vectors detect no more than valid-only")
+    campaigns = re.findall(r"PQCP_FAULT_CAMPAIGN variant=(\S+) .*controls_ok=(\d+)/(\d+)", body)
+    if {v for v, _, _ in campaigns} != {"boot", "boot-negative"} or any(
+            ok != total or int(total) == 0 for _, ok, total in campaigns):
+        problems.append("missing campaign marker or identity controls not clean")
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_evidence_coverage_ratchet(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2734,6 +2794,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         ),
         "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(
             spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.fault_campaign_boot_selftest": lambda spec: evaluate_fault_campaign_boot_selftest(
+            spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_relational": lambda spec: evaluate_ct_trace_relational(
             spec, transcript_manifest=transcript_manifest

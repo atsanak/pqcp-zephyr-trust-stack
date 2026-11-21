@@ -1,5 +1,5 @@
 {
-  "schema_version": 12,
+  "schema_version": 13,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -403,6 +403,13 @@
       "claim": "Under the pqcp_ct_trace QEMU TCG plugin (tools/tcg_ct_plugin), every ML-KEM-768 decapsulation of tests/ztest_ct_trace on the deployed qemu_x86_64 image leaves an identical fingerprint on four observation channels at three optimisation levels (Zephyr default -Os, speed -O2, debug -Og) for all ciphertexts of one key (a valid one and corruptions at different positions): the sequence of executed instruction addresses, the exact data addresses, the data addresses at 64-byte cache-line granularity, and the dividend of every x86 div/idiv (variable-latency operations, decoded from opcode bytes). The detector's power is measured, not assumed: scripts/ct_leak_rediscovery.py re-injects five known PQC timing-leak patterns (a secret-dependent branch in the clangover style, a secret-indexed table lookup, a KyberSlash-style division, an early-exit ciphertext comparison and a secret-dependent early continue) into a private copy of mlkem-native, rebuilds the image and requires the trace test to report a divergence for each, while three harmless changes (a dead volatile store, a public-constant branch and a constant-time multiplication rewrite) must NOT be flagged. The same run records which leaks the earlier counts-only evidence (security.ct_instruction_count) would have missed. This is relational leakage testing of an emulated x86_64 image on sampled keys and ciphertexts: not a constant-time proof, no microarchitecture, no ARM Cortex-M timing, and variation across different keys (public-matrix rejection sampling) is reported but not judged.",
       "required": true,
       "schema_version_added": 12
+    },
+    {
+      "id": "security.fault_campaign_boot_selftest",
+      "category": "security",
+      "claim": "An exhaustive emulated single-instruction fault campaign (scripts/run_fault_campaign.py, scripts/fault_inject.py, scripts/fault_oracle.py) patches a copy of the deployed qemu_x86_64 image of tests/ztest_fault_oracle at every instruction of the mlkem-native ML-KEM-768 decapsulation and mldsa-native ML-DSA-65 verify code (and the PQCP wrappers) with two fault models (instruction skip; branch/cmov/setcc inversion), runs each variant under QEMU and classifies the observations by cryptographic meaning: KEM_FO_BYPASS (a corrupted ciphertext yields the genuine shared secret) and SIG_VERIFY_BYPASS (a tampered signature or message is accepted) are the exploitable classes. Results are only trusted after calibration: three unfaulted runs must be identical and valid, and identity patches must all be NO_EFFECT. The gate measures the countermeasure rather than assuming it: on the image whose power-on self-test has only valid-only vectors the campaign must still find exploitable sites (the campaign is sensitive), and with CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE (a corrupted ciphertext must not yield the genuine key; a tampered signature and a different message must be rejected) the number of exploitable sites must be zero and boot-time detections must exceed the valid-only image's. Permanent single faults on x86_64 under emulation only: no hardware fault physics, no multi-fault or data bit-flip models, callees such as Keccak and NTT are outside the target set, no key recovery, and a boot self-test does not defend against faults injected after boot.",
+      "required": true,
+      "schema_version_added": 13
     }
   ]
 }

@@ -1390,6 +1390,51 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_ct_trace(clean, self.REDISCOVERY)
             self.assertEqual(result["status"], "fail", clean)
 
+    FAULT_BODY = (
+        "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
+        "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "
+        "no_effect=117 crash=133 timeout=2 controls_ok=6/6\n"
+        "PQCP_FAULT_CAMPAIGN variant=boot-negative sites=388 kem_fo_bypass=0 "
+        "sig_verify_bypass=0 detected_boot=121 fail_safe=1 corrupt=15 "
+        "no_effect=117 crash=132 timeout=2 controls_ok=6/6\n"
+        "PQCP_FAULT_GATE PASS sites=388 exploitable_boot=8 "
+        "exploitable_boot_negative=0 detected_boot=111 "
+        "detected_boot_negative=121\n"
+    )
+
+    def _eval_fault(self, body: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest.parent.mkdir(parents=True)
+            (manifest.parent / "01-fault.log").write_text(body, encoding="utf-8")
+            manifest.write_text(json.dumps({"schema_version": 1, "transcripts": [{
+                "step": "fault campaign", "transcript_path": "01-fault.log",
+                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                "size_bytes": len(body.encode()), "returncode": 0}]}) + "\n",
+                encoding="utf-8")
+            spec = {"id": "security.fault_campaign_boot_selftest",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_fault_campaign_boot_selftest(
+                spec, transcript_manifest=manifest)
+
+    def test_fault_campaign_passes_with_calibrated_measured_gate(self) -> None:
+        result = self._eval_fault(self.FAULT_BODY)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["exploitable_negative_boot"], 0)
+
+    def test_fault_campaign_fails_when_weakened(self) -> None:
+        for body in (
+            self.FAULT_BODY.replace("exploitable_boot_negative=0", "exploitable_boot_negative=1"),
+            self.FAULT_BODY.replace("exploitable_boot=8", "exploitable_boot=0"),
+            self.FAULT_BODY.replace("sites=388 exploitable", "sites=20 exploitable"),
+            self.FAULT_BODY.replace("detected_boot_negative=121", "detected_boot_negative=111"),
+            self.FAULT_BODY.replace("controls_ok=6/6", "controls_ok=5/6"),
+            self.FAULT_BODY.replace("PASS", "FAIL"),
+            "noise\n",
+        ):
+            self.assertEqual(self._eval_fault(body)["status"], "fail", body[-120:])
+
     def _write_fuzz_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
