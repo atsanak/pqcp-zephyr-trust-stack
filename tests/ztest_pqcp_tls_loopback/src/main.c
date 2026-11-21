@@ -678,6 +678,35 @@ ZTEST(pqcp_tls_loopback, test_parallel_psa_allocator_and_key_slots)
 	zassert_mem_equal(left.output, right.output, sizeof(left.output));
 }
 
+/*
+ * Join a loopback thread; on timeout print the channel state and abort BOTH
+ * threads. Without the abort a timed-out run leaves the static client/server
+ * threads and stacks live, the next run_tls_pair() re-creates them under a
+ * running thread, and the first failure is buried under later corruption.
+ * Ported from the superseded codex/patch20-loopback-stability branch.
+ */
+static int join_or_abort(struct k_thread *thread, k_timeout_t timeout,
+			 const char *side)
+{
+	int result = k_thread_join(thread, timeout);
+
+	if (result != 0) {
+		printk("PQCP_TLS_LOOPBACK_TIMEOUT side=%s result=%d "
+		       "client_state=%s server_state=%s "
+		       "client_frames=%llu/%llu server_frames=%llu/%llu\n",
+		       side, result,
+		       pqcp_channel_state_str(client_channel.state),
+		       pqcp_channel_state_str(server_channel.state),
+		       (unsigned long long)client_channel.frames_sent,
+		       (unsigned long long)client_channel.frames_received,
+		       (unsigned long long)server_channel.frames_sent,
+		       (unsigned long long)server_channel.frames_received);
+		k_thread_abort(&client_thread);
+		k_thread_abort(&server_thread);
+	}
+	return result;
+}
+
 static void run_tls_pair(enum live_test_mode mode)
 {
 	static const uint8_t export_context[] =
@@ -741,10 +770,8 @@ static void run_tls_pair(enum live_test_mode mode)
 		K_THREAD_STACK_SIZEOF(client_stack),
 		client_handshake, NULL, NULL, NULL,
 		5, 0, K_NO_WAIT);
-	zassert_ok(k_thread_join(
-		&client_thread, K_SECONDS(60)));
-	zassert_ok(k_thread_join(
-		&server_thread, K_SECONDS(60)));
+	zassert_ok(join_or_abort(&client_thread, K_SECONDS(60), "client"));
+	zassert_ok(join_or_abort(&server_thread, K_SECONDS(60), "server"));
 	zassert_equal(client_result, 0,
 		      "client TLS handshake returned %d",
 		      client_result);
@@ -836,10 +863,8 @@ static void run_tls_pair(enum live_test_mode mode)
 		K_THREAD_STACK_SIZEOF(client_stack),
 		client_channel_handshake, NULL, NULL, NULL,
 		5, 0, K_NO_WAIT);
-	zassert_ok(k_thread_join(
-		&client_thread, K_SECONDS(120)));
-	zassert_ok(k_thread_join(
-		&server_thread, K_SECONDS(150)));
+	zassert_ok(join_or_abort(&client_thread, K_SECONDS(120), "client"));
+	zassert_ok(join_or_abort(&server_thread, K_SECONDS(150), "server"));
 	zassert_equal(client_result, 0,
 		      "client PQC handshake returned %d", client_result);
 	zassert_equal(server_result, 0,
