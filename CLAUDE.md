@@ -1253,6 +1253,24 @@ external vectors; mutation testing of verifiers/ratchet.
   ledger changes, not reboot. Sonnet CLI authentication was expired; this
   implementation was performed and verified by Codex.
 
+## Wave 13 (2026-11): relational CT trace, model-based testing, fault campaign
+
+- Model-based testing of the edge state machines (tests/ztest_edge_model,
+  10/10 historical defects rediscovered); claim security.state_machine_model_conformance.
+- Relational leakage test of the deployed ML-KEM image (tools/tcg_ct_plugin
+  ct_trace_plugin.c, tests/ztest_ct_trace, scripts/run_ct_trace_checks.py):
+  four channels, 5/5 re-injected PQC leaks found, 0/3 benign flagged, counts-only
+  misses 2/5, clean at -Os/-O2/-Og. Claim security.ct_trace_relational (schema 12).
+  The SDK QEMU exports no glib symbols and has no disassembler.
+- Emulated fault campaign (scripts/run_fault_campaign.py, fault_inject.py,
+  fault_oracle.py, run_fault_gate.py, tests/ztest_fault_oracle): 388
+  single-instruction faults, 9 exploitable on the plain image, 8 with the
+  valid-only boot self-test, 0 with CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE.
+  Claim security.fault_campaign_boot_selftest (schema 13). The SDK QEMU plugin
+  API v4 cannot write guest state, so faults patch a copy of the image.
+- Full-gate-only steps: edge model conformance, ct trace relational, ct leak
+  rediscovery, fault campaign.
+
 ## Final rule
 
 Do not confuse motion with progress.
