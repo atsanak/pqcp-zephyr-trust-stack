@@ -273,6 +273,7 @@ hard to overclaim.
 | 7 | `python3 scripts/run_transparent_appraisal.py` | `PQCP_APPRAISAL_RECEIPT PASS consistency=ok differential_agree=169/169 forgeries_rejected=156/156 controls=11/11` |
 | 8 | `python3 scripts/run_model_checks.py --rediscover` | `PQCP_MODEL_REDISCOVERY PASS rediscovered=10/10` |
 | 9 | `python3 scripts/run_ct_trace_checks.py --opt default --opt speed --opt debug` and `--rediscover` | `PQCP_CT_TRACE PASS ... distinct=1` and `PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3` |
+| 10 | `python3 scripts/run_fault_gate.py --output-dir <dir>` | `PQCP_FAULT_GATE PASS exploitable_boot=8 exploitable_boot_negative=0` |
 
 Claims 1–4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
@@ -348,3 +349,46 @@ the clean test holds at three optimisation levels (Zephyr's default -Os, -O2, -O
 clangover itself is a Clang code-generation bug and the SDK uses GCC, so
 only its source pattern is injected; the leak list is the project's own and
 shows sensitivity to those patterns, not to every leak class.
+Claim 10 is the required claim `security.fault_campaign_boot_selftest`
+(schema 13); its gate step `fault campaign` runs in the full gate only.
+
+## Claim 10: an emulated, crypto-aware fault campaign that measures the boot self-test
+
+The campaign patches a copy of the deployed qemu_x86_64 image (the SDK QEMU
+plugin API v4 cannot write guest state, so instruction bytes are patched
+instead) at every instruction of the mlkem-native ML-KEM-768 decapsulation
+and mldsa-native ML-DSA-65 verify code, with two models (skip, branch
+inversion), and judges each run by cryptographic meaning: a corrupted
+ciphertext yielding the genuine key (FO bypass) or a tampered signature
+being accepted. It is calibrated (identical golden runs, identity patches
+must be NO_EFFECT) and it measures the countermeasure instead of assuming it.
+
+Measured over 388 faults: 9 exploitable sites on the plain image (3 FO
+bypass: skipping the `mlk_ct_memcmp` call, the `neg` after it, or a `mov`
+feeding the key select; 6 signature bypass, including skipping the
+`mld_ct_memcmp` call), no exploitable branch inversion; the existing
+valid-only power-on self-test still leaves 8 of the 9; with negative vectors
+(`CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE`) 0 remain and 121 faults are caught
+at boot instead of 111.
+
+Prior art (verified in a 2024-2026 literature search): Krahmer et al.,
+"Correction Fault Attacks on Randomized CRYSTALS-Dilithium" (TCHES 2024(3));
+Glabush, Günther, Hövelmanns, Stebila, "Verifiable Decapsulation" (CRYPTO
+2025), which changes the FO transform so a skipped check breaks correctness;
+Kosuge and Xagawa, "The Security of ML-DSA against Fault-Injection Attacks"
+(ASIACRYPT 2025), a proof-level analysis; Pesin et al., "Formally Verified
+Hardening of C Programs against Hardware Fault Injection" (CPP 2025);
+Xagawa et al. (ePrint 2021/840), who showed one skip bypasses the
+decapsulation equality check. Not new: the fault models, emulated fault
+simulation, the FO-bypass attack, negative self-test vectors. New here: a
+campaign on the shipped, cross-compiled standards-track image with
+cryptographic-meaning verdicts, calibration, and the boot self-test's
+detection measured by ablation and enforced in the release ledger.
+
+Non-claims: permanent single faults only, x86_64 under emulation, no
+hardware fault physics, no multi-fault or data bit-flip models; callees such
+as Keccak and NTT are outside the target set; no key recovery; a boot
+self-test does not defend against faults injected after boot, and a fault
+that also disables the self-test defeats it; fault sites that crash are not
+counted as exploitable. The valid-only boot test detects 1 of the 9
+exploitable sites, so it was far from sufficient, but not useless.

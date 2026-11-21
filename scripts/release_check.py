@@ -52,6 +52,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ct instruction-count",
     "ct trace relational",
     "ct leak rediscovery",
+    "fault campaign",
     "ct smoke ztest run",
     "ct instruction policy",
     "benchmark_csv",
@@ -598,6 +599,7 @@ def main() -> int:
     edge_model_output_dir = output_root / "edge_model"
     ct_instruction_output_dir = output_root / "ct_instruction"
     ct_trace_output_dir = output_root / "ct_trace"
+    fault_output_dir = output_root / "fault_campaign"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
@@ -2061,6 +2063,20 @@ def main() -> int:
             cwd=module_path,
             timeout=3600,
             success_markers=("PQCP_CT_TRACE_REDISCOVERY PASS",),
+        ),
+        Step(
+            name="fault campaign",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_fault_gate.py"),
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(fault_output_dir),
+            ],
+            cwd=module_path,
+            timeout=5400,
+            success_markers=("PQCP_FAULT_GATE PASS",),
         ),
         Step(
             name="ct smoke ztest build",
