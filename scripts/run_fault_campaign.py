@@ -61,12 +61,22 @@ def sdk_tool(name: str) -> str:
     raise RuntimeError(f"x86_64-zephyr-elf-{name} not found in the SDK")
 
 
+VARIANTS = {
+    # plain: no boot self-test. boot: the existing valid-only power-on test.
+    # boot-negative: the same plus negative vectors.
+    "plain": [],
+    "boot": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y"],
+    "boot-negative": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+                      "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y"],
+}
+
+
 def build_image(module: Path, build_dir: Path, west_root: Path,
-                west_cmd: list, env: dict) -> Path:
+                west_cmd: list, env: dict, extra: list = ()) -> Path:
     run_command(
         [*west_cmd, "build", "-p", "always", "-b", "qemu_x86_64",
          str(module / TEST_APP_RELATIVE), "-d", str(build_dir), "--",
-         f"-DZEPHYR_EXTRA_MODULES={module}"],
+         f"-DZEPHYR_EXTRA_MODULES={module}", *extra],
         cwd=west_root, env=env, timeout=600)
     run_command(["ninja", "-C", str(build_dir),
                  "zephyr/qemu_locore_image_target",
@@ -139,15 +149,18 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--target", action="append")
     parser.add_argument("--controls", type=int, default=6)
+    parser.add_argument("--variant", choices=sorted(VARIANTS),
+                        default="plain")
     args = parser.parse_args()
 
     env = clean_env()
-    out = args.output_dir or (MODULE_PATH / "build-fault-campaign")
+    out = (args.output_dir or (MODULE_PATH / "build-fault-campaign")).resolve()
     out.mkdir(parents=True, exist_ok=True)
     west_root = detect_west_root(args.west_root or MODULE_PATH)
     west_cmd = discover_west(args.west, west_root, MODULE_PATH)
     build_dir = out / "build"
-    build_image(MODULE_PATH, build_dir, west_root, west_cmd, env)
+    build_image(MODULE_PATH, build_dir, west_root, west_cmd, env,
+                VARIANTS[args.variant])
     main_elf = build_dir / "zephyr" / "zephyr-qemu-main.elf"
     image = main_elf.read_bytes()
     sym_elf = build_dir / "zephyr" / "zephyr.elf"
@@ -218,7 +231,8 @@ def main() -> int:
         per_function.setdefault(fault.function, Counter())[cls] += 1
     exploitable = [(f, c) for f, c in results if c in fo.EXPLOITABLE]
     report = {
-        "schema_version": 1, "sites": len(results),
+        "schema_version": 1, "variant": args.variant,
+        "sites": len(results),
         "totals": dict(totals),
         "per_function": {k: dict(v) for k, v in per_function.items()},
         "exploitable": [{"id": f.ident, "model": f.model, "class": c,
@@ -233,8 +247,10 @@ def main() -> int:
         print(f"[fault] EXPLOITABLE {cls} {fault.ident} ({fault.text})")
     kem = totals["KEM_FO_BYPASS"]
     sig = totals["SIG_VERIFY_BYPASS"]
-    print(f"PQCP_FAULT_CAMPAIGN sites={len(results)} "
+    print(f"PQCP_FAULT_CAMPAIGN variant={args.variant} "
+          f"sites={len(results)} "
           f"kem_fo_bypass={kem} sig_verify_bypass={sig} "
+          f"detected_boot={totals['DETECTED_BOOT']} "
           f"fail_safe={totals['FAIL_SAFE']} corrupt={totals['CORRUPT']} "
           f"no_effect={totals['NO_EFFECT']} crash={totals['CRASH']} "
           f"timeout={totals['TIMEOUT']} controls_ok={len(controls)}/"

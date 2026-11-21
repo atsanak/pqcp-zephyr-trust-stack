@@ -62,6 +62,14 @@ class Oracle(unittest.TestCase):
             fo.classify(GOLDEN, render(done=False), timed_out=True),
             "TIMEOUT")
 
+    def test_boot_self_test_detection_outranks_everything(self):
+        text = "PQCP_KAT_BOOT_VERIFY FAIL rc=-5\n" + render(done=False)
+        self.assertEqual(fo.classify(GOLDEN, text), "DETECTED_BOOT")
+        both = "PQCP_KAT_BOOT_VERIFY FAIL rc=-5\n" + render(
+            {"DSA_BADSIG1": (0, "")})
+        self.assertEqual(fo.classify(GOLDEN, both), "DETECTED_BOOT")
+        self.assertNotIn("DETECTED_BOOT", fo.EXPLOITABLE)
+
     def test_missing_scenario_is_corrupt(self):
         text = render().replace("DSA_BADMSG", "DSA_X")
         self.assertEqual(fo.classify(GOLDEN, text), "CORRUPT")
