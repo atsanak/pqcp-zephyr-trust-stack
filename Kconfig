@@ -1284,6 +1284,37 @@ config PQCP_KAT_BOOT_VERIFY_NEGATIVE
 	  exactly those cases. Costs one extra decapsulation and two extra
 	  verifications at boot.
 
+
+config PQCP_FAULT_CANARY
+	bool "Per-use negative canary against faults after boot"
+	default n
+	depends on PQCP_MLKEM || PQCP_MLDSA
+	help
+	  After every real ML-KEM decapsulation and ML-DSA verification the
+	  wrapper runs the SAME backend function on a stored negative input (a
+	  corrupted ciphertext whose genuine key is known, a tampered
+	  signature). If the corrupted ciphertext yields the genuine key, or
+	  the tampered signature is accepted, the output is wiped and
+	  PQCP_*_ERR_FAULT_DETECTED is returned. A permanent fault in the
+	  shared backend code that defeats the real check also defeats the
+	  canary's, which is how it is detected. It does not stop a transient
+	  fault that hits only the real operation; combine with
+	  PQCP_FAULT_DUPLICATE. Costs one extra decapsulation or verification
+	  per call and about 8 KB of static RAM; builds the canary lazily with
+	  the configured RNG at first use.
+
+config PQCP_FAULT_DUPLICATE
+	bool "Temporal duplication of decapsulation and verification"
+	default n
+	depends on PQCP_MLKEM || PQCP_MLDSA
+	help
+	  Runs each ML-KEM decapsulation and ML-DSA verification twice and
+	  requires identical results (constant-time compare). A single
+	  transient fault corrupts one run, so the results disagree and
+	  PQCP_*_ERR_FAULT_DETECTED is returned. A permanent fault corrupts
+	  both runs identically and is NOT detected by duplication; use
+	  PQCP_FAULT_CANARY for that. Costs one extra operation per call.
+
 endmenu
 
 # =============================================================================

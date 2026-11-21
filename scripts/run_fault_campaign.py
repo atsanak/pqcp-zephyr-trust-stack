@@ -70,6 +70,17 @@ VARIANTS = {
     "boot": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y"],
     "boot-negative": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
                       "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y"],
+    # Runtime countermeasures layered on boot-negative.
+    "canary": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+               "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y",
+               "-DCONFIG_PQCP_FAULT_CANARY=y"],
+    "duplicate": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+                  "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y",
+                  "-DCONFIG_PQCP_FAULT_DUPLICATE=y"],
+    "hardened": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+                 "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y",
+                 "-DCONFIG_PQCP_FAULT_CANARY=y",
+                 "-DCONFIG_PQCP_FAULT_DUPLICATE=y"],
 }
 
 
@@ -158,7 +169,8 @@ def collect_faults(elf: Path, targets) -> list:
     faults = []
     for name in targets:
         start, end = fi.function_range(nm, elf, name)
-        faults += fi.faults_for(name, fi.disassemble(objdump, elf, start, end))
+        faults += fi.faults_for(
+            name, fi.disassemble(objdump, elf, start, end), start)
     return faults
 
 
@@ -267,7 +279,8 @@ def main() -> int:
     controls = rng.sample(faults, min(args.controls, len(faults)))
     bad_controls = 0
     for f in controls:
-        same = fi.Fault(f.function, f.addr, "SKIP", f.old, f.old, f.text)
+        same = fi.Fault(f.function, f.addr, "SKIP", f.old, f.old, f.text,
+                        f.base)
         text, timed = execute(same, 1, 1, images / "control.elf")
         if fo.classify(golden, text, timed_out=timed) != "NO_EFFECT":
             bad_controls += 1
@@ -320,6 +333,7 @@ def main() -> int:
           f"sites={len(results)} "
           f"kem_fo_bypass={kem} sig_verify_bypass={sig} "
           f"detected_boot={totals['DETECTED_BOOT']} "
+          f"detected_runtime={totals['DETECTED_RUNTIME']} "
           f"fail_safe={totals['FAIL_SAFE']} corrupt={totals['CORRUPT']} "
           f"no_effect={totals['NO_EFFECT']} crash={totals['CRASH']} "
           f"timeout={totals['TIMEOUT']} controls_ok={len(controls)}/"
