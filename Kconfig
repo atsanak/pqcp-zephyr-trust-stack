@@ -1269,6 +1269,21 @@ config PQCP_KAT_BOOT_VERIFY
 	  changes boot semantics. Consumers that want a self-checking
 	  module turn this on explicitly.
 
+
+config PQCP_KAT_BOOT_VERIFY_NEGATIVE
+	bool "Also run negative vectors in the boot self-test"
+	default n
+	depends on PQCP_KAT_BOOT_VERIFY
+	help
+	  Adds negative vectors to the power-on self-test: a corrupted
+	  ML-KEM ciphertext must NOT decapsulate to the genuine shared
+	  secret, and a tampered ML-DSA signature and a different message
+	  must both be rejected. The valid-only roundtrip cannot see a
+	  defeated Fujisaki-Okamoto comparison or a bypassed verifier; the
+	  emulated fault campaign (scripts/run_fault_campaign.py) measures
+	  exactly those cases. Costs one extra decapsulation and two extra
+	  verifications at boot.
+
 endmenu
 
 # =============================================================================

@@ -34,6 +34,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/logging/log.h>
 
 #include <pqcp_zephyr/mlkem.h>
@@ -76,6 +77,9 @@ static uint8_t kem_sk[PQCP_MLKEM_SK_SIZE_MAX];
 static uint8_t kem_ct[PQCP_MLKEM_CT_SIZE_MAX];
 static uint8_t kem_ss_a[PQCP_MLKEM_SS_SIZE];
 static uint8_t kem_ss_b[PQCP_MLKEM_SS_SIZE];
+#ifdef CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE
+static uint8_t kem_ct_bad[PQCP_MLKEM_CT_SIZE_MAX];
+#endif
 
 static int kat_verify_mlkem(pqcp_mlkem_level_t level, const char *label)
 {
@@ -98,6 +102,23 @@ static int kat_verify_mlkem(pqcp_mlkem_level_t level, const char *label)
 		LOG_ERR("PQCP_KAT_BOOT_VERIFY[%s]: shared-secret mismatch", label);
 		return -EIO;
 	}
+#ifdef CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE
+	/*
+	 * Negative vector: a corrupted ciphertext must take the implicit
+	 * rejection path and so must NOT yield the genuine shared secret.
+	 * Catches a defeated Fujisaki-Okamoto check (for example a skipped
+	 * comparison), which the valid-only roundtrip above cannot see.
+	 */
+	memcpy(kem_ct_bad, kem_ct, pqcp_mlkem_ct_size(level));
+	kem_ct_bad[7] ^= 0x81U;
+	rc = pqcp_mlkem_decapsulate(level, kem_ct_bad, kem_sk, kem_ss_b);
+	if (rc != PQCP_MLKEM_SUCCESS ||
+	    memcmp(kem_ss_a, kem_ss_b, PQCP_MLKEM_SS_SIZE) == 0) {
+		LOG_ERR("PQCP_KAT_BOOT_VERIFY[%s]: corrupted ciphertext "
+			"yielded the genuine key", label);
+		return -EIO;
+	}
+#endif
 	LOG_INF("PQCP_KAT_BOOT_VERIFY[%s]: ok", label);
 	return 0;
 }
@@ -127,6 +148,29 @@ static int kat_verify_mldsa(pqcp_mldsa_level_t level, const char *label)
 		LOG_ERR("PQCP_KAT_BOOT_VERIFY[%s]: verify failed (%d)", label, rc);
 		return rc;
 	}
+#ifdef CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE
+	/*
+	 * Negative vectors: a tampered signature and a different message must
+	 * both be rejected. Catches a bypassed verifier (for example a skipped
+	 * commitment-hash comparison).
+	 */
+	dsa_sig[11] ^= 0x01U;
+	rc = pqcp_mldsa_verify(level, dsa_pk, kat_boot_message,
+			       sizeof(kat_boot_message) - 1U, NULL, 0U, dsa_sig);
+	dsa_sig[11] ^= 0x01U;
+	if (rc == PQCP_MLDSA_SUCCESS) {
+		LOG_ERR("PQCP_KAT_BOOT_VERIFY[%s]: tampered signature "
+			"accepted", label);
+		return -EIO;
+	}
+	rc = pqcp_mldsa_verify(level, dsa_pk, kat_boot_message,
+			       sizeof(kat_boot_message) - 2U, NULL, 0U, dsa_sig);
+	if (rc == PQCP_MLDSA_SUCCESS) {
+		LOG_ERR("PQCP_KAT_BOOT_VERIFY[%s]: wrong message accepted",
+			label);
+		return -EIO;
+	}
+#endif
 	LOG_INF("PQCP_KAT_BOOT_VERIFY[%s]: ok", label);
 	return 0;
 }
@@ -192,6 +236,10 @@ static int pqcp_kat_boot_verify_init(void)
 		 * power-on self-test to serve cryptographic requests. The
 		 * Kconfig help text explicitly documents this behavior.
 		 */
+		/* Plain console marker, independent of the log subsystem, so
+		 * external harnesses can tell a boot-test detection from a crash.
+		 */
+		printk("PQCP_KAT_BOOT_VERIFY FAIL rc=%d\n", rc);
 		LOG_ERR("PQCP_KAT_BOOT_VERIFY: panic — refusing to boot with broken PQCP");
 		k_panic();
 	}
