@@ -69,6 +69,9 @@ typedef enum {
 #define PQCP_MLKEM_ERR_VERIFY       -3
 #define PQCP_MLKEM_ERR_UNSUPPORTED  -4
 #define PQCP_MLKEM_ERR_INTERNAL     -5
+/* Returned by decapsulation when CONFIG_PQCP_FAULT_CANARY/DUPLICATE detect an
+ * inconsistency (a suspected fault); the output buffer is wiped. */
+#define PQCP_MLKEM_ERR_FAULT_DETECTED -6
 
 /**
  * @brief Get the public key size for a given security level.

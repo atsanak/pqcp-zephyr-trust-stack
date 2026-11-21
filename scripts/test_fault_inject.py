@@ -56,6 +56,8 @@ class Sites(unittest.TestCase):
                          [(0x10, "SKIP"), (0x11, "SKIP"), (0x11, "JCC_INV")])
         self.assertEqual(faults[1].new, bytes([0x90, 0x90]))
         self.assertEqual(faults[0].ident, "f+10:SKIP")
+        based = fi.faults_for("f", insns, base=0x8)
+        self.assertEqual(based[0].ident, "f+8:SKIP")     # offset, not address
 
 
 class Patching(unittest.TestCase):

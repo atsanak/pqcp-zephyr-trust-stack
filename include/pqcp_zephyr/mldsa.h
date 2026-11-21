@@ -69,6 +69,9 @@ typedef enum {
 #define PQCP_MLDSA_ERR_UNSUPPORTED  -4
 #define PQCP_MLDSA_ERR_INTERNAL     -5
 #define PQCP_MLDSA_ERR_CONTEXT_LEN  -6
+/* Returned by verification when CONFIG_PQCP_FAULT_CANARY/DUPLICATE detect an
+ * inconsistency (a suspected fault). */
+#define PQCP_MLDSA_ERR_FAULT_DETECTED -7
 
 /**
  * @brief Get the public key size for a given security level.

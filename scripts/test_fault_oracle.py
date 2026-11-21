@@ -70,6 +70,18 @@ class Oracle(unittest.TestCase):
         self.assertEqual(fo.classify(GOLDEN, both), "DETECTED_BOOT")
         self.assertNotIn("DETECTED_BOOT", fo.EXPLOITABLE)
 
+    def test_runtime_detection_is_not_exploitable_and_outranks_fail_safe(self):
+        text = render({"KEM_CORRUPT1": (-6, "00" * 32)})
+        self.assertEqual(fo.classify(GOLDEN, text), "DETECTED_RUNTIME")
+        text = render({"DSA_BADSIG1": (-7, ""), "DSA_VALID": (-7, "")})
+        self.assertEqual(fo.classify(GOLDEN, text), "DETECTED_RUNTIME")
+        self.assertNotIn("DETECTED_RUNTIME", fo.EXPLOITABLE)
+
+    def test_exploitable_outranks_runtime_detection(self):
+        # One scenario bypassed while another was detected: still exploitable.
+        text = render({"KEM_CORRUPT1": (0, GOOD), "DSA_BADSIG2": (-7, "")})
+        self.assertEqual(fo.classify(GOLDEN, text), "KEM_FO_BYPASS")
+
     def test_missing_scenario_is_corrupt(self):
         text = render().replace("DSA_BADMSG", "DSA_X")
         self.assertEqual(fo.classify(GOLDEN, text), "CORRUPT")
