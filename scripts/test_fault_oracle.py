@@ -82,6 +82,11 @@ class Oracle(unittest.TestCase):
         text = render({"KEM_CORRUPT1": (0, GOOD), "DSA_BADSIG2": (-7, "")})
         self.assertEqual(fo.classify(GOLDEN, text), "KEM_FO_BYPASS")
 
+    def test_harness_errors_are_never_no_effect(self):
+        text = render() + "PQCP_FAULT_HARNESS_ERROR cannot write\n"
+        self.assertEqual(fo.classify(GOLDEN, text), "HARNESS_ERROR")
+        self.assertNotIn("HARNESS_ERROR", fo.EXPLOITABLE)
+
     def test_missing_scenario_is_corrupt(self):
         text = render().replace("DSA_BADMSG", "DSA_X")
         self.assertEqual(fo.classify(GOLDEN, text), "CORRUPT")

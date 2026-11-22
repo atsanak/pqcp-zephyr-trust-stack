@@ -32,6 +32,7 @@ MARKER_RE = re.compile(
     r"sig_verify_bypass=(\d+) detected_boot=(\d+) "
     r"(?:detected_runtime=\d+ )?fail_safe=(\d+) "
     r"corrupt=(\d+) no_effect=(\d+) crash=(\d+) timeout=(\d+) "
+    r"(?:harness_error=\d+ )?"
     r"controls_ok=(\d+)/(\d+)")
 
 
