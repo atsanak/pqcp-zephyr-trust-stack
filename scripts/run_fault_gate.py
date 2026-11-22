@@ -29,8 +29,10 @@ BASELINE = SCRIPT_DIR / "fault_campaign_baseline.json"
 
 MARKER_RE = re.compile(
     r"PQCP_FAULT_CAMPAIGN variant=(\S+) sites=(\d+) kem_fo_bypass=(\d+) "
-    r"sig_verify_bypass=(\d+) detected_boot=(\d+) fail_safe=(\d+) "
+    r"sig_verify_bypass=(\d+) detected_boot=(\d+) "
+    r"(?:detected_runtime=\d+ )?fail_safe=(\d+) "
     r"corrupt=(\d+) no_effect=(\d+) crash=(\d+) timeout=(\d+) "
+    r"(?:harness_error=\d+ )?"
     r"controls_ok=(\d+)/(\d+)")
 
 

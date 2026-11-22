@@ -43,6 +43,7 @@
     {"id": "security.state_machine_model_conformance", "evidence_class": "integration", "environment": "qemu_x86_64", "requires_artifact": true},
     {"id": "security.evidence_parser_fuzzed", "evidence_class": "transcript_hash", "environment": "host_c_asan_ubsan", "requires_artifact": true},
     {"id": "release.evidence_coverage_ratchet", "evidence_class": "transcript_hash", "environment": "host_python_static", "requires_artifact": true},
+    {"id": "security.fault_timing_countermeasure", "evidence_class": "qemu_smoke", "environment": "qemu_gdbstub_timed_fault_campaign", "requires_artifact": true, "smoke_only": true},
     {"id": "security.fault_campaign_boot_selftest", "evidence_class": "qemu_smoke", "environment": "qemu_image_patch_fault_campaign", "requires_artifact": true, "smoke_only": true},
     {"id": "security.ct_trace_relational", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin_relational", "requires_artifact": true, "smoke_only": true},
     {"id": "security.ct_instruction_count", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin", "requires_artifact": true, "smoke_only": true},

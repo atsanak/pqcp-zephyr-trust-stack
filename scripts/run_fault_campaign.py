@@ -21,6 +21,7 @@ import os
 import random
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -33,6 +34,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 MODULE_PATH = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+import fault_gdb  # noqa: E402
 import fault_inject as fi  # noqa: E402
 import fault_oracle as fo  # noqa: E402
 from local_workflow import (  # noqa: E402
@@ -68,6 +70,17 @@ VARIANTS = {
     "boot": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y"],
     "boot-negative": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
                       "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y"],
+    # Runtime countermeasures layered on boot-negative.
+    "canary": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+               "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y",
+               "-DCONFIG_PQCP_FAULT_CANARY=y"],
+    "duplicate": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+                  "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y",
+                  "-DCONFIG_PQCP_FAULT_DUPLICATE=y"],
+    "hardened": ["-DCONFIG_PQCP_KAT_BOOT_VERIFY=y",
+                 "-DCONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE=y",
+                 "-DCONFIG_PQCP_FAULT_CANARY=y",
+                 "-DCONFIG_PQCP_FAULT_DUPLICATE=y"],
 }
 
 
@@ -97,18 +110,41 @@ def qemu_command(build_dir: Path, image: Path) -> str:
                        "-chardev stdio,id=con,mux=on,signal=off")
 
 
-def run_image(build_dir: Path, image: Path, env: dict,
-              timeout: int) -> tuple[str, bool]:
-    """Run one image; return (serial text, timed_out)."""
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def run_image(build_dir: Path, image: Path, env: dict, timeout: int,
+              gdb_action=None) -> tuple[str, bool]:
+    """Run one image; return (serial text, timed_out).
+
+    gdb_action(gdb) runs against QEMU's gdbstub while the guest is halted at
+    reset (-S); it applies a timed fault and detaches, after which the guest
+    runs to completion.
+    """
+    command = qemu_command(build_dir, image)
+    port = 0
+    if gdb_action is not None:
+        port = free_port()
+        command += f" -S -gdb tcp:127.0.0.1:{port}"
     with tempfile.TemporaryDirectory(prefix="pqcp-fault-run-") as tmp:
         log = Path(tmp) / "serial.log"
         with log.open("w") as handle:
             proc = subprocess.Popen(
-                qemu_command(build_dir, image), shell=True, cwd=tmp, env=env,
+                command, shell=True, cwd=tmp, env=env,
                 stdin=subprocess.DEVNULL, stdout=handle,
                 stderr=subprocess.STDOUT, start_new_session=True)
             deadline = time.time() + timeout
             timed_out = False
+            try:
+                if gdb_action is not None:
+                    gdb = fault_gdb.Gdb.connect(port)
+                    gdb_action(gdb)
+            except (fault_gdb.GdbError, OSError) as exc:
+                log.write_text(log.read_text(errors="replace") +
+                               f"\nPQCP_FAULT_HARNESS_ERROR {exc}\n")
             while True:
                 if proc.poll() is not None:
                     break
@@ -133,7 +169,8 @@ def collect_faults(elf: Path, targets) -> list:
     faults = []
     for name in targets:
         start, end = fi.function_range(nm, elf, name)
-        faults += fi.faults_for(name, fi.disassemble(objdump, elf, start, end))
+        faults += fi.faults_for(
+            name, fi.disassemble(objdump, elf, start, end), start)
     return faults
 
 
@@ -151,6 +188,16 @@ def main() -> int:
     parser.add_argument("--controls", type=int, default=6)
     parser.add_argument("--variant", choices=sorted(VARIANTS),
                         default="plain")
+    parser.add_argument("--timing", choices=("at-boot", "post-boot",
+                                             "transient"), default="at-boot",
+                        help="at-boot patches the image (permanent from "
+                             "reset); post-boot writes the patch through the "
+                             "gdbstub at the first arm point; transient "
+                             "applies it once on the k-th execution")
+    parser.add_argument("--sites-from", type=Path,
+                        help="campaign JSON whose exploitable fault ids are "
+                             "the transient candidates")
+    parser.add_argument("--hit-max", type=int, default=1)
     args = parser.parse_args()
 
     env = clean_env()
@@ -191,39 +238,89 @@ def main() -> int:
     print(f"[fault] {len(faults)} faults over "
           f"{len({f.function for f in faults})} functions", flush=True)
 
+    nm = sdk_tool("nm")
+    arm = fi.function_range(nm, sym_elf, "pqcp_fault_arm")[0]
+    if args.timing == "transient":
+        if args.sites_from:
+            wanted = {e["id"] for e in json.loads(
+                args.sites_from.read_text())["exploitable"]}
+            faults = [f for f in faults if f.ident in wanted]
+            if not faults:
+                print("[fault] FAIL: no transient candidates matched")
+                return 1
+
+        def scenarios_for(fault):
+            # Only the scenarios whose operation the function serves matter:
+            # ML-KEM decapsulation: corrupted ciphertexts 2, 3; ML-DSA verify:
+            # tampered signatures/message 5, 6, 7.
+            kem = "mlkem" in fault.function.lower()
+            return (2, 3) if kem else (5, 6, 7)
+
+        work = [(f, scenario, hit) for f in faults
+                for scenario in scenarios_for(f)
+                for hit in range(1, args.hit_max + 1)]
+    else:
+        work = [(f, 0, 0) for f in faults]
+
+    def execute(fault, scenario, hit, path=None):
+        """Run one fault with the selected timing; return (text, timed_out)."""
+        if args.timing == "at-boot":
+            target = path or images / "run.elf"
+            target.write_bytes(fi.apply_fault(image, fault))
+            try:
+                return run_image(build_dir, target, env, args.timeout)
+            finally:
+                target.unlink(missing_ok=True)
+        if args.timing == "post-boot":
+            return run_image(
+                build_dir, main_elf, env, args.timeout,
+                lambda gdb: fault_gdb.run_post_boot(
+                    gdb, arm, fault.addr, fault.new, fault.old))
+        return run_image(
+            build_dir, main_elf, env, args.timeout,
+            lambda gdb: fault_gdb.run_transient(
+                gdb, arm, fault.addr, fault.new, fault.old, scenario, hit))
+
     # Calibration 2: identity patches must change nothing.
     controls = rng.sample(faults, min(args.controls, len(faults)))
     bad_controls = 0
     for f in controls:
-        same = fi.Fault(f.function, f.addr, "SKIP", f.old, f.old, f.text)
-        path = images / "control.elf"
-        path.write_bytes(fi.apply_fault(image, same))
-        text, timed = run_image(build_dir, path, env, args.timeout)
-        if fo.classify(golden, text, timed_out=timed) != "NO_EFFECT":
+        same = fi.Fault(f.function, f.addr, "SKIP", f.old, f.old, f.text,
+                        f.base)
+        text, timed = execute(same, 1, 1, images / "control.elf")
+        cls = fo.classify(golden, text, timed_out=timed)
+        if cls != "NO_EFFECT":
             bad_controls += 1
+            print(f"[fault] control {f.ident} {f.text!r} -> {cls}")
+            print("[fault]   " + " | ".join(
+                l for l in text.splitlines()
+                if "HARNESS" in l or "FATAL" in l or "Exception" in l)[:240])
     if bad_controls:
         print(f"[fault] FAIL: {bad_controls}/{len(controls)} identity "
               "controls changed behaviour; results would be untrustworthy")
         return 1
     print(f"[fault] controls: {len(controls)}/{len(controls)} identity "
-          "patches NO_EFFECT")
+          f"patches NO_EFFECT (timing={args.timing})")
 
     def one(item):
-        index, fault = item
-        path = images / f"f{index}.elf"
-        path.write_bytes(fi.apply_fault(image, fault))
-        try:
-            text, timed = run_image(build_dir, path, env, args.timeout)
-            return fault, fo.classify(golden, text, timed_out=timed)
-        finally:
-            path.unlink(missing_ok=True)
+        index, (fault, scenario, hit) = item
+        text, timed = execute(fault, scenario, hit,
+                              images / f"f{index}.elf")
+        cls = fo.classify(golden, text, timed_out=timed)
+        if cls == "HARNESS_ERROR":
+            line = next((l for l in text.splitlines()
+                         if "PQCP_FAULT_HARNESS_ERROR" in l), "")
+            harness_errors.append(f"{fault.ident} scenario={scenario} "
+                                  f"hit={hit}: {line.strip()[:160]}")
+        return fault, cls
 
     results = []
+    harness_errors = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for n, item in enumerate(pool.map(one, enumerate(faults)), 1):
+        for n, item in enumerate(pool.map(one, enumerate(work)), 1):
             results.append(item)
             if n % 50 == 0:
-                print(f"[fault] {n}/{len(faults)}", flush=True)
+                print(f"[fault] {n}/{len(work)}", flush=True)
 
     totals = Counter(cls for _, cls in results)
     per_function = {}
@@ -232,17 +329,22 @@ def main() -> int:
     exploitable = [(f, c) for f, c in results if c in fo.EXPLOITABLE]
     report = {
         "schema_version": 1, "variant": args.variant,
+        "timing": args.timing,
         "sites": len(results),
         "totals": dict(totals),
         "per_function": {k: dict(v) for k, v in per_function.items()},
-        "exploitable": [{"id": f.ident, "model": f.model, "class": c,
-                         "insn": f.text} for f, c in exploitable],
+        "exploitable": [{"id": i, "model": m, "class": c, "insn": t}
+                        for i, m, c, t in sorted({
+                            (f.ident, f.model, c, f.text)
+                            for f, c in exploitable})],
     }
     (out / "fault_campaign.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8")
     for function, counts in sorted(per_function.items()):
         print(f"[fault] {function}: " + " ".join(
             f"{k}={counts[k]}" for k in fo.CLASSES if counts[k]))
+    for message in harness_errors[:10]:
+        print(f"[fault] HARNESS_ERROR {message}")
     for fault, cls in exploitable[:20]:
         print(f"[fault] EXPLOITABLE {cls} {fault.ident} ({fault.text})")
     kem = totals["KEM_FO_BYPASS"]
@@ -251,10 +353,13 @@ def main() -> int:
           f"sites={len(results)} "
           f"kem_fo_bypass={kem} sig_verify_bypass={sig} "
           f"detected_boot={totals['DETECTED_BOOT']} "
+          f"detected_runtime={totals['DETECTED_RUNTIME']} "
           f"fail_safe={totals['FAIL_SAFE']} corrupt={totals['CORRUPT']} "
           f"no_effect={totals['NO_EFFECT']} crash={totals['CRASH']} "
-          f"timeout={totals['TIMEOUT']} controls_ok={len(controls)}/"
-          f"{len(controls)}")
+          f"timeout={totals['TIMEOUT']} "
+          f"harness_error={totals['HARNESS_ERROR']} controls_ok={len(controls)}/"
+          f"{len(controls)} timing={args.timing} "
+          f"exploitable_sites={len({f.ident for f, _ in exploitable})}")
     return 0
 
 

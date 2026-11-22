@@ -1,0 +1,7 @@
+{
+  "min_sites": 300,
+  "base_postboot_min": 1,
+  "base_transient_min": 1,
+  "hardened_postboot_max": 0,
+  "hardened_transient_max": 0
+}

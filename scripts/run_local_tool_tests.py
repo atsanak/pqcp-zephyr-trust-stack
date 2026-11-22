@@ -26,6 +26,8 @@ TOOL_TESTS = (
     "test_fault_inject.py",
     "test_fault_oracle.py",
     "test_fault_gate.py",
+    "test_fault_gdb.py",
+    "test_fault_timing_gate.py",
     "test_transparent_appraisal.py",
     "test_kit_provenance.py",
     "test_check_declared_defined.py",

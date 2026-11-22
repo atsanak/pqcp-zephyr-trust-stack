@@ -40,10 +40,12 @@ class Fault:
     old: bytes
     new: bytes
     text: str
+    base: int = 0       # start address of the function
 
     @property
     def ident(self) -> str:
-        return f"{self.function}+{self.addr:x}:{self.model}"
+        """Stable across builds: function-relative offset, not an address."""
+        return f"{self.function}+{self.addr - self.base:x}:{self.model}"
 
 
 def jcc_offset(raw: bytes) -> int | None:
@@ -72,15 +74,16 @@ def invert_condition(raw: bytes) -> bytes | None:
     return bytes(out)
 
 
-def faults_for(function: str, insns: list[Insn]) -> list[Fault]:
+def faults_for(function: str, insns: list[Insn],
+               base: int = 0) -> list[Fault]:
     faults = []
     for insn in insns:
         faults.append(Fault(function, insn.addr, "SKIP", insn.raw,
-                            bytes([NOP]) * len(insn.raw), insn.text))
+                            bytes([NOP]) * len(insn.raw), insn.text, base))
         inverted = invert_condition(insn.raw)
         if inverted is not None:
             faults.append(Fault(function, insn.addr, "JCC_INV", insn.raw,
-                                inverted, insn.text))
+                                inverted, insn.text, base))
     return faults
 
 
