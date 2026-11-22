@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1819,6 +1819,91 @@ def evaluate_ct_trace_relational(
         commands=commands, details=details)
 
 
+def evaluate_ct_trace_declassified(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind security.ct_trace_declassified to the clean run AND rediscovery.
+
+    The clean run must compare a substantial share of the signing trace at
+    three optimisation levels with zero violations; the rediscovery run must
+    find every injected ML-DSA leak and flag no benign change.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/tcg_ct_plugin::pqcp_ct_trace",
+        "scripts/run_ct_trace_checks.py",
+        "scripts/ct_trace_analysis.py::analyze_declassified",
+        "scripts/ct_leak_rediscovery_mldsa.py",
+    ]
+    commands = [
+        "python3 scripts/run_ct_trace_checks.py --alg mldsa",
+        "python3 scripts/run_ct_trace_checks.py --alg mldsa --rediscover",
+    ]
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in ("ct trace declassified", "ct leak rediscovery declassified"):
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+
+    clean_opts = set()
+    segments = testable = 0
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_DECLASS PASS alg=MLDSA-65 opt=(\S+) "
+            r"regions=(\d+) groups=(\d+) segments=(\d+) testable=(\d+) "
+            r"classes=(\d+) sites=(\d+) violations=0 coverage_pct=\S+",
+            bodies["ct trace declassified"]):
+        clean_opts.add(m.group(1))
+        if int(m.group(2)) >= 12 and int(m.group(3)) >= 2:
+            segments = max(segments, int(m.group(4)))
+            testable = max(testable, int(m.group(5)))
+    redis = re.search(
+        r"PQCP_CT_TRACE_DECLASS_REDISCOVERY PASS leaks=(\d+)/(\d+) "
+        r"benign_flagged=0/(\d+) missed_by_counts_only=(\d+)/(\d+)",
+        bodies["ct leak rediscovery declassified"])
+    problems = []
+    required_opts = {"default", "speed", "debug"}
+    if not clean_opts:
+        problems.append("no clean PQCP_CT_TRACE_DECLASS PASS marker with "
+                        "zero violations")
+    elif not required_opts <= clean_opts:
+        problems.append("clean run lacks optimisation level(s): "
+                        + ", ".join(sorted(required_opts - clean_opts)))
+    elif segments == 0 or testable * 10 < segments * 7:
+        problems.append(
+            f"too little of the trace was comparable: {testable}/{segments}")
+    if redis is None:
+        problems.append("no PQCP_CT_TRACE_DECLASS_REDISCOVERY PASS marker "
+                        "with every leak found and no benign change flagged")
+    else:
+        found, total, benign = (int(redis.group(i)) for i in (1, 2, 3))
+        if found != total or total < 4 or benign < 3:
+            problems.append(
+                f"rediscovery incomplete: leaks={found}/{total}, "
+                f"benign controls={benign}")
+        details["leaks_rediscovered"] = f"{found}/{total}"
+        details["missed_by_counts_only"] = (
+            f"{redis.group(4)}/{redis.group(5)}")
+    if clean_opts:
+        details["segments"] = segments
+        details["comparable_segments"] = testable
+        details["optimisation_levels"] = sorted(clean_opts)
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2867,6 +2952,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_relational": lambda spec: evaluate_ct_trace_relational(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_declassified": lambda spec: evaluate_ct_trace_declassified(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(

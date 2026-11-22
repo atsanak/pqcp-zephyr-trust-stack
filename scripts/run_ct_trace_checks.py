@@ -175,6 +175,21 @@ def main() -> int:
     west_cmd = discover_west(args.west, west_root, MODULE_PATH)
     plugin = build_plugin(inc, env)
 
+    if args.rediscover and args.alg == "mldsa":
+        import ct_leak_rediscovery_mldsa as dsa_leaks  # noqa: PLC0415
+
+        def run_dsa_trace(tree, build_dir, outfile, opt):
+            return trace_once(tree, build_dir, outfile, opt=opt,
+                              west_root=west_root, west_cmd=west_cmd,
+                              env=env, plugin=plugin, timeout=900,
+                              app=MLDSA_APP, marker=MLDSA_MARKER,
+                              event_symbol="pqcp_ct_event")
+
+        only = set(os.environ.get("PQCP_CT_LEAK_ONLY", "").split(",")) - {""}
+        return dsa_leaks.rediscover(run_dsa_trace,
+                                    (args.opt or ["default"])[0],
+                                    only or None)
+
     if args.rediscover:
         import ct_leak_rediscovery as leaks  # noqa: PLC0415
 

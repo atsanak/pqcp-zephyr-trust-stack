@@ -1390,6 +1390,58 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_ct_trace(clean, self.REDISCOVERY)
             self.assertEqual(result["status"], "fail", clean)
 
+    DECL_CLEAN = "".join(
+        f"PQCP_CT_TRACE_DECLASS PASS alg=MLDSA-65 opt={opt} regions=18 "
+        "groups=3 segments=600 testable=546 classes=91 sites=8 violations=0 "
+        "coverage_pct=91.0\n" for opt in ("default", "speed", "debug")
+    ) + "[ct-trace] PASS: every comparable segment is identical\n"
+    DECL_REDIS = (
+        "PQCP_CT_TRACE_DECLASS_REDISCOVERY PASS leaks=4/4 "
+        "benign_flagged=0/3 missed_by_counts_only=2/4\n"
+    )
+
+    def _eval_declass(self, clean: str, redis: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, body, name in (
+                ("ct trace declassified", clean, "01.log"),
+                ("ct leak rediscovery declassified", redis, "02.log"),
+            ):
+                (manifest_path.parent / name).write_text(body, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                    "size_bytes": len(body.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            spec = {"id": "security.ct_trace_declassified",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_declassified(
+                spec, transcript_manifest=manifest_path)
+
+    def test_ct_trace_declassified_passes_with_both_markers(self) -> None:
+        result = self._eval_declass(self.DECL_CLEAN, self.DECL_REDIS)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["leaks_rediscovered"], "4/4")
+
+    def test_ct_trace_declassified_fails_on_weak_or_missing_evidence(self) -> None:
+        for clean, redis in (
+            (self.DECL_CLEAN.replace("violations=0", "violations=3"), self.DECL_REDIS),
+            (self.DECL_CLEAN.replace("opt=debug", "opt=default"), self.DECL_REDIS),
+            (self.DECL_CLEAN.replace("testable=546", "testable=100"), self.DECL_REDIS),
+            (self.DECL_CLEAN.replace("groups=3", "groups=1"), self.DECL_REDIS),
+            (self.DECL_CLEAN, self.DECL_REDIS.replace("leaks=4/4", "leaks=3/4")),
+            (self.DECL_CLEAN, self.DECL_REDIS.replace("benign_flagged=0/3", "benign_flagged=1/3")),
+            (self.DECL_CLEAN, self.DECL_REDIS.replace("PASS", "FAIL")),
+            (self.DECL_CLEAN, "noise\n"),
+        ):
+            result = self._eval_declass(clean, redis)
+            self.assertEqual(result["status"], "fail", (clean, redis))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "
