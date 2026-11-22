@@ -1268,8 +1268,14 @@ external vectors; mutation testing of verifiers/ratchet.
   valid-only boot self-test, 0 with CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE.
   Claim security.fault_campaign_boot_selftest (schema 13). The SDK QEMU plugin
   API v4 cannot write guest state, so faults patch a copy of the image.
+- Fault timing (scripts/fault_gdb.py, run_fault_timing_gate.py): post-boot and
+  transient faults through the QEMU gdbstub, CONFIG_PQCP_FAULT_CANARY /
+  CONFIG_PQCP_FAULT_DUPLICATE wrapper countermeasures. Measured exploitable
+  sites (post-boot / transient): base 9/9, canary 0/8, duplicate 9/0, both 0/0.
+  Claim security.fault_timing_countermeasure (schema 14). Gdbstub gotcha: step
+  off a breakpoint before continuing.
 - Full-gate-only steps: edge model conformance, ct trace relational, ct leak
-  rediscovery, fault campaign.
+  rediscovery, fault campaign, fault timing campaign.
 
 ## Final rule
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": 13,
+  "schema_version": 14,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -410,6 +410,13 @@
       "claim": "An exhaustive emulated single-instruction fault campaign (scripts/run_fault_campaign.py, scripts/fault_inject.py, scripts/fault_oracle.py) patches a copy of the deployed qemu_x86_64 image of tests/ztest_fault_oracle at every instruction of the mlkem-native ML-KEM-768 decapsulation and mldsa-native ML-DSA-65 verify code (and the PQCP wrappers) with two fault models (instruction skip; branch/cmov/setcc inversion), runs each variant under QEMU and classifies the observations by cryptographic meaning: KEM_FO_BYPASS (a corrupted ciphertext yields the genuine shared secret) and SIG_VERIFY_BYPASS (a tampered signature or message is accepted) are the exploitable classes. Results are only trusted after calibration: three unfaulted runs must be identical and valid, and identity patches must all be NO_EFFECT. The gate measures the countermeasure rather than assuming it: on the image whose power-on self-test has only valid-only vectors the campaign must still find exploitable sites (the campaign is sensitive), and with CONFIG_PQCP_KAT_BOOT_VERIFY_NEGATIVE (a corrupted ciphertext must not yield the genuine key; a tampered signature and a different message must be rejected) the number of exploitable sites must be zero and boot-time detections must exceed the valid-only image's. Permanent single faults on x86_64 under emulation only: no hardware fault physics, no multi-fault or data bit-flip models, callees such as Keccak and NTT are outside the target set, no key recovery, and a boot self-test does not defend against faults injected after boot.",
       "required": true,
       "schema_version_added": 13
+    },
+    {
+      "id": "security.fault_timing_countermeasure",
+      "category": "security",
+      "claim": "Extending the emulated fault campaign (claim security.fault_campaign_boot_selftest) with fault TIMING, the deployed qemu_x86_64 image is measured against two fault timings: permanent faults that appear after the boot self-test has run (the patch is written through the QEMU gdbstub at an arm point, because the SDK plugin API v4 cannot write guest state) and single-shot transient faults (the patch is applied once on the first execution of a site in the scenarios of a corrupted ciphertext or tampered signature, the instruction is stepped, and the original bytes are restored). Every instruction of the mlkem-native ML-KEM-768 decapsulation and mldsa-native ML-DSA-65 verify code is faulted with two models (instruction skip, branch inversion); verdicts are cryptographic (a corrupted ciphertext yielding the genuine key, a tampered signature accepted); campaigns are only trusted after identical golden runs, identity-patch controls and zero injection errors. Two opt-in wrapper countermeasures are evaluated: CONFIG_PQCP_FAULT_CANARY (after each operation the same backend function rejects a stored negative input) and CONFIG_PQCP_FAULT_DUPLICATE (two runs must agree). The release gate re-measures the four cells the claim rests on and requires: the base image (boot self-test with negative vectors only) shows exploitable sites under BOTH timings (the campaign is sensitive), and the image with both countermeasures shows none under either timing. The full measured ablation, published in docs/fault-campaign.md, is: base 9 exploitable post-boot / 9 transient; canary only 0 / 8 (a transient fault hits only the real operation); duplicate only 9 / 0 (a permanent fault corrupts both runs identically); both 0 / 0. Single faults on x86_64 under emulation only: the transient model faults the first execution of each site, no multi-fault attacks (two faults can defeat the compare itself), no hardware fault physics, callees such as Keccak and NTT are outside the target set, the results depend on this build's code layout and compiler, and the countermeasures cost about one extra operation per call each plus about 8 KB of RAM for the canary.",
+      "required": true,
+      "schema_version_added": 14
     }
   ]
 }
