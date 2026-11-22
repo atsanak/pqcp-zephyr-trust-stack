@@ -136,7 +136,9 @@ class Timings(unittest.TestCase):
                                scenario=2, hit=3)
         self.assertTrue(done)
         self.assertEqual(stub.writes, [(0x500, self.NEW), (0x500, self.OLD)])
-        self.assertEqual(stub.steps, 2)
+        # 1 step between arm hits, 1 off the last arm bp, 2 between site
+        # hits, then len(NEW)=2 steps over the patched NOPs.
+        self.assertEqual(stub.steps, 1 + 1 + 2 + 2)
         self.assertEqual(stub.memory[0x500], 0x74)
 
     def test_transient_steps_one_instruction_for_a_non_nop_patch(self):
@@ -145,7 +147,8 @@ class Timings(unittest.TestCase):
         gdb = client(stub)
         g.run_transient(gdb, 0x100, 0x500, inverted, self.OLD,
                         scenario=1, hit=1)
-        self.assertEqual(stub.steps, 1)       # not len(old) == 2
+        # 1 off the arm bp + exactly 1 instruction for the patched jcc.
+        self.assertEqual(stub.steps, 1 + 1)
 
     def test_transient_reports_a_fault_that_never_happened(self):
         stub = FakeStub({0x500: 0x74, 0x501: 0x02}, ["T05", "W00"])

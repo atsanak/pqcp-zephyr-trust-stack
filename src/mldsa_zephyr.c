@@ -290,6 +290,10 @@ static int dsa_canary_prepare(pqcp_mldsa_level_t level)
     ret = pqcp_mldsa_sign(level, sk, dsa_canary_msg,
                           sizeof(dsa_canary_msg) - 1U, NULL, 0U,
                           dsa_canary.bad_sig);
+    /* The canary needs only pk and the signature; do not keep the key. */
+    for (size_t i = 0U; i < sizeof(sk); ++i) {
+        ((volatile uint8_t *)sk)[i] = 0U;
+    }
     if (ret != PQCP_MLDSA_SUCCESS) {
         return ret;
     }
@@ -299,22 +303,28 @@ static int dsa_canary_prepare(pqcp_mldsa_level_t level)
     return 0;
 }
 
-/* Returns 1 when the canary was correctly rejected (or could not be built). */
+/*
+ * Returns 1 when the canary was correctly rejected. Fails CLOSED: a canary
+ * that cannot be prepared is treated as detection, never as "no evidence",
+ * otherwise faulting its setup would silently disable the countermeasure.
+ */
 static int dsa_canary_ok(pqcp_mldsa_level_t level)
 {
     int ret;
+    int rejected;
 
     k_mutex_lock(&dsa_canary_lock, K_FOREVER);
     ret = dsa_canary_prepare(level);
-    if (ret == 0) {
-        ret = mldsa_verify_backend(level, dsa_canary.pk, dsa_canary_msg,
-                                   sizeof(dsa_canary_msg) - 1U, NULL, 0U,
-                                   dsa_canary.bad_sig);
+    if (ret != 0) {
         k_mutex_unlock(&dsa_canary_lock);
-        return ret != PQCP_MLDSA_SUCCESS;
+        return 0;
     }
+    ret = mldsa_verify_backend(level, dsa_canary.pk, dsa_canary_msg,
+                               sizeof(dsa_canary_msg) - 1U, NULL, 0U,
+                               dsa_canary.bad_sig);
+    rejected = ret != PQCP_MLDSA_SUCCESS;
     k_mutex_unlock(&dsa_canary_lock);
-    return 1;
+    return rejected;
 }
 #endif /* CONFIG_PQCP_FAULT_CANARY */
 

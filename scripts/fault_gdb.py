@@ -179,17 +179,27 @@ def run_transient(gdb: Gdb, arm: int, site: int, new: bytes, old: bytes,
                   scenario: int, hit: int) -> bool:
     """Single-shot fault: patch on the `hit`-th execution of `site` after the
     arm point of `scenario`, step over it, restore. Returns False if the site
-    was never executed that often (the fault never happened)."""
+    was never executed that often (the fault never happened).
+
+    QEMU's gdbstub reports the SAME breakpoint again, without running any
+    code, if it is told to continue while stopped on it. Every continue from
+    a breakpoint stop is therefore preceded by one single step.
+    """
     gdb.set_breakpoint(arm)
-    for _ in range(scenario):
+    for index in range(scenario):
         if not is_stop_reply(gdb.cont()):
             raise GdbError("target never reached the arm point")
+        if index + 1 < scenario:
+            gdb.step()                      # leave this arm hit behind
     gdb.clear_breakpoint(arm)
+    gdb.step()                              # off the arm breakpoint's pc
     gdb.set_breakpoint(site)
-    for _ in range(hit):
+    for index in range(hit):
         if not is_stop_reply(gdb.cont()):
             gdb.detach()
             return False
+        if index + 1 < hit:
+            gdb.step()
     if gdb.read(site, len(old)) != old:
         raise GdbError("guest bytes at the site differ from the disassembly")
     gdb.write(site, new)
