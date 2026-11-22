@@ -148,8 +148,8 @@ def check_patterns(root: Path = MODULE_PATH) -> list[str]:
     return problems
 
 
-def build_base(destination: Path) -> None:
-    for relative in COPY_PATHS:
+def build_base(destination: Path, paths: tuple = COPY_PATHS) -> None:
+    for relative in paths:
         source = MODULE_PATH / relative
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
