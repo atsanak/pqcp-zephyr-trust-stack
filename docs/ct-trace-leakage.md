@@ -45,3 +45,18 @@ docs/novelty-claims.md claim 12.
 Pitfall found: an injected `if (secret) { __asm__ volatile(""); }` compiles to
 nothing (empty asm, empty branch) and looked like a missed leak; the body needs
 a real volatile store.
+
+## Cortex-M3 operand-latency channel
+
+`run_ct_trace_checks.py --target cortex-m3` builds `tests/ztest_ct_trace` for
+`mps2/an385` and runs it under `qemu-system-arm` with the same plugin. On the
+`arm` target the plugin reads r0..r2 for the marker arguments, masks the Thumb
+bit of the marker addresses and emits `PQCP_CT_VLAT` lines (one per region and
+instruction address) for Thumb-2 UDIV/SDIV/UMULL/SMULL/UMLAL/SMLAL.
+`ct_trace_analysis.analyze_vlat` applies the two-model verdict and the
+candidate inventory; marker
+`PQCP_CT_TRACE_VLAT PASS ... sites=1 fail_sites=0 candidate_sites=1 base=clean`.
+`--target cortex-m3 --rediscover` runs `ct_leak_rediscovery_m3.py` (3 leaks, 3
+benign; baseline `ct_leak_rediscovery_m3_baseline.json`). See
+docs/novelty-claims.md claim 13.
+
