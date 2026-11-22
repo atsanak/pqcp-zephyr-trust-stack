@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1904,6 +1904,109 @@ def evaluate_ct_trace_declassified(
         commands=commands, details=details)
 
 
+VLAT_INVENTORY_BASELINE = SCRIPT_DIR / "ct_vlat_inventory_baseline.json"
+
+
+def evaluate_ct_trace_cortex_m_latency(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+    inventory_baseline: Path | None = None,
+) -> dict[str, object]:
+    """Bind security.ct_trace_cortex_m_latency to the clean run AND rediscovery.
+
+    The clean run must be PASS with zero failing sites and clean address-level
+    channels at three optimisation levels; the candidate-site inventory (exact
+    operands vary, documented model constant) may not exceed the committed
+    baseline; the rediscovery run must find every injected operand-latency leak
+    and flag no benign change.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/tcg_ct_plugin::pqcp_ct_trace",
+        "scripts/run_ct_trace_checks.py",
+        "scripts/ct_trace_analysis.py::analyze_vlat",
+        "scripts/ct_leak_rediscovery_m3.py",
+    ]
+    commands = [
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3",
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3 --rediscover",
+    ]
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in ("ct trace cortex-m latency",
+                 "ct leak rediscovery cortex-m latency"):
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+
+    baseline_path = inventory_baseline or VLAT_INVENTORY_BASELINE
+    try:
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        candidate_max = int(baseline["candidate_sites_max"])
+    except (OSError, ValueError, KeyError):
+        return fail_claim(
+            spec, reason=f"unreadable inventory baseline {baseline_path}",
+            validators=validators, evidence_artifacts=artifacts,
+            commands=commands)
+
+    clean_opts = set()
+    candidates = 0
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_VLAT PASS alg=MLKEM-768 target=cortex-m3 "
+            r"opt=(\S+) regions=(\d+) sites=(\d+) div_sites=(\d+) "
+            r"mul_sites=(\d+) fail_sites=0 candidate_sites=(\d+) "
+            r"base=clean",
+            bodies["ct trace cortex-m latency"]):
+        if int(m.group(2)) >= 12:
+            clean_opts.add(m.group(1))
+            candidates = max(candidates, int(m.group(6)))
+    redis = re.search(
+        r"PQCP_CT_TRACE_VLAT_REDISCOVERY PASS leaks=(\d+)/(\d+) "
+        r"benign_flagged=0/(\d+) missed_by_address_channels=(\d+)/(\d+)",
+        bodies["ct leak rediscovery cortex-m latency"])
+    problems = []
+    required_opts = {"default", "speed", "debug"}
+    if not clean_opts:
+        problems.append("no clean PQCP_CT_TRACE_VLAT PASS marker with zero "
+                        "failing sites")
+    elif not required_opts <= clean_opts:
+        problems.append("clean run lacks optimisation level(s): "
+                        + ", ".join(sorted(required_opts - clean_opts)))
+    elif candidates > candidate_max:
+        problems.append(
+            f"candidate-site inventory grew: {candidates} > baseline "
+            f"{candidate_max}")
+    if redis is None:
+        problems.append("no PQCP_CT_TRACE_VLAT_REDISCOVERY PASS marker with "
+                        "every leak found and no benign change flagged")
+    else:
+        found, total, benign = (int(redis.group(i)) for i in (1, 2, 3))
+        if found != total or total < 3 or benign < 3:
+            problems.append(
+                f"rediscovery incomplete: leaks={found}/{total}, "
+                f"benign controls={benign}")
+        details["leaks_rediscovered"] = f"{found}/{total}"
+        details["missed_by_address_channels"] = (
+            f"{redis.group(4)}/{redis.group(5)}")
+    if clean_opts:
+        details["candidate_sites"] = candidates
+        details["candidate_sites_baseline_max"] = candidate_max
+        details["optimisation_levels"] = sorted(clean_opts)
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2955,6 +3058,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_declassified": lambda spec: evaluate_ct_trace_declassified(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_cortex_m_latency": lambda spec: evaluate_ct_trace_cortex_m_latency(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(

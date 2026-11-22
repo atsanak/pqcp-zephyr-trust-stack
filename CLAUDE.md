@@ -1284,6 +1284,13 @@ external vectors; mutation testing of verifiers/ratchet.
   segments comparable, 0 violations at -Os/-O2/-Og; 4/4 injected leaks found,
   0/3 benign flagged, counts-only misses 2/4. Two new full-gate steps.
 
+- Cortex-M3 operand-latency channel (claim 13, schema 16, claim
+  security.ct_trace_cortex_m_latency): plugin `arm` target decodes Thumb-2
+  UDIV/SDIV/long multiplies and records operands per site, `run_ct_trace_checks.py
+  --target cortex-m3`, ML-KEM-768 on mps2/an385 reusing tests/ztest_ct_trace.
+  One candidate UMULL (compress_d10), 3/3 injected leaks found that address
+  channels miss, 0/3 benign flagged. Two new full-gate steps.
+
 ## Final rule
 
 Do not confuse motion with progress.
