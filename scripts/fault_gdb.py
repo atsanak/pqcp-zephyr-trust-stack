@@ -137,15 +137,20 @@ class Gdb:
         if self.command(f"z0,{addr:x},1") != "OK":
             raise GdbError(f"cannot clear breakpoint at {addr:#x}")
 
-    def cont(self) -> str:
-        """Continue; return the stop reply, or '' if the target exits."""
+    def cont(self, timeout: float = 12.0) -> str:
+        """Continue; return the stop reply, or '' when the guest exits or no
+        stop arrives within `timeout` seconds (the breakpoint is never
+        reached: the guest runs to its idle loop and QEMU does not exit)."""
         self._send("c")
         self._await_ack()
+        previous = self.sock.gettimeout()
+        self.sock.settimeout(timeout)
         try:
-            reply = self._recv()
-        except GdbError:
+            return self._recv()
+        except (GdbError, socket.timeout):
             return ""
-        return reply
+        finally:
+            self.sock.settimeout(previous)
 
     def step(self) -> str:
         return self.command("s")
@@ -189,7 +194,10 @@ def run_transient(gdb: Gdb, arm: int, site: int, new: bytes, old: bytes,
         raise GdbError("guest bytes at the site differ from the disassembly")
     gdb.write(site, new)
     gdb.clear_breakpoint(site)
-    for _ in range(len(old)):
+    # A NOP fill is len(new) one-byte instructions; any other patch (branch
+    # inversion, identity control) is exactly one instruction.
+    steps = len(new) if new == bytes([0x90]) * len(new) else 1
+    for _ in range(steps):
         gdb.step()
     gdb.write(site, old)
     gdb.detach()

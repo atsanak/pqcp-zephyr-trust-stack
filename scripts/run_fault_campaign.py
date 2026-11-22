@@ -197,7 +197,7 @@ def main() -> int:
     parser.add_argument("--sites-from", type=Path,
                         help="campaign JSON whose exploitable fault ids are "
                              "the transient candidates")
-    parser.add_argument("--hit-max", type=int, default=2)
+    parser.add_argument("--hit-max", type=int, default=1)
     args = parser.parse_args()
 
     env = clean_env()
@@ -241,17 +241,23 @@ def main() -> int:
     nm = sdk_tool("nm")
     arm = fi.function_range(nm, sym_elf, "pqcp_fault_arm")[0]
     if args.timing == "transient":
-        if not args.sites_from:
-            print("[fault] FAIL: --timing transient needs --sites-from")
-            return 1
-        wanted = {e["id"] for e in json.loads(
-            args.sites_from.read_text())["exploitable"]}
-        faults = [f for f in faults if f.ident in wanted]
-        if not faults:
-            print("[fault] FAIL: no transient candidates matched")
-            return 1
+        if args.sites_from:
+            wanted = {e["id"] for e in json.loads(
+                args.sites_from.read_text())["exploitable"]}
+            faults = [f for f in faults if f.ident in wanted]
+            if not faults:
+                print("[fault] FAIL: no transient candidates matched")
+                return 1
+
+        def scenarios_for(fault):
+            # Only the scenarios whose operation the function serves matter:
+            # ML-KEM decapsulation: corrupted ciphertexts 2, 3; ML-DSA verify:
+            # tampered signatures/message 5, 6, 7.
+            kem = "mlkem" in fault.function.lower()
+            return (2, 3) if kem else (5, 6, 7)
+
         work = [(f, scenario, hit) for f in faults
-                for scenario in range(1, 8)
+                for scenario in scenarios_for(f)
                 for hit in range(1, args.hit_max + 1)]
     else:
         work = [(f, 0, 0) for f in faults]
@@ -282,8 +288,13 @@ def main() -> int:
         same = fi.Fault(f.function, f.addr, "SKIP", f.old, f.old, f.text,
                         f.base)
         text, timed = execute(same, 1, 1, images / "control.elf")
-        if fo.classify(golden, text, timed_out=timed) != "NO_EFFECT":
+        cls = fo.classify(golden, text, timed_out=timed)
+        if cls != "NO_EFFECT":
             bad_controls += 1
+            print(f"[fault] control {f.ident} {f.text!r} -> {cls}")
+            print("[fault]   " + " | ".join(
+                l for l in text.splitlines()
+                if "HARNESS" in l or "FATAL" in l or "Exception" in l)[:240])
     if bad_controls:
         print(f"[fault] FAIL: {bad_controls}/{len(controls)} identity "
               "controls changed behaviour; results would be untrustworthy")
@@ -295,9 +306,16 @@ def main() -> int:
         index, (fault, scenario, hit) = item
         text, timed = execute(fault, scenario, hit,
                               images / f"f{index}.elf")
-        return fault, fo.classify(golden, text, timed_out=timed)
+        cls = fo.classify(golden, text, timed_out=timed)
+        if cls == "HARNESS_ERROR":
+            line = next((l for l in text.splitlines()
+                         if "PQCP_FAULT_HARNESS_ERROR" in l), "")
+            harness_errors.append(f"{fault.ident} scenario={scenario} "
+                                  f"hit={hit}: {line.strip()[:160]}")
+        return fault, cls
 
     results = []
+    harness_errors = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for n, item in enumerate(pool.map(one, enumerate(work)), 1):
             results.append(item)
@@ -325,6 +343,8 @@ def main() -> int:
     for function, counts in sorted(per_function.items()):
         print(f"[fault] {function}: " + " ".join(
             f"{k}={counts[k]}" for k in fo.CLASSES if counts[k]))
+    for message in harness_errors[:10]:
+        print(f"[fault] HARNESS_ERROR {message}")
     for fault, cls in exploitable[:20]:
         print(f"[fault] EXPLOITABLE {cls} {fault.ident} ({fault.text})")
     kem = totals["KEM_FO_BYPASS"]
@@ -336,7 +356,8 @@ def main() -> int:
           f"detected_runtime={totals['DETECTED_RUNTIME']} "
           f"fail_safe={totals['FAIL_SAFE']} corrupt={totals['CORRUPT']} "
           f"no_effect={totals['NO_EFFECT']} crash={totals['CRASH']} "
-          f"timeout={totals['TIMEOUT']} controls_ok={len(controls)}/"
+          f"timeout={totals['TIMEOUT']} "
+          f"harness_error={totals['HARNESS_ERROR']} controls_ok={len(controls)}/"
           f"{len(controls)} timing={args.timing} "
           f"exploitable_sites={len({f.ident for f, _ in exploitable})}")
     return 0

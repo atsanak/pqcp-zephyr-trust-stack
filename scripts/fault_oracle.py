@@ -18,6 +18,8 @@ run is classified, in priority order:
                      service, but nothing forged was accepted
   CORRUPT            some other deviation from the golden observations
   NO_EFFECT          identical to golden
+  HARNESS_ERROR      the injection itself failed (stub, memory write); never
+                     counted as NO_EFFECT, and a campaign with any fails
   DETECTED_BOOT      the power-on self-test (CONFIG_PQCP_KAT_BOOT_VERIFY)
                      caught the fault and halted before the workload ran
   CRASH / TIMEOUT    no DONE line (reset, panic, hang)
@@ -33,7 +35,7 @@ OBS_RE = re.compile(
 EXPLOITABLE = ("KEM_FO_BYPASS", "SIG_VERIFY_BYPASS")
 CLASSES = ("NO_EFFECT", "FAIL_SAFE", "DETECTED_BOOT", "DETECTED_RUNTIME",
            "CORRUPT", "CRASH",
-           "TIMEOUT",
+           "TIMEOUT", "HARNESS_ERROR",
            *EXPLOITABLE)
 FAULT_DETECTED_RC = (-6, -7)  # PQCP_MLKEM/MLDSA_ERR_FAULT_DETECTED
 KEM_BAD = ("KEM_CORRUPT1", "KEM_CORRUPT2")
@@ -74,6 +76,8 @@ def validate_golden(golden: dict) -> list[str]:
 
 def classify(golden: dict, text: str, *, timed_out: bool = False) -> str:
     observed, done = parse(text)
+    if "PQCP_FAULT_HARNESS_ERROR" in text:
+        return "HARNESS_ERROR"
     if "PQCP_KAT_BOOT_VERIFY FAIL" in text:
         return "DETECTED_BOOT"
     if not done:

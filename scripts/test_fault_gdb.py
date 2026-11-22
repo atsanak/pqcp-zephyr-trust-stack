@@ -139,6 +139,14 @@ class Timings(unittest.TestCase):
         self.assertEqual(stub.steps, 2)
         self.assertEqual(stub.memory[0x500], 0x74)
 
+    def test_transient_steps_one_instruction_for_a_non_nop_patch(self):
+        inverted = bytes([0x75, 0x02])
+        stub = FakeStub({0x500: 0x74, 0x501: 0x02}, ["T05", "T05"])
+        gdb = client(stub)
+        g.run_transient(gdb, 0x100, 0x500, inverted, self.OLD,
+                        scenario=1, hit=1)
+        self.assertEqual(stub.steps, 1)       # not len(old) == 2
+
     def test_transient_reports_a_fault_that_never_happened(self):
         stub = FakeStub({0x500: 0x74, 0x501: 0x02}, ["T05", "W00"])
         gdb = client(stub)
