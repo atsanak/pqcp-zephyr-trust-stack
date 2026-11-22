@@ -59,11 +59,13 @@ def build_plugin(plugin_inc: Path, env: dict) -> Path:
 
 def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                west_root: Path, west_cmd: list, env: dict, plugin: Path,
-               timeout: int = 300) -> str:
+               timeout: int = 300, app: str = TEST_APP_RELATIVE,
+               marker: str = DEVICE_MARKER,
+               event_symbol: str | None = None) -> str:
     """Build `module`'s trace app, run it under the plugin, return the trace."""
     run_command(
         [*west_cmd, "build", "-p", "always", "-b", "qemu_x86_64",
-         str(module / TEST_APP_RELATIVE), "-d", str(build_dir), "--",
+         str(module / app), "-d", str(build_dir), "--",
          f"-DZEPHYR_EXTRA_MODULES={module}", *OPT_FLAGS[opt]],
         cwd=west_root, env=env, timeout=600)
     run_command(["ninja", "-C", str(build_dir),
@@ -73,20 +75,23 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
     elf = build_dir / "zephyr" / "zephyr.elf"
     begin = resolve_symbol(elf, "pqcp_ct_region_begin", env)
     end = resolve_symbol(elf, "pqcp_ct_region_end", env)
+    event_arg = ""
+    if event_symbol is not None:
+        event_arg = f",event=0x{resolve_symbol(elf, event_symbol, env):x}"
     if outfile.exists():
         outfile.unlink()
     device_log = build_dir / "ct_trace_device.log"
     cmd = qemu_run_command(build_dir)
     binary, rest = cmd.split(" ", 1)
-    cmd = (f"{binary} -plugin {plugin},begin=0x{begin:x},end=0x{end:x},"
-           f"outfile={outfile} {rest}")
+    cmd = (f"{binary} -plugin {plugin},begin=0x{begin:x},end=0x{end:x}"
+           f"{event_arg},outfile={outfile} {rest}")
     with device_log.open("w") as handle:
         proc = subprocess.Popen(cmd, shell=True, cwd=str(build_dir), env=env,
                                 stdout=handle, stderr=subprocess.STDOUT,
                                 start_new_session=True)
         deadline = time.time() + timeout
         while time.time() < deadline and proc.poll() is None:
-            if DEVICE_MARKER in device_log.read_text(errors="replace"):
+            if marker in device_log.read_text(errors="replace"):
                 time.sleep(1)
                 break
             time.sleep(1)
@@ -95,12 +100,47 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
             time.sleep(2)
             if proc.poll() is None:
                 os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    if DEVICE_MARKER not in device_log.read_text(errors="replace"):
+    if marker not in device_log.read_text(errors="replace"):
         raise RuntimeError("device marker not observed:\n" +
                            device_log.read_text(errors="replace")[-1500:])
     if not outfile.exists():
         raise RuntimeError("plugin produced no trace output")
     return outfile.read_text()
+
+
+MLDSA_APP = "tests/ztest_ct_trace_mldsa"
+MLDSA_MARKER = "PQCP_CT_TRACE_APP alg=MLDSA-65"
+
+
+def run_mldsa(args, out: Path, west_root: Path, west_cmd: list, env: dict,
+              plugin: Path) -> int:
+    failed = False
+    for opt in args.opt or ["default", "speed", "debug"]:
+        print(f"[ct-trace] ML-DSA-65 signing (declassification-aware), "
+              f"optimisation={opt}")
+        text = trace_once(MODULE_PATH, out / f"build-mldsa-{opt}",
+                          out / f"trace-mldsa-{opt}.txt", opt=opt,
+                          west_root=west_root, west_cmd=west_cmd, env=env,
+                          plugin=plugin, timeout=900, app=MLDSA_APP,
+                          marker=MLDSA_MARKER,
+                          event_symbol="pqcp_ct_event")
+        regions = cta.parse_trace(text)
+        analysis = cta.analyze_declassified(regions, cta.parse_segments(text))
+        print(cta.format_declass_marker(analysis, "MLDSA-65", opt))
+        print(f"[ct-trace] events/region={sorted(analysis.iterations_seen)} "
+              f"singleton_segments={analysis.singleton}")
+        if not analysis.clean:
+            failed = True
+            for kind, group, region, seq, detail in analysis.violations[:8]:
+                print(f"[ct-trace] violation {kind} group={group} "
+                      f"region={region} seq={seq}: {detail}")
+    if failed:
+        print("[ct-trace] FAIL: signing behaviour depends on the secret "
+              "beyond the declassified values")
+        return 1
+    print("[ct-trace] PASS: every comparable segment is identical on every "
+          "modelled channel")
+    return 0
 
 
 def main() -> int:
@@ -109,6 +149,10 @@ def main() -> int:
     parser.add_argument("--west")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--qemu-plugin-inc", type=Path)
+    parser.add_argument("--alg", choices=("mlkem", "mldsa"), default="mlkem",
+                        help="mlkem: decapsulation (whole-region relation); "
+                             "mldsa: signing (declassification-aware "
+                             "segment relation)")
     parser.add_argument("--rediscover", action="store_true",
                         help="re-inject known leak patterns and require the "
                              "test to catch them (sensitivity/specificity)")
@@ -142,6 +186,9 @@ def main() -> int:
         only = set(os.environ.get("PQCP_CT_LEAK_ONLY", "").split(",")) - {""}
         return leaks.rediscover(run_trace, (args.opt or ["default"])[0],
                                 only or None)
+
+    if args.alg == "mldsa":
+        return run_mldsa(args, out, west_root, west_cmd, env, plugin)
 
     failed = False
     for opt in args.opt or ["default", "speed", "debug"]:
