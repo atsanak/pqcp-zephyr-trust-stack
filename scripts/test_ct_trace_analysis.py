@@ -98,5 +98,84 @@ class TraceAnalysis(unittest.TestCase):
         self.assertEqual(len(cta.parse_trace(text)), 1)
 
 
+def seg(region, seq, site, length=4, cls=0, pc="a", addr="b", ln="c",
+        div="d"):
+    f = lambda c: c * 16  # noqa: E731
+    return (f"PQCP_CT_SEG region={region} seq={seq} site={site} len={length} "
+            f"cls={cls} insns=10 loads=1 stores=1 ndiv=0 h_pc={f(pc)} "
+            f"h_addr={f(addr)} h_line={f(ln)} h_div={f(div)}")
+
+
+def declass(regions):
+    """regions: {label: [(site, length, cls, pc), ...]} -> (regions, segs)."""
+    lines, seglines = [], []
+    for idx, (label, events) in enumerate(regions.items()):
+        lines.append(line(idx, label=label))
+        for n, (site, length, cls, pc) in enumerate(events):
+            seglines.append(seg(idx, n, site, length, cls, pc=pc))
+        seglines.append(seg(idx, len(events), 0, 0, 0))
+    text = trace(*lines) + "\n".join(seglines) + "\n"
+    return cta.parse_trace(text), cta.parse_segments(text)
+
+
+class DeclassifiedAnalysis(unittest.TestCase):
+    def test_runs_that_agree_on_declassified_values_must_match(self):
+        same = {0: [(100, 8, 7, "a"), (200, 4, 0, "a")],
+                1: [(100, 8, 7, "a"), (200, 4, 0, "a")]}
+        a = cta.analyze_declassified(*declass(same))
+        self.assertTrue(a.clean)
+        self.assertEqual(a.testable, a.segments)
+
+    def test_a_trace_difference_with_equal_declassified_prefix_is_a_leak(self):
+        leak = {0: [(100, 8, 7, "a"), (200, 4, 0, "a")],
+                1: [(100, 8, 7, "a"), (200, 4, 0, "e")]}
+        a = cta.analyze_declassified(*declass(leak))
+        self.assertFalse(a.clean)
+        self.assertEqual({v[0] for v in a.violations}, {"pc"})
+
+    def test_a_declassified_outcome_may_change_what_runs_next(self):
+        # Iteration 0 rejects in one run (flag=1) and accepts in the other
+        # (flag=0): the following segments have different prefixes, so they
+        # are not compared and the divergence is not a violation.
+        ok = {0: [(100, 8, 7, "a"), (200, 4, 1, "a"), (100, 8, 9, "b")],
+              1: [(100, 8, 7, "a"), (200, 4, 0, "a"), (300, 4, 0, "c")]}
+        a = cta.analyze_declassified(*declass(ok))
+        self.assertTrue(a.clean)
+
+    def test_unexplained_control_flow_divergence_is_reported(self):
+        # Same prefix, but the next event is reached at different sites.
+        leak = {0: [(100, 8, 7, "a"), (200, 4, 0, "a")],
+                1: [(100, 8, 7, "a"), (999, 4, 0, "a")]}
+        a = cta.analyze_declassified(*declass(leak))
+        self.assertIn("control", {v[0] for v in a.violations})
+
+    def test_groups_are_independent(self):
+        two = {0x000: [(1, 4, 0, "a")], 0x001: [(1, 4, 0, "a")],
+               0x100: [(1, 4, 0, "e")], 0x101: [(1, 4, 0, "e")]}
+        self.assertTrue(cta.analyze_declassified(*declass(two)).clean)
+
+    def test_all_singletons_is_not_a_pass(self):
+        solo = {0: [(1, 4, 0, "a")], 0x100: [(1, 4, 0, "e")]}
+        a = cta.analyze_declassified(*declass(solo))
+        self.assertEqual(a.testable, 0)
+        self.assertFalse(a.clean)
+
+    def test_malformed_segment_lines_are_rejected(self):
+        with self.assertRaises(cta.TraceError):
+            cta.parse_segments("PQCP_CT_SEG region=0 nonsense\n")
+        with self.assertRaises(cta.TraceError):  # no tail segment
+            cta.parse_segments(seg(0, 0, 5) + "\n")
+        with self.assertRaises(cta.TraceError):  # seq gap
+            cta.parse_segments(seg(0, 1, 0) + "\n")
+
+    def test_marker_format(self):
+        a = cta.analyze_declassified(*declass(
+            {0: [(1, 4, 0, "a")], 1: [(1, 4, 0, "a")]}))
+        marker = cta.format_declass_marker(a, "MLDSA-65", "default")
+        self.assertTrue(marker.startswith(
+            "PQCP_CT_TRACE_DECLASS PASS alg=MLDSA-65 opt=default"))
+        self.assertIn("violations=0", marker)
+
+
 if __name__ == "__main__":
     unittest.main()

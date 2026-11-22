@@ -1277,6 +1277,13 @@ external vectors; mutation testing of verifiers/ratchet.
 - Full-gate-only steps: edge model conformance, ct trace relational, ct leak
   rediscovery, fault campaign, fault timing campaign.
 
+- Declassification-aware ML-DSA signing leakage (claim 12, schema 15, claim
+  security.ct_trace_declassified): plugin `event=` mode, shim valgrind header
+  turns mldsa-native's MLD_CT_TESTING_DECLASSIFY into segment boundaries,
+  tests/ztest_ct_trace_mldsa, `run_ct_trace_checks.py --alg mldsa`. 546/600
+  segments comparable, 0 violations at -Os/-O2/-Og; 4/4 injected leaks found,
+  0/3 benign flagged, counts-only misses 2/4. Two new full-gate steps.
+
 ## Final rule
 
 Do not confuse motion with progress.

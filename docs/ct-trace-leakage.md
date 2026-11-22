@@ -28,3 +28,20 @@ Optimisation levels: the clean test runs at Zephyr's default (-Os), speed
 (-O2) and debug (-Og); instruction counts per region differ (about 814k,
 787k, 974k) so these are genuinely different builds. An earlier `size`
 level was the same build as the default and was removed.
+
+## ML-DSA signing (declassification-aware mode)
+
+`run_ct_trace_checks.py --alg mldsa` builds `tests/ztest_ct_trace_mldsa`. The
+plugin takes `event=<addr>`; each call of `pqcp_ct_event(site, len, class)`
+(reached from mldsa-native's `MLD_CT_TESTING_DECLASSIFY` through the shim
+valgrind header) closes a segment and prints a `PQCP_CT_SEG` line.
+`ct_trace_analysis.analyze_declassified` compares, within a message group, all
+segments whose declassified prefix is identical; marker
+`PQCP_CT_TRACE_DECLASS PASS ... segments=600 testable=546 violations=0`.
+`--rediscover --alg mldsa` runs `ct_leak_rediscovery_mldsa.py` (4 leaks, 3
+benign; baseline `ct_leak_rediscovery_mldsa_baseline.json`). See
+docs/novelty-claims.md claim 12.
+
+Pitfall found: an injected `if (secret) { __asm__ volatile(""); }` compiles to
+nothing (empty asm, empty branch) and looked like a missed leak; the body needs
+a real volatile store.
