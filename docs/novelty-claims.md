@@ -444,3 +444,48 @@ physics; callees such as Keccak and NTT are outside the target set; results
 depend on this build's layout and compiler; the countermeasures cost about
 one extra operation per call each, plus about 8 KB of RAM for the canary; the
 ML-DSA duplicate compares return codes only.
+
+## Claim 12: relational leakage testing of ML-DSA signing, modulo declassification
+
+Claim 9 compares whole traces, which cannot work for signing: ML-DSA retries
+until its norm checks pass, so the number of iterations (12 to 43 declassified
+events per signature in the sampled inputs) legitimately depends on the
+secret. mldsa-native already marks every point where secret-derived data
+becomes public with `MLD_CT_TESTING_DECLASSIFY` (used upstream with valgrind).
+This claim reuses those annotations as boundaries: a shim `<valgrind/memcheck.h>`
+(tests/ztest_ct_trace_mldsa/shim) routes the macro to a marker the TCG plugin
+hooks (`event=`), which cuts each signing into segments. The relation is
+relational noninterference modulo declassification: two executions that agree
+on every declassified value so far (call site, length, value class) must run
+the next segment identically on pc, exact data address, cache line and
+div/idiv dividend, and reach the same next site. Disagreement is behaviour
+the upstream policy does not explain. The vendored library is not modified.
+
+The input family fixes rho, K, tr, the message and the hedging randomness and
+varies only s1, s2, t0, so commitment and first challenge coincide across
+variants and the secret-dependent segments (c*s1, z, the norm checks) are
+actually compared, including past a rejection when two runs reject
+identically. Measured: 18 signings, 600 segments, 546 comparable (91%), 8
+declassification sites, 0 violations at -Os, -O2 and -Og. Detector power:
+four injected leaks on the secret path (branch, table lookup, KyberSlash-style
+division, early continue) are all reported (4/4) and three benign changes are
+not flagged (0/3); a totals-only check (insns, loads, stores) would have
+missed 2 of the 4 (the table lookup and the division).
+
+Prior art: declassification-based noninterference is classical (Sabelfeld and
+Sands); ctgrind/valgrind-style secret tracking is how upstream uses the
+annotations; Binsec/Rel and similar tools check relational properties
+symbolically on binaries. Not new: the property, the annotations. New here: the
+annotations used as trace segment boundaries in a differential, four-channel
+trace test of the deployed Zephyr image, input design that makes rejection
+loops comparable, and measured sensitivity/specificity enforced by the release
+ledger (`security.ct_trace_declassified`, schema 15; steps `ct trace
+declassified` and `ct leak rediscovery declassified`, full gate only).
+
+Non-claims: the declassification policy is upstream's and is trusted, not
+proven; segments that follow a declassified large buffer are public-data
+processing and compare only when their inputs coincide (singletons, 9% here,
+are untested); the crafted keys are not valid key pairs; sampled inputs on an
+emulated x86_64 image, no microarchitecture, no ARM timing; the relation is
+stricter than upstream in one way (an early exit inside a norm check that
+upstream says could be leaked would be reported). Not a constant-time proof.

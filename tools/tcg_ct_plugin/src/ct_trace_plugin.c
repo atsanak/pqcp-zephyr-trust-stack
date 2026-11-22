@@ -22,6 +22,15 @@
  * label is the value of rdi at the begin marker (the first C argument), so
  * the firmware can name regions (valid / corrupt ciphertext, ...).
  *
+ * Optional event=<addr> (declassification-aware mode): every execution of the
+ * event marker closes a segment and emits
+ *   PQCP_CT_SEG region=<n> seq=<k> site=<rdi> len=<rsi> cls=<rdx> insns=...
+ *       h_pc=... h_addr=... h_line=... h_div=...
+ * for the trace since the previous event (or the region begin). A final
+ * segment with site=0 closes each region. scripts/ct_trace_analysis.py
+ * compares segments of executions that agree on every declassified value so
+ * far (relational noninterference modulo declassification).
+ *
  * This is relational leakage testing in an emulated whole-system image. It
  * is NOT a constant-time proof and models no microarchitecture.
  */
@@ -41,6 +50,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 static uint64_t begin_addr;
 static uint64_t end_addr;
+static uint64_t event_addr; /* optional declassification event marker */
 static FILE *out_file;
 
 static int counting;
@@ -49,9 +59,17 @@ static uint64_t label;
 static uint64_t insns, loads, stores, ndiv;
 static uint64_t h_pc, h_addr, h_line, h_div;
 
+/* Per-segment accumulators (only meaningful when event_addr is set). A
+ * segment is the trace between two declassification events inside a region.
+ */
+static uint64_t seg_index;
+static uint64_t sg_insns, sg_loads, sg_stores, sg_ndiv;
+static uint64_t sg_pc, sg_addr, sg_line, sg_div;
+
 static struct qemu_plugin_register *reg_rax;
 static struct qemu_plugin_register *reg_rdx;
 static struct qemu_plugin_register *reg_rdi;
+static struct qemu_plugin_register *reg_rsi;
 
 static inline uint64_t mix(uint64_t h, uint64_t v)
 {
@@ -66,6 +84,15 @@ static void reset_region(void)
 {
 	insns = loads = stores = ndiv = 0U;
 	h_pc = h_addr = h_line = h_div = FNV_OFFSET;
+	seg_index = 0U;
+	sg_insns = sg_loads = sg_stores = sg_ndiv = 0U;
+	sg_pc = sg_addr = sg_line = sg_div = FNV_OFFSET;
+}
+
+static void reset_segment(void)
+{
+	sg_insns = sg_loads = sg_stores = sg_ndiv = 0U;
+	sg_pc = sg_addr = sg_line = sg_div = FNV_OFFSET;
 }
 
 /*
@@ -89,8 +116,31 @@ static uint64_t read_reg(struct qemu_plugin_register *reg)
 	return value;
 }
 
+static void emit_segment(uint64_t site, uint64_t len, uint64_t cls)
+{
+	if (out_file != NULL) {
+		fprintf(out_file,
+			"PQCP_CT_SEG region=%" PRIu64 " seq=%" PRIu64
+			" site=%" PRIu64 " len=%" PRIu64 " cls=%" PRIu64
+			" insns=%" PRIu64 " loads=%" PRIu64 " stores=%" PRIu64
+			" ndiv=%" PRIu64 " h_pc=%016" PRIx64
+			" h_addr=%016" PRIx64 " h_line=%016" PRIx64
+			" h_div=%016" PRIx64 "\n",
+			region_index, seg_index, site, len, cls, sg_insns,
+			sg_loads, sg_stores, sg_ndiv, sg_pc, sg_addr, sg_line,
+			sg_div);
+		fflush(out_file);
+	}
+	seg_index++;
+	reset_segment();
+}
+
 static void emit_region(void)
 {
+	if (event_addr != 0U) {
+		/* Tail segment: trace after the last event, site 0. */
+		emit_segment(0U, 0U, 0U);
+	}
 	if (out_file != NULL) {
 		fprintf(out_file,
 			"PQCP_CT_TRACE region=%" PRIu64 " label=%" PRIu64
@@ -121,6 +171,8 @@ static void vcpu_init(qemu_plugin_id_t id, unsigned int vcpu_index)
 			reg_rdx = d->handle;
 		} else if (strcmp(d->name, "rdi") == 0) {
 			reg_rdi = d->handle;
+		} else if (strcmp(d->name, "rsi") == 0) {
+			reg_rsi = d->handle;
 		}
 	}
 	if (regs != NULL) {
@@ -144,6 +196,25 @@ static void insn_exec(unsigned int cpu_index, void *udata)
 	if (counting) {
 		insns++;
 		h_pc = mix(h_pc, vaddr);
+		sg_insns++;
+		sg_pc = mix(sg_pc, vaddr);
+	}
+}
+
+/*
+ * Declassification event: closes the current segment. Arguments are the
+ * first three C arguments (rdi = site, rsi = length, rdx = value class).
+ */
+static void insn_exec_event(unsigned int cpu_index, void *udata)
+{
+	(void)cpu_index;
+	(void)udata;
+	if (counting) {
+		const uint64_t site = read_reg(reg_rdi);
+		const uint64_t len = read_reg(reg_rsi);
+		const uint64_t cls = read_reg(reg_rdx);
+
+		emit_segment(site, len, cls);
 	}
 }
 
@@ -167,6 +238,8 @@ static void insn_exec_div(unsigned int cpu_index, void *udata)
 
 		ndiv++;
 		h_div = mix(mix(h_div, lo), hi);
+		sg_ndiv++;
+		sg_div = mix(mix(sg_div, lo), hi);
 	}
 }
 
@@ -185,6 +258,13 @@ static void mem_access(unsigned int cpu_index, qemu_plugin_meminfo_t info,
 	}
 	h_addr = mix(h_addr, vaddr);
 	h_line = mix(h_line, vaddr >> 6);
+	if (qemu_plugin_mem_is_store(info)) {
+		sg_stores++;
+	} else {
+		sg_loads++;
+	}
+	sg_addr = mix(sg_addr, vaddr);
+	sg_line = mix(sg_line, vaddr >> 6);
 }
 
 /*
@@ -236,6 +316,11 @@ static void tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 			qemu_plugin_register_vcpu_insn_exec_cb(
 				insn, insn_exec_begin, QEMU_PLUGIN_CB_R_REGS,
 				ud);
+		} else if (event_addr != 0U && vaddr == event_addr) {
+			/* Event args must be read at the instruction itself. */
+			qemu_plugin_register_vcpu_insn_exec_cb(
+				insn, insn_exec_event, QEMU_PLUGIN_CB_R_REGS,
+				ud);
 		} else if (divide) {
 			qemu_plugin_register_vcpu_insn_exec_cb(
 				insn, insn_exec_div, QEMU_PLUGIN_CB_R_REGS,
@@ -277,6 +362,8 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
 			begin_addr = strtoull(argv[i] + 6, NULL, 0);
 		} else if (strncmp(argv[i], "end=", 4) == 0) {
 			end_addr = strtoull(argv[i] + 4, NULL, 0);
+		} else if (strncmp(argv[i], "event=", 6) == 0) {
+			event_addr = strtoull(argv[i] + 6, NULL, 0);
 		} else if (strncmp(argv[i], "outfile=", 8) == 0) {
 			outfile_path = argv[i] + 8;
 		}
