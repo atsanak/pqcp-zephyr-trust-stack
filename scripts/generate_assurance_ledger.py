@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -1879,6 +1879,71 @@ def evaluate_fault_campaign_boot_selftest(
         commands=commands, details=details)
 
 
+def evaluate_fault_timing_countermeasure(
+    spec: dict[str, Any], *, transcript_manifest: Path
+) -> dict[str, object]:
+    """Bind security.fault_timing_countermeasure to the timing gate step.
+
+    Re-parses the numbers: a weakened gate must not pass silently. The base
+    image must show exploitable sites under both timings, the hardened image
+    none, and every campaign must have been calibrated and error free.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "scripts/run_fault_timing_gate.py",
+        "scripts/run_fault_campaign.py",
+        "scripts/fault_gdb.py",
+        "scripts/fault_oracle.py",
+    ]
+    commands = ["python3 scripts/run_fault_timing_gate.py --output-dir <dir>"]
+    path, sha, body = _read_named_transcript(transcript_manifest, "fault timing campaign")
+    if path is None or not body:
+        return fail_claim(
+            spec, reason=f"fault timing campaign transcript missing or empty in {transcript_manifest}",
+            validators=validators, evidence_artifacts=artifacts, commands=commands)
+    artifacts.append(artifact(path, label="fault timing campaign transcript"))
+    details: dict[str, object] = {"transcript_sha256": sha}
+    gate = re.search(
+        r"PQCP_FAULT_TIMING_GATE PASS sites_postboot=(\d+) sites_transient=(\d+) "
+        r"base_postboot=(\d+) base_transient=(\d+) hardened_postboot=(\d+) "
+        r"hardened_transient=(\d+)", body)
+    problems = []
+    if gate is None:
+        problems.append("no PQCP_FAULT_TIMING_GATE PASS marker")
+    else:
+        sp, st, bp, bt, hp, ht = (int(g) for g in gate.groups())
+        details.update({"faults_postboot": sp, "faults_transient": st,
+                        "base_exploitable_postboot": bp,
+                        "base_exploitable_transient": bt,
+                        "hardened_exploitable_postboot": hp,
+                        "hardened_exploitable_transient": ht})
+        if sp < 300 or st < 300:
+            problems.append("campaign too small")
+        if bp < 1 or bt < 1:
+            problems.append("campaign not sensitive (base image shows no "
+                            "exploitable site under both timings)")
+        if hp != 0 or ht != 0:
+            problems.append("exploitable site(s) survive on the hardened image")
+    cells = re.findall(
+        r"PQCP_FAULT_CAMPAIGN variant=(\S+) .*?harness_error=(\d+) "
+        r"controls_ok=(\d+)/(\d+) timing=(\S+)", body)
+    seen = {(v, t) for v, _, _, _, t in cells}
+    needed = {("boot-negative", "post-boot"), ("hardened", "post-boot"),
+              ("boot-negative", "transient"), ("hardened", "transient")}
+    if not needed <= seen or any(
+            int(h) != 0 or ok != total or int(total) == 0
+            for _, h, ok, total, _ in cells):
+        problems.append("missing campaign cell, harness errors, or identity "
+                        "controls not clean")
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_evidence_coverage_ratchet(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -2794,6 +2859,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         ),
         "security.evidence_parser_fuzzed": lambda spec: evaluate_evidence_parser_fuzzed(
             spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.fault_timing_countermeasure": lambda spec: evaluate_fault_timing_countermeasure(
+            spec, transcript_manifest=transcript_manifest
         ),
         "security.fault_campaign_boot_selftest": lambda spec: evaluate_fault_campaign_boot_selftest(
             spec, transcript_manifest=transcript_manifest

@@ -1435,6 +1435,56 @@ class AssuranceLedgerTests(unittest.TestCase):
         ):
             self.assertEqual(self._eval_fault(body)["status"], "fail", body[-120:])
 
+    TIMING_BODY = "".join(
+        f"PQCP_FAULT_CAMPAIGN variant={v} sites={n} kem_fo_bypass={k} "
+        f"sig_verify_bypass={g} detected_boot=0 detected_runtime=5 "
+        f"fail_safe=1 corrupt=2 no_effect=100 crash=100 timeout=2 "
+        f"harness_error=0 controls_ok=6/6 timing={t} exploitable_sites={e}\n"
+        for v, t, n, k, g, e in (
+            ("boot-negative", "post-boot", 350, 3, 6, 9),
+            ("hardened", "post-boot", 593, 0, 0, 0),
+            ("boot-negative", "transient", 932, 5, 17, 9),
+            ("hardened", "transient", 1530, 0, 0, 0))
+    ) + ("PQCP_FAULT_TIMING_GATE PASS sites_postboot=593 sites_transient=1530 "
+         "base_postboot=9 base_transient=9 hardened_postboot=0 "
+         "hardened_transient=0\n")
+
+    def _eval_timing(self, body: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest.parent.mkdir(parents=True)
+            (manifest.parent / "01-timing.log").write_text(body, encoding="utf-8")
+            manifest.write_text(json.dumps({"schema_version": 1, "transcripts": [{
+                "step": "fault timing campaign", "transcript_path": "01-timing.log",
+                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                "size_bytes": len(body.encode()), "returncode": 0}]}) + "\n",
+                encoding="utf-8")
+            spec = {"id": "security.fault_timing_countermeasure",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_fault_timing_countermeasure(
+                spec, transcript_manifest=manifest)
+
+    def test_fault_timing_passes_with_measured_ablation(self) -> None:
+        result = self._eval_timing(self.TIMING_BODY)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["hardened_exploitable_transient"], 0)
+
+    def test_fault_timing_fails_when_weakened(self) -> None:
+        for body in (
+            self.TIMING_BODY.replace("hardened_transient=0\n", "hardened_transient=1\n"),
+            self.TIMING_BODY.replace("hardened_postboot=0 ", "hardened_postboot=2 "),
+            self.TIMING_BODY.replace("base_transient=9", "base_transient=0"),
+            self.TIMING_BODY.replace("base_postboot=9", "base_postboot=0"),
+            self.TIMING_BODY.replace("sites_transient=1530", "sites_transient=20"),
+            self.TIMING_BODY.replace("harness_error=0", "harness_error=3", 1),
+            self.TIMING_BODY.replace("controls_ok=6/6", "controls_ok=4/6", 1),
+            self.TIMING_BODY.replace("timing=transient", "timing=post-boot"),
+            self.TIMING_BODY.replace("PASS", "FAIL"),
+            "noise\n",
+        ):
+            self.assertEqual(self._eval_timing(body)["status"], "fail", body[-110:])
+
     def _write_fuzz_transcript(self, root: Path, body: str) -> Path:
         manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
