@@ -53,6 +53,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ct trace relational",
     "ct leak rediscovery",
     "fault campaign",
+    "fault timing campaign",
     "ct smoke ztest run",
     "ct instruction policy",
     "benchmark_csv",
@@ -2077,6 +2078,20 @@ def main() -> int:
             cwd=module_path,
             timeout=5400,
             success_markers=("PQCP_FAULT_GATE PASS",),
+        ),
+        Step(
+            name="fault timing campaign",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/run_fault_timing_gate.py"),
+                "--west-root",
+                str(west_root),
+                "--output-dir",
+                str(fault_output_dir / "timing"),
+            ],
+            cwd=module_path,
+            timeout=10800,
+            success_markers=("PQCP_FAULT_TIMING_GATE PASS",),
         ),
         Step(
             name="ct smoke ztest build",

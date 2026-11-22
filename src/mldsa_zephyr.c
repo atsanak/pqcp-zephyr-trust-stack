@@ -205,10 +205,10 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
 
-int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
-                      const uint8_t *msg, size_t msg_len,
-                      const uint8_t *ctx, size_t ctx_len,
-                      const uint8_t *sig)
+static int mldsa_verify_backend(pqcp_mldsa_level_t level, const uint8_t *pk,
+                                const uint8_t *msg, size_t msg_len,
+                                const uint8_t *ctx, size_t ctx_len,
+                                const uint8_t *sig)
 {
     if (pk == NULL || sig == NULL) {
         return PQCP_MLDSA_ERR_INVALID_ARG;
@@ -256,6 +256,102 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
     } else {
         return PQCP_MLDSA_ERR_VERIFY;
     }
+}
+
+
+#ifdef CONFIG_PQCP_FAULT_CANARY
+/*
+ * Negative canary: a genuine signature on a fixed message with one byte
+ * tampered. The real verifier must reject it; acceptance means the check was
+ * defeated.
+ */
+static struct {
+    bool ready;
+    pqcp_mldsa_level_t level;
+    uint8_t pk[PQCP_MLDSA_PK_SIZE_MAX];
+    uint8_t bad_sig[PQCP_MLDSA_SIG_SIZE_MAX];
+} dsa_canary;
+static K_MUTEX_DEFINE(dsa_canary_lock);
+static const uint8_t dsa_canary_msg[] = "PQCP fault canary";
+
+static int dsa_canary_prepare(pqcp_mldsa_level_t level)
+{
+    static uint8_t sk[PQCP_MLDSA_SK_SIZE_MAX];
+    int ret;
+
+    if (dsa_canary.ready && dsa_canary.level == level) {
+        return 0;
+    }
+    dsa_canary.ready = false;
+    ret = pqcp_mldsa_keypair(level, dsa_canary.pk, sk);
+    if (ret != PQCP_MLDSA_SUCCESS) {
+        return ret;
+    }
+    ret = pqcp_mldsa_sign(level, sk, dsa_canary_msg,
+                          sizeof(dsa_canary_msg) - 1U, NULL, 0U,
+                          dsa_canary.bad_sig);
+    /* The canary needs only pk and the signature; do not keep the key. */
+    for (size_t i = 0U; i < sizeof(sk); ++i) {
+        ((volatile uint8_t *)sk)[i] = 0U;
+    }
+    if (ret != PQCP_MLDSA_SUCCESS) {
+        return ret;
+    }
+    dsa_canary.bad_sig[11] ^= 0x01U;
+    dsa_canary.level = level;
+    dsa_canary.ready = true;
+    return 0;
+}
+
+/*
+ * Returns 1 when the canary was correctly rejected. Fails CLOSED: a canary
+ * that cannot be prepared is treated as detection, never as "no evidence",
+ * otherwise faulting its setup would silently disable the countermeasure.
+ */
+static int dsa_canary_ok(pqcp_mldsa_level_t level)
+{
+    int ret;
+    int rejected;
+
+    k_mutex_lock(&dsa_canary_lock, K_FOREVER);
+    ret = dsa_canary_prepare(level);
+    if (ret != 0) {
+        k_mutex_unlock(&dsa_canary_lock);
+        return 0;
+    }
+    ret = mldsa_verify_backend(level, dsa_canary.pk, dsa_canary_msg,
+                               sizeof(dsa_canary_msg) - 1U, NULL, 0U,
+                               dsa_canary.bad_sig);
+    rejected = ret != PQCP_MLDSA_SUCCESS;
+    k_mutex_unlock(&dsa_canary_lock);
+    return rejected;
+}
+#endif /* CONFIG_PQCP_FAULT_CANARY */
+
+int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
+                      const uint8_t *msg, size_t msg_len,
+                      const uint8_t *ctx, size_t ctx_len,
+                      const uint8_t *sig)
+{
+    int ret = mldsa_verify_backend(level, pk, msg, msg_len, ctx, ctx_len,
+                                   sig);
+
+#ifdef CONFIG_PQCP_FAULT_DUPLICATE
+    if (ret == PQCP_MLDSA_SUCCESS || ret == PQCP_MLDSA_ERR_VERIFY) {
+        int second = mldsa_verify_backend(level, pk, msg, msg_len, ctx,
+                                          ctx_len, sig);
+
+        if (second != ret) {
+            return PQCP_MLDSA_ERR_FAULT_DETECTED;
+        }
+    }
+#endif
+#ifdef CONFIG_PQCP_FAULT_CANARY
+    if (ret == PQCP_MLDSA_SUCCESS && !dsa_canary_ok(level)) {
+        return PQCP_MLDSA_ERR_FAULT_DETECTED;
+    }
+#endif
+    return ret;
 }
 
 #endif /* HAVE_MLDSA_NATIVE */

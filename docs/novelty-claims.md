@@ -274,6 +274,7 @@ hard to overclaim.
 | 8 | `python3 scripts/run_model_checks.py --rediscover` | `PQCP_MODEL_REDISCOVERY PASS rediscovered=10/10` |
 | 9 | `python3 scripts/run_ct_trace_checks.py --opt default --opt speed --opt debug` and `--rediscover` | `PQCP_CT_TRACE PASS ... distinct=1` and `PQCP_CT_TRACE_REDISCOVERY PASS leaks=5/5 benign_flagged=0/3` |
 | 10 | `python3 scripts/run_fault_gate.py --output-dir <dir>` | `PQCP_FAULT_GATE PASS exploitable_boot=8 exploitable_boot_negative=0` |
+| 11 | `python3 scripts/run_fault_timing_gate.py --output-dir <dir>` | `PQCP_FAULT_TIMING_GATE PASS base_postboot=9 base_transient=9 hardened_postboot=0 hardened_transient=0` |
 
 Claims 1–4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
@@ -392,3 +393,54 @@ self-test does not defend against faults injected after boot, and a fault
 that also disables the self-test defeats it; fault sites that crash are not
 counted as exploitable. The valid-only boot test detects 1 of the 9
 exploitable sites, so it was far from sufficient, but not useless.
+Claim 11 is the required claim `security.fault_timing_countermeasure`
+(schema 14); its gate step `fault timing campaign` runs in the full gate only
+(about 1.5 hours).
+
+## Claim 11: fault timing as a measured axis, and a countermeasure ablation
+
+Claim 10 left a stated gap: a boot self-test does not defend against faults
+that appear after boot. This closes it with measurement. The campaign gains
+two timings (permanent after boot, written through the QEMU gdbstub at an
+arm point; single-shot transient, applied on one execution, stepped over and
+restored) and two opt-in wrapper countermeasures:
+`CONFIG_PQCP_FAULT_CANARY` (after every operation the same backend function
+must reject a stored negative input) and `CONFIG_PQCP_FAULT_DUPLICATE` (two
+runs must agree). Measured, every instruction of the ML-KEM-768 decapsulation
+and ML-DSA-65 verify code, skip and branch-inversion models:
+
+| Image | permanent after boot | transient single-shot |
+|---|---|---|
+| boot self-test with negative vectors only | 9 exploitable | 9 |
+| + canary | **0** | 8 |
+| + duplication | 9 | **0** |
+| + canary + duplication | **0** | **0** |
+
+Each countermeasure covers exactly the timing its design predicts: the
+canary shares the fault with the real operation (a permanent fault defeats
+both, which is how it is detected) but not a transient one; duplication
+detects a transient fault because two runs disagree but not a permanent one
+(both runs are corrupted identically). Only the combination is clean on both.
+Predictions were written down before the measurement (see
+docs/fault-campaign.md); they held, after the measurement tool was fixed.
+
+Prior art (verified in the 2024-2026 literature search): Verifiable
+Decapsulation (Glabush et al., CRYPTO 2025) changes the transform so a
+skipped check breaks correctness, which this does not and cannot do for a
+standardised ML-KEM; Pesin et al. (CPP 2025) verify duplication-style
+hardening for C programs; Kosuge and Xagawa (ASIACRYPT 2025) analyse ML-DSA
+fault security at proof level; Krahmer et al. (TCHES 2024) attack signing.
+Not new: temporal duplication, negative self-test vectors, the FO-bypass
+attack. New here: fault timing measured on the shipped image with
+cryptographic verdicts, the countermeasure ablation by timing, and its
+enforcement in the release ledger with a sensitivity floor.
+
+Non-claims: single faults only (two faults can defeat the compare itself, and
+a fault in a callee's frame setup can unwind past the wrapper's checks: the
+wrappers now compute into a private buffer and hand the caller zeros unless
+every check passes, but this is not a proof); the transient model faults the
+first execution of each site; x86_64 under emulation; no hardware fault
+physics; callees such as Keccak and NTT are outside the target set; results
+depend on this build's layout and compiler; the countermeasures cost about
+one extra operation per call each, plus about 8 KB of RAM for the canary; the
+ML-DSA duplicate compares return codes only.

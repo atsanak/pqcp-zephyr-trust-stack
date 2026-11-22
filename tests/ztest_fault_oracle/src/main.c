@@ -49,6 +49,51 @@ static uint8_t dsa_bad[PQCP_MLDSA_65_SIG_SIZE];
 static const uint8_t message[32] = "PQCP fault campaign message #001";
 static const uint8_t other_message[32] = "PQCP fault campaign message #002";
 
+/*
+ * Arm point for the fault campaign's post-boot and transient timing models
+ * (scripts/fault_gdb.py): the campaign breaks here, applies its fault through
+ * the QEMU debugger stub, and continues. Hit n precedes scenario n (1..7), so
+ * everything before hit 1, including the boot self-test, runs fault-free.
+ */
+__attribute__((noinline)) void pqcp_fault_arm(uint32_t scenario)
+{
+	__asm__ volatile("" : : "r"(scenario) : "memory");
+}
+
+/*
+ * Every call below reloads its arguments from volatile globals. A fault that
+ * unwinds a callee's frame returns into this function with callee-saved
+ * registers restored from the wrong stack slots; if the compiler kept the
+ * ciphertext/signature pointer in one of those registers the NEXT scenario
+ * would silently run on a different input and be misjudged. Reloading from
+ * memory removes that harness artifact.
+ */
+static const uint8_t *volatile a_ct;
+static const uint8_t *volatile a_kem_sk;
+static uint8_t *volatile a_ss;
+static const uint8_t *volatile a_dsa_pk;
+static const uint8_t *volatile a_msg;
+static const uint8_t *volatile a_sig;
+
+static int decap(const uint8_t *ct)
+{
+	a_ct = ct;
+	a_kem_sk = kem_sk;
+	a_ss = kem_out;
+	return pqcp_mlkem_decapsulate(PQCP_MLKEM_768, a_ct, a_kem_sk, a_ss);
+}
+
+static int verify(const uint8_t *msg, const uint8_t *sig)
+{
+	static const uint8_t none[1] = { 0 };
+
+	a_dsa_pk = dsa_pk;
+	a_msg = msg;
+	a_sig = sig;
+	return pqcp_mldsa_verify(PQCP_MLDSA_65, a_dsa_pk, a_msg,
+				 sizeof(message), none, 0U, a_sig);
+}
+
 static void obs(const char *name, int rc, const uint8_t *out, size_t len)
 {
 	printk("PQCP_FAULT_OBS name=%s rc=%d out=", name, rc);
@@ -77,20 +122,23 @@ ZTEST(pqcp_fault_oracle, test_observations)
 		PQCP_MLKEM_768, kem_pk, coins, kem_ct, kem_ss),
 		PQCP_MLKEM_SUCCESS);
 
+	pqcp_fault_arm(1U);
 	memset(kem_out, 0, sizeof(kem_out));
-	rc = pqcp_mlkem_decapsulate(PQCP_MLKEM_768, kem_ct, kem_sk, kem_out);
+	rc = decap(kem_ct);
 	obs("KEM_VALID", rc, kem_out, sizeof(kem_out));
 
+	pqcp_fault_arm(2U);
 	memcpy(kem_bad, kem_ct, sizeof(kem_bad));
 	kem_bad[7] ^= 0x81U;
 	memset(kem_out, 0, sizeof(kem_out));
-	rc = pqcp_mlkem_decapsulate(PQCP_MLKEM_768, kem_bad, kem_sk, kem_out);
+	rc = decap(kem_bad);
 	obs("KEM_CORRUPT1", rc, kem_out, sizeof(kem_out));
 
+	pqcp_fault_arm(3U);
 	memcpy(kem_bad, kem_ct, sizeof(kem_bad));
 	kem_bad[sizeof(kem_bad) - 5U] ^= 0x42U;
 	memset(kem_out, 0, sizeof(kem_out));
-	rc = pqcp_mlkem_decapsulate(PQCP_MLKEM_768, kem_bad, kem_sk, kem_out);
+	rc = decap(kem_bad);
 	obs("KEM_CORRUPT2", rc, kem_out, sizeof(kem_out));
 
 	/* ML-DSA-65 */
@@ -102,24 +150,24 @@ ZTEST(pqcp_fault_oracle, test_observations)
 				      sizeof(message), none, 0U, dsa_sig),
 		      PQCP_MLDSA_SUCCESS);
 
-	rc = pqcp_mldsa_verify(PQCP_MLDSA_65, dsa_pk, message,
-			       sizeof(message), none, 0U, dsa_sig);
+	pqcp_fault_arm(4U);
+	rc = verify(message, dsa_sig);
 	obs("DSA_VALID", rc, none, 0U);
 
+	pqcp_fault_arm(5U);
 	memcpy(dsa_bad, dsa_sig, sizeof(dsa_bad));
 	dsa_bad[11] ^= 0x01U;
-	rc = pqcp_mldsa_verify(PQCP_MLDSA_65, dsa_pk, message,
-			       sizeof(message), none, 0U, dsa_bad);
+	rc = verify(message, dsa_bad);
 	obs("DSA_BADSIG1", rc, none, 0U);
 
+	pqcp_fault_arm(6U);
 	memcpy(dsa_bad, dsa_sig, sizeof(dsa_bad));
 	dsa_bad[sizeof(dsa_bad) - 40U] ^= 0x80U;
-	rc = pqcp_mldsa_verify(PQCP_MLDSA_65, dsa_pk, message,
-			       sizeof(message), none, 0U, dsa_bad);
+	rc = verify(message, dsa_bad);
 	obs("DSA_BADSIG2", rc, none, 0U);
 
-	rc = pqcp_mldsa_verify(PQCP_MLDSA_65, dsa_pk, other_message,
-			       sizeof(other_message), none, 0U, dsa_sig);
+	pqcp_fault_arm(7U);
+	rc = verify(other_message, dsa_sig);
 	obs("DSA_BADMSG", rc, none, 0U);
 
 	printk("PQCP_FAULT_DONE\n");
