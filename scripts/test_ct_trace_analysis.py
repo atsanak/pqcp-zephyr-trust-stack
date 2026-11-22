@@ -177,5 +177,91 @@ class DeclassifiedAnalysis(unittest.TestCase):
         self.assertIn("violations=0", marker)
 
 
+def vlat(region, pc, kind=3, n=4, op="a", cls="b", doc="c"):
+    f = lambda c: c * 16  # noqa: E731
+    return (f"PQCP_CT_VLAT region={region} pc={pc:x} kind={kind} n={n} "
+            f"h_op={f(op)} h_cls={f(cls)} h_doc={f(doc)}")
+
+
+def vlat_trace(records, regions=4, label_of=lambda i: i):
+    lines = [line(i, label=label_of(i)) for i in range(regions)]
+    return "\n".join(list(records) + lines) + \
+        f"\nPQCP_CT_TRACE done regions={regions}\n"
+
+
+def vlat_analyze(text):
+    return cta.analyze_vlat(cta.parse_trace(text), cta.parse_vlat(text))
+
+
+class VlatAnalysis(unittest.TestCase):
+    def test_identical_operands_are_clean_with_no_candidates(self):
+        text = vlat_trace([vlat(i, 0x100) for i in range(4)])
+        a = vlat_analyze(text)
+        self.assertTrue(a.clean)
+        self.assertEqual(a.candidate_sites, [])
+
+    def test_exact_operand_variation_alone_is_only_a_candidate(self):
+        text = vlat_trace([vlat(i, 0x100, op="abcd"[i]) for i in range(4)])
+        a = vlat_analyze(text)
+        self.assertTrue(a.clean)
+        self.assertEqual(a.candidate_sites, [(0x100, 3)])
+
+    def test_long_multiply_documented_predicate_variation_fails(self):
+        text = vlat_trace([vlat(i, 0x100, op="abcd"[i], doc="ab"[i % 2])
+                           for i in range(4)])
+        a = vlat_analyze(text)
+        self.assertFalse(a.clean)
+        self.assertEqual(a.fail_sites[0][:2], (0x100, 3))
+        self.assertEqual(a.candidate_sites, [])
+
+    def test_bit_length_variation_in_a_multiply_is_not_a_failure(self):
+        # The M3 documentation keys long multiplies on the 65536 boundary,
+        # not on bit length: only the conservative inventory sees this.
+        text = vlat_trace([vlat(i, 0x100, op="abcd"[i], cls="abcd"[i])
+                           for i in range(4)])
+        a = vlat_analyze(text)
+        self.assertTrue(a.clean)
+        self.assertEqual(len(a.candidate_sites), 1)
+
+    def test_division_bit_length_variation_fails(self):
+        text = vlat_trace([vlat(i, 0x200, kind=1, cls="ab"[i % 2])
+                           for i in range(4)])
+        a = vlat_analyze(text)
+        self.assertFalse(a.clean)
+        self.assertEqual(a.fail_sites[0][1], 1)
+
+    def test_a_site_executed_a_different_number_of_times_fails(self):
+        text = vlat_trace([vlat(i, 0x100, n=4 + (i == 2)) for i in range(4)])
+        a = vlat_analyze(text)
+        self.assertFalse(a.clean)
+        self.assertIn("count", a.fail_sites[0][2])
+
+    def test_variation_across_groups_is_public_and_ignored(self):
+        # label >> 8 is the group: operands may differ between keys.
+        text = vlat_trace([vlat(i, 0x100, doc="ab"[i // 2], op="ab"[i // 2])
+                           for i in range(4)],
+                          label_of=lambda i: (i // 2) << 8)
+        a = vlat_analyze(text)
+        self.assertTrue(a.clean)
+        self.assertEqual(a.candidate_sites, [])
+
+    def test_address_level_divergence_fails_even_with_clean_operands(self):
+        lines = [vlat(i, 0x100) for i in range(4)] + \
+            [line(i, pc="e" if i == 1 else "a") for i in range(4)]
+        text = "\n".join(lines) + "\nPQCP_CT_TRACE done regions=4\n"
+        self.assertFalse(vlat_analyze(text).clean)
+
+    def test_malformed_line_is_rejected_and_marker_format(self):
+        with self.assertRaises(cta.TraceError):
+            cta.parse_vlat("PQCP_CT_VLAT region=1 nonsense\n")
+        a = vlat_analyze(vlat_trace([vlat(i, 0x100) for i in range(4)]))
+        marker = cta.format_vlat_marker(a, "MLKEM-768", "default",
+                                        "cortex-m3")
+        self.assertTrue(marker.startswith(
+            "PQCP_CT_TRACE_VLAT PASS alg=MLKEM-768 target=cortex-m3 "
+            "opt=default"))
+        self.assertIn("mul_sites=1", marker)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -489,3 +489,66 @@ are untested); the crafted keys are not valid key pairs; sampled inputs on an
 emulated x86_64 image, no microarchitecture, no ARM timing; the relation is
 stricter than upstream in one way (an early exit inside a norm check that
 upstream says could be leaked would be reported). Not a constant-time proof.
+
+## Claim 13: operand-dependent latency on Cortex-M3, a channel the x86 trace test cannot see
+
+Claims 9 and 12 observe an x86_64 image, where the only variable-latency
+instruction modelled is `div`. The deployed targets of a Zephyr PQC stack are
+Cortex-M cores, and a Cortex-M3 has two such instruction classes: `UDIV` and
+`SDIV`, and the long multiplies `UMULL`, `SMULL`, `UMLAL` and `SMLAL`, which
+ARM documents as terminating early on the size of the operands (DDI 0337,
+instruction timing; BearSSL's measurements add that real M3 devices deviate
+from that rule). The pqcp_ct_trace plugin now runs against `qemu-system-arm`:
+it masks the Thumb bit of the marker symbols, decodes the Thumb-2 encodings
+(the SDK's QEMU has no disassembler) and, for every such instruction executed
+in a decapsulation region, accumulates per instruction address a hash of the
+exact operands, of their bit lengths, and of the documented long-multiply
+predicate (both operands below 65536). `tests/ztest_ct_trace` is reused
+unchanged on `mps2/an385`.
+
+Verdict model: a division fails on any bit-length variation between the valid
+and corrupted ciphertexts of one key; a long multiply fails on a change of the
+documented predicate; a site executed a different number of times fails; the
+address-level channels must also be identical. The conservative reading is
+kept as an inventory instead of being hidden: a site whose exact operands vary
+while the documented model is constant is a *candidate*, and the release
+ledger ratchets the candidate count against
+`scripts/ct_vlat_inventory_baseline.json`.
+
+Measured on the shipped ML-KEM-768: address channels are clean on the M3 image
+and the verdict passes at -Os, -O2 and -Og. The only variable-latency
+instruction reached inside decapsulation is one `UMULL` in
+`mlk_poly_compress_d10` (768 executions per decapsulation) whose operand is the
+re-encrypted, secret-derived coefficient; the other operand is a constant above
+65536, so the documented predicate is constant and the site is reported as a
+candidate, not a failure. That is a finding about the build, not a clean bill:
+whether it leaks on silicon depends on how the multiplier really terminates,
+which an emulator cannot say.
+
+Detector power: a UDIV and an SDIV of a decrypted coefficient by a runtime
+divisor and a UMULL whose operand magnitude follows a decrypted message bit are
+all reported (3/3); a UDIV on public loop operands, a UMULL of a secret
+coefficient by a small constant and a dead store are not flagged (0/3). None of
+the three leaks changes a branch, an address or an instruction count, so the
+address-level channels of claim 9 would have missed all three. The first
+version of the decoder missed the divisions because `UDIV r3, r3, lr` names
+`lr`, which the register table did not cover; the rediscovery run caught it, a
+concrete instance of the detector testing itself.
+
+Prior art: early-terminating multipliers as a side channel are classical
+(Grossschaedl, Oswald, Page, Tunstall, ePrint 2009/538); BearSSL's `ctmul`
+notes document the M3 caveat; KyberSlash is the division instance. Not new: the
+hazard, the instruction facts. New here: a differential, operand-recording
+test of the deployed Zephyr image on the Cortex-M3 target with a two-model
+verdict plus a ratcheted conservative inventory, and measured sensitivity and
+specificity enforced by the release ledger
+(`security.ct_trace_cortex_m_latency`, schema 16; steps `ct trace cortex-m
+latency` and `ct leak rediscovery cortex-m latency`, full gate only).
+
+Non-claims: operands are recorded, latency is not simulated; no hardware
+measurement; one core (a Cortex-M4 or M33 has single-cycle long multiplies and
+shares the divider rule, so its model differs and is not tested); ML-KEM only,
+not ML-DSA on Cortex-M; conditional execution inside Thumb IT blocks is
+counted when the instruction is reached; sampled inputs. Not a constant-time
+proof.
+

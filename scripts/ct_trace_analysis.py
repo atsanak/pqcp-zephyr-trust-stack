@@ -292,3 +292,120 @@ def format_declass_marker(a: DeclassAnalysis, alg: str, opt: str) -> str:
             f"testable={a.testable} classes={a.classes} sites={a.sites} "
             f"violations={len(a.violations)} "
             f"coverage_pct={100.0 * a.coverage:.1f}")
+
+
+# ---------------------------------------------------------------------------
+# Operand-dependent-latency channel (Cortex-M, plugin target "arm").
+#
+# The plugin emits one PQCP_CT_VLAT line per (region, instruction address) for
+# every Thumb-2 UDIV/SDIV/UMULL/SMULL/UMLAL/SMLAL executed in the region, with
+# three hashes of the operand stream: identity (h_op), bit-length class
+# (h_cls) and, for long multiplies, the documented Cortex-M3 predicate
+# "both operands below 65536" (h_doc). Within a group (same public inputs) a
+# site is secret-dependent on a model when its hash differs between regions.
+#
+#   FAIL model   a division whose bit-length class varies, or a long multiply
+#                whose documented predicate varies (ARM DDI 0337 timing), or a
+#                site that runs a different number of times between regions.
+#   candidate    any site whose exact operands vary but passes the FAIL
+#                model. The conservative reading: BearSSL measured M3 devices
+#                deviating from the documented rule, so these are an
+#                inventory that a ratchet can only shrink, not a pass/fail.
+# ---------------------------------------------------------------------------
+
+VLAT_RE = re.compile(
+    r"PQCP_CT_VLAT region=(\d+) pc=([0-9a-f]+) kind=(\d) n=(\d+) "
+    r"h_op=([0-9a-f]{16}) h_cls=([0-9a-f]{16}) h_doc=([0-9a-f]{16})$")
+VLAT_KINDS = {1: "udiv", 2: "sdiv", 3: "umull", 4: "smull", 5: "umlal",
+              6: "smlal"}
+
+
+@dataclass(frozen=True)
+class VlatRecord:
+    region: int
+    pc: int
+    kind: int
+    n: int
+    h_op: str
+    h_cls: str
+    h_doc: str
+
+
+def parse_vlat(text: str) -> list[VlatRecord]:
+    records = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line.startswith("PQCP_CT_VLAT"):
+            continue
+        m = VLAT_RE.match(line)
+        if not m:
+            raise TraceError(f"malformed vlat line: {line!r}")
+        g = m.groups()
+        records.append(VlatRecord(int(g[0]), int(g[1], 16), int(g[2]),
+                                  int(g[3]), g[4], g[5], g[6]))
+    return records
+
+
+@dataclass
+class VlatAnalysis:
+    regions: int
+    sites: dict            # pc -> kind
+    fail_sites: list       # [(pc, kind, reason)]
+    candidate_sites: list  # [(pc, kind)] operands vary, FAIL model clean
+    base_clean: bool       # pc/addr/line/div relational result
+    kinds_seen: dict       # kind name -> sites
+
+    @property
+    def clean(self) -> bool:
+        return self.base_clean and not self.fail_sites
+
+
+def analyze_vlat(regions: list[Region],
+                 records: list[VlatRecord]) -> VlatAnalysis:
+    base = analyze(regions)
+    by_region: dict[int, dict[int, VlatRecord]] = {}
+    sites: dict[int, int] = {}
+    for rec in records:
+        by_region.setdefault(rec.region, {})[rec.pc] = rec
+        sites[rec.pc] = rec.kind
+    groups: dict[int, list[Region]] = {}
+    for r in regions:
+        groups.setdefault(r.label >> GROUP_SHIFT, []).append(r)
+    fail: dict[int, str] = {}
+    candidate: set[int] = set()
+    for members in groups.values():
+        for pc, kind in sites.items():
+            seen = [by_region.get(r.index, {}).get(pc) for r in members]
+            counts = {None if s is None else s.n for s in seen}
+            if len(counts) > 1:
+                fail.setdefault(pc, "execution count differs between runs")
+                continue
+            if None in counts:
+                continue
+            model = "h_cls" if kind <= 2 else "h_doc"
+            if len({getattr(s, model) for s in seen}) > 1:
+                fail.setdefault(
+                    pc, "operand bit-length varies" if kind <= 2
+                    else "operand-size predicate varies")
+            elif len({s.h_op for s in seen}) > 1:
+                candidate.add(pc)
+    candidate -= set(fail)
+    kinds: dict[str, int] = {}
+    for kind in sites.values():
+        kinds[VLAT_KINDS[kind]] = kinds.get(VLAT_KINDS[kind], 0) + 1
+    return VlatAnalysis(
+        regions=len(regions), sites=sites,
+        fail_sites=sorted((pc, sites[pc], why) for pc, why in fail.items()),
+        candidate_sites=sorted((pc, sites[pc]) for pc in candidate),
+        base_clean=base.clean, kinds_seen=kinds)
+
+
+def format_vlat_marker(a: VlatAnalysis, alg: str, opt: str,
+                       target: str) -> str:
+    divs = sum(1 for k in a.sites.values() if k <= 2)
+    return (f"PQCP_CT_TRACE_VLAT {'PASS' if a.clean else 'FAIL'} alg={alg} "
+            f"target={target} opt={opt} regions={a.regions} "
+            f"sites={len(a.sites)} div_sites={divs} "
+            f"mul_sites={len(a.sites) - divs} fail_sites="
+            f"{len(a.fail_sites)} candidate_sites={len(a.candidate_sites)} "
+            f"base={'clean' if a.base_clean else 'diverged'}")

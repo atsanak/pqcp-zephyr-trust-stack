@@ -61,17 +61,19 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                west_root: Path, west_cmd: list, env: dict, plugin: Path,
                timeout: int = 300, app: str = TEST_APP_RELATIVE,
                marker: str = DEVICE_MARKER,
-               event_symbol: str | None = None) -> str:
+               event_symbol: str | None = None,
+               board: str = "qemu_x86_64") -> str:
     """Build `module`'s trace app, run it under the plugin, return the trace."""
     run_command(
-        [*west_cmd, "build", "-p", "always", "-b", "qemu_x86_64",
+        [*west_cmd, "build", "-p", "always", "-b", board,
          str(module / app), "-d", str(build_dir), "--",
          f"-DZEPHYR_EXTRA_MODULES={module}", *OPT_FLAGS[opt]],
         cwd=west_root, env=env, timeout=600)
-    run_command(["ninja", "-C", str(build_dir),
-                 "zephyr/qemu_locore_image_target",
-                 "zephyr/qemu_main_image_target"],
-                cwd=module, env=env, timeout=120)
+    if board == "qemu_x86_64":
+        run_command(["ninja", "-C", str(build_dir),
+                     "zephyr/qemu_locore_image_target",
+                     "zephyr/qemu_main_image_target"],
+                    cwd=module, env=env, timeout=120)
     elf = build_dir / "zephyr" / "zephyr.elf"
     begin = resolve_symbol(elf, "pqcp_ct_region_begin", env)
     end = resolve_symbol(elf, "pqcp_ct_region_end", env)
@@ -106,6 +108,47 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
     if not outfile.exists():
         raise RuntimeError("plugin produced no trace output")
     return outfile.read_text()
+
+
+CORTEX_M3_BOARD = "mps2/an385"
+CORTEX_M3_TARGET = "cortex-m3"
+
+
+def trace_m3(module: Path, build_dir: Path, outfile: Path, *, opt: str,
+             **kwargs) -> str:
+    return trace_once(module, build_dir, outfile, opt=opt,
+                      board=CORTEX_M3_BOARD, **kwargs)
+
+
+def run_m3(args, out: Path, west_root: Path, west_cmd: list, env: dict,
+           plugin: Path) -> int:
+    failed = False
+    for opt in args.opt or ["default", "speed", "debug"]:
+        print(f"[ct-trace] ML-KEM-768 decapsulation on {CORTEX_M3_TARGET} "
+              f"({CORTEX_M3_BOARD}), optimisation={opt}")
+        text = trace_m3(MODULE_PATH, out / f"build-m3-{opt}",
+                        out / f"trace-m3-{opt}.txt", opt=opt,
+                        west_root=west_root, west_cmd=west_cmd, env=env,
+                        plugin=plugin)
+        analysis = cta.analyze_vlat(cta.parse_trace(text),
+                                    cta.parse_vlat(text))
+        print(cta.format_vlat_marker(analysis, ALG, opt, CORTEX_M3_TARGET))
+        for pc, kind in analysis.candidate_sites:
+            print(f"[ct-trace] candidate {cta.VLAT_KINDS[kind]} at "
+                  f"0x{pc:x}: exact operands vary with the secret "
+                  f"(documented latency model clean)")
+        for pc, kind, why in analysis.fail_sites:
+            print(f"[ct-trace] FAIL site {cta.VLAT_KINDS[kind]} at "
+                  f"0x{pc:x}: {why}")
+        if not analysis.clean:
+            failed = True
+    if failed:
+        print("[ct-trace] FAIL: operand-dependent latency or address-level "
+              "divergence on Cortex-M3")
+        return 1
+    print("[ct-trace] PASS: no secret-dependent operand latency under the "
+          "documented Cortex-M3 model")
+    return 0
 
 
 MLDSA_APP = "tests/ztest_ct_trace_mldsa"
@@ -153,6 +196,10 @@ def main() -> int:
                         help="mlkem: decapsulation (whole-region relation); "
                              "mldsa: signing (declassification-aware "
                              "segment relation)")
+    parser.add_argument("--target", choices=("x86_64", CORTEX_M3_TARGET),
+                        default="x86_64",
+                        help="x86_64: qemu_x86_64 (default); cortex-m3: "
+                             "mps2/an385 with the operand-latency channel")
     parser.add_argument("--rediscover", action="store_true",
                         help="re-inject known leak patterns and require the "
                              "test to catch them (sensitivity/specificity)")
@@ -174,6 +221,24 @@ def main() -> int:
     west_root = detect_west_root(args.west_root or MODULE_PATH)
     west_cmd = discover_west(args.west, west_root, MODULE_PATH)
     plugin = build_plugin(inc, env)
+
+    if args.target == CORTEX_M3_TARGET:
+        if args.alg != "mlkem":
+            print("[ct-trace] FAIL: --target cortex-m3 supports --alg mlkem")
+            return 1
+        if args.rediscover:
+            import ct_leak_rediscovery_m3 as m3_leaks  # noqa: PLC0415
+
+            def run_m3_trace(tree, build_dir, outfile, opt):
+                return trace_m3(tree, build_dir, outfile, opt=opt,
+                                west_root=west_root, west_cmd=west_cmd,
+                                env=env, plugin=plugin)
+
+            only = set(os.environ.get("PQCP_CT_LEAK_ONLY", "").split(",")) - {""}
+            return m3_leaks.rediscover(run_m3_trace,
+                                       (args.opt or ["default"])[0],
+                                       only or None)
+        return run_m3(args, out, west_root, west_cmd, env, plugin)
 
     if args.rediscover and args.alg == "mldsa":
         import ct_leak_rediscovery_mldsa as dsa_leaks  # noqa: PLC0415
