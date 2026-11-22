@@ -292,52 +292,80 @@ static int kem_canary_prepare(pqcp_mlkem_level_t level)
     return 0;
 }
 
-static int kem_canary_ok(pqcp_mlkem_level_t level)
+/*
+ * Returns 0 when the canary was correctly rejected. Fails CLOSED: a canary
+ * that cannot be prepared (for example a faulted keygen) or whose backend
+ * call errors is treated as detection, never as "no evidence", otherwise
+ * faulting the canary setup would silently disable the countermeasure.
+ */
+static int kem_canary_check(pqcp_mlkem_level_t level)
 {
     uint8_t out[PQCP_MLKEM_SS_SIZE];
     int ret;
-    int equal;
+    int verdict;
 
     k_mutex_lock(&kem_canary_lock, K_FOREVER);
     ret = kem_canary_prepare(level);
-    if (ret == 0) {
-        ret = mlkem_decapsulate_backend(level, kem_canary.bad_ct,
-                                        kem_canary.sk, out);
+    if (ret != 0) {
+        k_mutex_unlock(&kem_canary_lock);
+        return PQCP_MLKEM_ERR_FAULT_DETECTED;
     }
-    equal = (ret == 0) && fault_equal(out, kem_canary.genuine,
-                                      PQCP_MLKEM_SS_SIZE);
+    ret = mlkem_decapsulate_backend(level, kem_canary.bad_ct,
+                                    kem_canary.sk, out);
+    verdict = (ret == 0 &&
+               !fault_equal(out, kem_canary.genuine, PQCP_MLKEM_SS_SIZE))
+                  ? 0 : PQCP_MLKEM_ERR_FAULT_DETECTED;
     fault_wipe(out, sizeof(out));
     k_mutex_unlock(&kem_canary_lock);
-    /* Preparation or backend errors are not fault evidence. */
-    return ret != 0 || !equal;
+    return verdict;
 }
 #endif /* CONFIG_PQCP_FAULT_CANARY */
 
 int pqcp_mlkem_decapsulate(pqcp_mlkem_level_t level, const uint8_t *ct,
                            const uint8_t *sk, uint8_t *ss)
 {
-    int ret = mlkem_decapsulate_backend(level, ct, sk, ss);
+#if defined(CONFIG_PQCP_FAULT_CANARY) || defined(CONFIG_PQCP_FAULT_DUPLICATE)
+    /*
+     * The key is computed into a private buffer and copied to the caller
+     * only after every check has passed; the caller's buffer is zeroed on
+     * entry. A fault that makes control skip the checks therefore hands the
+     * caller zeros, never an unchecked key.
+     */
+    uint8_t result[PQCP_MLKEM_SS_SIZE];
+    int ret;
 
+    if (ss == NULL) {
+        return PQCP_MLKEM_ERR_INVALID_ARG;
+    }
+    fault_wipe(ss, PQCP_MLKEM_SS_SIZE);
+    ret = mlkem_decapsulate_backend(level, ct, sk, result);
 #ifdef CONFIG_PQCP_FAULT_DUPLICATE
     if (ret == PQCP_MLKEM_SUCCESS) {
         uint8_t again[PQCP_MLKEM_SS_SIZE];
         int second = mlkem_decapsulate_backend(level, ct, sk, again);
 
         if (second != PQCP_MLKEM_SUCCESS ||
-            !fault_equal(ss, again, PQCP_MLKEM_SS_SIZE)) {
-            fault_wipe(ss, PQCP_MLKEM_SS_SIZE);
+            !fault_equal(result, again, PQCP_MLKEM_SS_SIZE)) {
             ret = PQCP_MLKEM_ERR_FAULT_DETECTED;
         }
         fault_wipe(again, sizeof(again));
     }
 #endif
 #ifdef CONFIG_PQCP_FAULT_CANARY
-    if (ret == PQCP_MLKEM_SUCCESS && !kem_canary_ok(level)) {
-        fault_wipe(ss, PQCP_MLKEM_SS_SIZE);
-        ret = PQCP_MLKEM_ERR_FAULT_DETECTED;
+    if (ret == PQCP_MLKEM_SUCCESS) {
+        ret = kem_canary_check(level);
     }
 #endif
+    if (ret == PQCP_MLKEM_SUCCESS) {
+        for (size_t i = 0U; i < PQCP_MLKEM_SS_SIZE; ++i) {
+            ss[i] = result[i];
+        }
+    }
+    fault_wipe(result, sizeof(result));
     return ret;
+#else
+    return mlkem_decapsulate_backend(level, ct, sk, ss);
+#endif
 }
 
 #endif /* HAVE_MLKEM_NATIVE */
