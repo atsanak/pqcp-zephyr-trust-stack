@@ -1790,6 +1790,17 @@ config PQCP_FLEET_TRUST
 	  through a two-slot store so interruption restores either the previous
 	  complete state or the new complete state.
 
+config PQCP_EVIDENCE_CONTINUITY
+	bool "Enable the cross-boot evidence continuity foundation"
+	depends on PQCP_FLEET_TRUST
+	default n
+	help
+	  Persisted-object types, canonical SHA-256 digests, validators and the
+	  two-phase record store/load that cross-boot evidence continuity will
+	  build on (anchors, boot sessions, hash-chained event journal,
+	  witness and replication receipts). Foundation only: the lifecycle API
+	  is not implemented yet, so nothing in the module calls this code.
+
 config PQCP_FLEET_STORE_ITS
 	bool "Enable PSA Internal Trusted Storage fleet backend"
 	depends on PQCP_FLEET_TRUST

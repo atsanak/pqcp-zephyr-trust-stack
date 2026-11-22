@@ -436,6 +436,10 @@ if(CONFIG_PQCP_PROTECTED_CHANNEL)
     )
 endif()
 
+if(CONFIG_PQCP_EVIDENCE_CONTINUITY)
+    zephyr_library_sources(${PQCP_SRC}/evidence_continuity_common.c)
+endif()
+
 if(CONFIG_PQCP_FLEET_TRUST)
     zephyr_library_sources(
         ${PQCP_SRC}/fleet_cbor.c
