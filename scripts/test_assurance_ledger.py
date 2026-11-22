@@ -1442,6 +1442,64 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_declass(clean, redis)
             self.assertEqual(result["status"], "fail", (clean, redis))
 
+    VLAT_CLEAN = "".join(
+        f"PQCP_CT_TRACE_VLAT PASS alg=MLKEM-768 target=cortex-m3 opt={opt} "
+        "regions=48 sites=1 div_sites=0 mul_sites=1 fail_sites=0 "
+        "candidate_sites=1 base=clean\n"
+        for opt in ("default", "speed", "debug")
+    ) + "[ct-trace] PASS: no secret-dependent operand latency\n"
+    VLAT_REDIS = (
+        "PQCP_CT_TRACE_VLAT_REDISCOVERY PASS leaks=3/3 benign_flagged=0/3 "
+        "missed_by_address_channels=3/3\n"
+    )
+
+    def _eval_vlat(self, clean: str, redis: str, baseline_max: int = 1) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, body, name in (
+                ("ct trace cortex-m latency", clean, "01.log"),
+                ("ct leak rediscovery cortex-m latency", redis, "02.log"),
+            ):
+                (manifest_path.parent / name).write_text(body, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                    "size_bytes": len(body.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"candidate_sites_max": baseline_max}))
+            spec = {"id": "security.ct_trace_cortex_m_latency",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_cortex_m_latency(
+                spec, transcript_manifest=manifest_path,
+                inventory_baseline=baseline)
+
+    def test_cortex_m_latency_passes_with_both_markers(self) -> None:
+        result = self._eval_vlat(self.VLAT_CLEAN, self.VLAT_REDIS)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["leaks_rediscovered"], "3/3")
+        self.assertEqual(result["details"]["candidate_sites"], 1)
+
+    def test_cortex_m_latency_fails_on_weak_or_missing_evidence(self) -> None:
+        for clean, redis, base in (
+            (self.VLAT_CLEAN.replace("fail_sites=0", "fail_sites=1"), self.VLAT_REDIS, 1),
+            (self.VLAT_CLEAN.replace("base=clean", "base=diverged"), self.VLAT_REDIS, 1),
+            (self.VLAT_CLEAN.replace("opt=debug", "opt=default"), self.VLAT_REDIS, 1),
+            (self.VLAT_CLEAN.replace("regions=48", "regions=4"), self.VLAT_REDIS, 1),
+            (self.VLAT_CLEAN, self.VLAT_REDIS, 0),  # inventory grew past baseline
+            (self.VLAT_CLEAN, self.VLAT_REDIS.replace("leaks=3/3", "leaks=2/3"), 1),
+            (self.VLAT_CLEAN, self.VLAT_REDIS.replace("benign_flagged=0/3", "benign_flagged=1/3"), 1),
+            (self.VLAT_CLEAN, self.VLAT_REDIS.replace("PASS", "FAIL"), 1),
+            (self.VLAT_CLEAN, "noise\n", 1),
+        ):
+            result = self._eval_vlat(clean, redis, base)
+            self.assertEqual(result["status"], "fail", (clean, redis, base))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "
