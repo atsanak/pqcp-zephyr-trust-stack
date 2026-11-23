@@ -43,6 +43,7 @@
  *   h_cls  operand bit-lengths (a magnitude / leading-zero latency model)
  *   h_doc  the documented M3 long-multiply predicate: are both operands
  *          below 65536 (div: same as h_cls)
+ *   cm_cyc sum of the modelled completion cycles of this site's executions
  *   h_cm   the CMEmu latency class (ct_latency_models.h): half-word
  *          non-zero patterns for long multiplies, cycle formula for divides
  * kind: 1 UDIV 2 SDIV 3 UMULL 4 SMULL 5 UMLAL 6 SMLAL. Registers are r0..r12,
@@ -97,6 +98,7 @@ struct vlat_site {
 	uint64_t pc;
 	uint64_t n;
 	uint64_t h_op, h_cls, h_doc, h_cm;
+	uint64_t cm_cyc; /* sum of modelled completion cycles (CMEmu) */
 	uint32_t kind;
 	int used;
 };
@@ -215,9 +217,9 @@ static void emit_region(void)
 			"PQCP_CT_VLAT region=%" PRIu64 " pc=%" PRIx64
 			" kind=%u n=%" PRIu64 " h_op=%016" PRIx64
 			" h_cls=%016" PRIx64 " h_doc=%016" PRIx64
-			" h_cm=%016" PRIx64 "\n",
+			" h_cm=%016" PRIx64 " cm_cyc=%" PRIu64 "\n",
 			region_index, v->pc, v->kind, v->n, v->h_op, v->h_cls,
-			v->h_doc, v->h_cm);
+			v->h_doc, v->h_cm, v->cm_cyc);
 	}
 	if (out_file != NULL) {
 		fprintf(out_file,
@@ -436,6 +438,7 @@ static struct vlat_site *vlat_lookup(uint64_t pc, uint32_t kind)
 			v->kind = kind;
 			v->n = 0U;
 			v->h_op = v->h_cls = v->h_doc = v->h_cm = FNV_OFFSET;
+			v->cm_cyc = 0U;
 			vsite_order[vsite_count++] = slot;
 			return v;
 		}
@@ -479,6 +482,9 @@ static void insn_exec_vlat(unsigned int cpu_index, void *udata)
 			v->h_op = mix(mix(v->h_op, a), b);
 			v->h_cls = mix(mix(v->h_cls, bitlen(ma)), bitlen(mb));
 			v->h_cm = mix(v->h_cm, cm);
+			/* completion cycle: divides are the class itself, long
+			 * multiplies keep (hi << 8) | lo. */
+			v->cm_cyc += vi->kind <= 2U ? cm : (cm >> 8);
 			if (vi->kind >= 3U) {
 				v->h_doc = mix(v->h_doc,
 					       (ma < 65536U) * 2U +

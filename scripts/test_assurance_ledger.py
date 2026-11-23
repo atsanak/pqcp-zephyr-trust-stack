@@ -1703,7 +1703,14 @@ class AssuranceLedgerTests(unittest.TestCase):
         f"patched_documented_sites=0 patched_cmemu_sites=0 "
         f"ss_digest_match=1 insn_overhead_pct={pct}\n"
         for lv in (512, 768, 1024)
-        for opt, pct in (("default", 0.03), ("speed", 0.06), ("debug", 0.12)))
+        for opt, pct in (("default", 0.03), ("speed", 0.06), ("debug", 0.12))
+    ) + "".join(
+        f"PQCP_CT_TRACE_MODELLED_CYCLES alg=MLKEM-{lv} target=cortex-m3 "
+        f"opt={opt}-{variant} groups=8 max_spread={sp} distinct_totals=2 "
+        f"variable_cycles_min=100 variable_cycles_max=101 insns_min=1000000 "
+        f"relative_amplitude=1.00e-06\n"
+        for lv in (512, 768, 1024) for opt in ("default", "speed", "debug")
+        for variant, sp in (("stock", 1), ("patched", 0)))
 
     def _eval_kem(self, selftest: str, body: str, ceiling=None) -> dict:
         ceiling = ceiling or {"default": 0.1, "speed": 0.2, "debug": 0.3}
@@ -1748,6 +1755,10 @@ class AssuranceLedgerTests(unittest.TestCase):
             (st, g.replace("stock_cmemu_only=1", "stock_cmemu_only=0"), None),
             (st, g.replace("ss_digest_match=1", "ss_digest_match=0"), None),
             (st, g.replace("alg=MLKEM-1024", "alg=MLKEM-768"), None),
+            (st, g.replace("opt=default-patched groups=8 max_spread=0", "opt=default-patched groups=8 max_spread=1"), None),
+            (st, g.replace("opt=default-stock groups=8 max_spread=1", "opt=default-stock groups=8 max_spread=0"), None),
+            (st, g.replace("max_spread=1 distinct", "max_spread=12 distinct"), None),
+            (st, "\n".join(l for l in g.splitlines() if "MODELLED" not in l) + "\n", None),
             (st, g.replace("PASS alg", "FAIL alg"), None),
             (st.replace(" variants=2", ""), g, None),
             (st, "noise\n", None),

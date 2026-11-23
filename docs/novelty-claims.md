@@ -734,3 +734,12 @@ Non-claims: CMEmu rules are a third party's measurements of one chip revision,
 not validated against silicon here; instruction counts, not cycles; one
 multiply site; opt-in, not the default build; not a constant-time proof.
 
+Magnitude (claim 17 addendum): the plugin also sums the modelled
+variable-latency cycles per region. Over the eight keys of the test, the stock
+decapsulation's total differs between ciphertexts of one key by 1 cycle
+(ML-KEM-512) or 2 cycles (768, 1024) on more than 800 thousand instructions,
+a relative amplitude near 1e-6; the repaired image's spread is exactly 0. This
+is why the finding is stated as a model disagreement, not an attack. The ledger
+requires stock spread of at least 1 (positive control), repaired spread of 0,
+and a spread of at most 8 cycles and 1e-5 relative.
+

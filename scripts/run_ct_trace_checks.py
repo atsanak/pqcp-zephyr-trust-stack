@@ -180,6 +180,9 @@ def report_models(text: str, elf: Path, env: dict, alg: str, opt: str,
             regions, segments,
             channels=cta.CORE_CHANNELS["cortex-m3-cmemu"]).violations)
     print(cta.format_models_marker(cmp_, alg, opt, target, fns, doc_v, cm_v))
+    if not declassified:
+        print(cta.format_cycles_marker(cta.modelled_cycles(regions, records),
+                                       alg, opt, target))
     for pc in sorted(cmp_.cmemu_only):
         print(f"[ct-trace] cmemu-only site "
               f"{cta.VLAT_KINDS[cmp_.kinds[pc]]} at 0x{pc:x} in "

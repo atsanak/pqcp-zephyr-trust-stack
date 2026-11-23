@@ -342,7 +342,7 @@ def format_declass_marker(a: DeclassAnalysis, alg: str, opt: str) -> str:
 VLAT_RE = re.compile(
     r"PQCP_CT_VLAT region=(\d+) pc=([0-9a-f]+) kind=(\d) n=(\d+) "
     r"h_op=([0-9a-f]{16}) h_cls=([0-9a-f]{16}) h_doc=([0-9a-f]{16})"
-    r"(?: h_cm=([0-9a-f]{16}))?$")
+    r"(?: h_cm=([0-9a-f]{16}))?(?: cm_cyc=(\d+))?$")
 VLAT_KINDS = {1: "udiv", 2: "sdiv", 3: "umull", 4: "smull", 5: "umlal",
               6: "smlal"}
 
@@ -357,6 +357,7 @@ class VlatRecord:
     h_cls: str
     h_doc: str
     h_cm: str = ""
+    cm_cyc: int = -1
 
 
 def parse_vlat(text: str) -> list[VlatRecord]:
@@ -370,7 +371,8 @@ def parse_vlat(text: str) -> list[VlatRecord]:
             raise TraceError(f"malformed vlat line: {line!r}")
         g = m.groups()
         records.append(VlatRecord(int(g[0]), int(g[1], 16), int(g[2]),
-                                  int(g[3]), g[4], g[5], g[6], g[7] or ""))
+                                  int(g[3]), g[4], g[5], g[6], g[7] or "",
+                                  int(g[8]) if g[8] else -1))
     return records
 
 
@@ -529,3 +531,44 @@ def format_models_marker(c: ModelComparison, alg: str, opt: str,
             f"documented_only={len(c.documented_only)} "
             f"cmemu_only={len(c.cmemu_only)}{seg} "
             f"cmemu_only_functions={','.join(only) if only else 'none'}")
+
+
+@dataclass
+class ModelledCycles:
+    """Per-key spread of the modelled variable-latency cycle total."""
+    groups: int
+    max_spread: int        # largest max-min over any key group, in cycles
+    distinct: int          # largest number of distinct totals in one group
+    total_min: int
+    total_max: int
+    insns_min: int         # instructions of the shortest region (for scale)
+
+
+def modelled_cycles(regions: list[Region],
+                    records: list[VlatRecord]) -> ModelledCycles:
+    totals: dict[int, int] = {}
+    for rec in records:
+        if rec.cm_cyc < 0:
+            raise TraceError("trace has no cm_cyc (rebuild the plugin)")
+        totals[rec.region] = totals.get(rec.region, 0) + rec.cm_cyc
+    groups: dict[int, list[int]] = {}
+    for r in regions:
+        groups.setdefault(r.label >> GROUP_SHIFT, []).append(
+            totals.get(r.index, 0))
+    spread = max((max(v) - min(v) for v in groups.values()), default=0)
+    distinct = max((len(set(v)) for v in groups.values()), default=0)
+    allv = [t for v in groups.values() for t in v]
+    return ModelledCycles(
+        groups=len(groups), max_spread=spread, distinct=distinct,
+        total_min=min(allv, default=0), total_max=max(allv, default=0),
+        insns_min=min((r.insns for r in regions), default=0))
+
+
+def format_cycles_marker(m: ModelledCycles, alg: str, opt: str,
+                         target: str) -> str:
+    rel = m.max_spread / m.insns_min if m.insns_min else 0.0
+    return (f"PQCP_CT_TRACE_MODELLED_CYCLES alg={alg} target={target} "
+            f"opt={opt} groups={m.groups} max_spread={m.max_spread} "
+            f"distinct_totals={m.distinct} variable_cycles_min="
+            f"{m.total_min} variable_cycles_max={m.total_max} "
+            f"insns_min={m.insns_min} relative_amplitude={rel:.2e}")

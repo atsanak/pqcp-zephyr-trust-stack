@@ -178,3 +178,25 @@ one key.
   larger. This is a scale statement about what the model implies, not a claim
   that the difference is observable or exploitable.
 
+### Results of the third registration
+
+Modelled variable-latency cycle totals of one decapsulation, per key group
+(8 keys), Cortex-M3 image, all three optimisation levels:
+
+| parameter set | stock spread | repaired spread | instructions per decapsulation |
+|---|---|---|---|
+| ML-KEM-512 | 1 cycle | 0 | about 0.82-0.87 million |
+| ML-KEM-768 | 2 cycles | 0 | about 1.29-1.33 million |
+| ML-KEM-1024 | 2 cycles | 0 | about 1.89-1.93 million |
+
+H8 holds (stock spread at least 1 everywhere, repaired exactly 0 everywhere)
+and H9 holds (at most 2 cycles on more than 800 thousand instructions, a
+relative amplitude of about 1e-6). The honest reading is that under the CMEmu
+model the secret-dependent part of a decapsulation is one or two cycles, the
+number of zero coefficients in the re-encrypted polynomial. That is far below
+what a remote timing measurement could resolve; it is a statement about the
+model's scale, not about observability, and it is the reason this finding is
+presented as a model disagreement and not as an attack. The repaired image
+spends a constant, secret-independent number of variable-latency cycles
+(for example 4608 against 2302-2304 for 768).
+

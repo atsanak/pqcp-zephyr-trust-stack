@@ -2381,6 +2381,34 @@ def evaluate_ct_trace_cortex_m_kem_mitigation(
             problems.append(f"instruction overhead at {key} grew: {pct} > "
                             f"ceiling {ceiling[opt]}")
     details["insn_overhead_pct"] = dict(sorted(good.items()))
+    spreads: dict[str, int] = {}
+    for key in sorted(required):
+        alg, opt = key.split("/")
+        pair = []
+        for variant in ("stock", "patched"):
+            m = re.search(
+                r"PQCP_CT_TRACE_MODELLED_CYCLES alg=" + re.escape(alg) +
+                r" target=cortex-m3 opt=" + re.escape(f"{opt}-{variant}") +
+                r" groups=\d+ max_spread=(\d+) distinct_totals=\d+ "
+                r"variable_cycles_min=\d+ variable_cycles_max=\d+ "
+                r"insns_min=(\d+) relative_amplitude=\S+",
+                bodies[steps[1]])
+            pair.append((int(m.group(1)), int(m.group(2))) if m else None)
+        if pair[0] is None or pair[1] is None:
+            problems.append(f"modelled-cycle spread missing at {key}")
+            continue
+        (stock_spread, insns), (fixed_spread, _) = pair
+        spreads[key] = stock_spread
+        if stock_spread < 1:
+            problems.append(f"stock modelled spread is 0 at {key} "
+                            "(positive control lost)")
+        if fixed_spread != 0:
+            problems.append(f"repaired image still has a modelled spread of "
+                            f"{fixed_spread} cycles at {key}")
+        if stock_spread > 8 or stock_spread * 100000 > insns:
+            problems.append(f"modelled spread at {key} grew to "
+                            f"{stock_spread} cycles over {insns} instructions")
+    details["stock_modelled_spread_cycles"] = dict(sorted(spreads.items()))
     if problems:
         return fail_claim(
             spec, reason="; ".join(problems), validators=validators,

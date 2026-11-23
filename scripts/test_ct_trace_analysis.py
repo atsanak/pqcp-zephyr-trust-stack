@@ -177,9 +177,11 @@ class DeclassifiedAnalysis(unittest.TestCase):
         self.assertIn("violations=0", marker)
 
 
-def vlat(region, pc, kind=3, n=4, op="a", cls="b", doc="c", cm=None):
+def vlat(region, pc, kind=3, n=4, op="a", cls="b", doc="c", cm=None, cyc=None):
     f = lambda c: c * 16  # noqa: E731
     tail = f" h_cm={f(cm)}" if cm is not None else ""
+    if cyc is not None:
+        tail += f" cm_cyc={cyc}"
     return (f"PQCP_CT_VLAT region={region} pc={pc:x} kind={kind} n={n} "
             f"h_op={f(op)} h_cls={f(cls)} h_doc={f(doc)}{tail}")
 
@@ -252,6 +254,27 @@ class LatencyModels(unittest.TestCase):
         self.assertEqual(segs[0][0].fingerprints["vcm"], "c" * 16)
         segs = cta.parse_segments(base + tail + "\n")
         self.assertNotIn("vcm", segs[0][0].fingerprints)
+
+
+class ModelledCyclesTest(unittest.TestCase):
+    def test_spread_is_per_key_group(self):
+        # regions 0-3 share one key; totals 10,10,11,10 -> spread 1, 2 distinct
+        text = vlat_trace([vlat(i, 0x100, cm="e", cyc=10 + (i == 2))
+                           for i in range(4)])
+        m = cta.modelled_cycles(cta.parse_trace(text), cta.parse_vlat(text))
+        self.assertEqual((m.max_spread, m.distinct), (1, 2))
+        self.assertIn("max_spread=1", cta.format_cycles_marker(
+            m, "MLKEM-768", "default", "cortex-m3"))
+
+    def test_constant_totals_have_zero_spread(self):
+        text = vlat_trace([vlat(i, 0x100, cm="e", cyc=10) for i in range(4)])
+        m = cta.modelled_cycles(cta.parse_trace(text), cta.parse_vlat(text))
+        self.assertEqual((m.max_spread, m.distinct), (0, 1))
+
+    def test_old_traces_without_cycles_are_rejected(self):
+        text = vlat_trace([vlat(i, 0x100, cm="e") for i in range(4)])
+        with self.assertRaises(cta.TraceError):
+            cta.modelled_cycles(cta.parse_trace(text), cta.parse_vlat(text))
 
 
 class VlatAnalysis(unittest.TestCase):
