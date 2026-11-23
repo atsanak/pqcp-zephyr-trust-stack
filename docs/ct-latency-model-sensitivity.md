@@ -127,3 +127,19 @@ against +34% to +75% for the full 16x16 split of claim 15 on ML-DSA. The
 split is needed there because operands span the full 32-bit range; here the
 operand domain is only [0, 3328], which is what makes an offset sufficient.
 
+## Second registration: do the findings generalise across ML-KEM parameter sets?
+
+Registered before any 512 / 1024 measurement. The 768 image uses the 10-bit
+compression (`mlk_scalar_compress_d10`, constant 2642263040); ML-KEM-1024 uses
+the 11-bit one (constant 5284526080, which does not fit 32 bits).
+
+- H5. ML-KEM-1024 decapsulation on the Cortex-M3 image has at least one
+  CMEmu-only site (the d11 multiply) and no documented-model site, at all three
+  optimisation levels. Falsified if the compiler lowers the 33-bit constant
+  without a variable-latency long multiply and no site appears.
+- H6. ML-KEM-512 shows the same pattern as 768 (exactly one CMEmu-only site,
+  in the d10 compression). Falsified if the count or the function differs.
+- H7. Extending the operand-offset repair to the d11 multiply leaves no failing
+  site under either model for 1024, with an unchanged shared-secret digest and
+  under 0.5% instruction overhead. Falsified otherwise.
+
