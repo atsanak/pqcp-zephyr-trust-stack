@@ -110,29 +110,34 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
     return outfile.read_text()
 
 
-CORTEX_M3_BOARD = "mps2/an385"
 CORTEX_M3_TARGET = "cortex-m3"
+CORE_BOARDS = {"cortex-m3": "mps2/an385", "cortex-m4": "mps2/an386"}
+# M3 long multiplies terminate early on operand size (ARM DDI 0337); M4's
+# are single-cycle. Both share the variable-latency divider.
+LONG_MUL_VARIABLE = {"cortex-m3": True, "cortex-m4": False}
 
 
-def trace_m3(module: Path, build_dir: Path, outfile: Path, *, opt: str,
-             **kwargs) -> str:
+def trace_core(module: Path, build_dir: Path, outfile: Path, *, opt: str,
+               target: str = CORTEX_M3_TARGET, **kwargs) -> str:
     return trace_once(module, build_dir, outfile, opt=opt,
-                      board=CORTEX_M3_BOARD, **kwargs)
+                      board=CORE_BOARDS[target], **kwargs)
 
 
-def run_m3(args, out: Path, west_root: Path, west_cmd: list, env: dict,
-           plugin: Path) -> int:
+def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
+             plugin: Path) -> int:
+    target = args.target
     failed = False
     for opt in args.opt or ["default", "speed", "debug"]:
-        print(f"[ct-trace] ML-KEM-768 decapsulation on {CORTEX_M3_TARGET} "
-              f"({CORTEX_M3_BOARD}), optimisation={opt}")
-        text = trace_m3(MODULE_PATH, out / f"build-m3-{opt}",
-                        out / f"trace-m3-{opt}.txt", opt=opt,
-                        west_root=west_root, west_cmd=west_cmd, env=env,
-                        plugin=plugin)
-        analysis = cta.analyze_vlat(cta.parse_trace(text),
-                                    cta.parse_vlat(text))
-        print(cta.format_vlat_marker(analysis, ALG, opt, CORTEX_M3_TARGET))
+        print(f"[ct-trace] ML-KEM-768 decapsulation on {target} "
+              f"({CORE_BOARDS[target]}), optimisation={opt}")
+        text = trace_core(MODULE_PATH, out / f"build-{target}-{opt}",
+                          out / f"trace-{target}-{opt}.txt", opt=opt,
+                          target=target, west_root=west_root,
+                          west_cmd=west_cmd, env=env, plugin=plugin)
+        analysis = cta.analyze_vlat(
+            cta.parse_trace(text), cta.parse_vlat(text),
+            long_mul_variable=LONG_MUL_VARIABLE[target])
+        print(cta.format_vlat_marker(analysis, ALG, opt, target))
         for pc, kind in analysis.candidate_sites:
             print(f"[ct-trace] candidate {cta.VLAT_KINDS[kind]} at "
                   f"0x{pc:x}: exact operands vary with the secret "
@@ -143,11 +148,67 @@ def run_m3(args, out: Path, west_root: Path, west_cmd: list, env: dict,
         if not analysis.clean:
             failed = True
     if failed:
-        print("[ct-trace] FAIL: operand-dependent latency or address-level "
-              "divergence on Cortex-M3")
+        print(f"[ct-trace] FAIL: operand-dependent latency or address-level "
+              f"divergence on {target}")
         return 1
-    print("[ct-trace] PASS: no secret-dependent operand latency under the "
-          "documented Cortex-M3 model")
+    print(f"[ct-trace] PASS: no secret-dependent operand latency under the "
+          f"documented {target} model")
+    return 0
+
+
+def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
+                   env: dict, plugin: Path) -> int:
+    """Declassification-aware ML-DSA-65 signing on a Cortex-M core."""
+    target = args.target
+    failed = False
+    measured_only = True   # only documented-model multiply findings so far
+    positive_control = False
+    for opt in args.opt or ["default", "speed", "debug"]:
+        print(f"[ct-trace] ML-DSA-65 signing on {target} "
+              f"({CORE_BOARDS[target]}), optimisation={opt}")
+        text = trace_core(MODULE_PATH, out / f"build-{target}-dsa-{opt}",
+                          out / f"trace-{target}-dsa-{opt}.txt", opt=opt,
+                          target=target, west_root=west_root,
+                          west_cmd=west_cmd, env=env, plugin=plugin,
+                          timeout=1500, app=MLDSA_APP, marker=MLDSA_MARKER,
+                          event_symbol="pqcp_ct_event")
+        regions = cta.parse_trace(text)
+        analysis = cta.analyze_declassified(
+            regions, cta.parse_segments(text),
+            channels=cta.CORE_CHANNELS[target])
+        sites = cta.analyze_vlat(
+            regions, cta.parse_vlat(text),
+            long_mul_variable=LONG_MUL_VARIABLE[target],
+            compare_counts=False)
+        print(cta.format_vlat_declass_marker(analysis, sites, "MLDSA-65",
+                                             opt, target))
+        for pc, kind, why in sites.fail_sites:
+            print(f"[ct-trace] site {cta.VLAT_KINDS[kind]} at 0x{pc:x}: "
+                  f"{why}")
+        for kind, group, region, seq, detail in analysis.violations[:4]:
+            print(f"[ct-trace] violation {kind} group={group} "
+                  f"region={region} seq={seq}")
+        if not analysis.clean:
+            failed = True
+            bad = [v for v in analysis.violations if v[0] != "vmul"]
+            measured_only = measured_only and not bad
+            positive_control = positive_control or any(
+                v[0] == "vmul" for v in analysis.violations)
+    if failed and args.measure:
+        # Inventory mode: the documented-model multiply findings are the
+        # measurement; anything on another channel is still a failure.
+        if measured_only and positive_control:
+            print(f"[ct-trace] MEASURED: {target} signing leaks only "
+                  f"through operand-size-dependent long multiplies")
+            return 0
+        print(f"[ct-trace] FAIL: unexpected behaviour on {target}")
+        return 1
+    if failed:
+        print(f"[ct-trace] FAIL: signing shows secret-dependent behaviour "
+              f"on {target}")
+        return 1
+    print(f"[ct-trace] PASS: every comparable segment is identical on "
+          f"every {target} channel")
     return 0
 
 
@@ -196,10 +257,15 @@ def main() -> int:
                         help="mlkem: decapsulation (whole-region relation); "
                              "mldsa: signing (declassification-aware "
                              "segment relation)")
-    parser.add_argument("--target", choices=("x86_64", CORTEX_M3_TARGET),
+    parser.add_argument("--target", choices=("x86_64", *CORE_BOARDS),
                         default="x86_64",
-                        help="x86_64: qemu_x86_64 (default); cortex-m3: "
-                             "mps2/an385 with the operand-latency channel")
+                        help="x86_64: qemu_x86_64 (default); cortex-m3 / "
+                             "cortex-m4: mps2/an385 / mps2/an386 with the "
+                             "operand-latency channel")
+    parser.add_argument("--measure", action="store_true",
+                        help="Cortex-M signing: exit 0 when the only "
+                             "findings are documented-model long-multiply "
+                             "violations (an inventory, not a pass)")
     parser.add_argument("--rediscover", action="store_true",
                         help="re-inject known leak patterns and require the "
                              "test to catch them (sensitivity/specificity)")
@@ -222,23 +288,27 @@ def main() -> int:
     west_cmd = discover_west(args.west, west_root, MODULE_PATH)
     plugin = build_plugin(inc, env)
 
-    if args.target == CORTEX_M3_TARGET:
-        if args.alg != "mlkem":
-            print("[ct-trace] FAIL: --target cortex-m3 supports --alg mlkem")
-            return 1
+    if args.target != "x86_64":
         if args.rediscover:
+            if args.alg != "mlkem" or args.target != CORTEX_M3_TARGET:
+                print("[ct-trace] FAIL: --rediscover on a Cortex-M target "
+                      "supports --alg mlkem --target cortex-m3")
+                return 1
             import ct_leak_rediscovery_m3 as m3_leaks  # noqa: PLC0415
 
             def run_m3_trace(tree, build_dir, outfile, opt):
-                return trace_m3(tree, build_dir, outfile, opt=opt,
-                                west_root=west_root, west_cmd=west_cmd,
-                                env=env, plugin=plugin)
+                return trace_core(tree, build_dir, outfile, opt=opt,
+                                  west_root=west_root, west_cmd=west_cmd,
+                                  env=env, plugin=plugin)
 
             only = set(os.environ.get("PQCP_CT_LEAK_ONLY", "").split(",")) - {""}
             return m3_leaks.rediscover(run_m3_trace,
                                        (args.opt or ["default"])[0],
                                        only or None)
-        return run_m3(args, out, west_root, west_cmd, env, plugin)
+        if args.alg == "mldsa":
+            return run_core_mldsa(args, out, west_root, west_cmd, env,
+                                  plugin)
+        return run_core(args, out, west_root, west_cmd, env, plugin)
 
     if args.rediscover and args.alg == "mldsa":
         import ct_leak_rediscovery_mldsa as dsa_leaks  # noqa: PLC0415
