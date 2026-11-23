@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 tests:
   pqcp.deployment_review_audit:
     tags:

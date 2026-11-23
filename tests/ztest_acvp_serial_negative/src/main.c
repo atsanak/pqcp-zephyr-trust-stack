@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 /*
  * Negative-scenario replay for the PQCP ACVP serial harness.
  *

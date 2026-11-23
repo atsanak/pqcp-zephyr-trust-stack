@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Runtime threat-state assessment for adaptive PQC deployment.
  */

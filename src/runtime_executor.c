@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Priority/deadline scheduler for native PQCP operations.
  */

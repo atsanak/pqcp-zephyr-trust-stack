@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Direct mbedTLS TLS 1.3 PSK plus exporter-bound PQCP channel demo.
  *

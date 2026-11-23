@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Stand-in for <valgrind/memcheck.h>. mldsa-native annotates every point where
  * secret-derived data becomes public with MLD_CT_TESTING_DECLASSIFY, which

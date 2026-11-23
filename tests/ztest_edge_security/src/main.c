@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Suite entry point plus the shared bounded primitives of the edge
  * security plane (edge_security_common.c) and the public string helpers.

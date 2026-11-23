@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Governance plane: posture, attestation, policy distribution, rotation,
  * resource budgets, DLP, federation, credentials, isolation, provenance,

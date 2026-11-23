@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Executable experiment readiness matrix for product/research evidence planning."""
 
 from __future__ import annotations

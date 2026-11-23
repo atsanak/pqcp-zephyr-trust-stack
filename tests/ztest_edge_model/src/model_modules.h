@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * The model vtables, one per checked module. Module names are part of the
  * marker contract: principal, session, credential, policy.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Tests for the fleet-level drift audit.
 
 Builds the host verifier once, then drives scripts/run_fleet_audit.py over

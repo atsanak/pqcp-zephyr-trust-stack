@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Render scripts/acvp_negative_scenarios.json into a C header.
 
 The generated header backs tests/ztest_acvp_serial_negative, which
@@ -116,7 +116,7 @@ def expand_command(case: dict) -> str | None:
 
 def render(cases: list[dict]) -> str:
     lines = [
-        "/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */",
+        "/* SPDX-License-Identifier: MIT */",
         "/*",
         " * Auto-generated from scripts/acvp_negative_scenarios.json by",
         " * scripts/generate_acvp_negative_header.py. Do not edit by hand.",

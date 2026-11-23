@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """
 Run focused sanitizer builds for the highest-risk PQCP harnesses.
 

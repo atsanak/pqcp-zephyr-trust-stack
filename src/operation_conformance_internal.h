@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef PQCP_OPERATION_CONFORMANCE_INTERNAL_H_

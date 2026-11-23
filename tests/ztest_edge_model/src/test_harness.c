@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Positive controls for the model harness. A checker that cannot fail
  * proves nothing, so these feed a deliberately broken fake module through

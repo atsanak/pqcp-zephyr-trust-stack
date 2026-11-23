@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Package the host evidence verifier as a self-contained release kit.
 
 Builds tools/evidence_verifier, smoke-tests the produced binary against the

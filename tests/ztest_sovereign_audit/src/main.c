@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Sovereign audit event, hash-chained ledger, and CBOR/CEF/OCSF exporter
  * contract tests.

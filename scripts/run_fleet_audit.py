@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Fleet-level drift audit over multiple device evidence transcripts.
 
 Each device's chain is verified by the C verifier (pqcp-evidence-verify);

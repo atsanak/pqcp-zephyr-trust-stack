@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Tests for fault_inject: byte arithmetic and ELF mapping on synthetic data."""
 
 import struct

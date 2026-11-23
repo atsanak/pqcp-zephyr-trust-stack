@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 /*
  * Constant-time runtime smoke for ML-KEM decapsulation.
  *

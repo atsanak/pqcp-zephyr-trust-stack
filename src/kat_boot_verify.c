@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 /*
  * Power-on self-test for the PQCP module.
  *

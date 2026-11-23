@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Tests for the edge model-check runner's parser, verdicts and defect list.
 
 These use synthetic marker transcripts; they never build firmware.

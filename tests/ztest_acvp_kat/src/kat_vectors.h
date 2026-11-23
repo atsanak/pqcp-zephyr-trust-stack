@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 /*
  * Vendored ACVP KAT vectors for all FIPS 203 / FIPS 204 parameter sets.
  *

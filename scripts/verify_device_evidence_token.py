@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Verify additive PQCP_DEVICE_EVIDENCE markers from assurance-status firmware."""
 
 from __future__ import annotations

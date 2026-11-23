@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Measure the sensitivity and specificity of the relational CT trace test.
 
 A detector that has never seen a leak proves little. This re-injects known

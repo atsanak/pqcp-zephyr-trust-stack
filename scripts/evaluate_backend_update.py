@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Evaluate PQ Code Package backend update candidates without vendoring code."""
 
 from __future__ import annotations

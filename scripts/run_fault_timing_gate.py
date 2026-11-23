@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Release-gate wrapper for the fault-timing countermeasure ablation.
 
 Re-measures the four cells the claim rests on (full campaigns, every

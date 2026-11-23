@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Composition root: runtime initialisation, end-to-end zero-trust
  * admission, compliance reporting and multi-module response flows.

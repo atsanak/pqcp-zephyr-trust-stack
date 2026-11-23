@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Reference implementation of the Cortex-M3 latency models, and the host
 cross-check against the C classifier compiled into the TCG plugin
 (tools/tcg_ct_plugin/src/ct_latency_models.h).

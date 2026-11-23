@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Abstract model of the session registry's slot and quota accounting
  * (edge_session_registry.c) together with the principal directory it

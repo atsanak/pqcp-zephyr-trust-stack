@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Fleet artifact core: canonical CBOR (RFC 8949 vectors), COSE_Sign1 with
  * ML-DSA (RFC 9052 / RFC 9964 profile), EAT/CWT evidence and RATS appraisal,

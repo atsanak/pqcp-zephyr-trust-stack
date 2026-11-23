@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Detection and response: signals, incidents, playbooks, evidence custody,
  * containment, continuity, anomaly scoring and recovery.

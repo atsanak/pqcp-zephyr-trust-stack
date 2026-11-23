@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Verify PQ Code Package backend pin currency and local submodule wiring."""
 
 from __future__ import annotations

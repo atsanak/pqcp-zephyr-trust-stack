@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Find public functions that are declared but never defined.
 
 A function advertised in include/pqcp_zephyr/*.h with no definition in

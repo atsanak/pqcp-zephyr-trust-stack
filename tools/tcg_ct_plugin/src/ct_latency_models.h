@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 /*
  * Cortex-M3 operand-dependent latency models, pure C (no QEMU dependency) so
  * the same code is compiled into the TCG plugin and into the host cross-check

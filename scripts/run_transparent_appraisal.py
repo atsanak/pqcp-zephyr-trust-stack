@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """End-to-end transparent appraisal receipt driver (differential + forgeries).
 
 Orchestrates the whole transparent-appraisal path with no Zephyr tooling:

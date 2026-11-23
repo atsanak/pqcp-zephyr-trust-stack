@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Abstract model of the credential cache's revocation semantics
  * (edge_credential_cache.c). The model is one set: ids that were

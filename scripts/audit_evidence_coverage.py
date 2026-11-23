@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Measure and ratchet how much of src/ is actually backed by evidence.
 
 Every module (src/<name>.c) is assigned an evidence level:

@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Offline verification of transparent-appraisal receipts (RFC 9162 inclusion
  * proofs against an ML-DSA-65 signed checkpoint) and consistency files.

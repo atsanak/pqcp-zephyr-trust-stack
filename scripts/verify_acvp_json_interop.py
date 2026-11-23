@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Replay-check ACVP JSON interop response and transcript-manifest artifacts."""
 
 from __future__ import annotations

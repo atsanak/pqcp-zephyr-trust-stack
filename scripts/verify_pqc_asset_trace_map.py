@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Verify the PQC asset-to-evidence trace map used by the Assurance Passport."""
 
 from __future__ import annotations

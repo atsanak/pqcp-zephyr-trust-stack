@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Tests for the evidence continuity foundation: validators, canonical
  * encoders, domain-separated digests and the two-phase record store.

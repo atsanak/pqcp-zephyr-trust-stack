@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Scan ML-KEM decapsulation disassembly for variable-latency division."""
 
 from __future__ import annotations

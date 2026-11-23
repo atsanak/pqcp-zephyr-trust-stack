@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 #include <errno.h>
 #include <zephyr/drivers/flash.h>
 #include <pqcp_zephyr/runtime_journal.h>

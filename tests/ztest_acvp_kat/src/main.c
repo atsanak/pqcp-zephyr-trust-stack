@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * PQCP ACVP known-answer tests for all FIPS 203 / FIPS 204 parameter sets.
  */

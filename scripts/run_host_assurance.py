@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Run every host-side assurance check that needs no Zephyr workspace.
 
 One entry point shared by developers and CI, so a green local run means a

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Translate NIST-style ACVP ML-KEM/ML-DSA JSON vectors to serial-command evidence.
 
 This bridge does not replace the existing serial ACVP harness. It preserves the

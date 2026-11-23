@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Exhaustive single-instruction fault campaign on the deployed PQC image.
 
 Builds tests/ztest_fault_oracle for qemu_x86_64, then for every instruction in

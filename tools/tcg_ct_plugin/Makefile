@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 #
 # Build the pqcp_ct_insn QEMU TCG plugin as a host shared object.
 #

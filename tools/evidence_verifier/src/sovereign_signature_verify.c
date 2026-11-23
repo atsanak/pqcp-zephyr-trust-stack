@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 #include <stdint.h>
 #include <stdio.h>
 #include "mldsa_native.h"

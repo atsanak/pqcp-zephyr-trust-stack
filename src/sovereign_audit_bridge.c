@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+/* SPDX-License-Identifier: MIT
  * Typed source snapshots projected into one tenant-scoped audit vocabulary.
  */
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Validate release evidence packs against the repository schema contract.
 
 The existing replay verifier checks many semantic relationships after a full

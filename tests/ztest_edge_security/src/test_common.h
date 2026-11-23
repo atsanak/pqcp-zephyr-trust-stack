@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Shared fixtures for the edge security ztest suite. All time values are
  * explicit; nothing in this suite reads a wall clock.

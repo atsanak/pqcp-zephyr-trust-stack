@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Verify a generated PQCP assurance ledger without rerunning Zephyr builds."""
 
 from __future__ import annotations

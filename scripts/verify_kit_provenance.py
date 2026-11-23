@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Verify an evidence-verifier release kit against its provenance sidecars.
 
   verify_kit_provenance.py KIT.tar.gz [--provenance P] [--signature S]

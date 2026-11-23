@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Instruction-count constant-time check for ML-KEM decapsulation.
 
 Builds tests/ztest_ct_instr, builds the pqcp_ct_insn TCG plugin, resolves

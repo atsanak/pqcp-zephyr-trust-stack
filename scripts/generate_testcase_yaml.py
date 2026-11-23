@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Keep every ztest suite registered with twister.
 
 Twister silently skips any directory that has no testcase.yaml, so a suite
@@ -18,7 +18,7 @@ from pathlib import Path
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = MODULE_ROOT / "tests"
 
-HEADER = "# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation\n"
+HEADER = "# SPDX-License-Identifier: MIT\n"
 
 # Suites that enable ML-KEM/ML-DSA run keygen/sign paths and need headroom
 # on the emulated target.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Independent RFC 9162 reference verifier for transparent appraisal receipts.
 
 Standard library only (hashlib, json, argparse, random, ...). It deliberately

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Sensitivity and specificity of the declassification-aware ML-DSA test.
 
 Same method as ct_leak_rediscovery.py (re-inject known leak PATTERNS into a

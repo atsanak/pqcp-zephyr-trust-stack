@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Confidential object vault: store, ACL, versions, leases, journal,
  * replication, snapshots and audit export.

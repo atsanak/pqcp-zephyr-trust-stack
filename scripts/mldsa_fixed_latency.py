@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Opt-in fixed-latency multiplication patch for mldsa-native on Cortex-M3.
 
 Claim 14 found that the stock ML-DSA-65 signing image multiplies

@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Direct mbedTLS transport adapter for the PQCP protected channel.
  * The socket descriptor is optional; pass -1 for an application-supplied BIO.

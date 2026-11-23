@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * pqcp-evidence-fuzz - deterministic mutational fuzzer for the evidence
  * grammar.

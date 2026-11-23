@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * pqcp_ct_trace - QEMU TCG plugin that records, for every region bracketed
  * by two marker addresses, a fingerprint of what the executing image

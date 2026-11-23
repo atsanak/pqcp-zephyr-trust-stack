@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Validate the research/product experiment catalog.
 
 The catalog is the bridge between the long-form audit and executable evidence.

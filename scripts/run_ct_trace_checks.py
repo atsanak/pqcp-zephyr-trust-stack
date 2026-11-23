@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Relational leakage test of ML-KEM-768 decapsulation on the deployed image.
 
 Builds tests/ztest_ct_trace for qemu_x86_64, runs it under the

@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Abstract model of the policy distributor's epoch discipline
  * (edge_policy_distributor.c). The model keeps the history of epochs that

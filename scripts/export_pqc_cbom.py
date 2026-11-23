@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Export a CycloneDX-style cryptography BOM for the PQCP assurance pack."""
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from check_version_consistency import parse_header_version  # noqa: E402
 
-LICENSE_EXPRESSION = "LicenseRef-Proprietary-Collaborative-Evaluation"
+LICENSE_EXPRESSION = "MIT"
 DEFAULT_PROFILE = SCRIPT_DIR / "pqc_assurance_profile.json"
 DEFAULT_EXTERNAL_SCHEMES = (
     {

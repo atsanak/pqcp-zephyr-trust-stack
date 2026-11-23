@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Suite entry point: one test per modelled module plus the harness
  * controls. The suite teardown prints the final PQCP_MODEL_SUMMARY marker

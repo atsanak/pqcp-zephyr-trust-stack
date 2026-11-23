@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * RFC 9052 COSE_Sign1 support with RFC 9964 ML-DSA algorithms.
  */

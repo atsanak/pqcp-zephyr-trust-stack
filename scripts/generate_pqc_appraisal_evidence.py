@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Generate a compact appraisal index over post-Passport evidence artifacts."""
 
 from __future__ import annotations

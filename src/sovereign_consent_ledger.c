@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Fixed-capacity consent receipts with explicit tenant, controller, purpose,
  * classification, epoch, and validity bindings.

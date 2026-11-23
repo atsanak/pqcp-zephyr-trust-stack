@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 #
 # Host build for pqcp-evidence-verify.
 #

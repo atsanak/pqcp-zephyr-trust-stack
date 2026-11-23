@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Host SHA-256 (FIPS 180-4) plus the transparency-log hash_ops adapter.
  * Host-only: the firmware keeps its own provider (fleet_sha256.c).

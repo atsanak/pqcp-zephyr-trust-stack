@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 #ifndef PQCP_RUNTIME_JOURNAL_H_
 #define PQCP_RUNTIME_JOURNAL_H_
 

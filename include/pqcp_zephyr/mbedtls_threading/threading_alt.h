@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation */
+/* SPDX-License-Identifier: MIT */
 #ifndef PQCP_MBEDTLS_THREADING_ALT_H_
 #define PQCP_MBEDTLS_THREADING_ALT_H_
 

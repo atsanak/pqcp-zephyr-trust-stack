@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Contract tests for the sovereign policy engines: policy helpers,
  * residency, network intent, privacy budget, consent, data contract,

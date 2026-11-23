@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Sensitivity/specificity of the Cortex-M3 operand-latency channel.
 
 Re-injects constant-time-source-looking changes that nevertheless feed secret

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 
 # Allow repo-local samples and tests to build even when this repository is not
 # listed as a west project in the active workspace manifest.

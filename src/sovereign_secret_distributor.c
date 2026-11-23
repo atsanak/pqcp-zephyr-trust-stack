@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Bounded secret grants.  Grant consumers receive opaque runtime key handles;
  * no secret bytes are stored in or returned by this subsystem.

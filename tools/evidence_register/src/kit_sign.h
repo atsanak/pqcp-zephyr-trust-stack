@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Domain-separated ML-DSA-65 sign/verify of an arbitrary file's bytes, used
  * to sign the evidence-verifier kit provenance (docs/kit-provenance.md).

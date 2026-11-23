@@ -7026,7 +7026,7 @@ validators replay evidence, and tests preserve contract behavior.
 
 `generate_migration_readiness_report.py` is classified as a artifact generator. Its
 opening implementation context is: #!/usr/bin/env python3 # SPDX-License-Identifier:
-LicenseRef-Proprietary-Collaborative-Evaluation """Generate JSON and Markdown migration-
+MIT """Generate JSON and Markdown migration-
 readiness summaries from Passport checks.""" from __future__ import annotations import
 argparse import json import sys from datetime import datetime, timezone from pathlib
 import Path from typing. This classification matters because the paper and product story
@@ -7055,7 +7055,7 @@ evidence, validators replay evidence, and tests preserve contract behavior.
 
 `generate_partner_review_scorecard.py` is classified as a artifact generator. Its
 opening implementation context is: #!/usr/bin/env python3 # SPDX-License-Identifier:
-LicenseRef-Proprietary-Collaborative-Evaluation """Generate a partner-facing release
+MIT """Generate a partner-facing release
 evidence scorecard. The scorecard is intentionally a derived artifact: it does not
 replace the ledger, CBOM, policy result, or replay verifiers. It reads those artifacts
 and. This classification matters because the paper and product story should not treat
@@ -7225,7 +7225,7 @@ validators replay evidence, and tests preserve contract behavior.
 
 `generate_research_product_dossier.py` is classified as a artifact generator. Its
 opening implementation context is: #!/usr/bin/env python3 # SPDX-License-Identifier:
-LicenseRef-Proprietary-Collaborative-Evaluation """Generate repo-grounded research and
+MIT """Generate repo-grounded research and
 product hardening dossiers. The dossier is a derived release artifact. It does not
 invent claims and it does not replace the Assurance Passport. It reads the. This
 classification matters because the paper and product story should not treat all scripts

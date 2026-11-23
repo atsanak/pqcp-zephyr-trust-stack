@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Deterministic-CBOR codec for appraisal statements, log checkpoints,
  * receipts and consistency files. Byte-level layout: see

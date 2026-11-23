@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Instruction-level fault sites for an x86 Zephyr image, patched in a copy.
 
 The SDK QEMU (plugin API v4) cannot write guest state, so faults are

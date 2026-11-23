@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Product-grade local evidence tooling for PQCP maintainers."""
 
 from .api import ProductEvidenceApi

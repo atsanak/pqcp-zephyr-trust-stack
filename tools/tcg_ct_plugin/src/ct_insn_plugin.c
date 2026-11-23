@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * pqcp_ct_insn - QEMU TCG plugin that counts guest instructions and guest
  * memory accesses executed between two marker addresses.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Relational analysis of pqcp_ct_trace plugin output.
 
 A run executes the same cryptographic operation under different secrets

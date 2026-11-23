@@ -1,29 +1,25 @@
-Proprietary Collaborative Evaluation License
+MIT License
 
-Copyright (c) 2026 Angelos Tsanaktsidis. All rights reserved.
+Copyright (c) 2026 Angelos Tsanaktsidis
 
-This repository, including all source code, documentation, designs, scripts, configuration files, models, data, diagrams, and related materials, is proprietary and confidential.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-This repository is shared only with authorized collaborators who have been explicitly granted access by the copyright holder.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Authorized collaborators may view, test, review, comment on, and contribute to this repository only for the purpose of evaluating, improving, or developing this project in collaboration with the copyright holder.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-No permission is granted to copy, publish, distribute, sublicense, sell, deploy, host, commercialize, reverse engineer, or use this repository or any part of it for any independent, competing, public, commercial, or production purpose without prior written permission from the copyright holder.
-
-Access to this repository does not transfer ownership of any intellectual property rights. All rights, title, and interest in the project remain with the copyright holder.
-
-By submitting any contribution, including code, documentation, designs, suggestions, issues, pull requests, fixes, improvements, or other materials, the contributor confirms that:
-
-1. The contribution is their own original work, or they have the necessary rights to submit it.
-
-2. The contribution does not knowingly violate any third-party rights.
-
-3. The contribution may be used, modified, integrated, reproduced, and maintained by Angelos Tsanaktsidis as part of this project.
-
-4. The contribution does not give the contributor ownership of the overall project.
-
-5. The contributor is not granted any right to reuse, copy, commercialize, or distribute the project outside the permissions expressly stated in this license.
-
-All rights not expressly granted in this license are reserved.
-
-THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, SECURITY, OR RELIABILITY.
+The vendored libraries under ext/ (mlkem-native, mldsa-native) are separate
+projects with their own licenses (Apache-2.0 OR ISC OR MIT); see their LICENSE
+files.

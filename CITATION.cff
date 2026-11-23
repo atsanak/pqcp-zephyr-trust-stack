@@ -8,7 +8,7 @@ authors:
     given-names: "atsana01"
 repository-code: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
 url: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
-license: Apache-2.0
+license: MIT
 version: "1.0.0"
 date-released: "2026-04-26"
 keywords:

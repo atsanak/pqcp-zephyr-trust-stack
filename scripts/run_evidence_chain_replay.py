@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Capture a live device evidence transcript and replay it on host.
 
 This is the executable bridge between the firmware deployment evidence

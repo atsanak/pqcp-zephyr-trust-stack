@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Direct mbedTLS adapter. Zephyr TLS sockets are intentionally not used
  * because they do not expose TLS exporter material to the application.

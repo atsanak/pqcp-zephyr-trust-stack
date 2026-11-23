@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Secure message queue, replay protection, fragmentation, ratchet, topic
  * registry, group membership and delivery tracking.

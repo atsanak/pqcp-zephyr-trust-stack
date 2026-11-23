@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Generate repo-grounded research and product hardening dossiers.
 
 The dossier is a derived release artifact. It does not invent claims and it does

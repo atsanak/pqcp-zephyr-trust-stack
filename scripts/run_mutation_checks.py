@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Mutation-test the host evidence verifier's security checks.
 
 Passing tests only prove the checks accept good evidence. This proves the

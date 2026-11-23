@@ -2,7 +2,7 @@
 
 Status: repository-grounded product analysis for post-v1.0.0 `main`  
 Analysis date: 2026-05-24  
-Repository role: proprietary collaborative evaluation project  
+Repository role: MIT-licensed research and engineering project  
 Primary product question: how can `pqcp-zephyr-trust-stack` move from a
 research-grade embedded PQC assurance prototype into a credible product
 direction for external partners?

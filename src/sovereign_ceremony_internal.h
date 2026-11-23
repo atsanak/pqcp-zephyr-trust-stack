@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Private allocation-free machinery for sovereign approvals and key
  * ceremonies.  The public storage model remains in sovereign_runtime.h.

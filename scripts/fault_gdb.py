@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Minimal GDB remote-serial-protocol client for timed fault injection.
 
 QEMU's gdbstub (qemu-system-x86_64 -S -gdb tcp:127.0.0.1:<port>) can read

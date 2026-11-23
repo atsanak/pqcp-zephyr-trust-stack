@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * State shared between the evidence-grammar harness (main.c) and the binary
  * parser targets (binary_targets.c): the seeded PRNG and the edge-coverage

@@ -5,9 +5,11 @@
 
 An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
 
-> **Access note:** this repository is proprietary and is not open source. It is
-> shared only with authorized collaborators for private review, testing,
-> feedback, and contribution under the terms in [`LICENSE`](LICENSE).
+> **Status:** research and engineering project, MIT-licensed
+> ([`LICENSE`](LICENSE)). Everything here is measured on QEMU and the host:
+> there is no hardware evidence, and the constant-time results are tests under
+> a documented latency model, not proofs. Read the non-claims next to each
+> claim in [`docs/novelty-claims.md`](docs/novelty-claims.md).
 
 ## What is novel here?
 
@@ -2021,19 +2023,11 @@ west build -t run
 
 ## License and Contribution Terms
 
-This repository is proprietary and is not open source.
+MIT, see [`LICENSE`](LICENSE). Repository-owned files carry the SPDX
+identifier `MIT`; the vendored libraries under `ext/` keep their own licenses.
 
-Repository-owned files use the SPDX expression `LicenseRef-Proprietary-Collaborative-Evaluation`.
-
-It is shared only with authorized collaborators for private review, testing, feedback, and contribution.
-
-You may view, test, review, and contribute to this project only if you have been explicitly granted access by Angelos Tsanaktsidis.
-
-You may not copy, publish, distribute, deploy, commercialize, reuse, or create a competing product from this repository without prior written permission.
-
-By submitting a contribution, you agree that your contribution may be used, modified, and integrated into this project by Angelos Tsanaktsidis under the terms described in the LICENSE file.
-
-See the LICENSE file for full terms.
+Contributions are welcome under the same license; see
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Authors
 

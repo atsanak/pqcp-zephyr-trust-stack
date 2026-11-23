@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Tests for the evidence-verifier kit provenance and signature.
 
 Builds the real pqcp-evidence-register once, assembles a miniature kit with

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Verify signed sovereign audit CBOR v1 and atomically journal receipts.
 
 A receipt authenticates the transmitted projection, not source completeness or

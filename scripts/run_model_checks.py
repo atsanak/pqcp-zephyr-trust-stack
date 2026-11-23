@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Run the edge state-machine model checks and measure their power.
 
 tests/ztest_edge_model drives four edge firmware modules (principal

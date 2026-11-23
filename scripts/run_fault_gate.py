@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Release-gate wrapper for the emulated fault campaign.
 
 Runs the exhaustive single-instruction campaign on two images and judges

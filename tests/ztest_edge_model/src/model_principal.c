@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Abstract model of the principal directory's quarantine and revocation
  * lifecycle (edge_identity_directory.c).

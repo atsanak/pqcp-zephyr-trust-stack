@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * pqcp-evidence-register - append-only RFC 9162 log of verifier appraisal
  * statements with ML-DSA-65 signed checkpoints.

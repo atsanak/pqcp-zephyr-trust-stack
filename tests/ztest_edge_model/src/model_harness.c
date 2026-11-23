@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * Seeded trace generation, replay, delta-debugging shrinker and marker
  * output for the edge model checks. See model_harness.h for the grammar.

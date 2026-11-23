@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Generate replayable PQC release reference values.
 
 The reference-values artifact is the compact bridge between a release evidence

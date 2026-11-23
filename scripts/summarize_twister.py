@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Summarize a twister run, with failing-suite log tails.
 
 CI job logs and artifacts can be unavailable (storage quota, expired

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Focused tests for the host evidence verifier CLI.
 
 Builds tools/evidence_verifier with the host toolchain, then drives it

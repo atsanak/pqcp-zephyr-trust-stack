@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+ * SPDX-License-Identifier: MIT
  *
  * FIPS 180-4 known-answer tests for host_sha256 plus hash_ops parts[] and
  * incremental-update equivalence.

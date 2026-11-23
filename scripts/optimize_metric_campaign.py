@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Decide whether safe optimization candidates improve PQCP metrics.
 
 The optimizer is intentionally evidence-first: it consumes benchmark-campaign

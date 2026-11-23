@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 # PQCP Zephyr Trust Stack - CMake Build Configuration
 #
 # This module provides ML-KEM (FIPS-203) and ML-DSA (FIPS-204) implementations

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Build and run the evidence-grammar fuzzer under ASan+UBSan.
 
 Orchestration only: tools/evidence_fuzzer drives the unmodified firmware

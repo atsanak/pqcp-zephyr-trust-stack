@@ -2,7 +2,7 @@
 name = "pqcp-fleet-coordinator"
 version = "0.1.0"
 edition = "2021"
-license = "LicenseRef-Proprietary-Collaborative-Evaluation"
+license = "MIT"
 description = "Operational control plane for PQCP Zephyr trust-fabric fleets"
 
 [dependencies]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: LicenseRef-Proprietary-Collaborative-Evaluation
+# SPDX-License-Identifier: MIT
 """Classify a faulted run by what it means cryptographically.
 
 Observations come from tests/ztest_fault_oracle:
