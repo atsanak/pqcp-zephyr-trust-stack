@@ -125,6 +125,54 @@ def trace_core(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                       board=CORE_BOARDS[target], **kwargs)
 
 
+def functions_for(elf: Path, pcs, env: dict) -> dict:
+    """pc -> containing function name, from the ELF symbol table."""
+    import bisect  # noqa: PLC0415
+    nm = shutil.which("arm-zephyr-eabi-nm") or shutil.which("nm") or "nm"
+    sdk = Path.home() / "zephyr-sdk-1.0.1" / "arm-zephyr-eabi" / "bin" / \
+        "arm-zephyr-eabi-nm"
+    if sdk.exists():
+        nm = str(sdk)
+    out = subprocess.run([nm, "-n", str(elf)], capture_output=True,
+                         text=True, env=env).stdout
+    addrs, names = [], []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] in "tTwW":
+            addrs.append(int(parts[0], 16) & ~1)
+            names.append(parts[2])
+    result = {}
+    for pc in pcs:
+        i = bisect.bisect_right(addrs, pc) - 1
+        result[pc] = names[i] if i >= 0 else "?"
+    return result
+
+
+def report_models(text: str, elf: Path, env: dict, alg: str, opt: str,
+                  target: str, *, declassified: bool) -> "cta.ModelComparison":
+    """Evaluate the documented and the CMEmu latency model on one trace."""
+    regions = cta.parse_trace(text)
+    records = cta.parse_vlat(text)
+    cmp_ = cta.compare_latency_models(regions, records,
+                                      compare_counts=not declassified)
+    fns = functions_for(elf, cmp_.documented | cmp_.cmemu, env)
+    doc_v = cm_v = None
+    if declassified:
+        segments = cta.parse_segments(text)
+        doc_v = len(cta.analyze_declassified(
+            regions, segments,
+            channels=cta.CORE_CHANNELS["cortex-m3"]).violations)
+        cm_v = len(cta.analyze_declassified(
+            regions, segments,
+            channels=cta.CORE_CHANNELS["cortex-m3-cmemu"]).violations)
+    print(cta.format_models_marker(cmp_, alg, opt, target, fns, doc_v, cm_v))
+    for pc in sorted(cmp_.cmemu_only):
+        print(f"[ct-trace] cmemu-only site "
+              f"{cta.VLAT_KINDS[cmp_.kinds[pc]]} at 0x{pc:x} in "
+              f"{fns.get(pc, '?')}")
+    return cmp_
+
+
 def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
              plugin: Path) -> int:
     target = args.target
@@ -140,6 +188,10 @@ def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
             cta.parse_trace(text), cta.parse_vlat(text),
             long_mul_variable=LONG_MUL_VARIABLE[target])
         print(cta.format_vlat_marker(analysis, ALG, opt, target))
+        if target == CORTEX_M3_TARGET:
+            report_models(text, out / f"build-{target}-{opt}" / "zephyr" /
+                          "zephyr.elf", env, ALG, opt, target,
+                          declassified=False)
         for pc, kind in analysis.candidate_sites:
             print(f"[ct-trace] candidate {cta.VLAT_KINDS[kind]} at "
                   f"0x{pc:x}: exact operands vary with the secret "
@@ -184,6 +236,10 @@ def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
             compare_counts=False)
         print(cta.format_vlat_declass_marker(analysis, sites, "MLDSA-65",
                                              opt, target))
+        if target == CORTEX_M3_TARGET:
+            report_models(text, out / f"build-{target}-dsa-{opt}" / "zephyr" /
+                          "zephyr.elf", env, "MLDSA-65", opt, target,
+                          declassified=True)
         for pc, kind, why in sites.fail_sites:
             print(f"[ct-trace] site {cta.VLAT_KINDS[kind]} at 0x{pc:x}: "
                   f"{why}")
@@ -261,8 +317,12 @@ def run_core_mldsa_mitigated(args, out: Path, west_root: Path,
                     regions, cta.parse_vlat(text),
                     long_mul_variable=LONG_MUL_VARIABLE[target],
                     compare_counts=False)
+                print(f"[ct-trace] latency models, {name} build")
+                models = report_models(
+                    text, build / "zephyr" / "zephyr.elf", env, "MLDSA-65",
+                    f"{opt}-{name}", target, declassified=True)
                 results[name] = {
-                    "decl": decl, "sites": sites,
+                    "decl": decl, "sites": sites, "models": models,
                     "digest": read_sig_digest(build),
                     "insns": sum(r.insns for r in regions)}
             stock, patched_r = results["stock"], results["patched"]

@@ -173,13 +173,17 @@ SEG_RE = re.compile(
     r"insns=(\d+) loads=(\d+) stores=(\d+) ndiv=(\d+) h_pc=([0-9a-f]{16}) "
     r"h_addr=([0-9a-f]{16}) h_line=([0-9a-f]{16}) h_div=([0-9a-f]{16})"
     r"(?: nvl=(\d+) h_vdiv=([0-9a-f]{16}) h_vmul=([0-9a-f]{16}) "
-    r"h_vop=([0-9a-f]{16}))?$")
+    r"h_vop=([0-9a-f]{16})(?: h_vcm=([0-9a-f]{16}))?)?$")
 # Cortex-M cores differ in which instruction classes have operand-dependent
 # latency: an M3's long multiplies terminate early (ARM DDI 0337); an M4's
 # are single-cycle (DDI 0439). Both share the variable-latency divider.
 CORE_CHANNELS = {
     "cortex-m3": ("pc", "addr", "line", "vdiv", "vmul"),
     "cortex-m4": ("pc", "addr", "line", "vdiv"),
+    # Same core, second latency model (CMEmu, see ct_latency_models.py): one
+    # stream carries the modelled latency class of every variable-latency
+    # instruction, divides and long multiplies alike.
+    "cortex-m3-cmemu": ("pc", "addr", "line", "vcm"),
 }
 
 
@@ -213,6 +217,8 @@ def parse_segments(text: str) -> dict:
         if g[13] is not None:
             by_region[int(g[0])][-1].fingerprints.update(
                 {"vdiv": g[14], "vmul": g[15], "vop": g[16]})
+            if g[17] is not None:
+                by_region[int(g[0])][-1].fingerprints["vcm"] = g[17]
     for region, segs in by_region.items():
         if [s.seq for s in segs] != list(range(len(segs))):
             raise TraceError(f"region {region}: segment seq out of order")
@@ -335,7 +341,8 @@ def format_declass_marker(a: DeclassAnalysis, alg: str, opt: str) -> str:
 
 VLAT_RE = re.compile(
     r"PQCP_CT_VLAT region=(\d+) pc=([0-9a-f]+) kind=(\d) n=(\d+) "
-    r"h_op=([0-9a-f]{16}) h_cls=([0-9a-f]{16}) h_doc=([0-9a-f]{16})$")
+    r"h_op=([0-9a-f]{16}) h_cls=([0-9a-f]{16}) h_doc=([0-9a-f]{16})"
+    r"(?: h_cm=([0-9a-f]{16}))?$")
 VLAT_KINDS = {1: "udiv", 2: "sdiv", 3: "umull", 4: "smull", 5: "umlal",
               6: "smlal"}
 
@@ -349,6 +356,7 @@ class VlatRecord:
     h_op: str
     h_cls: str
     h_doc: str
+    h_cm: str = ""
 
 
 def parse_vlat(text: str) -> list[VlatRecord]:
@@ -362,7 +370,7 @@ def parse_vlat(text: str) -> list[VlatRecord]:
             raise TraceError(f"malformed vlat line: {line!r}")
         g = m.groups()
         records.append(VlatRecord(int(g[0]), int(g[1], 16), int(g[2]),
-                                  int(g[3]), g[4], g[5], g[6]))
+                                  int(g[3]), g[4], g[5], g[6], g[7] or ""))
     return records
 
 
@@ -382,7 +390,8 @@ class VlatAnalysis:
 
 def analyze_vlat(regions: list[Region], records: list[VlatRecord], *,
                  long_mul_variable: bool = True,
-                 compare_counts: bool = True) -> VlatAnalysis:
+                 compare_counts: bool = True,
+                 model: str = "documented") -> VlatAnalysis:
     """Per-site verdict. `long_mul_variable` is the core policy (M3 true, M4
     false); `compare_counts=False` skips sites whose execution count differs
     between regions (rejection loops), which the segment analysis covers."""
@@ -407,6 +416,14 @@ def analyze_vlat(regions: list[Region], records: list[VlatRecord], *,
                                     "execution count differs between runs")
                 continue
             if None in counts:
+                continue
+            if model == "cmemu":
+                if any(not s.h_cm for s in seen):
+                    raise TraceError("trace has no h_cm (rebuild the plugin)")
+                if len({s.h_cm for s in seen}) > 1:
+                    fail.setdefault(pc, "cmemu latency class varies")
+                elif len({s.h_op for s in seen}) > 1:
+                    candidate.add(pc)
                 continue
             if kind > 2 and not long_mul_variable:
                 if (len({s.h_doc for s in seen}) > 1 or
@@ -461,3 +478,54 @@ def format_vlat_declass_marker(a: DeclassAnalysis, v: VlatAnalysis, alg: str,
             f"{len(a.violations) - by_channel.get('vdiv', 0) - by_channel.get('vmul', 0)} "
             f"candidate_segments={a.candidate_segments} "
             f"attributed_sites={len(v.fail_sites)}")
+
+
+@dataclass
+class ModelComparison:
+    """Per-site disagreement of two latency models over the SAME trace."""
+    documented: set      # pcs failing under the documented model
+    cmemu: set           # pcs failing under the CMEmu model
+    kinds: dict          # pc -> kind
+
+    @property
+    def both(self) -> set:
+        return self.documented & self.cmemu
+
+    @property
+    def documented_only(self) -> set:
+        return self.documented - self.cmemu
+
+    @property
+    def cmemu_only(self) -> set:
+        return self.cmemu - self.documented
+
+
+def compare_latency_models(regions: list[Region], records: list[VlatRecord],
+                           *, long_mul_variable: bool = True,
+                           compare_counts: bool = True) -> ModelComparison:
+    doc = analyze_vlat(regions, records, long_mul_variable=long_mul_variable,
+                       compare_counts=compare_counts, model="documented")
+    cm = analyze_vlat(regions, records, long_mul_variable=long_mul_variable,
+                      compare_counts=compare_counts, model="cmemu")
+    return ModelComparison(
+        documented={pc for pc, _, _ in doc.fail_sites},
+        cmemu={pc for pc, _, _ in cm.fail_sites},
+        kinds=dict(doc.sites))
+
+
+def format_models_marker(c: ModelComparison, alg: str, opt: str,
+                         target: str, functions: dict | None = None,
+                         doc_segment_violations: int | None = None,
+                         cmemu_segment_violations: int | None = None) -> str:
+    fns = functions or {}
+    only = sorted({fns.get(pc, "?") for pc in c.cmemu_only})
+    seg = ""
+    if doc_segment_violations is not None:
+        seg = (f" doc_violations={doc_segment_violations} "
+               f"cmemu_violations={cmemu_segment_violations}")
+    return (f"PQCP_CT_TRACE_LATENCY_MODELS alg={alg} target={target} "
+            f"opt={opt} documented_sites={len(c.documented)} "
+            f"cmemu_sites={len(c.cmemu)} both={len(c.both)} "
+            f"documented_only={len(c.documented_only)} "
+            f"cmemu_only={len(c.cmemu_only)}{seg} "
+            f"cmemu_only_functions={','.join(only) if only else 'none'}")

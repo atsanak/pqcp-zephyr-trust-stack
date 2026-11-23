@@ -37,12 +37,14 @@
  * executed inside a region the plugin accumulates, per instruction address,
  * the operand pair three ways and emits one line per site at region end:
  *   PQCP_CT_VLAT region=<n> pc=<hex> kind=<k> n=<count> h_op=<hex16>
- *       h_cls=<hex16> h_doc=<hex16>
+ *       h_cls=<hex16> h_doc=<hex16> h_cm=<hex16>
  *   h_op   exact operand values (identity: any latency function of the
  *          operands is a function of this)
  *   h_cls  operand bit-lengths (a magnitude / leading-zero latency model)
  *   h_doc  the documented M3 long-multiply predicate: are both operands
  *          below 65536 (div: same as h_cls)
+ *   h_cm   the CMEmu latency class (ct_latency_models.h): half-word
+ *          non-zero patterns for long multiplies, cycle formula for divides
  * kind: 1 UDIV 2 SDIV 3 UMULL 4 SMULL 5 UMLAL 6 SMLAL. Registers are r0..r12,
  * sp and lr, and the marker arguments are r0..r2. Marker addresses are masked to even.
  * No cycle model: operands are recorded, latency is not simulated.
@@ -58,6 +60,8 @@
 #include <string.h>
 
 #include <qemu-plugin.h>
+
+#include "ct_latency_models.h"
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
@@ -83,7 +87,7 @@ static uint64_t sg_insns, sg_loads, sg_stores, sg_ndiv;
 static uint64_t sg_pc, sg_addr, sg_line, sg_div;
 /* Cortex-M per-segment latency streams: div bit-lengths, long-multiply
  * predicate, exact operands; each mixed with the instruction address. */
-static uint64_t sg_vdiv, sg_vmul, sg_vop, sg_nvl;
+static uint64_t sg_vdiv, sg_vmul, sg_vop, sg_vcm, sg_nvl;
 
 static int is_arm;
 static struct qemu_plugin_register *arm_regs[15]; /* r0..r12, sp, lr */
@@ -92,7 +96,7 @@ static struct qemu_plugin_register *arm_regs[15]; /* r0..r12, sp, lr */
 struct vlat_site {
 	uint64_t pc;
 	uint64_t n;
-	uint64_t h_op, h_cls, h_doc;
+	uint64_t h_op, h_cls, h_doc, h_cm;
 	uint32_t kind;
 	int used;
 };
@@ -136,7 +140,7 @@ static void reset_region(void)
 	seg_index = 0U;
 	sg_insns = sg_loads = sg_stores = sg_ndiv = 0U;
 	sg_pc = sg_addr = sg_line = sg_div = FNV_OFFSET;
-	sg_vdiv = sg_vmul = sg_vop = FNV_OFFSET;
+	sg_vdiv = sg_vmul = sg_vop = sg_vcm = FNV_OFFSET;
 	sg_nvl = 0U;
 }
 
@@ -144,7 +148,7 @@ static void reset_segment(void)
 {
 	sg_insns = sg_loads = sg_stores = sg_ndiv = 0U;
 	sg_pc = sg_addr = sg_line = sg_div = FNV_OFFSET;
-	sg_vdiv = sg_vmul = sg_vop = FNV_OFFSET;
+	sg_vdiv = sg_vmul = sg_vop = sg_vcm = FNV_OFFSET;
 	sg_nvl = 0U;
 }
 
@@ -173,13 +177,14 @@ static uint64_t read_reg(struct qemu_plugin_register *reg)
 static void emit_segment(uint64_t site, uint64_t len, uint64_t cls)
 {
 	if (out_file != NULL) {
-		char vlat[128] = "";
+		char vlat[192] = "";
 
 		if (is_arm) {
 			snprintf(vlat, sizeof(vlat),
 				 " nvl=%" PRIu64 " h_vdiv=%016" PRIx64
-				 " h_vmul=%016" PRIx64 " h_vop=%016" PRIx64,
-				 sg_nvl, sg_vdiv, sg_vmul, sg_vop);
+				 " h_vmul=%016" PRIx64 " h_vop=%016" PRIx64
+				 " h_vcm=%016" PRIx64,
+				 sg_nvl, sg_vdiv, sg_vmul, sg_vop, sg_vcm);
 		}
 		fprintf(out_file,
 			"PQCP_CT_SEG region=%" PRIu64 " seq=%" PRIu64
@@ -209,9 +214,10 @@ static void emit_region(void)
 		fprintf(out_file,
 			"PQCP_CT_VLAT region=%" PRIu64 " pc=%" PRIx64
 			" kind=%u n=%" PRIu64 " h_op=%016" PRIx64
-			" h_cls=%016" PRIx64 " h_doc=%016" PRIx64 "\n",
+			" h_cls=%016" PRIx64 " h_doc=%016" PRIx64
+			" h_cm=%016" PRIx64 "\n",
 			region_index, v->pc, v->kind, v->n, v->h_op, v->h_cls,
-			v->h_doc);
+			v->h_doc, v->h_cm);
 	}
 	if (out_file != NULL) {
 		fprintf(out_file,
@@ -429,7 +435,7 @@ static struct vlat_site *vlat_lookup(uint64_t pc, uint32_t kind)
 			v->pc = pc;
 			v->kind = kind;
 			v->n = 0U;
-			v->h_op = v->h_cls = v->h_doc = FNV_OFFSET;
+			v->h_op = v->h_cls = v->h_doc = v->h_cm = FNV_OFFSET;
 			vsite_order[vsite_count++] = slot;
 			return v;
 		}
@@ -456,8 +462,11 @@ static void insn_exec_vlat(unsigned int cpu_index, void *udata)
 		const uint64_t mb = magnitude(b, sgn);
 		struct vlat_site *v = vlat_lookup(vi->pc, vi->kind);
 
+		const uint32_t cm = ctlm_cmemu_class(vi->kind, a, b);
+
 		sg_nvl++;
 		sg_vop = mix(mix(mix(sg_vop, vi->pc), a), b);
+		sg_vcm = mix(mix(sg_vcm, vi->pc), cm);
 		if (vi->kind <= 2U) {
 			sg_vdiv = mix(mix(mix(sg_vdiv, vi->pc), bitlen(ma)),
 				      bitlen(mb));
@@ -469,6 +478,7 @@ static void insn_exec_vlat(unsigned int cpu_index, void *udata)
 			v->n++;
 			v->h_op = mix(mix(v->h_op, a), b);
 			v->h_cls = mix(mix(v->h_cls, bitlen(ma)), bitlen(mb));
+			v->h_cm = mix(v->h_cm, cm);
 			if (vi->kind >= 3U) {
 				v->h_doc = mix(v->h_doc,
 					       (ma < 65536U) * 2U +

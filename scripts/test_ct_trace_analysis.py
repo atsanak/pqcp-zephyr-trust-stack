@@ -177,10 +177,11 @@ class DeclassifiedAnalysis(unittest.TestCase):
         self.assertIn("violations=0", marker)
 
 
-def vlat(region, pc, kind=3, n=4, op="a", cls="b", doc="c"):
+def vlat(region, pc, kind=3, n=4, op="a", cls="b", doc="c", cm=None):
     f = lambda c: c * 16  # noqa: E731
+    tail = f" h_cm={f(cm)}" if cm is not None else ""
     return (f"PQCP_CT_VLAT region={region} pc={pc:x} kind={kind} n={n} "
-            f"h_op={f(op)} h_cls={f(cls)} h_doc={f(doc)}")
+            f"h_op={f(op)} h_cls={f(cls)} h_doc={f(doc)}{tail}")
 
 
 def vlat_trace(records, regions=4, label_of=lambda i: i):
@@ -191,6 +192,66 @@ def vlat_trace(records, regions=4, label_of=lambda i: i):
 
 def vlat_analyze(text):
     return cta.analyze_vlat(cta.parse_trace(text), cta.parse_vlat(text))
+
+
+class LatencyModels(unittest.TestCase):
+    def test_cmemu_only_site_is_reported_as_a_disagreement(self):
+        # Documented model constant, CMEmu class varies (the u == 0 case).
+        text = vlat_trace([vlat(i, 0x100, op="abcd"[i], cm="ef"[i % 2])
+                           for i in range(4)])
+        regions, records = cta.parse_trace(text), cta.parse_vlat(text)
+        self.assertTrue(cta.analyze_vlat(regions, records).clean)
+        cm = cta.analyze_vlat(regions, records, model="cmemu")
+        self.assertFalse(cm.clean)
+        cmp_ = cta.compare_latency_models(regions, records)
+        self.assertEqual(cmp_.cmemu_only, {0x100})
+        self.assertEqual(cmp_.documented, set())
+        self.assertEqual(cmp_.both, set())
+
+    def test_documented_only_and_both(self):
+        text = vlat_trace(
+            [vlat(i, 0x100, op="abcd"[i], doc="ab"[i % 2], cm="ef"[i % 2])
+             for i in range(4)] +
+            [vlat(i, 0x104, op="abcd"[i], doc="ab"[i % 2], cm="d")
+             for i in range(4)])
+        cmp_ = cta.compare_latency_models(cta.parse_trace(text),
+                                          cta.parse_vlat(text))
+        self.assertEqual(cmp_.both, {0x100})
+        self.assertEqual(cmp_.documented_only, {0x104})
+
+    def test_constant_cmemu_class_with_varying_operands_is_only_a_candidate(self):
+        text = vlat_trace([vlat(i, 0x100, op="abcd"[i], cm="e")
+                           for i in range(4)])
+        a = cta.analyze_vlat(cta.parse_trace(text), cta.parse_vlat(text),
+                             model="cmemu")
+        self.assertTrue(a.clean)
+        self.assertEqual(a.candidate_sites, [(0x100, 3)])
+
+    def test_cmemu_model_needs_the_new_plugin_field(self):
+        text = vlat_trace([vlat(i, 0x100) for i in range(4)])
+        with self.assertRaises(cta.TraceError):
+            cta.analyze_vlat(cta.parse_trace(text), cta.parse_vlat(text),
+                             model="cmemu")
+
+    def test_marker_names_the_functions_only_cmemu_flags(self):
+        cmp_ = cta.ModelComparison(documented=set(), cmemu={0x10},
+                                   kinds={0x10: 3})
+        marker = cta.format_models_marker(cmp_, "MLKEM-768", "default",
+                                          "cortex-m3", {0x10: "f"})
+        self.assertIn("cmemu_only=1", marker)
+        self.assertIn("cmemu_only_functions=f", marker)
+
+    def test_segment_lines_carry_the_optional_cmemu_stream(self):
+        base = ("PQCP_CT_SEG region=0 seq=0 site=0 len=0 cls=0 insns=1 "
+                "loads=0 stores=0 ndiv=0 " + " ".join(
+                    f"{k}={'a' * 16}" for k in
+                    ("h_pc", "h_addr", "h_line", "h_div")))
+        tail = " nvl=1 " + " ".join(f"{k}={'b' * 16}" for k in
+                                    ("h_vdiv", "h_vmul", "h_vop"))
+        segs = cta.parse_segments(base + tail + f" h_vcm={'c' * 16}\n")
+        self.assertEqual(segs[0][0].fingerprints["vcm"], "c" * 16)
+        segs = cta.parse_segments(base + tail + "\n")
+        self.assertNotIn("vcm", segs[0][0].fingerprints)
 
 
 class VlatAnalysis(unittest.TestCase):
