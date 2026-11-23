@@ -159,3 +159,22 @@ post-KyberSlash compression multiply, in `mlk_poly_compress_d10_c` for 512 and
 768 and `mlk_poly_compress_d11_c` for 1024. The negative figure at 1024 -O is
 a code-generation difference of a few instructions, not a saving.
 
+## Third registration: how large is the modelled leak?
+
+Registered before measuring. The verdicts so far are binary (a site's latency
+class varies or not). A reviewer's first question is "one cycle, so what?".
+The plugin will additionally sum, per site, the CMEmu latency of every
+executed variable-latency instruction (completion cycle of the result), and
+the analysis compares the per-region totals across ciphertext classes within
+one key.
+
+- H8. On the stock Cortex-M3 image the modelled variable-latency cycle total of
+  a decapsulation differs between ciphertexts of one key (maximum spread of at
+  least 1 cycle) for ML-KEM-512, 768 and 1024 at every optimisation level, and
+  is exactly 0 on the repaired image. Falsified if the stock spread is 0
+  anywhere or the repaired spread is non-zero anywhere.
+- H9. The spread is small: at most 8 cycles in a decapsulation of more than a
+  million instructions, i.e. a relative amplitude below 1e-5. Falsified if
+  larger. This is a scale statement about what the model implies, not a claim
+  that the difference is observable or exploitable.
+
