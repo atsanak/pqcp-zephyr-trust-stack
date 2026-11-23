@@ -27,13 +27,33 @@
 #define CT_TRACE_KEYS 8U
 #define CT_TRACE_CTS 6U /* 1 valid + 5 corrupted ciphertexts per key */
 
-static uint8_t public_key[PQCP_MLKEM_768_PK_SIZE];
-static uint8_t secret_key[PQCP_MLKEM_768_SK_SIZE];
-static uint8_t valid_ct[PQCP_MLKEM_768_CT_SIZE];
+#if defined(CONFIG_PQCP_MLKEM_LEVEL_1024)
+#define CT_LEVEL PQCP_MLKEM_1024
+#define CT_PK_SIZE PQCP_MLKEM_1024_PK_SIZE
+#define CT_SK_SIZE PQCP_MLKEM_1024_SK_SIZE
+#define CT_CT_SIZE PQCP_MLKEM_1024_CT_SIZE
+#define CT_ALG "MLKEM-1024"
+#elif defined(CONFIG_PQCP_MLKEM_LEVEL_512)
+#define CT_LEVEL PQCP_MLKEM_512
+#define CT_PK_SIZE PQCP_MLKEM_512_PK_SIZE
+#define CT_SK_SIZE PQCP_MLKEM_512_SK_SIZE
+#define CT_CT_SIZE PQCP_MLKEM_512_CT_SIZE
+#define CT_ALG "MLKEM-512"
+#else
+#define CT_LEVEL PQCP_MLKEM_768
+#define CT_PK_SIZE PQCP_MLKEM_768_PK_SIZE
+#define CT_SK_SIZE PQCP_MLKEM_768_SK_SIZE
+#define CT_CT_SIZE PQCP_MLKEM_768_CT_SIZE
+#define CT_ALG "MLKEM-768"
+#endif
+
+static uint8_t public_key[CT_PK_SIZE];
+static uint8_t secret_key[CT_SK_SIZE];
+static uint8_t valid_ct[CT_CT_SIZE];
 /* Every region decapsulates from this one buffer, so data addresses of the
  * ciphertext can never differ between regions by construction.
  */
-static uint8_t work_ct[PQCP_MLKEM_768_CT_SIZE];
+static uint8_t work_ct[CT_CT_SIZE];
 static uint8_t shared_secret[PQCP_MLKEM_SS_SIZE];
 /* FNV-1a over every shared secret produced (outside the traced regions): a
  * mitigated build must print the same digest as the stock build. 32-bit
@@ -78,7 +98,7 @@ static void run_region(uint32_t label)
 	const unsigned int irq = irq_lock();
 
 	pqcp_ct_region_begin(label);
-	(void)pqcp_mlkem_decapsulate(PQCP_MLKEM_768, work_ct, secret_key,
+	(void)pqcp_mlkem_decapsulate(CT_LEVEL, work_ct, secret_key,
 				     shared_secret);
 	pqcp_ct_region_end(label);
 	irq_unlock(irq);
@@ -96,10 +116,10 @@ ZTEST(pqcp_ct_trace, test_decap_relational_trace_regions)
 {
 	for (uint32_t key = 0U; key < CT_TRACE_KEYS; ++key) {
 		seed_for_key(key);
-		zassert_equal(pqcp_mlkem_keypair(PQCP_MLKEM_768, public_key,
+		zassert_equal(pqcp_mlkem_keypair(CT_LEVEL, public_key,
 						 secret_key),
 			      PQCP_MLKEM_SUCCESS);
-		zassert_equal(pqcp_mlkem_encapsulate(PQCP_MLKEM_768,
+		zassert_equal(pqcp_mlkem_encapsulate(CT_LEVEL,
 						     public_key, valid_ct,
 						     shared_secret),
 			      PQCP_MLKEM_SUCCESS);
@@ -116,7 +136,7 @@ ZTEST(pqcp_ct_trace, test_decap_relational_trace_regions)
 		}
 	}
 	printk("PQCP_CT_SSDIGEST 0x%08x\n", ss_digest);
-	printk("PQCP_CT_TRACE_APP alg=MLKEM-768 keys=%u regions=%u\n",
+	printk("PQCP_CT_TRACE_APP alg=%s keys=%u regions=%u\n", CT_ALG,
 	       CT_TRACE_KEYS, CT_TRACE_KEYS * CT_TRACE_CTS);
 }
 

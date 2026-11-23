@@ -2285,6 +2285,8 @@ def main() -> int:
                 "--alg",
                 "mlkem",
                 "--mitigated",
+                "--kem-level",
+                "all",
                 "--opt",
                 "default",
                 "--opt",
@@ -2293,7 +2295,7 @@ def main() -> int:
                 "debug",
             ],
             cwd=module_path,
-            timeout=2400,
+            timeout=4800,
             success_markers=("PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS",),
         ),
         Step(

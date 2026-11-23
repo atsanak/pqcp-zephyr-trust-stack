@@ -1696,12 +1696,13 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail", (cross, kem, dsa, only))
 
     KEM_SELFTEST = ("PQCP_MLKEM_FIXED_LATENCY_SELFTEST PASS domain=3329 "
-                    "stock_cmemu_classes=2 fixed_cmemu_classes=1\n")
+                    "stock_cmemu_classes=2 fixed_cmemu_classes=1 variants=2\n")
     KEM_FIX = "".join(
-        f"PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS alg=MLKEM-768 "
+        f"PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS alg=MLKEM-{lv} "
         f"target=cortex-m3 opt={opt} stock_cmemu_only=1 "
         f"patched_documented_sites=0 patched_cmemu_sites=0 "
         f"ss_digest_match=1 insn_overhead_pct={pct}\n"
+        for lv in (512, 768, 1024)
         for opt, pct in (("default", 0.03), ("speed", 0.06), ("debug", 0.12)))
 
     def _eval_kem(self, selftest: str, body: str, ceiling=None) -> dict:
@@ -1733,7 +1734,8 @@ class AssuranceLedgerTests(unittest.TestCase):
     def test_kem_mitigation_passes_and_records_overhead(self) -> None:
         result = self._eval_kem(self.KEM_SELFTEST, self.KEM_FIX)
         self.assertEqual(result["status"], "pass", result.get("failure_reason"))
-        self.assertEqual(result["details"]["insn_overhead_pct"]["debug"], 0.12)
+        self.assertEqual(
+            result["details"]["insn_overhead_pct"]["MLKEM-1024/debug"], 0.12)
 
     def test_kem_mitigation_fails_on_weak_or_missing_evidence(self) -> None:
         st, g = self.KEM_SELFTEST, self.KEM_FIX
@@ -1745,8 +1747,9 @@ class AssuranceLedgerTests(unittest.TestCase):
             (st, g.replace("patched_documented_sites=0", "patched_documented_sites=2"), None),
             (st, g.replace("stock_cmemu_only=1", "stock_cmemu_only=0"), None),
             (st, g.replace("ss_digest_match=1", "ss_digest_match=0"), None),
-            (st, g.replace("opt=debug", "opt=default"), None),
+            (st, g.replace("alg=MLKEM-1024", "alg=MLKEM-768"), None),
             (st, g.replace("PASS alg", "FAIL alg"), None),
+            (st.replace(" variants=2", ""), g, None),
             (st, "noise\n", None),
             (st, g, {"default": 0.01, "speed": 0.2, "debug": 0.3}),
         ):

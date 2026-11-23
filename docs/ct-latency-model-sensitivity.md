@@ -143,3 +143,19 @@ the 11-bit one (constant 5284526080, which does not fit 32 bits).
   site under either model for 1024, with an unchanged shared-secret digest and
   under 0.5% instruction overhead. Falsified otherwise.
 
+### Results of the second registration
+
+Cortex-M3 image, QEMU, three optimisation levels, stock versus repaired:
+
+| parameter set | multiply | stock CMEmu-only sites | repaired failing sites (both models) | digest | instruction overhead |
+|---|---|---|---|---|---|
+| ML-KEM-512 | d10 | 1 | 0 | equal | +0.03 / +0.06 / +0.12% |
+| ML-KEM-768 | d10 | 1 | 0 | equal | +0.03 / +0.06 / +0.12% |
+| ML-KEM-1024 | d11 | 1 | 0 | equal | -0.01 / +0.06 / +0.11% |
+
+H5, H6 and H7 all hold. The documented model reports no site at any parameter
+set, so the disagreement is the same one-per-image pattern everywhere: the
+post-KyberSlash compression multiply, in `mlk_poly_compress_d10_c` for 512 and
+768 and `mlk_poly_compress_d11_c` for 1024. The negative figure at 1024 -O is
+a code-generation difference of a few instructions, not a saving.
+

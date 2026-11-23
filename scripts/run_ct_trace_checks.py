@@ -64,12 +64,14 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                timeout: int = 300, app: str = TEST_APP_RELATIVE,
                marker: str = DEVICE_MARKER,
                event_symbol: str | None = None,
-               board: str = "qemu_x86_64") -> str:
+               board: str = "qemu_x86_64",
+               extra_cmake: tuple = ()) -> str:
     """Build `module`'s trace app, run it under the plugin, return the trace."""
     run_command(
         [*west_cmd, "build", "-p", "always", "-b", board,
          str(module / app), "-d", str(build_dir), "--",
-         f"-DZEPHYR_EXTRA_MODULES={module}", *OPT_FLAGS[opt]],
+         f"-DZEPHYR_EXTRA_MODULES={module}", *OPT_FLAGS[opt],
+         *extra_cmake],
         cwd=west_root, env=env, timeout=600)
     if board == "qemu_x86_64":
         run_command(["ninja", "-C", str(build_dir),
@@ -117,6 +119,18 @@ CORE_BOARDS = {"cortex-m3": "mps2/an385", "cortex-m4": "mps2/an386"}
 # M3 long multiplies terminate early on operand size (ARM DDI 0337); M4's
 # are single-cycle. Both share the variable-latency divider.
 LONG_MUL_VARIABLE = {"cortex-m3": True, "cortex-m4": False}
+
+
+def kem_level_kwargs(level: int, out: Path) -> dict:
+    """Marker and Kconfig overlay for one ML-KEM parameter set."""
+    if level == 768:
+        return {}
+    overlay = (out / f"kem{level}.conf").resolve()
+    overlay.write_text("CONFIG_PQCP_MLKEM_LEVEL_768=n\n"
+                       f"CONFIG_PQCP_MLKEM_LEVEL_{level}=y\n",
+                       encoding="utf-8")
+    return {"marker": f"PQCP_CT_TRACE_APP alg=MLKEM-{level}",
+            "extra_cmake": (f"-DEXTRA_CONF_FILE={overlay}",)}
 
 
 def trace_core(module: Path, build_dir: Path, outfile: Path, *, opt: str,
@@ -176,21 +190,24 @@ def report_models(text: str, elf: Path, env: dict, alg: str, opt: str,
 def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
              plugin: Path) -> int:
     target = args.target
+    level = 768 if args.kem_level == "all" else int(args.kem_level)
+    alg = f"MLKEM-{level}"
+    kw = kem_level_kwargs(level, out)
     failed = False
     for opt in args.opt or ["default", "speed", "debug"]:
-        print(f"[ct-trace] ML-KEM-768 decapsulation on {target} "
+        print(f"[ct-trace] ML-KEM decapsulation on {target} "
               f"({CORE_BOARDS[target]}), optimisation={opt}")
         text = trace_core(MODULE_PATH, out / f"build-{target}-{opt}",
                           out / f"trace-{target}-{opt}.txt", opt=opt,
                           target=target, west_root=west_root,
-                          west_cmd=west_cmd, env=env, plugin=plugin)
+                          west_cmd=west_cmd, env=env, plugin=plugin, **kw)
         analysis = cta.analyze_vlat(
             cta.parse_trace(text), cta.parse_vlat(text),
             long_mul_variable=LONG_MUL_VARIABLE[target])
-        print(cta.format_vlat_marker(analysis, ALG, opt, target))
+        print(cta.format_vlat_marker(analysis, alg, opt, target))
         if target == CORTEX_M3_TARGET:
             report_models(text, out / f"build-{target}-{opt}" / "zephyr" /
-                          "zephyr.elf", env, ALG, opt, target,
+                          "zephyr.elf", env, alg, opt, target,
                           declassified=False)
         for pc, kind in analysis.candidate_sites:
             print(f"[ct-trace] candidate {cta.VLAT_KINDS[kind]} at "
@@ -293,20 +310,25 @@ def run_core_mlkem_mitigated(args, out: Path, west_root: Path,
     failed = False
     with tempfile.TemporaryDirectory(prefix="pqcp-ct-kemfix-") as tmp:
         patched = fixed.materialise(Path(tmp) / "module")
-        for opt in args.opt or ["default", "speed", "debug"]:
+        levels = (512, 768, 1024) if args.kem_level == "all" else \
+            (int(args.kem_level),)
+        for level, opt in [(lv, o) for lv in levels for o in
+                           (args.opt or ["default", "speed", "debug"])]:
+            alg = f"MLKEM-{level}"
+            kw = kem_level_kwargs(level, out)
             res = {}
             for name, module in (("stock", MODULE_PATH),
                                  ("patched", patched)):
                 print(f"[ct-trace] ML-KEM-768 decapsulation on {target}, "
                       f"{name} build, optimisation={opt}")
-                build = out / f"build-{target}-kem-{name}-{opt}"
+                build = out / f"build-{target}-kem{level}-{name}-{opt}"
                 text = trace_core(module, build,
-                                  out / f"trace-{target}-kem-{name}-{opt}.txt",
+                                  out / f"trace-{target}-kem{level}-{name}-{opt}.txt",
                                   opt=opt, target=target,
                                   west_root=west_root, west_cmd=west_cmd,
-                                  env=env, plugin=plugin)
+                                  env=env, plugin=plugin, **kw)
                 models = report_models(text, build / "zephyr" / "zephyr.elf",
-                                       env, ALG, f"{opt}-{name}", target,
+                                       env, alg, f"{opt}-{name}", target,
                                        declassified=False)
                 log = (build / "ct_trace_device.log").read_text(
                     errors="replace")
@@ -324,7 +346,7 @@ def run_core_mlkem_mitigated(args, out: Path, west_root: Path,
             if sd is None or sd != pd:
                 issues.append(f"shared-secret digest differs: {sd} vs {pd}")
             print(f"PQCP_CT_TRACE_VLAT_MITIGATION_KEM "
-                  f"{'FAIL' if issues else 'PASS'} alg={ALG} target={target} "
+                  f"{'FAIL' if issues else 'PASS'} alg={alg} target={target} "
                   f"opt={opt} stock_cmemu_only={len(sm.cmemu_only)} "
                   f"patched_documented_sites={len(pm.documented)} "
                   f"patched_cmemu_sites={len(pm.cmemu)} "
@@ -472,6 +494,10 @@ def main() -> int:
                         help="x86_64: qemu_x86_64 (default); cortex-m3 / "
                              "cortex-m4: mps2/an385 / mps2/an386 with the "
                              "operand-latency channel")
+    parser.add_argument("--kem-level", choices=("512", "768", "1024", "all"),
+                        default="768",
+                        help="ML-KEM parameter set (Cortex-M3); `all` runs "
+                             "the three with --mitigated")
     parser.add_argument("--measure", action="store_true",
                         help="Cortex-M signing: exit 0 when the only "
                              "findings are documented-model long-multiply "

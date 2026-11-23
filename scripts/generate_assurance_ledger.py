@@ -2357,25 +2357,28 @@ def evaluate_ct_trace_cortex_m_kem_mitigation(
     m = re.search(r"PQCP_MLKEM_FIXED_LATENCY_SELFTEST PASS domain=(\d+) "
                   r"stock_cmemu_classes=(\d+) fixed_cmemu_classes=1",
                   bodies[steps[0]])
-    if not m or int(m.group(1)) != 3329 or int(m.group(2)) < 2:
+    if (not m or int(m.group(1)) != 3329 or int(m.group(2)) < 2 or
+            "variants=2" not in bodies[steps[0]]):
         problems.append("host self-test missing or does not cover the "
                         "whole domain with a live stock distinction")
     good: dict[str, float] = {}
     for m in re.finditer(
-            r"PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS alg=MLKEM-768 "
+            r"PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS alg=(MLKEM-\d+) "
             r"target=cortex-m3 opt=(\S+) stock_cmemu_only=(\d+) "
             r"patched_documented_sites=0 patched_cmemu_sites=0 "
             r"ss_digest_match=1 insn_overhead_pct=(-?[0-9.]+)",
             bodies[steps[1]]):
-        if int(m.group(2)) >= 1:
-            good[m.group(1)] = float(m.group(3))
-    required = {"default", "speed", "debug"}
+        if int(m.group(3)) >= 1:
+            good[f"{m.group(1)}/{m.group(2)}"] = float(m.group(4))
+    required = {f"MLKEM-{lv}/{o}" for lv in (512, 768, 1024)
+                for o in ("default", "speed", "debug")}
     if not required <= set(good):
         problems.append("repair not verified at: "
                         + ", ".join(sorted(required - set(good))))
-    for opt, pct in sorted(good.items()):
+    for key, pct in sorted(good.items()):
+        opt = key.split("/")[1]
         if opt in ceiling and pct > ceiling[opt]:
-            problems.append(f"instruction overhead at {opt} grew: {pct} > "
+            problems.append(f"instruction overhead at {key} grew: {pct} > "
                             f"ceiling {ceiling[opt]}")
     details["insn_overhead_pct"] = dict(sorted(good.items()))
     if problems:
