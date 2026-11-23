@@ -114,10 +114,8 @@ uint32_t pqcp_evidence_continuity_next_generation(
 	if (next == 0U || next == UINT32_MAX) {
 		next = 1U;
 	}
+	/* next is in [1, UINT32_MAX - 1] here, so next + 1U cannot wrap to 0. */
 	*generation = next + 1U;
-	if (*generation == 0U) {
-		*generation = 1U;
-	}
 	return next;
 }
 
