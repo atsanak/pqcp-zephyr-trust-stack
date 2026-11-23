@@ -226,3 +226,26 @@ Prediction from the theory: key-independent to within sampling noise.
 Either outcome is reported: a significant dependence would be a finding about
 the rejection channel, a null result is a measured bound on it.
 
+### Results of the fourth registration
+
+Host build of mldsa-native, ML-DSA-65, deterministic signing, 200 keys x 5000
+messages (one million signatures):
+
+- pooled mean 5.144 attempts per signature;
+- chi-square homogeneity of the per-key attempt distributions: chi2 = 5481.9
+  on 5373 degrees of freedom, p = 0.147;
+- spread of the per-key means 1.30% (relative standard deviation), against
+  about 1.27% expected from sampling noise alone for a distribution of this
+  width, so no key-to-key variation is resolved beyond noise (the excess is
+  below roughly 0.5%);
+- correlation of the per-key mean with sum|s1|, sum|s2|, sum|t0|: r = 0.054,
+  -0.010, 0.128 (|r| = 0.139 is the 5% two-sided limit for 200 keys).
+
+H10 is falsified (p >= 1e-3) and H11 does not apply. The measured reading
+matches the theory: at this resolution the signing-attempt count is
+key-independent for this implementation. This is a null result with a stated
+resolution, not a proof: a dependence below about 0.5% of the mean, or one
+specific to rare keys, would not show up in 200 keys; it covers ML-DSA-65 only,
+a host build (not the Cortex-M image), deterministic signing, random keys (not
+adversarial ones) and random messages.
+

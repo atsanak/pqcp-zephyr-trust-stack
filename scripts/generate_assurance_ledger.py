@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2418,6 +2418,66 @@ def evaluate_ct_trace_cortex_m_kem_mitigation(
         commands=commands, details=details)
 
 
+def evaluate_mldsa_rejection_independence(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+) -> dict[str, object]:
+    """Bind security.mldsa_rejection_independence to the reduced study.
+
+    The statistics self-test must pass and the homogeneity test over the
+    per-key attempt histograms must not reject at p >= 1e-3, over a study big
+    enough to mean something. A regression guard, not a proof.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["scripts/mldsa_rejection_study.py"]
+    commands = ["python3 scripts/mldsa_rejection_study.py --selftest",
+                "python3 scripts/mldsa_rejection_study.py --keys 60 --messages 3000"]
+    steps = ("mldsa rejection selftest", "mldsa rejection study")
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in steps:
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+    problems = []
+    if "PQCP_MLDSA_REJECTION_SELFTEST PASS" not in bodies[steps[0]]:
+        problems.append("statistics self-test did not pass")
+    m = re.search(
+        r"PQCP_MLDSA_REJECTION_STUDY CONSISTENT_WITH_INDEPENDENT keys=(\d+) "
+        r"msgs=(\d+) pooled_mean=([0-9.]+) key_mean_sd=[0-9.]+ "
+        r"relative_sd=([0-9.]+) chi2=[0-9.]+ dof=(\d+) p=([0-9.eE+-]+)",
+        bodies[steps[1]])
+    if not m:
+        problems.append("study did not report CONSISTENT_WITH_INDEPENDENT")
+    else:
+        keys, msgs, mean, rsd, dof, p = (int(m.group(1)), int(m.group(2)),
+                                          float(m.group(3)), float(m.group(4)),
+                                          int(m.group(5)), float(m.group(6)))
+        if keys < 50 or msgs < 2000 or dof < 100:
+            problems.append(f"study too small: {keys} keys x {msgs} messages")
+        if p < 1e-3:
+            problems.append(f"attempt distributions differ between keys "
+                            f"(p={p})")
+        if not 4.0 <= mean <= 6.5 or rsd > 0.05:
+            problems.append(f"implausible attempt statistics mean={mean} "
+                            f"relative_sd={rsd}")
+        details.update({"keys": keys, "messages": msgs, "pooled_mean": mean,
+                        "relative_sd": rsd, "p": p})
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3484,6 +3544,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_kem_mitigation": lambda spec: evaluate_ct_trace_cortex_m_kem_mitigation(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.mldsa_rejection_independence": lambda spec: evaluate_mldsa_rejection_independence(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(

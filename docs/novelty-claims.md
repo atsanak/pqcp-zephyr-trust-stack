@@ -743,3 +743,35 @@ is why the finding is stated as a model disagreement, not an attack. The ledger
 requires stock spread of at least 1 (positive control), repaired spread of 0,
 and a spread of at most 8 cycles and 1e-5 relative.
 
+## Claim 18: the signing-attempt count is key-independent at a stated resolution
+
+A measurement, not a model. ML-DSA signing repeats until its checks pass and
+the number of attempts is visible to a timing observer; the standard argument
+makes the z-norm check key-independent but only argues the r0, c*t0 and hint
+checks to be close to key-independent. `scripts/mldsa_rejection_study.py`
+builds the real mldsa-native (ML-DSA-65, deterministic signing, private copy
+exporting the attempt counter), signs M messages with each of K keys and tests
+the per-key attempt histograms for homogeneity (chi-square, implemented
+without SciPy and checked against closed forms) and the per-key mean against
+key statistics. Hypotheses were registered first
+(`docs/ct-latency-model-sensitivity.md`). Result at 200 keys x 5000 messages:
+chi2 = 5481.9 on 5373 dof, p = 0.147; the spread of per-key means (1.30%)
+equals the sampling-noise expectation (about 1.27%); correlations with
+sum|s1|, sum|s2|, sum|t0| are 0.054, -0.010, 0.128 (none significant).
+Ledger claim `security.mldsa_rejection_independence` (schema 21; step
+`mldsa rejection study`, a reduced 60 keys x 3000 messages run in the full
+gate, requires the homogeneity test not to reject at p >= 1e-3 and the
+self-test of the statistics).
+
+Prior art: the Dilithium/FIPS 204 analysis of the rejection probability and
+the rejected-signature leakage literature (for example ePrint 2025/195); not
+checked here whether an implementation-level per-key measurement like this
+exists. Not new: the theory. New here (to the extent not found in prior work):
+a reproducible, gated measurement of the key-dependence of the attempt count
+on the shipped implementation, with a null result and its resolution.
+
+Non-claims: a null result at a stated resolution, not a proof; a dependence
+below about 0.5% of the mean or specific to rare keys would not be seen in 200
+keys; ML-DSA-65 only; host build, not the target image; random keys and random
+messages (not adversarial); deterministic signing; no timing measurement.
+

@@ -1767,6 +1767,56 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_kem(selftest, body, ceiling)
             self.assertEqual(result["status"], "fail", (selftest, body, ceiling))
 
+    REJ_SELF = "PQCP_MLDSA_REJECTION_SELFTEST PASS p_same=0.299 p_diff=0\n"
+    REJ_STUDY = ("PQCP_MLDSA_REJECTION_STUDY CONSISTENT_WITH_INDEPENDENT "
+                 "keys=60 msgs=3000 pooled_mean=5.1443 key_mean_sd=0.1 "
+                 "relative_sd=0.0194 chi2=1500.0 dof=1500 p=0.4 r_s1=0.05 "
+                 "r_s2=0.0 r_t0=0.1\n")
+
+    def _eval_rej(self, selftest: str, study: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, text, name in (
+                ("mldsa rejection selftest", selftest, "01.log"),
+                ("mldsa rejection study", study, "02.log"),
+            ):
+                (manifest_path.parent / name).write_text(text, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                    "size_bytes": len(text.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            spec = {"id": "security.mldsa_rejection_independence",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_mldsa_rejection_independence(
+                spec, transcript_manifest=manifest_path)
+
+    def test_rejection_study_passes(self) -> None:
+        result = self._eval_rej(self.REJ_SELF, self.REJ_STUDY)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["keys"], 60)
+
+    def test_rejection_study_fails_on_weak_or_dependent_evidence(self) -> None:
+        st = self.REJ_STUDY
+        for selftest, study in (
+            ("noise\n", st),
+            (self.REJ_SELF, "noise\n"),
+            (self.REJ_SELF, st.replace("CONSISTENT_WITH_INDEPENDENT", "DEPENDENT")),
+            (self.REJ_SELF, st.replace("p=0.4", "p=0.0001")),
+            (self.REJ_SELF, st.replace("keys=60", "keys=5")),
+            (self.REJ_SELF, st.replace("msgs=3000", "msgs=100")),
+            (self.REJ_SELF, st.replace("dof=1500", "dof=10")),
+            (self.REJ_SELF, st.replace("pooled_mean=5.1443", "pooled_mean=2.0")),
+            (self.REJ_SELF, st.replace("relative_sd=0.0194", "relative_sd=0.2")),
+        ):
+            result = self._eval_rej(selftest, study)
+            self.assertEqual(result["status"], "fail", (selftest, study))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "
