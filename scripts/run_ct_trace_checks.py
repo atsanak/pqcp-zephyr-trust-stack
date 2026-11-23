@@ -277,6 +277,65 @@ def read_sig_digest(build_dir: Path) -> str | None:
     return f"{match.group(1)}/{match.group(2)}" if match else None
 
 
+def run_core_mlkem_mitigated(args, out: Path, west_root: Path,
+                             west_cmd: list, env: dict,
+                             plugin: Path) -> int:
+    """Claim 17: the operand-offset repair of the compress_d10 multiply must
+    remove the CMEmu-only site, keep the documented model clean, leave the
+    shared secrets unchanged and cost only a few instructions."""
+    import mlkem_fixed_latency as fixed  # noqa: PLC0415
+
+    target = args.target
+    problems = fixed.check()
+    if problems:
+        print("\n".join(f"[ct-trace] {p}" for p in problems))
+        return 1
+    failed = False
+    with tempfile.TemporaryDirectory(prefix="pqcp-ct-kemfix-") as tmp:
+        patched = fixed.materialise(Path(tmp) / "module")
+        for opt in args.opt or ["default", "speed", "debug"]:
+            res = {}
+            for name, module in (("stock", MODULE_PATH),
+                                 ("patched", patched)):
+                print(f"[ct-trace] ML-KEM-768 decapsulation on {target}, "
+                      f"{name} build, optimisation={opt}")
+                build = out / f"build-{target}-kem-{name}-{opt}"
+                text = trace_core(module, build,
+                                  out / f"trace-{target}-kem-{name}-{opt}.txt",
+                                  opt=opt, target=target,
+                                  west_root=west_root, west_cmd=west_cmd,
+                                  env=env, plugin=plugin)
+                models = report_models(text, build / "zephyr" / "zephyr.elf",
+                                       env, ALG, f"{opt}-{name}", target,
+                                       declassified=False)
+                log = (build / "ct_trace_device.log").read_text(
+                    errors="replace")
+                m = re.search(r"PQCP_CT_SSDIGEST (0x[0-9a-f]{8})", log)
+                res[name] = (models, m.group(1) if m else None,
+                             sum(r.insns for r in cta.parse_trace(text)))
+            (sm, sd, si), (pm, pd, pi) = res["stock"], res["patched"]
+            overhead = 100.0 * (pi - si) / max(si, 1)
+            issues = []
+            if not sm.cmemu_only:
+                issues.append("stock build shows no CMEmu-only site "
+                              "(positive control lost)")
+            if pm.documented or pm.cmemu:
+                issues.append("patched build still has a failing site")
+            if sd is None or sd != pd:
+                issues.append(f"shared-secret digest differs: {sd} vs {pd}")
+            print(f"PQCP_CT_TRACE_VLAT_MITIGATION_KEM "
+                  f"{'FAIL' if issues else 'PASS'} alg={ALG} target={target} "
+                  f"opt={opt} stock_cmemu_only={len(sm.cmemu_only)} "
+                  f"patched_documented_sites={len(pm.documented)} "
+                  f"patched_cmemu_sites={len(pm.cmemu)} "
+                  f"ss_digest_match={int(sd is not None and sd == pd)} "
+                  f"insn_overhead_pct={overhead:.2f}")
+            for issue in issues:
+                print(f"[ct-trace] FAIL: {issue}")
+            failed = failed or bool(issues)
+    return 1 if failed else 0
+
+
 def run_core_mldsa_mitigated(args, out: Path, west_root: Path,
                              west_cmd: list, env: dict,
                              plugin: Path) -> int:
@@ -461,6 +520,9 @@ def main() -> int:
             return m3_leaks.rediscover(run_m3_trace,
                                        (args.opt or ["default"])[0],
                                        only or None)
+        if args.alg == "mlkem" and args.mitigated:
+            return run_core_mlkem_mitigated(args, out, west_root, west_cmd,
+                                            env, plugin)
         if args.alg == "mldsa" and args.mitigated:
             return run_core_mldsa_mitigated(args, out, west_root, west_cmd,
                                             env, plugin)

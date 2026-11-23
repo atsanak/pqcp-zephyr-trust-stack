@@ -35,6 +35,20 @@ static uint8_t valid_ct[PQCP_MLKEM_768_CT_SIZE];
  */
 static uint8_t work_ct[PQCP_MLKEM_768_CT_SIZE];
 static uint8_t shared_secret[PQCP_MLKEM_SS_SIZE];
+/* FNV-1a over every shared secret produced (outside the traced regions): a
+ * mitigated build must print the same digest as the stock build. 32-bit
+ * shifts and adds only, so the harness adds no long multiply. */
+static uint32_t ss_digest = 0x811c9dc5U;
+
+static void digest_secret(void)
+{
+	for (size_t i = 0U; i < sizeof(shared_secret); ++i) {
+		ss_digest ^= shared_secret[i];
+		ss_digest += (ss_digest << 1) + (ss_digest << 4) +
+			     (ss_digest << 7) + (ss_digest << 8) +
+			     (ss_digest << 24);
+	}
+}
 
 /* The plugin reads the label from the first argument register (rdi). */
 __attribute__((noinline)) void pqcp_ct_region_begin(uint32_t label)
@@ -98,8 +112,10 @@ ZTEST(pqcp_ct_trace, test_decap_relational_trace_regions)
 				work_ct[sizeof(work_ct) - c] ^= 0x5AU;
 			}
 			run_region((key << 8) | c);
+			digest_secret();
 		}
 	}
+	printk("PQCP_CT_SSDIGEST 0x%08x\n", ss_digest);
 	printk("PQCP_CT_TRACE_APP alg=MLKEM-768 keys=%u regions=%u\n",
 	       CT_TRACE_KEYS, CT_TRACE_KEYS * CT_TRACE_CTS);
 }
