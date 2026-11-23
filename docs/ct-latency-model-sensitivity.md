@@ -200,3 +200,29 @@ presented as a model disagreement and not as an attack. The repaired image
 spends a constant, secret-independent number of variable-latency cycles
 (for example 4608 against 2302-2304 for 768).
 
+## Fourth registration: does the signing-attempt count depend on the key?
+
+A different question, with a measurement instead of a model: ML-DSA signing
+repeats until the checks pass, and the number of attempts is visible to a
+timing observer. FIPS 204 and the Dilithium analysis argue that the z-norm
+check accepts with a key-independent probability (z = y + c*s1 with y uniform
+over a range wider than the bound on c*s1), while the r0, c*t0 and hint-count
+checks depend on s2 and t0 and are only argued to be close to key-independent.
+`scripts/mldsa_rejection_study.py` counts attempts on a host build of the real
+mldsa-native (ML-DSA-65, deterministic signing, a private patched copy that
+exports the attempt counter) over K keys and M messages per key and tests the
+per-key attempt distributions for homogeneity (chi-square) and the per-key mean
+for correlation with key statistics (sum of |s1|, |s2|, |t0| coefficients).
+
+Prediction from the theory: key-independent to within sampling noise.
+
+- H10. The attempt-count distribution differs between keys more than sampling
+  noise allows (chi-square homogeneity over K = 200 keys, M = 5000 messages,
+  p < 1e-3). Falsified if p >= 1e-3: the data are then consistent with a
+  key-independent attempt distribution at this resolution.
+- H11. Conditional on H10, the per-key mean attempt count correlates with at
+  least one key statistic with |Pearson r| >= 0.2. Falsified otherwise.
+
+Either outcome is reported: a significant dependence would be a finding about
+the rejection channel, a null result is a measured bound on it.
+
