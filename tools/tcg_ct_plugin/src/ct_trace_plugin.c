@@ -81,6 +81,9 @@ static uint64_t h_pc, h_addr, h_line, h_div;
 static uint64_t seg_index;
 static uint64_t sg_insns, sg_loads, sg_stores, sg_ndiv;
 static uint64_t sg_pc, sg_addr, sg_line, sg_div;
+/* Cortex-M per-segment latency streams: div bit-lengths, long-multiply
+ * predicate, exact operands; each mixed with the instruction address. */
+static uint64_t sg_vdiv, sg_vmul, sg_vop, sg_nvl;
 
 static int is_arm;
 static struct qemu_plugin_register *arm_regs[15]; /* r0..r12, sp, lr */
@@ -133,12 +136,16 @@ static void reset_region(void)
 	seg_index = 0U;
 	sg_insns = sg_loads = sg_stores = sg_ndiv = 0U;
 	sg_pc = sg_addr = sg_line = sg_div = FNV_OFFSET;
+	sg_vdiv = sg_vmul = sg_vop = FNV_OFFSET;
+	sg_nvl = 0U;
 }
 
 static void reset_segment(void)
 {
 	sg_insns = sg_loads = sg_stores = sg_ndiv = 0U;
 	sg_pc = sg_addr = sg_line = sg_div = FNV_OFFSET;
+	sg_vdiv = sg_vmul = sg_vop = FNV_OFFSET;
+	sg_nvl = 0U;
 }
 
 /*
@@ -166,16 +173,24 @@ static uint64_t read_reg(struct qemu_plugin_register *reg)
 static void emit_segment(uint64_t site, uint64_t len, uint64_t cls)
 {
 	if (out_file != NULL) {
+		char vlat[128] = "";
+
+		if (is_arm) {
+			snprintf(vlat, sizeof(vlat),
+				 " nvl=%" PRIu64 " h_vdiv=%016" PRIx64
+				 " h_vmul=%016" PRIx64 " h_vop=%016" PRIx64,
+				 sg_nvl, sg_vdiv, sg_vmul, sg_vop);
+		}
 		fprintf(out_file,
 			"PQCP_CT_SEG region=%" PRIu64 " seq=%" PRIu64
 			" site=%" PRIu64 " len=%" PRIu64 " cls=%" PRIu64
 			" insns=%" PRIu64 " loads=%" PRIu64 " stores=%" PRIu64
 			" ndiv=%" PRIu64 " h_pc=%016" PRIx64
 			" h_addr=%016" PRIx64 " h_line=%016" PRIx64
-			" h_div=%016" PRIx64 "\n",
+			" h_div=%016" PRIx64 "%s\n",
 			region_index, seg_index, site, len, cls, sg_insns,
 			sg_loads, sg_stores, sg_ndiv, sg_pc, sg_addr, sg_line,
-			sg_div);
+			sg_div, vlat);
 		fflush(out_file);
 	}
 	seg_index++;
@@ -284,16 +299,17 @@ static void insn_exec(unsigned int cpu_index, void *udata)
 
 /*
  * Declassification event: closes the current segment. Arguments are the
- * first three C arguments (rdi = site, rsi = length, rdx = value class).
+ * first three C arguments, 32 bits each (rdi/r0 = site, rsi/r1 = length,
+ * rdx/r2 = value class).
  */
 static void insn_exec_event(unsigned int cpu_index, void *udata)
 {
 	(void)cpu_index;
 	(void)udata;
 	if (counting) {
-		const uint64_t site = read_reg(reg_rdi);
-		const uint64_t len = read_reg(reg_rsi);
-		const uint64_t cls = read_reg(reg_rdx);
+		const uint64_t site = read_reg(reg_rdi) & 0xffffffffU;
+		const uint64_t len = read_reg(reg_rsi) & 0xffffffffU;
+		const uint64_t cls = read_reg(reg_rdx) & 0xffffffffU;
 
 		emit_segment(site, len, cls);
 	}
@@ -440,6 +456,15 @@ static void insn_exec_vlat(unsigned int cpu_index, void *udata)
 		const uint64_t mb = magnitude(b, sgn);
 		struct vlat_site *v = vlat_lookup(vi->pc, vi->kind);
 
+		sg_nvl++;
+		sg_vop = mix(mix(mix(sg_vop, vi->pc), a), b);
+		if (vi->kind <= 2U) {
+			sg_vdiv = mix(mix(mix(sg_vdiv, vi->pc), bitlen(ma)),
+				      bitlen(mb));
+		} else {
+			sg_vmul = mix(mix(sg_vmul, vi->pc),
+				      (ma < 65536U) * 2U + (mb < 65536U));
+		}
 		if (v != NULL) {
 			v->n++;
 			v->h_op = mix(mix(v->h_op, a), b);
