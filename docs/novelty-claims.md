@@ -617,7 +617,7 @@ mitigate, then verify the mitigation with the same instrument.
 fail loudly if upstream moves) so that every signed 32x32-to-64 product in the
 Montgomery reduction, `mld_fqmul`, `mld_fqscale`, the pointwise product and
 the matrix-vector accumulator is built from four 16x16 partial products
-computed with the 32-bit `MUL` (single-cycle on every Cortex-M) plus shifts
+computed with the 32-bit `MUL` (single-cycle on Cortex-M3/M4, constant-time on every Cortex-M) plus shifts
 and adds, instead of `SMULL`. Build the copy with
 `-DZEPHYR_EXTRA_MODULES=<copy>`; it is opt-in, not the default build.
 
@@ -648,7 +648,11 @@ but that is not measured here. The overhead is ratcheted by
 `scripts/ct_vlat_mitigation_baseline.json` so it may only shrink.
 
 Prior art: fixed-latency multiplication from 16-bit partial products is
-standard practice (BearSSL `ctmul`, Cortex-M3 notes). Not new: the technique.
+standard practice (BearSSL `ctmul`); Greconici, Kannwischer and Sprenkels
+(ePrint 2020/1278, TCHES 2021) already observed that `smull`/`smlal` are not
+constant time on the Cortex-M3 and ship a constant-time M3 Dilithium. Claim 14's
+core-selection finding is therefore a known result re-measured on this
+image, and this claim's technique is not new.
 New here: the mitigation is machine-verified by the leak detector that found
 the problem, with a positive control and an output-equivalence digest in the
 same run, gated by the release ledger
@@ -660,3 +664,42 @@ Non-claims: documented-model verification under emulation with recorded
 operands; no hardware, no cycle count; only multiplies are replaced (other
 arithmetic is covered by the trace test on sampled inputs only); opt-in, not
 default; ML-DSA-65 on Cortex-M3 only. Not a constant-time proof.
+
+## Claim 16: latency-model sensitivity of emulation-based verdicts
+
+An honest novelty audit of claims 1-15 (against the literature, including
+CMEmu, KyberSlash, Greconici et al. ePrint 2020/1278, DATA, MicroWalk,
+LmTest, "Breaking Bad") found the technique in each of them is known and the
+repository's contribution is mostly measurement and gating on a deployed
+Zephyr image. This claim is a measurement the existing tools do not make:
+the same traces, judged by two latency models, per instruction site.
+
+The plugin now also records a CMEmu latency-class hash per site and per
+segment (`ct_latency_models.h`; the rules are re-implemented from CMEmu's
+published description, no CMEmu code is used) and the analysis compares the
+documented ARM model with the CMEmu model on one trace
+(`PQCP_CT_TRACE_LATENCY_MODELS`). Hypotheses were committed before the run
+(`docs/ct-latency-model-sensitivity.md`): H1 and H3 confirmed, H2 falsified.
+Result: the models agree on every ML-DSA-65 signing site (8 / 12 / 4 stock,
+0 patched) and disagree on exactly one ML-KEM-768 decapsulation site, the
+`UMULL` of the post-KyberSlash multiply-and-shift in
+`mlk_poly_compress_d10_c`, constant under ARM's documented rule and
+data-dependent (a zero operand is one cycle faster) under CMEmu's measured
+one. The claim-15 patch is clean under both.
+
+Prior art: CMEmu (MSWiM 2025) is the model; KyberSlash (ePrint 2024/1049)
+and Valgrind-based variable-time checks fix one model; Phantom Timing Leaks
+(ePrint 2026/2744) warns that few-cycle effects can come from the
+measurement harness. Not new: the models, the instrument. New here: a
+per-site disagreement matrix between latency models on deployed PQC images,
+gated by the release ledger (`security.ct_trace_cortex_m_latency_models`,
+schema 19; step `ct latency model crosscheck`, the existing M3 steps supply
+the traces; the ML-KEM site count can only shrink against
+`scripts/ct_vlat_models_baseline.json`).
+
+Non-claims: no exploit and no key recovery; one-cycle effect; CMEmu models
+one chip revision (TI CC2650) and is not validated against silicon here; the
+two classifiers share a source of rules; no cycle-accurate execution (the
+CMEmu function-level simulation is future work and needs a third-party
+checkout); sampled inputs. Not a constant-time proof.
+

@@ -69,3 +69,47 @@ Non-claims: a model disagreement is not an exploit; one-cycle effects may be
 hidden by flash wait states, prefetch and pipeline stalls (see ePrint
 2026/2744 on measurement-harness effects); no silicon measurement; one chip
 revision; sampled inputs; not a constant-time proof.
+
+---
+
+## Results
+
+Measured on `mps2/an385` (Cortex-M3) under QEMU 10.0.2, one trace per image
+and level, both models evaluated on the same trace. C and Python classifiers
+agree on 315,678 operand cases (`scripts/ct_latency_models.py --crosscheck`);
+note both were written from the same published rule set, so this guards
+against transcription errors, not against errors in the rules.
+
+| image | level | documented sites | cmemu sites | both | only cmemu |
+|---|---|---|---|---|---|
+| ML-KEM-768 decapsulation, stock | -Os | 0 | 1 | 0 | 1 |
+| ML-KEM-768 decapsulation, stock | -O2 | 0 | 1 | 0 | 1 |
+| ML-KEM-768 decapsulation, stock | -Og | 0 | 1 | 0 | 1 |
+| ML-DSA-65 signing, stock | -Os / -O2 / -Og | 8 / 12 / 4 | 8 / 12 / 4 | 8 / 12 / 4 | 0 |
+| ML-DSA-65 signing, claim-15 patch | -Os / -O2 / -Og | 0 | 0 | 0 | 0 |
+
+- **H1 confirmed.** The only site on which the models disagree is a `UMULL`
+  in `mlk_poly_compress_d10_c` at all three levels. It computes
+  `(uint64_t)u * 2642263040`, the multiply-and-shift that replaced the
+  secret-dependent division after KyberSlash. Under the documented model it is
+  constant (both operands' halves are not examined), under CMEmu it takes one
+  cycle less when u = 0, and u is the re-encrypted coefficient, so the
+  difference follows the secret for a corrupted ciphertext. About 21% of
+  decapsulations contain at least one zero coefficient (1 - (1 - 1/3329)^768).
+- **H2 falsified.** The registered prediction (the CMEmu model flags more
+  ML-DSA sites than the documented one) is wrong: all 8 / 12 / 4 stock sites
+  fail under both models and no site fails only under CMEmu. Every leaking
+  ML-DSA multiply already has operands that straddle the 65536 boundary, so
+  the second model adds nothing there.
+- **H3 confirmed.** The claim-15 patch has no violation and no failing site
+  under CMEmu at all three levels (546 comparable segments, zero violations).
+  It is clean under both models, which is stronger evidence than claim 15
+  gave.
+
+Reading: the documented-model verdicts of claims 13-15 are robust for
+ML-DSA signing and for the patch, and understate ML-KEM decapsulation by one
+site, the post-KyberSlash multiply. That site is a measured-model candidate,
+not an exploit: one cycle, one chip revision's measurements (CMEmu, TI
+CC2650), no silicon check here, and flash wait states or pipeline effects may
+hide it.
+
