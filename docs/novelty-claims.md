@@ -703,3 +703,32 @@ two classifiers share a source of rules; no cycle-accurate execution (the
 CMEmu function-level simulation is future work and needs a third-party
 checkout); sampled inputs. Not a constant-time proof.
 
+## Claim 17: a cheaper repair, verified under both latency models
+
+Claim 16 left one ML-KEM decapsulation site that only the CMEmu model flags.
+This claim repairs it and verifies the repair with the instrument that found
+it. The repair is an operand offset (`u + 0x10001`, removed from the 64-bit
+product afterwards) that makes both 16-bit halves non-zero for every input,
+applied to a private copy of mlkem-native by `scripts/mlkem_fixed_latency.py`.
+A host test covers all 3329 inputs (value equality; one CMEmu latency class
+instead of two). On the Cortex-M3 image the repaired decapsulation has no
+failing site under the documented or the CMEmu model, the shared-secret
+digest is unchanged, and the overhead is +0.03% / +0.06% / +0.12%
+instructions at -Os / -O2 / -Og, against +34% to +75% for the full 16x16 split
+used for ML-DSA in claim 15 (there the operands span 32 bits; here the domain
+is [0, 3328], which is what makes an offset sufficient). Ledger claim
+`security.ct_trace_cortex_m_kem_mitigation` (schema 20; steps
+`mlkem fixed-latency selftest` and `ct trace cortex-m3 kem mitigation`, full
+gate only; ceilings in `scripts/ct_kem_mitigation_baseline.json`).
+
+Prior art: operand-blinding and fixed-latency multiplication are known;
+Rosita and SC-Eliminator repair power and control-flow/memory leakage, not
+operand-dependent latency, and none verify a repair under several latency
+models. Not new: the idea of offsetting an operand. New here: a latency-model
+disagreement found, repaired for a few instructions and re-verified under both
+models in the same run.
+
+Non-claims: CMEmu rules are a third party's measurements of one chip revision,
+not validated against silicon here; instruction counts, not cycles; one
+multiply site; opt-in, not the default build; not a constant-time proof.
+

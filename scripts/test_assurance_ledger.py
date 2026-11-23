@@ -1695,6 +1695,64 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_models(cross, kem, dsa, only)
             self.assertEqual(result["status"], "fail", (cross, kem, dsa, only))
 
+    KEM_SELFTEST = ("PQCP_MLKEM_FIXED_LATENCY_SELFTEST PASS domain=3329 "
+                    "stock_cmemu_classes=2 fixed_cmemu_classes=1\n")
+    KEM_FIX = "".join(
+        f"PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS alg=MLKEM-768 "
+        f"target=cortex-m3 opt={opt} stock_cmemu_only=1 "
+        f"patched_documented_sites=0 patched_cmemu_sites=0 "
+        f"ss_digest_match=1 insn_overhead_pct={pct}\n"
+        for opt, pct in (("default", 0.03), ("speed", 0.06), ("debug", 0.12)))
+
+    def _eval_kem(self, selftest: str, body: str, ceiling=None) -> dict:
+        ceiling = ceiling or {"default": 0.1, "speed": 0.2, "debug": 0.3}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, text, name in (
+                ("mlkem fixed-latency selftest", selftest, "01.log"),
+                ("ct trace cortex-m3 kem mitigation", body, "02.log"),
+            ):
+                (manifest_path.parent / name).write_text(text, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                    "size_bytes": len(text.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"insn_overhead_pct_max": ceiling}))
+            spec = {"id": "security.ct_trace_cortex_m_kem_mitigation",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_cortex_m_kem_mitigation(
+                spec, transcript_manifest=manifest_path, kem_baseline=baseline)
+
+    def test_kem_mitigation_passes_and_records_overhead(self) -> None:
+        result = self._eval_kem(self.KEM_SELFTEST, self.KEM_FIX)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["insn_overhead_pct"]["debug"], 0.12)
+
+    def test_kem_mitigation_fails_on_weak_or_missing_evidence(self) -> None:
+        st, g = self.KEM_SELFTEST, self.KEM_FIX
+        for selftest, body, ceiling in (
+            (st.replace("3329", "100"), g, None),
+            (st.replace("stock_cmemu_classes=2", "stock_cmemu_classes=1"), g, None),
+            ("noise\n", g, None),
+            (st, g.replace("patched_cmemu_sites=0", "patched_cmemu_sites=1"), None),
+            (st, g.replace("patched_documented_sites=0", "patched_documented_sites=2"), None),
+            (st, g.replace("stock_cmemu_only=1", "stock_cmemu_only=0"), None),
+            (st, g.replace("ss_digest_match=1", "ss_digest_match=0"), None),
+            (st, g.replace("opt=debug", "opt=default"), None),
+            (st, g.replace("PASS alg", "FAIL alg"), None),
+            (st, "noise\n", None),
+            (st, g, {"default": 0.01, "speed": 0.2, "debug": 0.3}),
+        ):
+            result = self._eval_kem(selftest, body, ceiling)
+            self.assertEqual(result["status"], "fail", (selftest, body, ceiling))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "

@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2301,6 +2301,92 @@ def evaluate_ct_trace_cortex_m_latency_models(
         commands=commands, details=details)
 
 
+KEM_MITIGATION_BASELINE = SCRIPT_DIR / "ct_kem_mitigation_baseline.json"
+
+
+def evaluate_ct_trace_cortex_m_kem_mitigation(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+    kem_baseline: Path | None = None,
+) -> dict[str, object]:
+    """Bind security.ct_trace_cortex_m_kem_mitigation to the repair run.
+
+    Per level: the stock image still shows the CMEmu-only site (positive
+    control), the repaired image has no failing site under either model, the
+    shared-secret digest is unchanged, and the instruction overhead stays
+    under the committed ceiling. The host self-test must cover the whole
+    compress_d10 input domain.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "scripts/mlkem_fixed_latency.py",
+        "scripts/run_ct_trace_checks.py::run_core_mlkem_mitigated",
+        "scripts/ct_latency_models.py",
+        "scripts/ct_trace_analysis.py::compare_latency_models",
+    ]
+    commands = [
+        "python3 scripts/mlkem_fixed_latency.py --selftest",
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3 --alg mlkem --mitigated",
+    ]
+    steps = ("mlkem fixed-latency selftest",
+             "ct trace cortex-m3 kem mitigation")
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in steps:
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+    baseline_path = kem_baseline or KEM_MITIGATION_BASELINE
+    try:
+        ceiling = {
+            str(k): float(v) for k, v in json.loads(
+                baseline_path.read_text(encoding="utf-8"))[
+                    "insn_overhead_pct_max"].items()}
+    except (OSError, ValueError, KeyError, AttributeError):
+        return fail_claim(
+            spec, reason=f"unreadable baseline {baseline_path}",
+            validators=validators, evidence_artifacts=artifacts,
+            commands=commands)
+    problems = []
+    m = re.search(r"PQCP_MLKEM_FIXED_LATENCY_SELFTEST PASS domain=(\d+) "
+                  r"stock_cmemu_classes=(\d+) fixed_cmemu_classes=1",
+                  bodies[steps[0]])
+    if not m or int(m.group(1)) != 3329 or int(m.group(2)) < 2:
+        problems.append("host self-test missing or does not cover the "
+                        "whole domain with a live stock distinction")
+    good: dict[str, float] = {}
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS alg=MLKEM-768 "
+            r"target=cortex-m3 opt=(\S+) stock_cmemu_only=(\d+) "
+            r"patched_documented_sites=0 patched_cmemu_sites=0 "
+            r"ss_digest_match=1 insn_overhead_pct=(-?[0-9.]+)",
+            bodies[steps[1]]):
+        if int(m.group(2)) >= 1:
+            good[m.group(1)] = float(m.group(3))
+    required = {"default", "speed", "debug"}
+    if not required <= set(good):
+        problems.append("repair not verified at: "
+                        + ", ".join(sorted(required - set(good))))
+    for opt, pct in sorted(good.items()):
+        if opt in ceiling and pct > ceiling[opt]:
+            problems.append(f"instruction overhead at {opt} grew: {pct} > "
+                            f"ceiling {ceiling[opt]}")
+    details["insn_overhead_pct"] = dict(sorted(good.items()))
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3364,6 +3450,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_latency_models": lambda spec: evaluate_ct_trace_cortex_m_latency_models(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_cortex_m_kem_mitigation": lambda spec: evaluate_ct_trace_cortex_m_kem_mitigation(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(

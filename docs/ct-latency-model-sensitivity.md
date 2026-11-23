@@ -113,3 +113,17 @@ not an exploit: one cycle, one chip revision's measurements (CMEmu, TI
 CC2650), no silicon check here, and flash wait states or pipeline effects may
 hide it.
 
+## Follow-up: a cheap repair verified under both models
+
+`scripts/mlkem_fixed_latency.py` offsets the operand of the one disagreeing
+multiply: `ub = u + 0x10001` (both 16-bit halves always non-zero), product
+`ub * C - 0x10001 * C`, an empty asm statement against constant folding. Host
+check over all 3329 inputs: identical value, one CMEmu latency class instead
+of two. Cortex-M3 image, three levels: the stock image still shows the site,
+the repaired image has no failing site under either model, the shared-secret
+digest (including implicit-rejection outputs) is identical, and the whole
+decapsulation costs +0.03% / +0.06% / +0.12% instructions (-Os / -O2 / -Og),
+against +34% to +75% for the full 16x16 split of claim 15 on ML-DSA. The
+split is needed there because operands span the full 32-bit range; here the
+operand domain is only [0, 3328], which is what makes an offset sufficient.
+
