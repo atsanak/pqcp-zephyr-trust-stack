@@ -171,7 +171,16 @@ def format_marker(analysis: Analysis, alg: str, opt: str) -> str:
 SEG_RE = re.compile(
     r"PQCP_CT_SEG region=(\d+) seq=(\d+) site=(\d+) len=(\d+) cls=(\d+) "
     r"insns=(\d+) loads=(\d+) stores=(\d+) ndiv=(\d+) h_pc=([0-9a-f]{16}) "
-    r"h_addr=([0-9a-f]{16}) h_line=([0-9a-f]{16}) h_div=([0-9a-f]{16})$")
+    r"h_addr=([0-9a-f]{16}) h_line=([0-9a-f]{16}) h_div=([0-9a-f]{16})"
+    r"(?: nvl=(\d+) h_vdiv=([0-9a-f]{16}) h_vmul=([0-9a-f]{16}) "
+    r"h_vop=([0-9a-f]{16}))?$")
+# Cortex-M cores differ in which instruction classes have operand-dependent
+# latency: an M3's long multiplies terminate early (ARM DDI 0337); an M4's
+# are single-cycle (DDI 0439). Both share the variable-latency divider.
+CORE_CHANNELS = {
+    "cortex-m3": ("pc", "addr", "line", "vdiv", "vmul"),
+    "cortex-m4": ("pc", "addr", "line", "vdiv"),
+}
 
 
 @dataclass(frozen=True)
@@ -201,6 +210,9 @@ def parse_segments(text: str) -> dict:
             length=int(g[3]), cls=int(g[4]), insns=int(g[5]),
             fingerprints={"pc": g[9], "addr": g[10], "line": g[11],
                           "div": g[12]}))
+        if g[13] is not None:
+            by_region[int(g[0])][-1].fingerprints.update(
+                {"vdiv": g[14], "vmul": g[15], "vop": g[16]})
     for region, segs in by_region.items():
         if [s.seq for s in segs] != list(range(len(segs))):
             raise TraceError(f"region {region}: segment seq out of order")
@@ -221,6 +233,7 @@ class DeclassAnalysis:
     sites: int               # distinct declassification call sites seen
     max_events: int          # most events in one region
     iterations_seen: set     # distinct event counts per region
+    candidate_segments: int = 0  # exact operands vary, FAIL model constant
 
     @property
     def clean(self) -> bool:
@@ -231,8 +244,8 @@ class DeclassAnalysis:
         return self.testable / self.segments if self.segments else 0.0
 
 
-def analyze_declassified(regions: list[Region],
-                         segments: dict) -> DeclassAnalysis:
+def analyze_declassified(regions: list[Region], segments: dict,
+                         channels: tuple = CHANNELS) -> DeclassAnalysis:
     if not regions:
         raise TraceError("no regions captured")
     missing = [r.index for r in regions if r.index not in segments]
@@ -243,6 +256,7 @@ def analyze_declassified(regions: list[Region],
         by_group.setdefault(r.label >> GROUP_SHIFT, []).append(r)
 
     violations: list = []
+    candidates = 0
     total = testable = classes = 0
     sites: set = set()
     max_events = 0
@@ -272,17 +286,23 @@ def analyze_declassified(regions: list[Region],
                          f"next event site {seg.site}/{seg.length} != "
                          f"{ref.site}/{ref.length} (region {ref_r.index})"))
                     continue
-                for ch in CHANNELS:
+                before = len(violations)
+                for ch in channels:
                     if seg.fingerprints[ch] != ref.fingerprints[ch]:
                         violations.append(
                             (ch, group, r.index, seg.seq,
                              f"{seg.fingerprints[ch]} != "
                              f"{ref.fingerprints[ch]} (region {ref_r.index})"))
+                if (len(violations) == before and "vop" in seg.fingerprints
+                        and seg.fingerprints["vop"] !=
+                        ref.fingerprints["vop"]):
+                    candidates += 1
     return DeclassAnalysis(
         regions=len(regions), groups=len(by_group), segments=total,
         testable=testable, classes=classes, singleton=total - testable,
         violations=violations, sites=len(sites - {0}),
-        max_events=max_events, iterations_seen=event_counts)
+        max_events=max_events, iterations_seen=event_counts,
+        candidate_segments=candidates)
 
 
 def format_declass_marker(a: DeclassAnalysis, alg: str, opt: str) -> str:
@@ -360,8 +380,12 @@ class VlatAnalysis:
         return self.base_clean and not self.fail_sites
 
 
-def analyze_vlat(regions: list[Region],
-                 records: list[VlatRecord]) -> VlatAnalysis:
+def analyze_vlat(regions: list[Region], records: list[VlatRecord], *,
+                 long_mul_variable: bool = True,
+                 compare_counts: bool = True) -> VlatAnalysis:
+    """Per-site verdict. `long_mul_variable` is the core policy (M3 true, M4
+    false); `compare_counts=False` skips sites whose execution count differs
+    between regions (rejection loops), which the segment analysis covers."""
     base = analyze(regions)
     by_region: dict[int, dict[int, VlatRecord]] = {}
     sites: dict[int, int] = {}
@@ -378,9 +402,16 @@ def analyze_vlat(regions: list[Region],
             seen = [by_region.get(r.index, {}).get(pc) for r in members]
             counts = {None if s is None else s.n for s in seen}
             if len(counts) > 1:
-                fail.setdefault(pc, "execution count differs between runs")
+                if compare_counts:
+                    fail.setdefault(pc,
+                                    "execution count differs between runs")
                 continue
             if None in counts:
+                continue
+            if kind > 2 and not long_mul_variable:
+                if (len({s.h_doc for s in seen}) > 1 or
+                        len({s.h_op for s in seen}) > 1):
+                    candidate.add(pc)
                 continue
             model = "h_cls" if kind <= 2 else "h_doc"
             if len({getattr(s, model) for s in seen}) > 1:
@@ -409,3 +440,24 @@ def format_vlat_marker(a: VlatAnalysis, alg: str, opt: str,
             f"mul_sites={len(a.sites) - divs} fail_sites="
             f"{len(a.fail_sites)} candidate_sites={len(a.candidate_sites)} "
             f"base={'clean' if a.base_clean else 'diverged'}")
+
+
+def format_vlat_declass_marker(a: DeclassAnalysis, v: VlatAnalysis, alg: str,
+                               opt: str, target: str) -> str:
+    """Verdict of a declassification-aware Cortex-M run: segment relation on
+    the core's channels, plus the per-site attribution of operand-class
+    variation (sites that ran equally often in every region of a group)."""
+    by_channel: dict[str, int] = {}
+    for kind, *_ in a.violations:
+        by_channel[kind] = by_channel.get(kind, 0) + 1
+    clean = a.clean
+    return (f"PQCP_CT_TRACE_VLAT_DECLASS {'PASS' if clean else 'FAIL'} "
+            f"alg={alg} target={target} opt={opt} regions={a.regions} "
+            f"segments={a.segments} testable={a.testable} "
+            f"violations={len(a.violations)} "
+            f"vdiv_violations={by_channel.get('vdiv', 0)} "
+            f"vmul_violations={by_channel.get('vmul', 0)} "
+            f"other_violations="
+            f"{len(a.violations) - by_channel.get('vdiv', 0) - by_channel.get('vmul', 0)} "
+            f"candidate_segments={a.candidate_segments} "
+            f"attributed_sites={len(v.fail_sites)}")
