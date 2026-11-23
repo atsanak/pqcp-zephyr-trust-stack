@@ -115,10 +115,12 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
 
 
 CORTEX_M3_TARGET = "cortex-m3"
-CORE_BOARDS = {"cortex-m3": "mps2/an385", "cortex-m4": "mps2/an386"}
+CORE_BOARDS = {"cortex-m3": "mps2/an385", "cortex-m4": "mps2/an386",
+               "cortex-m33": "mps2/an521/cpu0"}
 # M3 long multiplies terminate early on operand size (ARM DDI 0337); M4's
 # are single-cycle. Both share the variable-latency divider.
-LONG_MUL_VARIABLE = {"cortex-m3": True, "cortex-m4": False}
+LONG_MUL_VARIABLE = {"cortex-m3": True, "cortex-m4": False,
+                     "cortex-m33": False}
 
 
 def kem_level_kwargs(level: int, out: Path) -> dict:

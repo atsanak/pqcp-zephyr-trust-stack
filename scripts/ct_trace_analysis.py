@@ -180,6 +180,9 @@ SEG_RE = re.compile(
 CORE_CHANNELS = {
     "cortex-m3": ("pc", "addr", "line", "vdiv", "vmul"),
     "cortex-m4": ("pc", "addr", "line", "vdiv"),
+    # ARMv8-M Cortex-M33: single-cycle long multiplies like the M4, divider
+    # with data-dependent latency.
+    "cortex-m33": ("pc", "addr", "line", "vdiv"),
     # Same core, second latency model (CMEmu, see ct_latency_models.py): one
     # stream carries the modelled latency class of every variable-latency
     # instruction, divides and long multiplies alike.

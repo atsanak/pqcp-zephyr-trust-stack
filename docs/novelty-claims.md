@@ -784,3 +784,20 @@ alpha = 0.01, and the s1 and s2 controls are null. The claim stays a null
 result at its stated resolution; the t0 association is an open question, not a
 finding.
 
+## Claim 19: Cortex-M33 coverage
+
+The trace test also runs on a Cortex-M33 (ARMv8-M, QEMU `mps2/an521/cpu0`)
+with the M4-style channel set. Registered first (H14), then measured:
+ML-KEM-768 decapsulation shows no failing site at three optimisation levels
+and ML-DSA-65 signing shows zero violations over 546 comparable of 600
+segments on every channel, as on the M4. Ledger claim
+`security.ct_trace_cortex_m33` (schema 22; steps `ct trace cortex-m33
+decapsulation` and `ct trace cortex-m33 signing`, full gate only).
+
+Prior art: none beyond the documented ARMv8-M timing (single-cycle long
+multiplies, data-dependent divide). This is coverage, not a new technique.
+
+Non-claims: documented model only (no third-party measured M33 model); QEMU,
+recorded operands, no cycle model; sampled inputs; ML-KEM-768 and ML-DSA-65
+only; not a constant-time proof.
+

@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2478,6 +2478,59 @@ def evaluate_mldsa_rejection_independence(
         commands=commands, details=details)
 
 
+def evaluate_ct_trace_cortex_m33(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+) -> dict[str, object]:
+    """Bind security.ct_trace_cortex_m33 to the ML-KEM and ML-DSA M33 runs."""
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["tools/tcg_ct_plugin::pqcp_ct_trace",
+                  "scripts/run_ct_trace_checks.py",
+                  "scripts/ct_trace_analysis.py::CORE_CHANNELS"]
+    commands = ["python3 scripts/run_ct_trace_checks.py --target cortex-m33",
+                "python3 scripts/run_ct_trace_checks.py --target cortex-m33 --alg mldsa"]
+    steps = ("ct trace cortex-m33 decapsulation", "ct trace cortex-m33 signing")
+    bodies = {}
+    details: dict[str, object] = {}
+    for step in steps:
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+    required = {"default", "speed", "debug"}
+    kem = {m.group(1) for m in re.finditer(
+        r"PQCP_CT_TRACE_VLAT PASS alg=MLKEM-768 target=cortex-m33 "
+        r"opt=(\S+) regions=(\d+) sites=\d+ div_sites=\d+ mul_sites=\d+ "
+        r"fail_sites=0 candidate_sites=\d+ base=clean", bodies[steps[0]])
+        if int(m.group(2)) >= 12}
+    dsa = {m.group(1) for m in re.finditer(
+        r"PQCP_CT_TRACE_VLAT_DECLASS PASS alg=MLDSA-65 target=cortex-m33 "
+        r"opt=(\S+) regions=(\d+) segments=(\d+) testable=(\d+) "
+        r"violations=0 ", bodies[steps[1]])
+        if int(m.group(2)) >= 12 and int(m.group(4)) * 10 >= int(m.group(3)) * 7}
+    problems = []
+    if not required <= kem:
+        problems.append("ML-KEM not clean on Cortex-M33 at: "
+                        + ", ".join(sorted(required - kem)))
+    if not required <= dsa:
+        problems.append("ML-DSA signing not clean on Cortex-M33 at: "
+                        + ", ".join(sorted(required - dsa)))
+    details.update({"mlkem_clean_levels": sorted(kem),
+                    "mldsa_clean_levels": sorted(dsa)})
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3544,6 +3597,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_kem_mitigation": lambda spec: evaluate_ct_trace_cortex_m_kem_mitigation(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_cortex_m33": lambda spec: evaluate_ct_trace_cortex_m33(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.mldsa_rejection_independence": lambda spec: evaluate_mldsa_rejection_independence(

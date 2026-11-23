@@ -1817,6 +1817,54 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_rej(selftest, study)
             self.assertEqual(result["status"], "fail", (selftest, study))
 
+    M33_KEM = "".join(
+        f"PQCP_CT_TRACE_VLAT PASS alg=MLKEM-768 target=cortex-m33 opt={o} "
+        "regions=48 sites=1 div_sites=0 mul_sites=1 fail_sites=0 "
+        "candidate_sites=1 base=clean\n" for o in ("default", "speed", "debug"))
+    M33_DSA = "".join(
+        f"PQCP_CT_TRACE_VLAT_DECLASS PASS alg=MLDSA-65 target=cortex-m33 "
+        f"opt={o} regions=18 segments=600 testable=546 violations=0 "
+        "vdiv_violations=0 vmul_violations=0 other_violations=0 "
+        "candidate_segments=370 attributed_sites=0\n"
+        for o in ("default", "speed", "debug"))
+
+    def _eval_m33(self, kem: str, dsa: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, text, name in (
+                ("ct trace cortex-m33 decapsulation", kem, "01.log"),
+                ("ct trace cortex-m33 signing", dsa, "02.log"),
+            ):
+                (manifest_path.parent / name).write_text(text, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                    "size_bytes": len(text.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            spec = {"id": "security.ct_trace_cortex_m33",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_cortex_m33(
+                spec, transcript_manifest=manifest_path)
+
+    def test_cortex_m33_passes_and_fails(self) -> None:
+        ok = self._eval_m33(self.M33_KEM, self.M33_DSA)
+        self.assertEqual(ok["status"], "pass", ok.get("failure_reason"))
+        for kem, dsa in (
+            (self.M33_KEM.replace("fail_sites=0", "fail_sites=1"), self.M33_DSA),
+            (self.M33_KEM.replace("opt=debug", "opt=default"), self.M33_DSA),
+            (self.M33_KEM, self.M33_DSA.replace("violations=0 vdiv", "violations=2 vdiv")),
+            (self.M33_KEM, self.M33_DSA.replace("testable=546", "testable=100")),
+            (self.M33_KEM, self.M33_DSA.replace("cortex-m33", "cortex-m4")),
+            ("noise\n", self.M33_DSA),
+            (self.M33_KEM, "noise\n"),
+        ):
+            self.assertEqual(self._eval_m33(kem, dsa)["status"], "fail", (kem, dsa))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "

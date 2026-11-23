@@ -298,3 +298,21 @@ signatures per key; the measurement bounds any key-dependence of the mean
 attempt count below roughly 0.5% of the mean. The registered test was not
 adjusted after the fact.
 
+## Seventh registration and result: Cortex-M33
+
+Registered before the run. H14: on a Cortex-M33 (QEMU board `mps2/an521/cpu0`,
+ARMv8-M) the ML-KEM-768 decapsulation and the ML-DSA-65 signing are clean under
+the M4-style channel set (instruction addresses, data addresses, cache lines,
+divider latency; long multiplies are single-cycle on the M33), with zero
+violations at three optimisation levels. Falsified by any violation.
+
+Result: H14 holds. ML-KEM-768: no failing site at -Os, -O2 and -Og, one
+candidate multiply site (exact operands vary, model constant: the same compress
+multiply as on the M3). ML-DSA-65: 546 comparable of 600 segments, zero
+violations on every channel at all three levels, identical to the M4. As on the
+M4, the long-multiply hazard found on the M3 does not apply because M33 long
+multiplies do not terminate early. The ARMv8-M latency rules used here are the
+documented ones (single-cycle long multiplies, data-dependent divider); no
+measured third-party model of the M33 was used, so the CMEmu comparison of
+claim 16 does not extend to this core.
+
