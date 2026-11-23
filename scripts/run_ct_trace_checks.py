@@ -14,10 +14,12 @@ Not a constant-time proof; x86_64 under emulation, no microarchitecture.
 
 import argparse
 import os
+import re
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -212,6 +214,95 @@ def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
     return 0
 
 
+def read_sig_digest(build_dir: Path) -> str | None:
+    log = (build_dir / "ct_trace_device.log").read_text(errors="replace")
+    match = re.search(r"PQCP_CT_SIGDIGEST (0x[0-9a-f]{8}) signatures=(\d+)",
+                      log)
+    return f"{match.group(1)}/{match.group(2)}" if match else None
+
+
+def run_core_mldsa_mitigated(args, out: Path, west_root: Path,
+                             west_cmd: list, env: dict,
+                             plugin: Path) -> int:
+    """Closed loop for claim 15: the stock Cortex-M3 signing image must show
+    the long-multiply finding (positive control), the fixed-latency build
+    must show none on any channel, and both must produce the same signatures
+    (digest) and the same control flow, with the instruction overhead
+    measured."""
+    import mldsa_fixed_latency as fixed  # noqa: PLC0415
+
+    target = args.target
+    problems = fixed.check()
+    if problems:
+        print("\n".join(f"[ct-trace] {p}" for p in problems))
+        return 1
+    failed = False
+    with tempfile.TemporaryDirectory(prefix="pqcp-ct-fixed-") as tmp:
+        patched = fixed.materialise(Path(tmp) / "module")
+        for opt in args.opt or ["default", "speed", "debug"]:
+            results = {}
+            for name, module in (("stock", MODULE_PATH),
+                                 ("patched", patched)):
+                print(f"[ct-trace] ML-DSA-65 signing on {target}, "
+                      f"{name} build, optimisation={opt}")
+                build = out / f"build-{target}-dsa-{name}-{opt}"
+                text = trace_core(module, build,
+                                  out / f"trace-{target}-dsa-{name}-{opt}.txt",
+                                  opt=opt, target=target,
+                                  west_root=west_root, west_cmd=west_cmd,
+                                  env=env, plugin=plugin, timeout=1500,
+                                  app=MLDSA_APP, marker=MLDSA_MARKER,
+                                  event_symbol="pqcp_ct_event")
+                regions = cta.parse_trace(text)
+                decl = cta.analyze_declassified(
+                    regions, cta.parse_segments(text),
+                    channels=cta.CORE_CHANNELS[target])
+                sites = cta.analyze_vlat(
+                    regions, cta.parse_vlat(text),
+                    long_mul_variable=LONG_MUL_VARIABLE[target],
+                    compare_counts=False)
+                results[name] = {
+                    "decl": decl, "sites": sites,
+                    "digest": read_sig_digest(build),
+                    "insns": sum(r.insns for r in regions)}
+            stock, patched_r = results["stock"], results["patched"]
+            stock_vmul = sum(1 for v in stock["decl"].violations
+                             if v[0] == "vmul")
+            overhead = (100.0 * (patched_r["insns"] - stock["insns"]) /
+                        max(stock["insns"], 1))
+            issues = []
+            if stock_vmul == 0:
+                issues.append("stock build shows no long-multiply finding "
+                              "(positive control lost)")
+            if not patched_r["decl"].clean:
+                issues.append(f"patched build still has "
+                              f"{len(patched_r['decl'].violations)} "
+                              f"violation(s)")
+            if patched_r["sites"].fail_sites:
+                issues.append(f"patched build still has "
+                              f"{len(patched_r['sites'].fail_sites)} "
+                              f"attributed site(s)")
+            if (stock["digest"] is None or
+                    stock["digest"] != patched_r["digest"]):
+                issues.append(f"signature digest differs: "
+                              f"{stock['digest']} vs {patched_r['digest']}")
+            print(f"PQCP_CT_TRACE_VLAT_MITIGATION "
+                  f"{'FAIL' if issues else 'PASS'} alg=MLDSA-65 "
+                  f"target={target} opt={opt} "
+                  f"stock_vmul_violations={stock_vmul} "
+                  f"stock_sites={len(stock['sites'].fail_sites)} "
+                  f"patched_violations={len(patched_r['decl'].violations)} "
+                  f"patched_sites={len(patched_r['sites'].fail_sites)} "
+                  f"patched_testable={patched_r['decl'].testable} "
+                  f"sig_digest_match="
+                  f"{int(stock['digest'] == patched_r['digest'])} "
+                  f"insn_overhead_pct={overhead:.1f}")
+            for issue in issues:
+                print(f"[ct-trace] FAIL: {issue}")
+            failed = failed or bool(issues)
+    return 1 if failed else 0
+
+
 MLDSA_APP = "tests/ztest_ct_trace_mldsa"
 MLDSA_MARKER = "PQCP_CT_TRACE_APP alg=MLDSA-65"
 
@@ -266,6 +357,11 @@ def main() -> int:
                         help="Cortex-M signing: exit 0 when the only "
                              "findings are documented-model long-multiply "
                              "violations (an inventory, not a pass)")
+    parser.add_argument("--mitigated", action="store_true",
+                        help="Cortex-M3 signing: also build the fixed-latency "
+                             "multiplication patch and require it to remove "
+                             "the long-multiply finding without changing "
+                             "the signatures")
     parser.add_argument("--rediscover", action="store_true",
                         help="re-inject known leak patterns and require the "
                              "test to catch them (sensitivity/specificity)")
@@ -305,6 +401,9 @@ def main() -> int:
             return m3_leaks.rediscover(run_m3_trace,
                                        (args.opt or ["default"])[0],
                                        only or None)
+        if args.alg == "mldsa" and args.mitigated:
+            return run_core_mldsa_mitigated(args, out, west_root, west_cmd,
+                                            env, plugin)
         if args.alg == "mldsa":
             return run_core_mldsa(args, out, west_root, west_cmd, env,
                                   plugin)

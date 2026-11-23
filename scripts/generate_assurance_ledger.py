@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2106,6 +2106,94 @@ def evaluate_ct_trace_cortex_m_signing(
         commands=commands, details=details)
 
 
+VLAT_MITIGATION_BASELINE = SCRIPT_DIR / "ct_vlat_mitigation_baseline.json"
+
+
+def evaluate_ct_trace_cortex_m_mitigation(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+    mitigation_baseline: Path | None = None,
+) -> dict[str, object]:
+    """Bind security.ct_trace_cortex_m_mitigation to the closed-loop run.
+
+    At every optimisation level the stock Cortex-M3 signing image must still
+    show the long-multiply finding (positive control), the fixed-latency
+    build must show no violation and no attributed site on any channel over
+    most segments, both must produce the same signature digest, and the
+    measured instruction overhead may not exceed the committed ceiling.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/tcg_ct_plugin::pqcp_ct_trace",
+        "scripts/run_ct_trace_checks.py::run_core_mldsa_mitigated",
+        "scripts/mldsa_fixed_latency.py",
+        "scripts/ct_trace_analysis.py::analyze_declassified",
+        "scripts/ct_trace_analysis.py::analyze_vlat",
+    ]
+    commands = [
+        "python3 scripts/mldsa_fixed_latency.py --selftest",
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3 --alg mldsa --mitigated",
+    ]
+    steps = ("mldsa fixed-latency multiply selftest",
+             "ct trace cortex-m3 signing mitigation")
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in steps:
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+    baseline_path = mitigation_baseline or VLAT_MITIGATION_BASELINE
+    try:
+        ceiling = {
+            str(k): float(v) for k, v in json.loads(
+                baseline_path.read_text(encoding="utf-8"))[
+                    "insn_overhead_pct_max"].items()}
+    except (OSError, ValueError, KeyError, AttributeError):
+        return fail_claim(
+            spec, reason=f"unreadable mitigation baseline {baseline_path}",
+            validators=validators, evidence_artifacts=artifacts,
+            commands=commands)
+    problems = []
+    m = re.search(r"PQCP_MLDSA_FIXED_MUL_SELFTEST PASS products=(\d+)",
+                  bodies[steps[0]])
+    if not m or int(m.group(1)) < 1_000_000:
+        problems.append("fixed-latency multiply selftest missing or too small")
+    else:
+        details["selftest_products"] = int(m.group(1))
+    required_opts = {"default", "speed", "debug"}
+    good: dict[str, float] = {}
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_VLAT_MITIGATION PASS alg=MLDSA-65 "
+            r"target=cortex-m3 opt=(\S+) stock_vmul_violations=(\d+) "
+            r"stock_sites=(\d+) patched_violations=0 patched_sites=0 "
+            r"patched_testable=(\d+) sig_digest_match=1 "
+            r"insn_overhead_pct=(-?[0-9.]+)", bodies[steps[1]]):
+        if (int(m.group(2)) >= 1 and int(m.group(3)) >= 1 and
+                int(m.group(4)) >= 400):
+            good[m.group(1)] = float(m.group(5))
+    if not required_opts <= set(good):
+        problems.append("mitigation not verified at: "
+                        + ", ".join(sorted(required_opts - set(good))))
+    for opt, pct in sorted(good.items()):
+        if opt in ceiling and pct > ceiling[opt]:
+            problems.append(f"instruction overhead at {opt} grew: {pct} > "
+                            f"ceiling {ceiling[opt]}")
+    details["insn_overhead_pct"] = dict(sorted(good.items()))
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3163,6 +3251,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_signing": lambda spec: evaluate_ct_trace_cortex_m_signing(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_cortex_m_mitigation": lambda spec: evaluate_ct_trace_cortex_m_mitigation(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(

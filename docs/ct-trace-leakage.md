@@ -71,3 +71,11 @@ Per-core channels: `ct_trace_analysis.CORE_CHANNELS`. The marker function
 `pqcp_ct_event` takes 32-bit arguments (r0..r2 on ARM). See
 docs/novelty-claims.md claim 14.
 
+## Verified Cortex-M3 mitigation
+
+`python3 scripts/mldsa_fixed_latency.py --selftest|--check|--apply DEST`
+patches a private copy of mldsa-native with a fixed-latency 32x32->64 helper.
+`run_ct_trace_checks.py --target cortex-m3 --alg mldsa --mitigated` builds
+stock and patched images and prints `PQCP_CT_TRACE_VLAT_MITIGATION PASS ...
+stock_vmul_violations= patched_violations=0 patched_sites=0
+sig_digest_match=1 insn_overhead_pct=`. See docs/novelty-claims.md claim 15.
