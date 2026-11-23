@@ -249,3 +249,37 @@ specific to rare keys, would not show up in 200 keys; it covers ML-DSA-65 only,
 a host build (not the Cortex-M image), deterministic signing, random keys (not
 adversarial ones) and random messages.
 
+### Fifth registration: the other ML-DSA parameter sets
+
+Registered before measuring. H12: for ML-DSA-44 and ML-DSA-87 (100 keys x 5000
+messages each) the per-key attempt histograms are also consistent with
+key-independence (chi-square homogeneity p >= 1e-3). Falsified if either set
+rejects. ML-DSA-44 and 87 use eta = 2 (3-bit packing) and different K, L, so
+the key statistics are unpacked per parameter set.
+
+### Results of the fifth registration, and an exploratory signal
+
+ML-DSA-44 (100 keys x 5000): pooled mean 4.359, chi2 = 2124.2 on 2277 dof,
+p = 0.990. ML-DSA-87 (100 keys x 5000): pooled mean 3.902, chi2 = 1973.0 on
+1980 dof, p = 0.540. H12 holds: no parameter set rejects key-independence.
+
+The per-key mean did correlate positively with sum|t0| in all three sets:
+r = 0.128 (ML-DSA-65, 200 keys), 0.252 (44, 100 keys), 0.171 (87, 100 keys)
+(Stouffer combined z = 3.5). That correlation was not registered (H11 was
+conditional on H10), it is one of nine correlations computed, and none of the
+nine passes a Bonferroni correction on its own, so it is an exploratory
+observation, not a finding. It has a mechanism worth testing: a larger t0
+makes c*t0 larger and so makes the c*t0 and hint-count checks reject more
+often.
+
+## Sixth registration (confirmatory)
+
+Registered before running, on fresh seeds (seed 2, disjoint from the seed 1
+used above). ML-DSA-65, 600 keys x 5000 messages.
+
+- H13. The per-key mean attempt count correlates positively with sum|t0|:
+  one-sided test on the Pearson correlation (Fisher z), alpha = 0.01.
+  Falsified if the one-sided p >= 0.01. The sum|s1| and sum|s2| correlations
+  are controls: two-sided, Bonferroni-corrected alpha = 0.005 each; a
+  significant control would be reported as unexpected.
+

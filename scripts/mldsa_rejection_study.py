@@ -47,8 +47,8 @@ int main(int argc, char **argv) {
   unsigned keys = (unsigned)atoi(argv[1]), msgs = (unsigned)atoi(argv[2]);
   unsigned long long seed0 = strtoull(argv[3], 0, 10);
   const char *skfile = argv[4];
-  static uint8_t pk[MLDSA_PUBLICKEYBYTES(65)], sk[MLDSA_SECRETKEYBYTES(65)];
-  static uint8_t sig[MLDSA_BYTES(65)];
+  static uint8_t pk[MLDSA_PUBLICKEYBYTES(MLD_CONFIG_PARAMETER_SET)], sk[MLDSA_SECRETKEYBYTES(MLD_CONFIG_PARAMETER_SET)];
+  static uint8_t sig[MLDSA_BYTES(MLD_CONFIG_PARAMETER_SET)];
   uint8_t seed[32], rnd[32] = {0}, msg[32];
   FILE *fsk = fopen(skfile, "wb");
   for (unsigned k = 0; k < keys; ++k) {
@@ -151,7 +151,29 @@ def pearson(xs: list[float], ys: list[float]) -> float:
     return sxy / math.sqrt(sxx * syy) if sxx > 0 and syy > 0 else 0.0
 
 
-def unpack(sk: bytes) -> dict:
+# (K, L, eta) per parameter set; secret key = rho K tr s1 s2 t0.
+PARAMS = {44: (4, 4, 2), 65: (6, 5, 4), 87: (8, 7, 2)}
+
+
+def unpack_eta(data: bytes, eta: int) -> int:
+    """Sum of |coefficient| of packed eta-bounded polynomials."""
+    if eta == 4:
+        return sum(abs(4 - (b & 15)) + abs(4 - (b >> 4)) for b in data)
+    total, bits = 0, int.from_bytes(data, "little")
+    for i in range(len(data) * 8 // 3):
+        total += abs(2 - ((bits >> (3 * i)) & 7))
+    return total
+
+
+def corr_p_one_sided(r: float, n: int) -> float:
+    """One-sided p-value for a positive Pearson correlation (Fisher z)."""
+    if n <= 3 or abs(r) >= 1.0:
+        return 1.0
+    z = math.atanh(r) * math.sqrt(n - 3)
+    return 0.5 * math.erfc(z / math.sqrt(2))
+
+
+def unpack_old(sk: bytes) -> dict:
     """ML-DSA-65 secret key: rho(32) K(32) tr(64) s1(5x128) s2(6x128) t0(6x416);
     eta = 4: 4-bit coefficients (eta - v); t0: 13-bit (2^12 - v)."""
     off = 128
@@ -166,7 +188,20 @@ def unpack(sk: bytes) -> dict:
     return {"s1": l1(s1), "s2": l1(s2), "t0": t0l1}
 
 
-def build(tmp: Path) -> Path:
+def unpack(sk: bytes, pset: int = 65) -> dict:
+    k, l, eta = PARAMS[pset]
+    poly = 128 if eta == 4 else 96
+    off = 128
+    s1 = sk[off:off + l * poly]
+    s2 = sk[off + l * poly:off + (l + k) * poly]
+    t0 = sk[off + (l + k) * poly:off + (l + k) * poly + k * 416]
+    bits = int.from_bytes(t0, "little")
+    t0l1 = sum(abs(4096 - ((bits >> (13 * i)) & 0x1FFF))
+               for i in range(len(t0) * 8 // 13))
+    return {"s1": unpack_eta(s1, eta), "s2": unpack_eta(s2, eta), "t0": t0l1}
+
+
+def build(tmp: Path, pset: int = 65) -> Path:
     copy = tmp / "mldsa-native"
     shutil.copytree(SRC / "mldsa", copy / "mldsa", symlinks=True)
     sign = copy / SIGN_C
@@ -178,24 +213,25 @@ def build(tmp: Path) -> Path:
     (tmp / "driver.c").write_text(DRIVER, encoding="utf-8")
     exe = tmp / "study"
     subprocess.run(
-        ["cc", "-O2", "-DMLD_CONFIG_PARAMETER_SET=65",
+        ["cc", "-O2", f"-DMLD_CONFIG_PARAMETER_SET={pset}",
          "-DMLD_CONFIG_NAMESPACE_PREFIX=mldsa",
          f"-I{copy / 'mldsa'}", str(copy / "mldsa" / "mldsa_native.c"),
          str(tmp / "driver.c"), "-o", str(exe)], check=True)
     return exe
 
 
-def run(keys: int, msgs: int, seed: int) -> int:
+def run(keys: int, msgs: int, seed: int, pset: int = 65) -> int:
     with tempfile.TemporaryDirectory(prefix="pqcp-reject-") as t:
         tmp = Path(t)
-        exe = build(tmp)
+        exe = build(tmp, pset)
         out = subprocess.run([str(exe), str(keys), str(msgs), str(seed),
                               str(tmp / "sk.bin")], capture_output=True,
                              text=True, check=True).stdout
         sks = (tmp / "sk.bin").read_bytes()
     hists = [[int(x) for x in line.split()[2:]] for line in out.splitlines()]
     sk_len = len(sks) // keys
-    stats = [unpack(sks[i * sk_len:(i + 1) * sk_len]) for i in range(keys)]
+    stats = [unpack(sks[i * sk_len:(i + 1) * sk_len], pset)
+             for i in range(keys)]
     means = [sum(a * c for a, c in enumerate(h)) / max(sum(h), 1)
              for h in hists]
     pooled = sum(means) / len(means)
@@ -207,7 +243,10 @@ def run(keys: int, msgs: int, seed: int) -> int:
           f"pooled_mean={pooled:.4f} key_mean_sd={se:.4f} "
           f"relative_sd={se / pooled:.5f} chi2={chi2:.1f} dof={dof} "
           f"p={p:.4g} r_s1={rs['s1']:.3f} r_s2={rs['s2']:.3f} "
-          f"r_t0={rs['t0']:.3f}")
+          f"r_t0={rs['t0']:.3f} pset={pset} "
+          f"p_t0_one_sided={corr_p_one_sided(rs['t0'], keys):.4g} "
+          f"p_s1_two_sided={2 * min(corr_p_one_sided(rs['s1'], keys), corr_p_one_sided(-rs['s1'], keys)):.4g} "
+          f"p_s2_two_sided={2 * min(corr_p_one_sided(rs['s2'], keys), corr_p_one_sided(-rs['s2'], keys)):.4g}")
     return 0
 
 
@@ -239,11 +278,12 @@ def main() -> int:
     ap.add_argument("--keys", type=int, default=200)
     ap.add_argument("--messages", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--pset", type=int, choices=(44, 65, 87), default=65)
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     if args.selftest:
         return selftest()
-    return run(args.keys, args.messages, args.seed)
+    return run(args.keys, args.messages, args.seed, args.pset)
 
 
 if __name__ == "__main__":
