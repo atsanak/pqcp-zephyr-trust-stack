@@ -1298,6 +1298,14 @@ external vectors; mutation testing of verifiers/ratchet.
   findings at 8/12/4 sites (ratcheted in ct_vlat_signing_baseline.json). Two
   new full-gate steps.
 
+- Verified M3 mitigation (claim 15, schema 18, claim
+  security.ct_trace_cortex_m_mitigation): scripts/mldsa_fixed_latency.py
+  patches a private mldsa-native copy (fixed-latency 32x32->64 from 16-bit
+  MUL partials); `--target cortex-m3 --alg mldsa --mitigated` requires stock
+  still leaking (positive control), patched clean, equal signature digest;
+  overhead +75/+56/+34% instructions ratcheted in
+  ct_vlat_mitigation_baseline.json. Two new full-gate steps.
+
 ## Final rule
 
 Do not confuse motion with progress.
