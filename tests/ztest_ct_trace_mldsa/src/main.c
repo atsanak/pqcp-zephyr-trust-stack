@@ -50,6 +50,20 @@ static uint8_t base_sk[PQCP_MLDSA_65_SK_SIZE];
 static uint8_t work_sk[PQCP_MLDSA_65_SK_SIZE];
 static uint8_t signature[PQCP_MLDSA_65_SIG_SIZE];
 static uint8_t message[CT_MSG_LEN];
+/* FNV-1a over every signature produced (outside the traced regions). The
+ * deterministic hedging seed makes it a function of the arithmetic only, so
+ * a mitigated build must print the same digest as the stock build. */
+static uint32_t sig_digest = 0x811c9dc5U;
+
+static void digest_signature(void)
+{
+	for (size_t i = 0U; i < sizeof(signature); ++i) {
+		sig_digest ^= signature[i];
+		sig_digest += (sig_digest << 1) + (sig_digest << 4) +
+			      (sig_digest << 7) + (sig_digest << 8) +
+			      (sig_digest << 24);
+	}
+}
 
 /* The plugin reads the label from the first argument register (rdi). */
 __attribute__((noinline)) void pqcp_ct_region_begin(uint32_t label)
@@ -172,6 +186,7 @@ ZTEST(pqcp_ct_trace_mldsa, test_sign_relational_trace_segments)
 			}
 			seed_for_message(m); /* identical hedging randomness */
 			run_region((m << 8) | v);
+			digest_signature();
 			if (v == 0U) {
 				/* Sanity: the genuine key signs validly. */
 				zassert_equal(pqcp_mldsa_verify(
@@ -182,6 +197,8 @@ ZTEST(pqcp_ct_trace_mldsa, test_sign_relational_trace_segments)
 			}
 		}
 	}
+	printk("PQCP_CT_SIGDIGEST 0x%08x signatures=%u\n", sig_digest,
+	       CT_MSGS * CT_VARIANTS);
 	printk("PQCP_CT_TRACE_APP alg=MLDSA-65 msgs=%u variants=%u\n", CT_MSGS,
 	       CT_VARIANTS);
 }

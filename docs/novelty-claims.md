@@ -607,3 +607,56 @@ measurement; two cores only (M33, M7 and M0+ are not modelled); ML-DSA-65 only;
 crafted non-valid keys; the declassification policy is upstream's; sampled
 inputs. Not a constant-time proof.
 
+## Claim 15: a verified fixed-latency fix for the Cortex-M3 finding
+
+Claim 14 left the Cortex-M3 result as a finding. This claim closes the loop:
+mitigate, then verify the mitigation with the same instrument.
+
+`scripts/mldsa_fixed_latency.py` patches a **private copy** of mldsa-native
+(the vendored tree is never edited; the patch is six exact-match anchors that
+fail loudly if upstream moves) so that every signed 32x32-to-64 product in the
+Montgomery reduction, `mld_fqmul`, `mld_fqscale`, the pointwise product and
+the matrix-vector accumulator is built from four 16x16 partial products
+computed with the 32-bit `MUL` (single-cycle on every Cortex-M) plus shifts
+and adds, instead of `SMULL`. Build the copy with
+`-DZEPHYR_EXTRA_MODULES=<copy>`; it is opt-in, not the default build.
+
+`run_ct_trace_checks.py --target cortex-m3 --alg mldsa --mitigated` builds the
+stock and patched images for each optimisation level and requires:
+
+- the patched image has no violation and no attributed variable-latency site
+  on any Cortex-M3 channel over 546 comparable segments;
+- the stock image in the same run still shows the finding (a positive
+  control: a clean result cannot come from a dead detector);
+- both images produce the same FNV-1a digest over every signature of the run
+  (`PQCP_CT_SIGDIGEST`), so the patch changes neither output nor control flow;
+- the helper equals native 64-bit multiplication on edge values and 20
+  million random pairs under UBSan (`--selftest`).
+
+Measured (instruction counts from the trace, whole signing, no cycle model):
+
+| level | stock M3 sites | patched sites | instruction overhead |
+|---|---|---|---|
+| default (-Os) | 8 | 0 | +75.1% |
+| speed (-O2) | 12 | 0 | +56.4% |
+| debug (-Og) | 4 | 0 | +34.3% |
+
+The overhead is the honest price: a `SMULL` is one instruction, the fixed
+helper is about a dozen. On a real M3 the cycle cost is smaller than the
+instruction count suggests (an `SMULL` takes up to five cycles, a `MUL` one),
+but that is not measured here. The overhead is ratcheted by
+`scripts/ct_vlat_mitigation_baseline.json` so it may only shrink.
+
+Prior art: fixed-latency multiplication from 16-bit partial products is
+standard practice (BearSSL `ctmul`, Cortex-M3 notes). Not new: the technique.
+New here: the mitigation is machine-verified by the leak detector that found
+the problem, with a positive control and an output-equivalence digest in the
+same run, gated by the release ledger
+(`security.ct_trace_cortex_m_mitigation`, schema 18; steps
+`mldsa fixed-latency multiply selftest` and
+`ct trace cortex-m3 signing mitigation`, full gate only).
+
+Non-claims: documented-model verification under emulation with recorded
+operands; no hardware, no cycle count; only multiplies are replaced (other
+arithmetic is covered by the trace test on sampled inputs only); opt-in, not
+default; ML-DSA-65 on Cortex-M3 only. Not a constant-time proof.

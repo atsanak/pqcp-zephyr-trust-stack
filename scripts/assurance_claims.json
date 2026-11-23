@@ -1,5 +1,5 @@
 {
-  "schema_version": 17,
+  "schema_version": 18,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -438,6 +438,13 @@
       "claim": "ML-DSA-65 signing is tested on two Cortex-M cores with the declassification-aware relational test of claim security.ct_trace_declassified, extended with the operand-latency channels of claim security.ct_trace_cortex_m_latency: the same tests/ztest_ct_trace_mldsa image is built for mps2/an385 (Cortex-M3) and mps2/an386 (Cortex-M4) and run under qemu-system-arm with the pqcp_ct_trace plugin, which now cuts each signing at the upstream MLD_CT_TESTING_DECLASSIFY events on 32-bit ARM and fingerprints, per segment, the bit lengths of every UDIV/SDIV operand and the documented long-multiply predicate (both operands below 65536) of every UMULL/SMULL/UMLAL/SMLAL. Two segments that agree on every declassified value so far must match on instruction addresses, exact data addresses, 64-byte cache lines and the core's latency model: an M3 long multiply terminates early on operand size (ARM DDI 0337) and so is a channel, an M4 long multiply is single-cycle and is not; both share the variable-latency divider. Measured: on the Cortex-M4 model signing is clean (zero violations over 546 comparable of 600 segments) at three optimisation levels; on the Cortex-M3 model the address channels and the divider are clean but the long-multiply predicate varies with the secret in the Montgomery and NTT arithmetic (8, 12 and 4 instruction sites at -Os, -O2 and -Og, inventoried by site and ratcheted so the count may only shrink against scripts/ct_vlat_signing_baseline.json). The release gate requires the M4 run clean, the M3 run to show no violation on any channel other than the long multiply and at least one such finding (a positive control showing the core distinction is live), and the site counts not to exceed the baseline. This documents a core-selection finding, not a defect proof: it follows ARM's documented early-termination rule, which BearSSL measured real M3 devices to deviate from, under emulation with recorded operands, no cycle model, sampled inputs and crafted non-valid keys. Not a constant-time proof.",
       "required": true,
       "schema_version_added": 17
+    },
+    {
+      "id": "security.ct_trace_cortex_m_mitigation",
+      "category": "security",
+      "claim": "The Cortex-M3 long-multiply finding of claim security.ct_trace_cortex_m_signing is closed by a mitigation that is itself verified by the same test: scripts/mldsa_fixed_latency.py patches a private copy of mldsa-native (the vendored tree is never edited) so that every signed 32x32-to-64 product in the Montgomery and NTT arithmetic is built from four 16x16 partial products computed with the 32-bit MUL instruction, single-cycle on every Cortex-M, plus shifts and adds, instead of SMULL. Three things are checked at three optimisation levels on the mps2/an385 image under QEMU: the patched build shows no violation and no attributed variable-latency site on any Cortex-M3 channel over at least 400 comparable segments; the stock build still shows the long-multiply finding at the same run (a positive control, so a clean patched result cannot come from a dead detector); and both builds produce the same FNV-1a digest over every signature of the run, so the patch changes neither the output nor, with the segment relation, the control flow. The helper is separately checked against native 64-bit multiplication on edge values and 20 million random pairs under UBSan. The cost is recorded, not hidden: the instruction overhead of a whole signing is measured from the trace and ratcheted against scripts/ct_vlat_mitigation_baseline.json. This is verification under emulation against the documented Cortex-M3 latency model with recorded operands: no cycle count (only instruction counts), no hardware measurement, other arithmetic that is not a multiply (rounding, hint, sampling) is covered by the same trace test only for the sampled inputs, the mitigation is opt-in and not part of the default build, and it is not a constant-time proof.",
+      "required": true,
+      "schema_version_added": 18
     }
   ]
 }
