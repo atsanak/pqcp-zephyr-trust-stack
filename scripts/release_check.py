@@ -60,6 +60,7 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "ct trace cortex-m3 signing inventory",
     "mldsa fixed-latency multiply selftest",
     "ct trace cortex-m3 signing mitigation",
+    "ct latency model crosscheck",
     "fault campaign",
     "fault timing campaign",
     "ct smoke ztest run",
@@ -2245,6 +2246,17 @@ def main() -> int:
             cwd=module_path,
             timeout=4800,
             success_markers=("PQCP_CT_TRACE_VLAT_MITIGATION PASS",),
+        ),
+        Step(
+            name="ct latency model crosscheck",
+            cmd=[
+                sys.executable,
+                str(module_path / "scripts/ct_latency_models.py"),
+                "--crosscheck",
+            ],
+            cwd=module_path,
+            timeout=300,
+            success_markers=("PQCP_CT_LATENCY_MODEL_CROSSCHECK PASS",),
         ),
         Step(
             name="fault campaign",

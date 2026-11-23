@@ -1624,6 +1624,77 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_mitigation(selftest, body, ceiling)
             self.assertEqual(result["status"], "fail", (selftest, body, ceiling))
 
+    MODELS_CROSS = "PQCP_CT_LATENCY_MODEL_CROSSCHECK PASS cases=315678\n"
+    MODELS_KEM = "".join(
+        f"PQCP_CT_TRACE_LATENCY_MODELS alg=MLKEM-768 target=cortex-m3 "
+        f"opt={opt} documented_sites=0 cmemu_sites=1 both=0 "
+        "documented_only=0 cmemu_only=1 "
+        "cmemu_only_functions=mlk_poly_compress_d10_c\n"
+        for opt in ("default", "speed", "debug"))
+    MODELS_DSA = "".join(
+        f"PQCP_CT_TRACE_LATENCY_MODELS alg=MLDSA-65 target=cortex-m3 "
+        f"opt={opt}-stock documented_sites={n} cmemu_sites={n} both={n} "
+        f"documented_only=0 cmemu_only=0 doc_violations=370 "
+        f"cmemu_violations=370 cmemu_only_functions=none\n"
+        f"PQCP_CT_TRACE_LATENCY_MODELS alg=MLDSA-65 target=cortex-m3 "
+        f"opt={opt}-patched documented_sites=0 cmemu_sites=0 both=0 "
+        f"documented_only=0 cmemu_only=0 doc_violations=0 "
+        f"cmemu_violations=0 cmemu_only_functions=none\n"
+        for opt, n in (("default", 8), ("speed", 12), ("debug", 4)))
+
+    def _eval_models(self, cross: str, kem: str, dsa: str, only=None) -> dict:
+        only = only or {"default": 1, "speed": 1, "debug": 1}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, text, name in (
+                ("ct latency model crosscheck", cross, "01.log"),
+                ("ct trace cortex-m latency", kem, "02.log"),
+                ("ct trace cortex-m3 signing mitigation", dsa, "03.log"),
+            ):
+                (manifest_path.parent / name).write_text(text, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                    "size_bytes": len(text.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"mlkem_cmemu_only_max": only}))
+            spec = {"id": "security.ct_trace_cortex_m_latency_models",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_cortex_m_latency_models(
+                spec, transcript_manifest=manifest_path,
+                models_baseline=baseline)
+
+    def test_latency_models_passes_and_records_the_disagreement(self) -> None:
+        result = self._eval_models(self.MODELS_CROSS, self.MODELS_KEM,
+                                   self.MODELS_DSA)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["mlkem_cmemu_only_sites"]["debug"], 1)
+
+    def test_latency_models_fails_on_weak_or_missing_evidence(self) -> None:
+        c, k, d = self.MODELS_CROSS, self.MODELS_KEM, self.MODELS_DSA
+        for cross, kem, dsa, only in (
+            (c.replace("315678", "10"), k, d, None),
+            ("noise\n", k, d, None),
+            (c, k.replace("opt=debug", "opt=default"), d, None),
+            (c, k.replace("cmemu_only=1", "cmemu_only=2"), d, None),
+            (c, k, d.replace("opt=speed-patched documented_sites=0 cmemu_sites=0",
+                             "opt=speed-patched documented_sites=0 cmemu_sites=1"), None),
+            (c, k, d.replace("cmemu_violations=0", "cmemu_violations=3"), None),
+            (c, k, d.replace("doc_violations=0", "doc_violations=3"), None),
+            (c, k, d.replace("opt=debug-stock documented_sites=4 cmemu_sites=4",
+                             "opt=debug-stock documented_sites=4 cmemu_sites=0"), None),
+            (c, k, "noise\n", None),
+            (c, k, d, {"default": 0, "speed": 1, "debug": 1}),  # shrunk baseline
+        ):
+            result = self._eval_models(cross, kem, dsa, only)
+            self.assertEqual(result["status"], "fail", (cross, kem, dsa, only))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "

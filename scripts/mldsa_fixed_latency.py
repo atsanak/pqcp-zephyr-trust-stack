@@ -7,7 +7,11 @@ secret-dependent 32-bit operands with SMULL, whose latency on a Cortex-M3
 depends on operand size (ARM DDI 0337). This module is the mitigation: every
 signed 32x32 -> 64 product in the Montgomery path is replaced by a helper
 built from four 16x16 partial products computed with the 32-bit MUL, which is
-single-cycle on every Cortex-M, plus shifts and adds. The vendored tree is
+single-cycle on Cortex-M3/M4 (and constant-time on every Cortex-M, including
+the 32-cycle small-multiplier option of M0/M0+), plus shifts and adds.
+The technique is not new: Greconici, Kannwischer and Sprenkels (ePrint
+2020/1278) already observed that smull/smlal are not constant time on the
+M3 and ship a constant-time M3 Dilithium. The vendored tree is
 never edited: `apply()` patches a private copy, the same way the leak
 rediscovery tests do, and the copy is built with
 `-DZEPHYR_EXTRA_MODULES=<copy>`.
@@ -40,7 +44,7 @@ COPY_PATHS = tuple(p if p != "tests/ztest_ct_trace" else
 HELPER = """\
 /* PQCP fixed-latency patch (scripts/mldsa_fixed_latency.py).
  * Signed 32x32 -> 64 product from four 16x16 partial products. Every
- * multiply is a 32-bit MUL (single-cycle on all Cortex-M cores), so the
+ * multiply is a 32-bit MUL (constant-time on all Cortex-M cores), so the
  * latency no longer depends on the operand magnitudes the way SMULL does on a
  * Cortex-M3. Shifts and adds are data-independent. */
 #define PQCP_FIXED_LATENCY_MUL 1

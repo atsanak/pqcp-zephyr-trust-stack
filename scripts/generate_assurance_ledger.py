@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2194,6 +2194,113 @@ def evaluate_ct_trace_cortex_m_mitigation(
         commands=commands, details=details)
 
 
+VLAT_MODELS_BASELINE = SCRIPT_DIR / "ct_vlat_models_baseline.json"
+
+
+def evaluate_ct_trace_cortex_m_latency_models(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+    models_baseline: Path | None = None,
+) -> dict[str, object]:
+    """Bind security.ct_trace_cortex_m_latency_models to the model comparison.
+
+    Requires the C/Python classifier cross-check, a live second channel (the
+    stock ML-DSA image fails under the CMEmu model), the patched image clean
+    under CMEmu at every level, and the ML-KEM CMEmu-only site count within
+    the committed baseline.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/tcg_ct_plugin/src/ct_latency_models.h",
+        "scripts/ct_latency_models.py",
+        "scripts/ct_trace_analysis.py::compare_latency_models",
+        "scripts/run_ct_trace_checks.py::report_models",
+    ]
+    commands = [
+        "python3 scripts/ct_latency_models.py --crosscheck",
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3",
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3 --alg mldsa --mitigated",
+    ]
+    steps = ("ct latency model crosscheck", "ct trace cortex-m latency",
+             "ct trace cortex-m3 signing mitigation")
+    details: dict[str, object] = {}
+    bodies = {}
+    for step in steps:
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+    baseline_path = models_baseline or VLAT_MODELS_BASELINE
+    try:
+        only_max = {
+            str(k): int(v) for k, v in json.loads(
+                baseline_path.read_text(encoding="utf-8"))[
+                    "mlkem_cmemu_only_max"].items()}
+    except (OSError, ValueError, KeyError, AttributeError):
+        return fail_claim(
+            spec, reason=f"unreadable models baseline {baseline_path}",
+            validators=validators, evidence_artifacts=artifacts,
+            commands=commands)
+    problems = []
+    m = re.search(r"PQCP_CT_LATENCY_MODEL_CROSSCHECK PASS cases=(\d+)",
+                  bodies[steps[0]])
+    if not m or int(m.group(1)) < 100_000:
+        problems.append("classifier cross-check missing or too small")
+    else:
+        details["crosscheck_cases"] = int(m.group(1))
+    required_opts = {"default", "speed", "debug"}
+    line = (r"PQCP_CT_TRACE_LATENCY_MODELS alg=%s target=cortex-m3 "
+            r"opt=%s documented_sites=(\d+) cmemu_sites=(\d+) both=(\d+) "
+            r"documented_only=(\d+) cmemu_only=(\d+)")
+    kem_only: dict[str, int] = {}
+    for opt in sorted(required_opts):
+        m = re.search(line % ("MLKEM-768", re.escape(opt)), bodies[steps[1]])
+        if m:
+            kem_only[opt] = int(m.group(5))
+    if set(kem_only) != required_opts:
+        problems.append("ML-KEM model comparison missing at: "
+                        + ", ".join(sorted(required_opts - set(kem_only))))
+    for opt, count in sorted(kem_only.items()):
+        if opt in only_max and count > only_max[opt]:
+            problems.append(f"ML-KEM CMEmu-only sites at {opt} grew: "
+                            f"{count} > baseline {only_max[opt]}")
+    stock_live: dict[str, int] = {}
+    patched_clean = set()
+    for opt in sorted(required_opts):
+        m = re.search(line % ("MLDSA-65", re.escape(opt + "-stock")),
+                      bodies[steps[2]])
+        if m and int(m.group(2)) >= 1:
+            stock_live[opt] = int(m.group(2))
+        m = re.search((line % ("MLDSA-65", re.escape(opt + "-patched"))) +
+                      r" doc_violations=(\d+) cmemu_violations=(\d+)",
+                      bodies[steps[2]])
+        if (m and int(m.group(2)) == 0 and int(m.group(1)) == 0 and
+                int(m.group(6)) == 0 and int(m.group(7)) == 0):
+            patched_clean.add(opt)
+    if set(stock_live) != required_opts:
+        problems.append("second channel not live (stock ML-DSA shows no "
+                        "CMEmu-failing site) at: "
+                        + ", ".join(sorted(required_opts - set(stock_live))))
+    if patched_clean != required_opts:
+        problems.append("patched image not clean under both models at: "
+                        + ", ".join(sorted(required_opts - patched_clean)))
+    details["mlkem_cmemu_only_sites"] = dict(sorted(kem_only.items()))
+    details["mldsa_stock_cmemu_sites"] = dict(sorted(stock_live.items()))
+    details["patched_clean_levels"] = sorted(patched_clean)
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3254,6 +3361,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_mitigation": lambda spec: evaluate_ct_trace_cortex_m_mitigation(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_cortex_m_latency_models": lambda spec: evaluate_ct_trace_cortex_m_latency_models(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(
