@@ -283,3 +283,18 @@ used above). ML-DSA-65, 600 keys x 5000 messages.
   are controls: two-sided, Bonferroni-corrected alpha = 0.005 each; a
   significant control would be reported as unexpected.
 
+### Results of the sixth registration (confirmatory, seed 2, 600 keys x 5000)
+
+pooled mean 5.137; chi-square homogeneity 16444.3 on 16173 dof, p = 0.066
+(does not reject); r(sum|t0|) = 0.092, one-sided p = 0.0121; controls
+r(sum|s1|) = 0.030 (p = 0.46), r(sum|s2|) = 0.054 (p = 0.18).
+
+H13 is falsified at the registered level: p = 0.0121 >= 0.01. The direction
+matches the exploratory observation and the effect is small (r = 0.092 on
+per-key means that are dominated by sampling noise), so the honest reading is
+"not confirmed": the data neither establish nor exclude a weak positive
+dependence of the attempt count on sum|t0|. Excluding it would need many more
+signatures per key; the measurement bounds any key-dependence of the mean
+attempt count below roughly 0.5% of the mean. The registered test was not
+adjusted after the fact.
+

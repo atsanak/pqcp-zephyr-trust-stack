@@ -775,3 +775,12 @@ below about 0.5% of the mean or specific to rare keys would not be seen in 200
 keys; ML-DSA-65 only; host build, not the target image; random keys and random
 messages (not adversarial); deterministic signing; no timing measurement.
 
+Addendum to claim 18 (confirmatory test): ML-DSA-44 and 87 are also consistent
+with key-independence (p = 0.99 and 0.54). An exploratory positive correlation
+of the per-key mean with sum|t0| (r = 0.13, 0.25, 0.17 in the three sets) was
+tested on fresh seeds with a pre-registered one-sided test (600 keys x 5000
+messages): r = 0.092, p = 0.0121, so it is not confirmed at the registered
+alpha = 0.01, and the s1 and s2 controls are null. The claim stays a null
+result at its stated resolution; the t0 association is an open question, not a
+finding.
+
