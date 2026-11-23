@@ -1291,6 +1291,13 @@ external vectors; mutation testing of verifiers/ratchet.
   One candidate UMULL (compress_d10), 3/3 injected leaks found that address
   channels miss, 0/3 benign flagged. Two new full-gate steps.
 
+- ML-DSA signing on Cortex-M (claim 14, schema 17, claim
+  security.ct_trace_cortex_m_signing): `--target cortex-m3|cortex-m4 --alg
+  mldsa [--measure]`, per-segment latency streams in the plugin, core-aware
+  channels. M4 clean (0 violations); M3 documented-model long-multiply
+  findings at 8/12/4 sites (ratcheted in ct_vlat_signing_baseline.json). Two
+  new full-gate steps.
+
 ## Final rule
 
 Do not confuse motion with progress.

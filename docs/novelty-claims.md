@@ -552,3 +552,58 @@ not ML-DSA on Cortex-M; conditional execution inside Thumb IT blocks is
 counted when the instruction is reached; sampled inputs. Not a constant-time
 proof.
 
+## Claim 14: ML-DSA signing on two Cortex-M cores, and a core-selection finding
+
+Claims 12 and 13 meet here. The declassification-aware signing test now runs
+on 32-bit ARM, and the operand-latency fingerprints are kept per segment, so
+rejection loops (whose per-site execution counts legitimately vary) are
+compared segment by segment, only when the declassified prefixes coincide. The
+same `tests/ztest_ct_trace_mldsa` image is built for `mps2/an385` (Cortex-M3)
+and `mps2/an386` (Cortex-M4). The verdict is core-aware: an M3 long multiply
+terminates early on operand size (ARM DDI 0337), so the documented predicate
+(both operands below 65536) is a channel there; an M4 long multiply is
+single-cycle, so it is not; both share the variable-latency divider. Exact
+operand differences that the core's model does not explain are counted as
+candidates, not hidden.
+
+Measured on the shipped ML-DSA-65 (18 signings, 600 segments, 546 comparable):
+
+- Cortex-M4 model: 0 violations at -Os, -O2 and -Og (370 candidate segments,
+  where exact operands vary but the M4 model is constant).
+- Cortex-M3 model: instruction addresses, data addresses, cache lines and the
+  divider are clean, but the long-multiply predicate varies with the secret in
+  the Montgomery reduction and NTT arithmetic (`mld_montgomery_reduce`,
+  `mld_fqmul`, `mld_fqscale`, `mld_poly_pointwise_montgomery_c`): 8, 12 and 4
+  instruction sites at -Os, -O2 and -Og. The gate requires the M4 run clean,
+  the M3 run to show no violation on any other channel and at least one such
+  finding (a positive control that the core distinction is live), and the
+  site counts not to exceed `scripts/ct_vlat_signing_baseline.json`; a fix
+  can only shrink them.
+
+The practical reading is a core-selection finding: on the documented model,
+this build of ML-DSA signing is only reasonable to deploy on a core with
+single-cycle long multiplies. That follows ARM's documented rule; BearSSL
+measured real M3 devices deviating from it, so the M3 result is a documented-
+model finding, not a measured exploit.
+
+Two harness bugs the ARM run exposed and the gate now prevents: 64-bit marker
+arguments occupy register pairs on 32-bit ARM, which silently dropped the
+declassified value class and made the segment comparison too lenient (the
+marker now passes 32-bit arguments and the plugin masks them); and a 64-bit
+FNV multiply in the harness itself compiled to a `UMULL`, a false finding
+inside the test code (the digest is now 32-bit shifts and adds).
+
+Prior art: as in claims 12 and 13 (declassification-based noninterference;
+early-terminating multipliers, ePrint 2009/538; BearSSL ctmul notes).
+Not new: the hazard, the instruction facts. New here: segment-wise,
+declassification-aware operand-latency testing of a rejection-sampling
+scheme on two cores with core-specific verdicts, an inventory ratcheted by
+the release ledger (`security.ct_trace_cortex_m_signing`, schema 17; steps
+`ct trace cortex-m4 signing` and `ct trace cortex-m3 signing inventory`, full
+gate only).
+
+Non-claims: operands are recorded, latency is not simulated; no hardware
+measurement; two cores only (M33, M7 and M0+ are not modelled); ML-DSA-65 only;
+crafted non-valid keys; the declassification policy is upstream's; sampled
+inputs. Not a constant-time proof.
+

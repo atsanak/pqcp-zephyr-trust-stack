@@ -1500,6 +1500,70 @@ class AssuranceLedgerTests(unittest.TestCase):
             result = self._eval_vlat(clean, redis, base)
             self.assertEqual(result["status"], "fail", (clean, redis, base))
 
+    M4_SIGN = "".join(
+        f"PQCP_CT_TRACE_VLAT_DECLASS PASS alg=MLDSA-65 target=cortex-m4 "
+        f"opt={opt} regions=18 segments=600 testable=546 violations=0 "
+        "vdiv_violations=0 vmul_violations=0 other_violations=0 "
+        "candidate_segments=370 attributed_sites=0\n"
+        for opt in ("default", "speed", "debug")
+    ) + "[ct-trace] PASS: every comparable segment is identical\n"
+    M3_SIGN = "".join(
+        f"PQCP_CT_TRACE_VLAT_DECLASS FAIL alg=MLDSA-65 target=cortex-m3 "
+        f"opt={opt} regions=18 segments=600 testable=546 violations=370 "
+        f"vdiv_violations=0 vmul_violations=370 other_violations=0 "
+        f"candidate_segments=0 attributed_sites={n}\n"
+        for opt, n in (("default", 8), ("speed", 12), ("debug", 4))
+    ) + "[ct-trace] MEASURED: cortex-m3 signing leaks only through multiplies\n"
+
+    def _eval_signing(self, m4: str, m3: str, sites=None) -> dict:
+        sites = sites or {"default": 8, "speed": 12, "debug": 4}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            entries = []
+            for step, body, name in (
+                ("ct trace cortex-m4 signing", m4, "01.log"),
+                ("ct trace cortex-m3 signing inventory", m3, "02.log"),
+            ):
+                (manifest_path.parent / name).write_text(body, encoding="utf-8")
+                entries.append({
+                    "step": step, "transcript_path": name,
+                    "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                    "size_bytes": len(body.encode()), "returncode": 0})
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "transcripts": entries}) + "\n",
+                encoding="utf-8")
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"m3_attributed_sites_max": sites}))
+            spec = {"id": "security.ct_trace_cortex_m_signing",
+                    "category": "security", "claim": "x", "required": True}
+            return ledger.evaluate_ct_trace_cortex_m_signing(
+                spec, transcript_manifest=manifest_path,
+                signing_baseline=baseline)
+
+    def test_cortex_m_signing_passes_and_records_inventory(self) -> None:
+        result = self._eval_signing(self.M4_SIGN, self.M3_SIGN)
+        self.assertEqual(result["status"], "pass", result.get("failure_reason"))
+        self.assertEqual(result["details"]["m3_leaking_sites"]["speed"], 12)
+
+    def test_cortex_m_signing_fails_on_weak_or_missing_evidence(self) -> None:
+        shrunk = {"default": 8, "speed": 11, "debug": 4}
+        for m4, m3, sites in (
+            (self.M4_SIGN.replace("violations=0 vdiv", "violations=2 vdiv"), self.M3_SIGN, None),
+            (self.M4_SIGN.replace("opt=debug", "opt=default"), self.M3_SIGN, None),
+            (self.M4_SIGN.replace("testable=546", "testable=100"), self.M3_SIGN, None),
+            (self.M4_SIGN.replace("PASS alg", "FAIL alg"), self.M3_SIGN, None),
+            (self.M4_SIGN, self.M3_SIGN.replace("other_violations=0", "other_violations=3"), None),
+            (self.M4_SIGN, self.M3_SIGN.replace("vdiv_violations=0", "vdiv_violations=1"), None),
+            (self.M4_SIGN, self.M3_SIGN.replace("vmul_violations=370", "vmul_violations=0").replace("violations=370", "violations=0"), None),
+            (self.M4_SIGN, self.M3_SIGN.replace("[ct-trace] MEASURED", "[ct-trace] noise"), None),
+            (self.M4_SIGN, self.M3_SIGN, shrunk),  # site count above a shrunk baseline
+            (self.M4_SIGN, "noise\n", None),
+        ):
+            result = self._eval_signing(m4, m3, sites)
+            self.assertEqual(result["status"], "fail", (m4, m3, sites))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "

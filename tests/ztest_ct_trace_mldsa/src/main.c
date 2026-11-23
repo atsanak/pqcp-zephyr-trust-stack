@@ -62,9 +62,14 @@ __attribute__((noinline)) void pqcp_ct_region_end(uint32_t label)
 	__asm__ volatile("" : : "r"(label) : "memory");
 }
 
-/* The plugin reads site, length and value class from rdi, rsi, rdx. */
-__attribute__((noinline)) void pqcp_ct_event(uint64_t site, uint64_t len,
-					     uint64_t cls)
+/*
+ * The plugin reads site, length and value class from the first three
+ * argument registers (rdi, rsi, rdx on x86_64; r0..r2 on Cortex-M). 32-bit
+ * arguments keep that true on both: a 64-bit argument would occupy a register
+ * pair on 32-bit ARM. The plugin masks the registers to 32 bits.
+ */
+__attribute__((noinline)) void pqcp_ct_event(uint32_t site, uint32_t len,
+					     uint32_t cls)
 {
 	__asm__ volatile("" : : "r"(site), "r"(len), "r"(cls) : "memory");
 }
@@ -77,21 +82,27 @@ __attribute__((noinline)) void pqcp_ct_event(uint64_t site, uint64_t len,
 __attribute__((noinline)) void pqcp_ct_declassify(const void *ptr, size_t len)
 {
 	const uint8_t *p = ptr;
-	uint64_t cls = 0U;
+	uint32_t cls = 0U;
 
 	if (len <= 8U) {
+		/* Raw value (norm-check flags), folded to 32 bits. */
 		for (size_t i = 0U; i < len; ++i) {
-			cls |= (uint64_t)p[i] << (8U * i);
+			cls ^= (uint32_t)p[i] << (8U * (i & 3U));
 		}
 	} else {
-		cls = 0xcbf29ce484222325ULL;
+		/* 32-bit FNV-1a. The multiply by the prime 0x01000193 is
+		 * spelled as shifts and adds in 32-bit arithmetic so the
+		 * harness contains no variable-latency multiplier on
+		 * Cortex-M3 (a 64-bit shift would compile to UMULL). */
+		cls = 0x811c9dc5U;
 		for (size_t i = 0U; i < len; ++i) {
 			cls ^= p[i];
-			cls *= 0x100000001b3ULL;
+			cls += (cls << 1) + (cls << 4) + (cls << 7) +
+			       (cls << 8) + (cls << 24);
 		}
 	}
-	pqcp_ct_event((uint64_t)(uintptr_t)__builtin_return_address(0),
-		      (uint64_t)len, cls);
+	pqcp_ct_event((uint32_t)(uintptr_t)__builtin_return_address(0),
+		      (uint32_t)len, cls);
 }
 
 static uint32_t prng_state;

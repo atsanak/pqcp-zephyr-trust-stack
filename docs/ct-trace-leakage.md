@@ -60,3 +60,14 @@ candidate inventory; marker
 benign; baseline `ct_leak_rediscovery_m3_baseline.json`). See
 docs/novelty-claims.md claim 13.
 
+## Cortex-M signing (M3 and M4)
+
+`run_ct_trace_checks.py --target cortex-m4 --alg mldsa` must pass;
+`--target cortex-m3 --alg mldsa --measure` exits 0 when the only findings are
+long-multiply predicate violations (an inventory, with a positive control).
+Markers: `PQCP_CT_TRACE_VLAT_DECLASS PASS|FAIL ... vdiv_violations=
+vmul_violations= other_violations= candidate_segments= attributed_sites=`.
+Per-core channels: `ct_trace_analysis.CORE_CHANNELS`. The marker function
+`pqcp_ct_event` takes 32-bit arguments (r0..r2 on ARM). See
+docs/novelty-claims.md claim 14.
+

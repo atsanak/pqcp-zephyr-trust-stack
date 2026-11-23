@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2007,6 +2007,105 @@ def evaluate_ct_trace_cortex_m_latency(
         commands=commands, details=details)
 
 
+VLAT_SIGNING_BASELINE = SCRIPT_DIR / "ct_vlat_signing_baseline.json"
+
+
+def evaluate_ct_trace_cortex_m_signing(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+    signing_baseline: Path | None = None,
+) -> dict[str, object]:
+    """Bind security.ct_trace_cortex_m_signing to the M4 run and M3 inventory.
+
+    M4: clean at three optimisation levels with most segments comparable.
+    M3: no violation on any channel but the long multiply, at least one such
+    finding at every level (positive control), and no more leaking sites than
+    the committed baseline.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = [
+        "tools/tcg_ct_plugin::pqcp_ct_trace",
+        "scripts/run_ct_trace_checks.py",
+        "scripts/ct_trace_analysis.py::analyze_declassified",
+        "scripts/ct_trace_analysis.py::analyze_vlat",
+    ]
+    commands = [
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m4 --alg mldsa",
+        "python3 scripts/run_ct_trace_checks.py --target cortex-m3 --alg mldsa --measure",
+    ]
+    details: dict[str, object] = {}
+    bodies = {}
+    steps = ("ct trace cortex-m4 signing", "ct trace cortex-m3 signing inventory")
+    for step in steps:
+        path, sha, body = _read_named_transcript(transcript_manifest, step)
+        if path is None or not body:
+            return fail_claim(
+                spec,
+                reason=f"{step} transcript missing or empty in {transcript_manifest}",
+                validators=validators, evidence_artifacts=artifacts,
+                commands=commands)
+        artifacts.append(artifact(path, label=f"{step} transcript"))
+        details[f"{step} transcript_sha256"] = sha
+        bodies[step] = body
+    baseline_path = signing_baseline or VLAT_SIGNING_BASELINE
+    try:
+        site_max = {
+            str(k): int(v) for k, v in json.loads(
+                baseline_path.read_text(encoding="utf-8"))[
+                    "m3_attributed_sites_max"].items()}
+    except (OSError, ValueError, KeyError, AttributeError):
+        return fail_claim(
+            spec, reason=f"unreadable signing baseline {baseline_path}",
+            validators=validators, evidence_artifacts=artifacts,
+            commands=commands)
+
+    required_opts = {"default", "speed", "debug"}
+    problems = []
+    m4_opts = set()
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_VLAT_DECLASS PASS alg=MLDSA-65 target=cortex-m4 "
+            r"opt=(\S+) regions=(\d+) segments=(\d+) testable=(\d+) "
+            r"violations=0 ",
+            bodies[steps[0]]):
+        if int(m.group(2)) >= 12 and int(m.group(4)) * 10 >= int(m.group(3)) * 7:
+            m4_opts.add(m.group(1))
+    if not required_opts <= m4_opts:
+        problems.append("Cortex-M4 signing not clean at: "
+                        + ", ".join(sorted(required_opts - m4_opts)))
+    m3_sites: dict[str, int] = {}
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_VLAT_DECLASS FAIL alg=MLDSA-65 target=cortex-m3 "
+            r"opt=(\S+) regions=(\d+) segments=(\d+) testable=(\d+) "
+            r"violations=(\d+) vdiv_violations=0 vmul_violations=(\d+) "
+            r"other_violations=0 candidate_segments=\d+ "
+            r"attributed_sites=(\d+)",
+            bodies[steps[1]]):
+        if (int(m.group(2)) >= 12 and int(m.group(6)) >= 1 and
+                int(m.group(5)) == int(m.group(6)) and
+                int(m.group(4)) * 10 >= int(m.group(3)) * 7):
+            m3_sites[m.group(1)] = int(m.group(7))
+    if not required_opts <= set(m3_sites):
+        problems.append("Cortex-M3 inventory incomplete or has violations on "
+                        "a channel other than the long multiply at: "
+                        + ", ".join(sorted(required_opts - set(m3_sites))))
+    for opt, count in sorted(m3_sites.items()):
+        if opt in site_max and count > site_max[opt]:
+            problems.append(f"M3 leaking sites at {opt} grew: {count} > "
+                            f"baseline {site_max[opt]}")
+        if count < 1:
+            problems.append(f"M3 inventory at {opt} has no attributed sites")
+    if "[ct-trace] MEASURED:" not in bodies[steps[1]]:
+        problems.append("no MEASURED line for the Cortex-M3 inventory")
+    details["m4_clean_levels"] = sorted(m4_opts)
+    details["m3_leaking_sites"] = dict(sorted(m3_sites.items()))
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3061,6 +3160,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_latency": lambda spec: evaluate_ct_trace_cortex_m_latency(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_trace_cortex_m_signing": lambda spec: evaluate_ct_trace_cortex_m_signing(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_instruction_count": lambda spec: evaluate_ct_instruction_count(
