@@ -15,7 +15,7 @@ Describe the change you would like to see. Include any concrete touch
 points you can identify (Kconfig symbol, module source file, ztest
 suite, release-gate step, CI workflow). If the feature introduces a
 new public API, note whether it crosses the immutable-contract
-boundary (see `PROJECT_NOTES.md` and `CONTRIBUTING.md`).
+boundary (see `CONTRIBUTING.md`).
 
 ## Alternatives considered
 

@@ -164,8 +164,7 @@ What this repository explicitly does **not** prove:
   protocol-level adversary on the wire.
 - **GitHub Release-page publication.** The repository is currently
   release-pack-ready and consumer-onboarding-ready; the GitHub Release
-  page itself depends on Actions billing being unblocked and is
-  tracked separately in `PROJECT_NOTES.md`.
+  page itself depends on the release workflow running on GitHub-hosted runners.
 
 ## 6. Pointers
 

@@ -70,8 +70,8 @@ DEFAULT_CASES = [
         overlay="overlay-sanitize.conf",
         # Build-only by default. The native_sim ASan + mbedTLS TLS-handshake
         # path hangs past the per-case 120s wall-clock budget on the GitHub
-        # hosted runner; root-causing the hang is tracked separately in
-        # PROJECT_NOTES.md. Build-only keeps the sanitizer build path covered, and
+        # hosted runner; root-causing the hang is a known open item.
+        # Build-only keeps the sanitizer build path covered, and
         # the runtime ASan/UBSan TLS path is now exercised by
         # tests/ztest_tls_selftest after the timer-source fix landed in
         # src/tls_selftest.c (commit 011c937).
