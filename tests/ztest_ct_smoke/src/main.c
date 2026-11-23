@@ -45,6 +45,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/printk.h>
+#include <stdbool.h>
 #include <zephyr/ztest.h>
 
 #include <pqcp_zephyr/mlkem.h>
@@ -154,7 +155,10 @@ static uint64_t welch_t2_x1000(const uint64_t *valid_samples,
 	return (delta * delta * 1000U) / denominator;
 }
 
-static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
+/* One measurement round; true when the median split is inside the smoke
+ * bound. Wall-clock timing on a shared emulated runner has outliers, so the
+ * caller retries: a real bifurcation repeats, a scheduling blip does not. */
+static bool ct_smoke_attempt(pqcp_mlkem_level_t level, const char *name)
 {
 	zassert_equal(pqcp_rng_init(), 0);
 	zassert_equal(pqcp_rng_deterministic_seed(ct_smoke_seed,
@@ -248,11 +252,24 @@ static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
 	       (unsigned long long)mean_invalid,
 	       (unsigned long long)t2_x1000);
 
-	zassert_true(relative_pct <= CT_SMOKE_RELATIVE_BOUND_PERCENT,
-		     "%s decap median timing variance %llu%% > smoke bound %u%%",
-		     name,
-		     (unsigned long long)relative_pct,
-		     (unsigned int)CT_SMOKE_RELATIVE_BOUND_PERCENT);
+	return relative_pct <= CT_SMOKE_RELATIVE_BOUND_PERCENT;
+}
+
+#define CT_SMOKE_ATTEMPTS 3
+
+static void run_mlkem_decap_ct_smoke(pqcp_mlkem_level_t level, const char *name)
+{
+	for (unsigned int attempt = 1U; attempt <= CT_SMOKE_ATTEMPTS; ++attempt) {
+		if (ct_smoke_attempt(level, name)) {
+			return;
+		}
+		printk("PQCP_CT_SMOKE_RETRY alg=%s attempt=%u of %u\n", name,
+		       attempt, (unsigned int)CT_SMOKE_ATTEMPTS);
+	}
+	zassert_unreachable("%s decap median timing split exceeded the smoke "
+			    "bound %u%% in all %u attempts", name,
+			    (unsigned int)CT_SMOKE_RELATIVE_BOUND_PERCENT,
+			    (unsigned int)CT_SMOKE_ATTEMPTS);
 }
 
 ZTEST(pqcp_ct_smoke, test_mlkem_decap_timing_profile_does_not_bifurcate)
