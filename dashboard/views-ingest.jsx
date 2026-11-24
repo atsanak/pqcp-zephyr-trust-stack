@@ -70,15 +70,6 @@ function IngestView({ session, setSession, pack, onLoadPack, onClearPack }) {
     } finally { setBusy(false); }
   }
 
-  async function handleSample() {
-    setBusy(true); setLastErr(null);
-    const url = "pqcp-dashboard-seed-pack.json";
-    const p = await IgPK.loadFromUrl(url, "pqcp-dashboard-seed-pack.json");
-    if (!p.loaded) setLastErr(p.errors[0] || "Failed to load bundled sample");
-    onLoadPack(p);
-    setSession(s => ({ ...s, ingested: !!p.loaded, path: "pqcp-dashboard-seed-pack.json (bundled)" }));
-    setBusy(false);
-  }
 
   const presence = igM(() => {
     if (!pack || !pack.loaded) return null;
@@ -98,23 +89,15 @@ function IngestView({ session, setSession, pack, onLoadPack, onClearPack }) {
         {lastErr && <IgCallout tone="err" title="Ingest failed">{lastErr}</IgCallout>}
 
         <IgDrop onFile={handleFile}
-                label="Drop seed-pack JSON here"
-                hint="Produced by scripts/build_pqcp_dashboard_seed_pack.py over a release output root." />
+                label="Drop a pack JSON here"
+                hint="Or pick the output directory of a local release check." />
 
         <div className="dropzone__or">, or, </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <button className="btn" onClick={handleDirectory}>Pick release output directory…</button>
-          <button className="btn" onClick={handleSample}>Load bundled sample pack</button>
-        </div>
+        <button className="btn" onClick={handleDirectory}>Pick release output directory…</button>
 
         <IgHr />
-        <div className="kv__k" style={{ marginBottom: 6 }}>Produce a pack from a release output root</div>
-        <IgCode label="$ build seed pack">{`python3 scripts/build_pqcp_dashboard_seed_pack.py \\
-  /tmp/pqcp-release-pack \\
-  --out seedpack.json`}</IgCode>
-
-        <div className="kv__k" style={{ marginBottom: 6 }}>If you do not have a pack yet, produce one locally</div>
+        <div className="kv__k" style={{ marginBottom: 6 }}>Produce a release output directory locally</div>
         <IgCode label="$ release_check">{`python3 scripts/release_check.py \\
   --tag v1.0.0 \\
   --output-root /tmp/pqcp-release-pack`}</IgCode>
