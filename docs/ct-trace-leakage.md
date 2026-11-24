@@ -22,7 +22,7 @@ Implementation notes learned the hard way: the SDK QEMU exports no glib
 symbols (the plugin links glib itself) and has no disassembler (x86 div is
 decoded from opcode bytes); traces of different keys differ because the
 public matrix is expanded by rejection sampling, so the relation is checked
-within a key. See docs/novelty-claims.md claim 9 for scope and non-claims.
+within a key. See docs/prior-art-and-contributions.md claim 9 for scope and non-claims.
 
 Optimisation levels: the clean test runs at Zephyr's default (-Os), speed
 (-O2) and debug (-Og); instruction counts per region differ (about 814k,
@@ -40,7 +40,7 @@ segments whose declassified prefix is identical; marker
 `PQCP_CT_TRACE_DECLASS PASS ... segments=600 testable=546 violations=0`.
 `--rediscover --alg mldsa` runs `ct_leak_rediscovery_mldsa.py` (4 leaks, 3
 benign; baseline `ct_leak_rediscovery_mldsa_baseline.json`). See
-docs/novelty-claims.md claim 12.
+docs/prior-art-and-contributions.md claim 12.
 
 Pitfall found: an injected `if (secret) { __asm__ volatile(""); }` compiles to
 nothing (empty asm, empty branch) and looked like a missed leak; the body needs
@@ -58,7 +58,7 @@ candidate inventory; marker
 `PQCP_CT_TRACE_VLAT PASS ... sites=1 fail_sites=0 candidate_sites=1 base=clean`.
 `--target cortex-m3 --rediscover` runs `ct_leak_rediscovery_m3.py` (3 leaks, 3
 benign; baseline `ct_leak_rediscovery_m3_baseline.json`). See
-docs/novelty-claims.md claim 13.
+docs/prior-art-and-contributions.md claim 13.
 
 ## Cortex-M signing (M3 and M4)
 
@@ -69,7 +69,7 @@ Markers: `PQCP_CT_TRACE_VLAT_DECLASS PASS|FAIL ... vdiv_violations=
 vmul_violations= other_violations= candidate_segments= attributed_sites=`.
 Per-core channels: `ct_trace_analysis.CORE_CHANNELS`. The marker function
 `pqcp_ct_event` takes 32-bit arguments (r0..r2 on ARM). See
-docs/novelty-claims.md claim 14.
+docs/prior-art-and-contributions.md claim 14.
 
 ## Verified Cortex-M3 mitigation
 
@@ -78,4 +78,4 @@ patches a private copy of mldsa-native with a fixed-latency 32x32->64 helper.
 `run_ct_trace_checks.py --target cortex-m3 --alg mldsa --mitigated` builds
 stock and patched images and prints `PQCP_CT_TRACE_VLAT_MITIGATION PASS ...
 stock_vmul_violations= patched_violations=0 patched_sites=0
-sig_digest_match=1 insn_overhead_pct=`. See docs/novelty-claims.md claim 15.
+sig_digest_match=1 insn_overhead_pct=`. See docs/prior-art-and-contributions.md claim 15.

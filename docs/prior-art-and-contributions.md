@@ -1,15 +1,12 @@
-# Novelty claims and prior art
+# Prior art and contributions
 
-This document states, precisely, what is novel in this repository and what
-is not. Each claim names the prior art it builds on and the exact thing
-that is new, plus explicit non-claims. The intent is that a skeptical
-reviewer can check every sentence against the code and the captured
-evidence rather than against marketing.
+This document states what this repository contributes and what it builds
+on. Each claim names its prior art, the exact thing that is new, and
+explicit non-claims, so a reviewer can check every sentence against the code
+and the captured evidence.
 
 Everything below is validated locally on macOS with Zephyr v4.4.0 and
-Zephyr SDK 1.0.1 (QEMU 10.0.2). GitHub Actions hosted runners remain
-blocked by account billing, so local validation is authoritative; the
-release gate (`scripts/release_check.py`) re-runs every check listed here.
+Zephyr SDK 1.0.1 (QEMU 10.0.2), and the release gate (`scripts/release_check.py`) re-runs every check listed here.
 
 ## Background: what already existed here
 
@@ -244,7 +241,7 @@ receipt shows the verdict was logged, not that the device is genuine
 (the device passport signature is still demo custody, see claim 2).
 Python agreement covers structure and Merkle math, not authenticity.
 
-## Combined novelty
+## Combined contribution
 
 Taken together, the repository demonstrates, to our knowledge for the
 first time in an open Zephyr PQC module, a firmware-emitted, host-
@@ -667,7 +664,7 @@ default; ML-DSA-65 on Cortex-M3 only. Not a constant-time proof.
 
 ## Claim 16: latency-model sensitivity of emulation-based verdicts
 
-An honest novelty audit of claims 1-15 (against the literature, including
+A prior-art review of claims 1-15 (against the literature, including
 CMEmu, KyberSlash, Greconici et al. ePrint 2020/1278, DATA, MicroWalk,
 LmTest, "Breaking Bad") found the technique in each of them is known and the
 repository's contribution is mostly measurement and gating on a deployed

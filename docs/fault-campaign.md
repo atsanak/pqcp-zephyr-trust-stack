@@ -17,7 +17,7 @@ Calibration: three unfaulted runs identical and valid; six identity patches
 NO_EFFECT. The campaign takes about 10 minutes per variant on a laptop.
 
 Measured (388 faults): plain 9 exploitable; valid-only boot test 8;
-negative-vector boot test 0. See docs/novelty-claims.md claim 10 for prior
+negative-vector boot test 0. See docs/prior-art-and-contributions.md claim 10 for prior
 art and non-claims. Why QEMU plugins are not used: the SDK QEMU is plugin
 API v4, which cannot write registers or memory.
 
