@@ -65,7 +65,8 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                marker: str = DEVICE_MARKER,
                event_symbol: str | None = None,
                board: str = "qemu_x86_64",
-               extra_cmake: tuple = ()) -> str:
+               extra_cmake: tuple = (),
+               residue: bool = False) -> str:
     """Build `module`'s trace app, run it under the plugin, return the trace."""
     run_command(
         [*west_cmd, "build", "-p", "always", "-b", board,
@@ -89,8 +90,9 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
     device_log = build_dir / "ct_trace_device.log"
     cmd = qemu_run_command(build_dir)
     binary, rest = cmd.split(" ", 1)
+    res_arg = ",residue=1" if residue else ""
     cmd = (f"{binary} -plugin {plugin},begin=0x{begin:x},end=0x{end:x}"
-           f"{event_arg},outfile={outfile} {rest}")
+           f"{event_arg}{res_arg},outfile={outfile} {rest}")
     with device_log.open("w") as handle:
         proc = subprocess.Popen(cmd, shell=True, cwd=str(build_dir), env=env,
                                 stdout=handle, stderr=subprocess.STDOUT,
@@ -144,19 +146,26 @@ def trace_core(module: Path, build_dir: Path, outfile: Path, *, opt: str,
 def functions_for(elf: Path, pcs, env: dict) -> dict:
     """pc -> containing function name, from the ELF symbol table."""
     import bisect  # noqa: PLC0415
-    nm = shutil.which("arm-zephyr-eabi-nm") or shutil.which("nm") or "nm"
-    sdk = Path.home() / "zephyr-sdk-1.0.1" / "arm-zephyr-eabi" / "bin" / \
-        "arm-zephyr-eabi-nm"
-    if sdk.exists():
-        nm = str(sdk)
-    out = subprocess.run([nm, "-n", str(elf)], capture_output=True,
-                         text=True, env=env).stdout
+    sdk = Path.home() / "zephyr-sdk-1.0.1"
+    candidates = [str(sdk / "gnu" / "arm-zephyr-eabi" / "bin" /
+                      "arm-zephyr-eabi-nm"),
+                  str(sdk / "arm-zephyr-eabi" / "bin" / "arm-zephyr-eabi-nm"),
+                  str(sdk / "gnu" / "x86_64-zephyr-elf" / "bin" /
+                      "x86_64-zephyr-elf-nm"),
+                  shutil.which("nm") or "nm"]
     addrs, names = [], []
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) == 3 and parts[1] in "tTwW":
-            addrs.append(int(parts[0], 16) & ~1)
-            names.append(parts[2])
+    for nm in candidates:
+        if not Path(nm).exists() and nm != (shutil.which("nm") or "nm"):
+            continue
+        out = subprocess.run([nm, "-n", str(elf)], capture_output=True,
+                             text=True, env=env).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) == 3 and parts[1] in "tTwW":
+                addrs.append(int(parts[0], 16) & ~1)
+                names.append(parts[2])
+        if addrs:
+            break
     result = {}
     for pc in pcs:
         i = bisect.bisect_right(addrs, pc) - 1
@@ -232,6 +241,15 @@ def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
     return 0
 
 
+def report_residue(text: str, elf: Path, env: dict, alg: str, opt: str,
+                   target: str) -> None:
+    import ct_residue_analysis as ra  # noqa: PLC0415
+    res = ra.analyze(text)
+    pcs = set(res.by_pc)
+    fns = functions_for(elf, pcs, env) if pcs else {}
+    print(ra.format_marker(res, alg, opt, target, fns))
+
+
 def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
                    env: dict, plugin: Path) -> int:
     """Declassification-aware ML-DSA-65 signing on a Cortex-M core."""
@@ -247,7 +265,10 @@ def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
                           target=target, west_root=west_root,
                           west_cmd=west_cmd, env=env, plugin=plugin,
                           timeout=1500, app=MLDSA_APP, marker=MLDSA_MARKER,
-                          event_symbol="pqcp_ct_event")
+                          event_symbol="pqcp_ct_event", residue=args.residue)
+        if args.residue:
+            report_residue(text, out / f"build-{target}-dsa-{opt}" / "zephyr" /
+                           "zephyr.elf", env, "MLDSA-65", opt, target)
         regions = cta.parse_trace(text)
         analysis = cta.analyze_declassified(
             regions, cta.parse_segments(text),
@@ -470,7 +491,10 @@ def run_mldsa(args, out: Path, west_root: Path, west_cmd: list, env: dict,
                           west_root=west_root, west_cmd=west_cmd, env=env,
                           plugin=plugin, timeout=900, app=MLDSA_APP,
                           marker=MLDSA_MARKER,
-                          event_symbol="pqcp_ct_event")
+                          event_symbol="pqcp_ct_event", residue=args.residue)
+        if args.residue:
+            report_residue(text, out / f"build-mldsa-{opt}" / "zephyr" /
+                           "zephyr.elf", env, "MLDSA-65", opt, "x86_64")
         regions = cta.parse_trace(text)
         analysis = cta.analyze_declassified(regions, cta.parse_segments(text))
         print(cta.format_declass_marker(analysis, "MLDSA-65", opt))
@@ -509,6 +533,10 @@ def main() -> int:
                         default="768",
                         help="ML-KEM parameter set (Cortex-M3); `all` runs "
                              "the three with --mitigated")
+    parser.add_argument("--residue", action="store_true",
+                        help="ML-DSA signing: also record stack words left "
+                             "below the caller after the call and compare "
+                             "them across secret variants")
     parser.add_argument("--measure", action="store_true",
                         help="Cortex-M signing: exit 0 when the only "
                              "findings are documented-model long-multiply "

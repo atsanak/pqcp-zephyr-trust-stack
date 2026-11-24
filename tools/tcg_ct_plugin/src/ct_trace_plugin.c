@@ -75,6 +75,50 @@ static uint64_t event_addr; /* optional declassification event marker */
 static FILE *out_file;
 
 static int counting;
+
+/* Residue mode: words stored below the begin-marker stack pointer. */
+#define RES_SLOTS (1U << 17)
+/* Bytes below the begin-marker stack pointer that count as stack. On the
+ * Cortex-M images global buffers sit just below the stack object, so the
+ * window must stay inside the thread stack (256 KiB in the test apps). */
+#define RES_WINDOW (200U * 1024U)
+struct res_word {
+	uint64_t word; /* address >> 2, 0 = free */
+	uint64_t pc;
+};
+static int residue_mode;
+static uint64_t res_sp;
+static struct res_word res_tab[RES_SLOTS];
+static unsigned int res_used;
+static int res_overflow;
+static struct qemu_plugin_register *reg_rsp;
+
+static void res_record(uint64_t vaddr, unsigned int size, uint64_t pc)
+{
+	for (uint64_t a = vaddr & ~3ULL; a < vaddr + size; a += 4U) {
+		uint64_t key = (a >> 2) + 1U;
+		unsigned int slot = (unsigned int)((key * 11400714819323198485ULL) >> 47) %
+				    RES_SLOTS;
+
+		for (unsigned int p = 0U; p < RES_SLOTS; ++p) {
+			if (res_tab[slot].word == 0U) {
+				res_tab[slot].word = key;
+				res_tab[slot].pc = pc;
+				res_used++;
+				break;
+			}
+			if (res_tab[slot].word == key) {
+				res_tab[slot].pc = pc;
+				break;
+			}
+			slot = (slot + 1U) % RES_SLOTS;
+			if (p + 1U == RES_SLOTS) {
+				res_overflow = 1;
+			}
+		}
+	}
+}
+
 static uint64_t region_index;
 static uint64_t label;
 static uint64_t insns, loads, stores, ndiv;
@@ -137,6 +181,11 @@ static void reset_vlat(void)
 static void reset_region(void)
 {
 	reset_vlat();
+	if (residue_mode) {
+		memset(res_tab, 0, sizeof(res_tab));
+		res_used = 0U;
+		res_overflow = 0;
+	}
 	insns = loads = stores = ndiv = 0U;
 	h_pc = h_addr = h_line = h_div = FNV_OFFSET;
 	seg_index = 0U;
@@ -277,11 +326,47 @@ static void vcpu_init(qemu_plugin_id_t id, unsigned int vcpu_index)
 			reg_rdi = d->handle;
 		} else if (strcmp(d->name, "rsi") == 0) {
 			reg_rsi = d->handle;
+		} else if (strcmp(d->name, "rsp") == 0) {
+			reg_rsp = d->handle;
 		}
 	}
 	if (regs != NULL) {
 		g_array_free(regs, TRUE);
 	}
+}
+
+static void emit_residue(void)
+{
+	GByteArray *buf = g_byte_array_new();
+	unsigned int emitted = 0U;
+
+	for (unsigned int i = 0U; i < RES_SLOTS; ++i) {
+		const uint64_t addr = (res_tab[i].word - 1U) << 2;
+		uint32_t val;
+
+		if (res_tab[i].word == 0U) {
+			continue;
+		}
+		g_byte_array_set_size(buf, 0);
+		if (!qemu_plugin_read_memory_vaddr(addr, buf, 4) ||
+		    buf->len < 4U) {
+			continue;
+		}
+		memcpy(&val, buf->data, 4);
+		if (val == 0U) {
+			continue;
+		}
+		fprintf(out_file,
+			"PQCP_CT_RESIDUE region=%" PRIu64 " addr=%" PRIx64
+			" val=%08x pc=%" PRIx64 "\n",
+			region_index, addr, val, res_tab[i].pc);
+		emitted++;
+	}
+	fprintf(out_file,
+		"PQCP_CT_RESIDUE_REGION region=%" PRIu64 " sp=%" PRIx64
+		" words=%u nonzero=%u overflow=%d\n",
+		region_index, res_sp, res_used, emitted, res_overflow);
+	g_byte_array_free(buf, TRUE);
 }
 
 /* Plain instruction: needs only the address. */
@@ -293,6 +378,9 @@ static void insn_exec(unsigned int cpu_index, void *udata)
 	if (vaddr == end_addr) {
 		if (counting) {
 			counting = 0;
+			if (residue_mode) {
+				emit_residue();
+			}
 			emit_region();
 		}
 		return;
@@ -330,6 +418,9 @@ static void insn_exec_begin(unsigned int cpu_index, void *udata)
 	(void)udata;
 	reset_region();
 	label = read_reg(reg_rdi);
+	if (residue_mode) {
+		res_sp = read_reg(is_arm ? arm_regs[13] : reg_rsp);
+	}
 	counting = 1;
 }
 
@@ -352,7 +443,6 @@ static void mem_access(unsigned int cpu_index, qemu_plugin_meminfo_t info,
 		       uint64_t vaddr, void *udata)
 {
 	(void)cpu_index;
-	(void)udata;
 	if (!counting) {
 		return;
 	}
@@ -363,6 +453,12 @@ static void mem_access(unsigned int cpu_index, qemu_plugin_meminfo_t info,
 	}
 	h_addr = mix(h_addr, vaddr);
 	h_line = mix(h_line, vaddr >> 6);
+	if (residue_mode && qemu_plugin_mem_is_store(info) && vaddr < res_sp &&
+	    vaddr + (1U << qemu_plugin_mem_size_shift(info)) + RES_WINDOW >
+		    res_sp) {
+		res_record(vaddr, 1U << qemu_plugin_mem_size_shift(info),
+			   (uint64_t)(uintptr_t)udata);
+	}
 	if (qemu_plugin_mem_is_store(info)) {
 		sg_stores++;
 	} else {
@@ -582,7 +678,7 @@ static void tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 		}
 		qemu_plugin_register_vcpu_mem_cb(insn, mem_access,
 						 QEMU_PLUGIN_CB_NO_REGS,
-						 QEMU_PLUGIN_MEM_RW, NULL);
+						 QEMU_PLUGIN_MEM_RW, ud);
 	}
 }
 
@@ -616,6 +712,8 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
 			end_addr = strtoull(argv[i] + 4, NULL, 0);
 		} else if (strncmp(argv[i], "event=", 6) == 0) {
 			event_addr = strtoull(argv[i] + 6, NULL, 0);
+		} else if (strcmp(argv[i], "residue=1") == 0) {
+			residue_mode = 1;
 		} else if (strncmp(argv[i], "outfile=", 8) == 0) {
 			outfile_path = argv[i] + 8;
 		}

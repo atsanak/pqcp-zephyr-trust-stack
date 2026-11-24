@@ -798,3 +798,26 @@ Non-claims: documented model only (no third-party measured M33 model); QEMU,
 recorded operands, no cycle model; sampled inputs; ML-KEM-768 and ML-DSA-65
 only; not a constant-time proof.
 
+
+## Claim 20, memory residue after the call returns
+
+The trace plugin can also record the stack words written during a region and
+read them back at its end (`residue=1`), and `scripts/ct_residue_analysis.py`
+compares them across secret variants and attributes differing words to the last
+writing function. Details, hypotheses registered first and the manual
+attribution are in `docs/ct-residue.md`. On x86_64 the library leaves about 300
+non-zero words after an ML-DSA-65 signing and none of the two words that differ
+is library data. On the Cortex-M4 image 4 to 7 words differ, almost all of them
+public (hint positions), code addresses or caller state, with one coefficient
+like pair at -O2 that may be secret dependent and was not resolved.
+
+Prior art. Stack residue in cryptographic libraries was measured before (a 2024
+study of eleven libraries) and zeroization has been verified formally in
+Libjade. Not new, the idea of looking at residue. New here, the relational use
+under emulation on the deployed image of a post-quantum scheme with a
+registered protocol.
+
+Non-claims. Emulation only. Caches, DMA and other threads are not covered.
+Sampled inputs and crafted key variants that are not valid key pairs. The
+attribution of differing words is manual. Not part of the release gate. Residue
+is not an exploit and none is shown.

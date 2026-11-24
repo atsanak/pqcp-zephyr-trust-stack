@@ -40,3 +40,50 @@ inputs, crafted key variants that are not valid key pairs. Residue is not an
 exploit and none is shown. Heap and static data are covered only where the
 region writes to them below the stack pointer. The wipe depth is measured, not
 proven.
+
+## Results
+
+ML-DSA-65 signing, 6 key variants for each of 3 messages, three optimisation
+levels. The window is the 200 KiB below the begin marker's stack pointer
+(inside the 256 KiB test stack). A first Cortex-M4 run used a 1 MiB window and
+counted about 820 words that were really the global signature buffer sitting
+just below the stack object, so the window was narrowed; the x86_64 numbers did
+not change.
+
+| target | level | non-zero words after return | words that differ between secret variants |
+|---|---|---|---|
+| x86_64 | -Os / -O2 / -Og | 328 / 329 / 302 | 2 / 2 / 2 |
+| Cortex-M4 | -Os / -O2 / -Og | 396 / 399 / 332 | 4 / 7 / 5 |
+
+Manual attribution of every differing word (the analysis lists the last
+writing function and the values):
+
+- x86_64, all levels. Two words in the prologue frame of the library entry
+  point. They hold the harness loop index (0 to 5) and the saved CPU flags,
+  which are caller state, not library data.
+- Cortex-M4, all levels. One word holding the harness loop index in the frame
+  of the signing wrapper.
+- Cortex-M4. Hint position words (values such as 0x29, 0x1f, 0x2b) left in the
+  frames of the hint packing and `memset`. They are part of the signature and
+  therefore public.
+- Cortex-M4. Words holding flash addresses such as 0x5dfd8 or 0x57d9b in the
+  frames of the signing core and the z packing. They are saved return
+  addresses that depend on the control flow.
+- Cortex-M4 at -O2 only. Two words in the frame of the norm check
+  (`polyveck_chknorm`) with coefficient like values (for example 0xfffffb21,
+  0x2448, 0x48bd) and a sign mask. They look like the last coefficient examined
+  by the check. Which vector it came from (z, w0 minus c s2, or c t0) was not
+  determined, so this is the single residue candidate that may depend on the
+  secret.
+
+H15 is not supported on x86_64 (no library data differs) and only weakly
+supported on the Cortex-M4 (one candidate pair at -O2). H16 holds: no
+differing word lies in a frame the library zeroizes by name. H17 was not run,
+because the stack wipe is only worth building if the candidate is confirmed.
+After the call the library leaves about 300 to 400 non-zero words in the
+window, a small fraction of the stack it used (about 21,000 words were written).
+
+The residue check is not part of the release gate. A confirmed leak of
+coefficients from the norm check would need a decision about a wipe wrapper
+and a gate claim.
+
