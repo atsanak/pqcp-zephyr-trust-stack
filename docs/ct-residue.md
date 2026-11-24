@@ -174,3 +174,25 @@ intact and an overhead under the ceiling in `scripts/ct_residue_baseline.json`.
 Measured overhead is 1.25 to 1.52 percent for decapsulation and 1.09 to 1.19
 percent for signing.
 
+
+## Key generation and encapsulation (registered before any run)
+
+The wipe so far covers decapsulation and signing. Key generation and
+encapsulation handle secrets of their own, namely the seeds and the message.
+
+- H20. On the Cortex-M4 image at the three optimisation levels, at least one
+  32 bit word of a secret input survives below the caller after each of ML-KEM-768
+  key generation (the 64 random bytes d and z, or the secret key words),
+  ML-KEM-768 encapsulation (the 32 byte message m or the shared secret) and
+  ML-DSA-65 key generation (the 32 byte seed, rho prime or K). Falsified, entry
+  point by entry point, if the dictionary check finds no match in any region at
+  any level. The random bytes are known because the deterministic generator is
+  reseeded and the same bytes are drawn first; rho prime and K are derived from
+  the seed on the host.
+- H21. Extending the wipe to these entry points brings the matches to zero,
+  keeps fewer than half of the non-zero words and stays under the 3 percent
+  instruction ceiling. Falsified otherwise.
+
+Non-claims as for the rest of this document. A dictionary only finds literal
+copies, so a null result means no literal copy of the listed values, not that
+nothing derived from them remains.
