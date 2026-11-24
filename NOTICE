@@ -1,0 +1,8 @@
+PQCP Zephyr Trust Stack
+Copyright (c) 2026 Angelos Tsanaktsidis
+
+This project is licensed under the MIT License, see LICENSE.
+
+The vendored libraries under ext/ (mlkem-native, mldsa-native) are separate
+projects with their own licenses (Apache-2.0 OR ISC OR MIT); see their LICENSE
+files.
