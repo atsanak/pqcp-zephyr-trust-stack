@@ -87,3 +87,22 @@ The residue check is not part of the release gate. A confirmed leak of
 coefficients from the norm check would need a decision about a wipe wrapper
 and a gate claim.
 
+
+## ML-KEM-768 decapsulation (registered before the run)
+
+The same method applies to decapsulation, with a weaker relation. Regions of
+one group share the key and differ in the ciphertext (valid and corrupted), so
+a differing word depends on the ciphertext or on values derived from the
+secret key and the ciphertext, such as the decrypted message or the implicit
+rejection key. The two causes cannot be separated by this relation alone, so
+every differing word is attributed to its writer and read by hand. The shared
+secret and the working ciphertext buffer are excluded (output and public input).
+
+- H18. ML-KEM-768 decapsulation leaves fewer than 400 non-zero words below the
+  caller's stack pointer on x86_64 and on the Cortex-M4 image at every level.
+  Falsified otherwise.
+- H19. Every differing word is attributable to caller state, a code address or
+  a function that handles only public data. A differing word in the frame of a
+  function that processes the decrypted message or the rejection key
+  (`indcpa_dec`, `poly_tomsg`, the key derivation) is reported as a residue
+  candidate.
