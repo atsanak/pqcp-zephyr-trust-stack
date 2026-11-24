@@ -48,7 +48,7 @@ COMPRESS_LINE = (r"uint32_t t = mlk_scalar_compress_d1\("
                  r"a->coeffs\[8 \* i \+ j\]\);")
 
 COPY_PATHS = ("src", "include", "cmake", "CMakeLists.txt", "Kconfig",
-              "zephyr", "ext", "tests/ztest_ct_trace")
+              "zephyr", "scripts", "ext", "tests/ztest_ct_trace")
 
 
 @dataclass(frozen=True)

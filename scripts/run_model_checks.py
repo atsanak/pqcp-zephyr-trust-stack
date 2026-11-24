@@ -83,6 +83,8 @@ COPY_PATHS = (
     "CMakeLists.txt",
     "Kconfig",
     "zephyr",
+    # CMakeLists.txt generates the decision catalogs from these generators.
+    "scripts",
     TEST_APP_RELATIVE,
     # The model app reuses this suite's test_common.h.
     "tests/ztest_edge_security",
