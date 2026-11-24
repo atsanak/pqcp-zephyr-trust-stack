@@ -299,6 +299,91 @@ def report_residue(text: str, elf: Path, env: dict, alg: str, opt: str,
                                                         "ss_word_hits"))
 
 
+def dsa_scrub_kwargs(args, out: Path) -> dict:
+    if not getattr(args, "scrub", False):
+        return {}
+    overlay = (out / "dsa-scrub.conf").resolve()
+    overlay.write_text("CONFIG_PQCP_STACK_SCRUB=y\n", encoding="utf-8")
+    return {"extra_cmake": (f"-DEXTRA_CONF_FILE={overlay}",)}
+
+
+def run_residue_verify(args, out: Path, west_root: Path, west_cmd: list,
+                       env: dict, plugin: Path) -> int:
+    """Stock against scrubbed image on a Cortex-M core, for ML-KEM
+    decapsulation and ML-DSA-65 signing, at every optimisation level. The
+    stock image must leave residue (positive control), the scrubbed image no
+    copy of the shared secret and far fewer words, the leakage verdict must
+    still hold and the instruction overhead must stay small."""
+    import ct_residue_analysis as ra  # noqa: PLC0415
+
+    target = args.target
+    failed = False
+    for alg_name, app, marker, event, extra in (
+            ("MLKEM-768", TEST_APP_RELATIVE, DEVICE_MARKER, None,
+             ("shared_secret", "work_ct")),
+            ("MLDSA-65", MLDSA_APP, MLDSA_MARKER, "pqcp_ct_event", ())):
+        for opt in args.opt or ["default", "speed", "debug"]:
+            res = {}
+            for name in ("stock", "scrub"):
+                build = out / f"build-{target}-{alg_name}-{name}-{opt}"
+                overlay = out / f"{alg_name}-{name}.conf"
+                overlay.write_text(
+                    "CONFIG_PQCP_STACK_SCRUB=y\n" if name == "scrub" else "",
+                    encoding="utf-8")
+                text = trace_core(
+                    MODULE_PATH, build, out / f"trace-{alg_name}-{name}-{opt}.txt",
+                    opt=opt, target=target, west_root=west_root,
+                    west_cmd=west_cmd, env=env, plugin=plugin, timeout=1500,
+                    app=app, marker=marker, event_symbol=event, residue=True,
+                    extra_cmake=(f"-DEXTRA_CONF_FILE={overlay.resolve()}",))
+                elf = build / "zephyr" / "zephyr.elf"
+                excl = (symbol_ranges(elf, set(extra), env) if extra else ())
+                regions = cta.parse_trace(text)
+                residue = ra.analyze(text, excl)
+                ss_hits = 0
+                log = (build / "ct_trace_device.log").read_text(
+                    errors="replace")
+                if alg_name == "MLKEM-768":
+                    found = ra.ss_matches(text, log, excl)
+                    ss_hits = sum(len(h) for _, h in found.values())
+                verdict = 0
+                if alg_name == "MLDSA-65":
+                    verdict = len(cta.analyze_declassified(
+                        regions, cta.parse_segments(text),
+                        channels=cta.CORE_CHANNELS[target]).violations)
+                res[name] = {
+                    "nonzero": residue.nonzero_mean, "ss": ss_hits,
+                    "viol": verdict,
+                    "insns": sum(r.insns for r in regions) / len(regions)}
+            st, sc = res["stock"], res["scrub"]
+            overhead = 100.0 * (sc["insns"] - st["insns"]) / st["insns"]
+            issues = []
+            if alg_name == "MLKEM-768" and st["ss"] < 1:
+                issues.append("stock image shows no shared secret residue")
+            if sc["ss"] != 0:
+                issues.append(f"scrubbed image keeps {sc['ss']} shared "
+                              "secret words")
+            if sc["nonzero"] > st["nonzero"] / 2:
+                issues.append("scrub removes less than half of the words")
+            if sc["viol"] != 0:
+                issues.append("scrub changes the leakage verdict")
+            print(f"PQCP_CT_TRACE_RESIDUE_VERIFY "
+                  f"{'FAIL' if issues else 'PASS'} alg={alg_name} "
+                  f"target={target} opt={opt} stock_ss_hits={st['ss']} "
+                  f"scrub_ss_hits={sc['ss']} "
+                  f"stock_nonzero={st['nonzero']:.0f} "
+                  f"scrub_nonzero={sc['nonzero']:.0f} "
+                  f"scrub_violations={sc['viol']} "
+                  f"insn_overhead_pct={overhead:.2f}")
+            for issue in issues:
+                print(f"[ct-trace] FAIL: {issue}")
+            failed = failed or bool(issues)
+    if not failed:
+        print("[ct-trace] PASS: the stack wipe removes the residue without "
+              "changing the leakage verdict")
+    return 1 if failed else 0
+
+
 def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
                    env: dict, plugin: Path) -> int:
     """Declassification-aware ML-DSA-65 signing on a Cortex-M core."""
@@ -314,7 +399,8 @@ def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
                           target=target, west_root=west_root,
                           west_cmd=west_cmd, env=env, plugin=plugin,
                           timeout=1500, app=MLDSA_APP, marker=MLDSA_MARKER,
-                          event_symbol="pqcp_ct_event", residue=args.residue)
+                          event_symbol="pqcp_ct_event", residue=args.residue,
+                          **dsa_scrub_kwargs(args, out))
         if args.residue:
             report_residue(text, out / f"build-{target}-dsa-{opt}" / "zephyr" /
                            "zephyr.elf", env, "MLDSA-65", opt, target)
@@ -586,6 +672,9 @@ def main() -> int:
                         help="ML-DSA signing and ML-KEM decapsulation: record stack words left "
                              "below the caller after the call and compare "
                              "them across secret variants")
+    parser.add_argument("--residue-verify", action="store_true",
+                        help="Cortex-M: build stock and scrubbed images and "
+                             "check the stack wipe for ML-KEM and ML-DSA")
     parser.add_argument("--scrub", action="store_true",
                         help="build with CONFIG_PQCP_STACK_SCRUB=y "
                              "(Cortex-M ML-KEM runs)")
@@ -637,6 +726,9 @@ def main() -> int:
             return m3_leaks.rediscover(run_m3_trace,
                                        (args.opt or ["default"])[0],
                                        only or None)
+        if args.residue_verify:
+            return run_residue_verify(args, out, west_root, west_cmd, env,
+                                      plugin)
         if args.alg == "mlkem" and args.mitigated:
             return run_core_mlkem_mitigated(args, out, west_root, west_cmd,
                                             env, plugin)

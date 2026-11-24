@@ -12,6 +12,8 @@
 
 #include <string.h>
 
+#include "stack_scrub.h"
+
 /* Check if we have the real mlkem-native */
 #if defined(PQCP_MLKEM_MULTILEVEL_BUILD)
 #define HAVE_MLKEM_NATIVE 1
@@ -322,20 +324,7 @@ static int kem_canary_check(pqcp_mlkem_level_t level)
 #endif /* CONFIG_PQCP_FAULT_CANARY */
 
 #ifdef CONFIG_PQCP_STACK_SCRUB
-/*
- * Overwrite the stack below the caller. The volatile array forces real
- * stores that the compiler may not drop, and the empty asm makes the array
- * observable so it is not optimised away.
- */
-static void __attribute__((noinline)) stack_scrub(void)
-{
-    volatile uint32_t pad[CONFIG_PQCP_STACK_SCRUB_DEPTH / 4];
-
-    for (size_t i = 0U; i < ARRAY_SIZE(pad); ++i) {
-        pad[i] = 0U;
-    }
-    __asm__ volatile("" : : "r"(pad) : "memory");
-}
+PQCP_DEFINE_STACK_SCRUB(stack_scrub, CONFIG_PQCP_STACK_SCRUB_DEPTH)
 #endif
 
 static int mlkem_decapsulate_public(pqcp_mlkem_level_t level,

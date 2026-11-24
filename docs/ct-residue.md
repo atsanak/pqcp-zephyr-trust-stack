@@ -153,3 +153,24 @@ version with byte stores cost 5 to 6 percent. The depth is measured, not
 proven, and ML-DSA signing used about 21,000 stack words, so it would need a
 much larger depth and no wrapper exists for it yet. The check is not part of
 the release gate.
+
+### ML-DSA-65 signing wipe and the release gate
+
+The same header (`src/crypto/stack_scrub.h`) now provides a wipe after
+`pqcp_mldsa_sign` with its own depth (`CONFIG_PQCP_STACK_SCRUB_SIGN_DEPTH`,
+default 108 KiB, because signing used about 21,000 stack words). On the
+Cortex-M4 image the non-zero words after the call fall from 332 to 399 to 4 or
+5, the only differing word is the harness loop index, the coefficient like pair
+seen at -O2 is gone, the declassification aware verdict is unchanged (546
+comparable segments, zero violations at all three levels) and the instruction
+overhead is 1.1 to 1.2 percent.
+
+The release gate runs `run_ct_trace_checks.py --residue-verify` on the
+Cortex-M4 image. It builds the stock and the scrubbed image for decapsulation
+and signing at three levels and checks the ledger claim
+`security.ct_residue_scrub` (schema 23): stock residue present, no shared
+secret word and less than half of the words after the wipe, the leakage verdict
+intact and an overhead under the ceiling in `scripts/ct_residue_baseline.json`.
+Measured overhead is 1.25 to 1.52 percent for decapsulation and 1.09 to 1.19
+percent for signing.
+

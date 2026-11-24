@@ -831,3 +831,8 @@ is. An opt-in wrapper (`CONFIG_PQCP_STACK_SCRUB`) removes every match for 1.3 to
 and a ciphertext relation that cannot separate public from secret derived
 words, which is why the two dictionary checks were added.
 
+Claim 20 is gated by `security.ct_residue_scrub` (schema 23, step `ct residue
+stack wipe cortex-m4`, full gate only). The wipe now also covers ML-DSA signing
+(non-zero words after the call from about 330 to 400 down to 4 or 5, overhead
+about 1.2 percent, leakage verdict unchanged).
+

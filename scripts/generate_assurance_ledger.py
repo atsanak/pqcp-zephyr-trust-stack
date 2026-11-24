@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2531,6 +2531,75 @@ def evaluate_ct_trace_cortex_m33(
         commands=commands, details=details)
 
 
+RESIDUE_BASELINE = SCRIPT_DIR / "ct_residue_baseline.json"
+
+
+def evaluate_ct_residue_scrub(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+    baseline: Path | None = None,
+) -> dict[str, object]:
+    """Bind security.ct_residue_scrub to the stock against scrubbed runs.
+
+    For ML-KEM decapsulation and ML-DSA-65 signing at three optimisation
+    levels the stock image leaves residue (ML-KEM shows shared secret words),
+    the scrubbed image keeps no shared secret word and less than half of the
+    words, the declassification aware verdict still holds and the instruction
+    overhead stays under the committed ceiling.
+    """
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["scripts/run_ct_trace_checks.py::run_residue_verify",
+                  "scripts/ct_residue_analysis.py",
+                  "tools/tcg_ct_plugin::pqcp_ct_trace"]
+    commands = ["python3 scripts/run_ct_trace_checks.py --residue-verify --target cortex-m4"]
+    step = "ct residue stack wipe cortex-m4"
+    path, sha, body = _read_named_transcript(transcript_manifest, step)
+    if path is None or not body:
+        return fail_claim(
+            spec, reason=f"{step} transcript missing or empty in {transcript_manifest}",
+            validators=validators, evidence_artifacts=artifacts, commands=commands)
+    artifacts.append(artifact(path, label=f"{step} transcript"))
+    details: dict[str, object] = {f"{step} transcript_sha256": sha}
+    baseline_path = baseline or RESIDUE_BASELINE
+    try:
+        ceiling = float(json.loads(baseline_path.read_text(
+            encoding="utf-8"))["insn_overhead_pct_max"])
+    except (OSError, ValueError, KeyError, AttributeError):
+        return fail_claim(
+            spec, reason=f"unreadable baseline {baseline_path}",
+            validators=validators, evidence_artifacts=artifacts,
+            commands=commands)
+    seen: dict[str, float] = {}
+    for m in re.finditer(
+            r"PQCP_CT_TRACE_RESIDUE_VERIFY PASS alg=(\S+) target=cortex-m4 "
+            r"opt=(\S+) stock_ss_hits=(\d+) scrub_ss_hits=0 "
+            r"stock_nonzero=(\d+) scrub_nonzero=(\d+) scrub_violations=0 "
+            r"insn_overhead_pct=(-?[0-9.]+)", body):
+        alg, opt = m.group(1), m.group(2)
+        if alg == "MLKEM-768" and int(m.group(3)) < 1:
+            continue
+        if int(m.group(4)) < 100 or int(m.group(5)) * 2 > int(m.group(4)):
+            continue
+        seen[f"{alg}/{opt}"] = float(m.group(6))
+    required = {f"{a}/{o}" for a in ("MLKEM-768", "MLDSA-65")
+                for o in ("default", "speed", "debug")}
+    problems = []
+    if not required <= set(seen):
+        problems.append("stack wipe not verified at: "
+                        + ", ".join(sorted(required - set(seen))))
+    for key, pct in sorted(seen.items()):
+        if pct > ceiling:
+            problems.append(f"instruction overhead at {key} is {pct}, "
+                            f"above the ceiling {ceiling}")
+    details["insn_overhead_pct"] = dict(sorted(seen.items()))
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3597,6 +3666,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_kem_mitigation": lambda spec: evaluate_ct_trace_cortex_m_kem_mitigation(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_residue_scrub": lambda spec: evaluate_ct_residue_scrub(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m33": lambda spec: evaluate_ct_trace_cortex_m33(

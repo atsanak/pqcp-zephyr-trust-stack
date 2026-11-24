@@ -1865,6 +1865,49 @@ class AssuranceLedgerTests(unittest.TestCase):
         ):
             self.assertEqual(self._eval_m33(kem, dsa)["status"], "fail", (kem, dsa))
 
+    RES_BODY = "".join(
+        f"PQCP_CT_TRACE_RESIDUE_VERIFY PASS alg={a} target=cortex-m4 opt={o} "
+        f"stock_ss_hits={320 if a == 'MLKEM-768' else 0} scrub_ss_hits=0 "
+        f"stock_nonzero=300 scrub_nonzero=100 scrub_violations=0 "
+        f"insn_overhead_pct=1.25\n"
+        for a in ("MLKEM-768", "MLDSA-65") for o in ("default", "speed", "debug"))
+
+    def _eval_res(self, body: str, ceiling: float = 3.0) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            (manifest_path.parent / "01.log").write_text(body, encoding="utf-8")
+            manifest_path.write_text(json.dumps({"schema_version": 1, "transcripts": [{
+                "step": "ct residue stack wipe cortex-m4", "transcript_path": "01.log",
+                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                "size_bytes": len(body.encode()), "returncode": 0}]}) + "\n",
+                encoding="utf-8")
+            base = root / "baseline.json"
+            base.write_text(json.dumps({"insn_overhead_pct_max": ceiling}))
+            spec = {"id": "security.ct_residue_scrub", "category": "security",
+                    "claim": "x", "required": True}
+            return ledger.evaluate_ct_residue_scrub(
+                spec, transcript_manifest=manifest_path, baseline=base)
+
+    def test_residue_scrub_passes_and_fails(self) -> None:
+        ok = self._eval_res(self.RES_BODY)
+        self.assertEqual(ok["status"], "pass", ok.get("failure_reason"))
+        b = self.RES_BODY
+        for body, ceiling in (
+            (b.replace("scrub_ss_hits=0", "scrub_ss_hits=8", 1), 3.0),
+            (b.replace("stock_ss_hits=320", "stock_ss_hits=0"), 3.0),
+            (b.replace("scrub_nonzero=100", "scrub_nonzero=200", 1), 3.0),
+            (b.replace("stock_nonzero=300", "stock_nonzero=50", 1), 3.0),
+            (b.replace("scrub_violations=0", "scrub_violations=2", 1), 3.0),
+            (b.replace("opt=debug", "opt=default"), 3.0),
+            (b.replace("PASS alg", "FAIL alg", 1), 3.0),
+            (b, 1.0),
+            ("noise\n", 3.0),
+        ):
+            self.assertEqual(self._eval_res(body, ceiling)["status"], "fail",
+                             (body[:80], ceiling))
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "

@@ -12,6 +12,12 @@
 
 #include <string.h>
 
+#include "stack_scrub.h"
+
+#ifdef CONFIG_PQCP_STACK_SCRUB
+PQCP_DEFINE_STACK_SCRUB(stack_scrub_sign, CONFIG_PQCP_STACK_SCRUB_SIGN_DEPTH)
+#endif
+
 /* Check if we have the real mldsa-native */
 #if defined(PQCP_MLDSA_MULTILEVEL_BUILD)
 #define HAVE_MLDSA_NATIVE 1
@@ -201,7 +207,11 @@ int pqcp_mldsa_sign(pqcp_mldsa_level_t level, const uint8_t *sk,
     /* mldsa-native signing function: crypto_sign_signature */
     ret = crypto_sign_signature(sig, &sig_len, msg, msg_len, ctx, ctx_len, sk);
 #endif
-    
+
+#ifdef CONFIG_PQCP_STACK_SCRUB
+    stack_scrub_sign();
+#endif
+
     return (ret == 0) ? PQCP_MLDSA_SUCCESS : PQCP_MLDSA_ERR_INTERNAL;
 }
 

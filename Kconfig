@@ -164,7 +164,7 @@ config PQCP_RNG_CUSTOM
 endchoice
 
 config PQCP_STACK_SCRUB
-	bool "Wipe the stack below the caller after ML-KEM decapsulation"
+	bool "Wipe the stack below the caller after decapsulation and signing"
 	default n
 	help
 	  Decapsulation leaves copies of the shared secret in the dead stack
@@ -173,8 +173,18 @@ config PQCP_STACK_SCRUB
 	  decapsulation. Measured on an emulated image in docs/ct-residue.md.
 	  The caller needs PQCP_STACK_SCRUB_DEPTH bytes of stack headroom.
 
+config PQCP_STACK_SCRUB_SIGN_DEPTH
+	int "Bytes of stack to wipe after ML-DSA signing"
+	depends on PQCP_STACK_SCRUB
+	default 110592
+	range 4096 262144
+	help
+	  Signing uses far more stack than decapsulation. The wipe after
+	  pqcp_mldsa_sign needs this much stack headroom on top of the signing
+	  call itself.
+
 config PQCP_STACK_SCRUB_DEPTH
-	int "Bytes of stack to wipe"
+	int "Bytes of stack to wipe after ML-KEM decapsulation"
 	depends on PQCP_STACK_SCRUB
 	default 16384
 	range 256 131072
