@@ -458,19 +458,19 @@ def check_version_sync(module_path: Path) -> bool:
 
 
 def check_manifest_guidance(module_path: Path) -> bool:
-    readme_text = (module_path / "README.md").read_text()
+    readme_text = (module_path / "docs" / "getting-started.md").read_text()
 
-    print("[release] README manifest guidance")
+    print("[release] Getting-started manifest guidance")
     missing = [
         snippet for snippet in README_MANIFEST_REQUIRED_SNIPPETS
         if snippet not in readme_text
     ]
     if missing:
         for snippet in missing:
-            print(f"[release] Missing README snippet: {snippet}")
+            print(f"[release] Missing getting-started snippet: {snippet}")
         return False
 
-    print("[release] README manifest snippet and pinning guidance are present")
+    print("[release] Manifest snippet and pinning guidance are present")
     return True
 
 

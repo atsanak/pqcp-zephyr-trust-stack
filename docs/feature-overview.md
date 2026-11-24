@@ -10,14 +10,14 @@ The module combines the following parts.
   chain. The exporter supports ML-DSA-signed CBOR/CEF/OCSF batches, frozen
   retransmission and exact acknowledgements. QEMU tests exercise source
   tampering, tenant isolation and redaction. State is currently volatile;
-  see [the protocol and trust boundaries](docs/sovereign-audit-export.md).
+  see [the protocol and trust boundaries](sovereign-audit-export.md).
 - **Claim-to-evidence assurance ledger.** Every release-relevant
   behaviour ("ML-DSA-65 KAT vectors match the header", "the ACVP
   harness rejects malformed input", "the benchmark CSV is bound to its
   provenance sidecar") is encoded as a typed claim in
-  [`scripts/assurance_claims.json`](scripts/assurance_claims.json) with
+  [`scripts/assurance_claims.json`](../scripts/assurance_claims.json) with
   a dedicated evaluator. The release gate produces a JSON ledger
-  ([`assurance_ledger.json`](docs/assurance-model.md)) and a
+  ([`assurance_ledger.json`](assurance-model.md)) and a
   self-contained HTML report that can be handed to a reviewer or
   attached to a paper. The ledger has a versioned schema with a
   documented backward-compatibility shim, old packs degrade
@@ -35,14 +35,14 @@ The module combines the following parts.
 - **Offline KAT provenance binding.** The `tests/ztest_acvp_kat`
   vectors are vendored from NIST ACVP fixtures and pinned to
   `kat_vectors.h` constants by
-  [`scripts/verify_kat_provenance.py`](scripts/verify_kat_provenance.py).
+  [`scripts/verify_kat_provenance.py`](../scripts/verify_kat_provenance.py).
   Per-parameter-set claims (`kat.mlkem_512`, `kat.mlkem_768`,
   `kat.mlkem_1024`, `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87`)
   decompose KAT verification so a regression in a single primitive is
   named directly in the failure reason rather than hidden in an
   aggregate.
 - **QEMU-only local release gate with transcript-hash assurance.**
-  [`scripts/release_check.py`](scripts/release_check.py) runs the
+  [`scripts/release_check.py`](../scripts/release_check.py) runs the
   entire validation sequence locally, no GitHub Actions required, 
   and captures stdout transcripts for every required step. Each
   transcript is SHA-256-hashed into
@@ -65,7 +65,7 @@ The module combines the following parts.
   add direct witnesses, two-step scenarios, authorization/continuity and
   epoch/stream guards, and eight-step transition traces without adding
   validation-only data to normal production builds. See
-  [`docs/patch-set-20-runtime-channel.md`](docs/patch-set-20-runtime-channel.md).
+  [`docs/patch-set-20-runtime-channel.md`](patch-set-20-runtime-channel.md).
 - **Policy-bound multi-tenant crypto broker.** Principals receive bounded
   quotas, grants, and attenuable capabilities over opaque ML-KEM, ML-DSA,
   HKDF, HMAC, and AES-GCM key handles. The broker provides exact idempotency,
@@ -84,11 +84,11 @@ The module combines the following parts.
   that provides SQLite inventory, deterministic canaries, measured rollout
   decisions, signed revocation publication, a durable anti-replay sequence
   allocator, REST/SSE, and an operator CLI. See
-  [`samples/pqcp_fleet_trust`](samples/pqcp_fleet_trust) and
-  [`tools/pqcp_fleet_coordinator`](tools/pqcp_fleet_coordinator).
+  [`samples/pqcp_fleet_trust`](../samples/pqcp_fleet_trust) and
+  [`tools/pqcp_fleet_coordinator`](../tools/pqcp_fleet_coordinator).
 
 For the underlying architecture see
-[`docs/assurance-model.md`](docs/assurance-model.md). For the Passport
-artifact model see [`docs/pqc-assurance-passport.md`](docs/pqc-assurance-passport.md).
-For the public C API surface see [`docs/api-overview.md`](docs/api-overview.md).
+[`docs/assurance-model.md`](assurance-model.md). For the Passport
+artifact model see [`docs/pqc-assurance-passport.md`](pqc-assurance-passport.md).
+For the public C API surface see [`docs/api-overview.md`](api-overview.md).
 
