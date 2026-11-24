@@ -113,7 +113,7 @@ from the real encoders. Those targets assert decode(encode(x)) round
 trips, rejected-input hygiene and verifier/VM agreement on top of the
 sanitizers (measured: ~1,400 covered edges and ~370 evolved corpus
 entries per 200k-iteration campaign across all 10 targets). Its first
-runs found four defects in `src/fleet_cose_sign1.c`: an unprotected-bucket
+runs found four defects in `src/experimental/fleet/fleet_cose_sign1.c`: an unprotected-bucket
 map head parsed with a one-byte rewind (so a `map(160)` bucket decoded as
 an empty bucket), embedded NULs in a content-type string, an empty `kid`
 that decoded to "no kid", and half-built output left behind on rejection.

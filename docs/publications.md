@@ -1,4 +1,4 @@
-# pqcp-zephyr-trust-stack, Publication-Ready Technical Brief
+# Technical brief
 
 > Two-page workshop-style brief describing what this repository proves
 > and how a reviewer can re-verify every claim. Intended as the abstract
@@ -28,14 +28,14 @@ parameter sets 44/65/87. The C surface is layered as:
 
 - A vendored, pinned upstream of `mlkem-native` and `mldsa-native`
   (declared in `west.yml`).
-- A PSA Crypto + mbedTLS provider layer (`src/psa_mlkem_driver.c`,
-  `src/psa_mldsa_driver.c`).
+- A PSA Crypto + mbedTLS provider layer (`src/crypto/psa_mlkem_driver.c`,
+  `src/crypto/psa_mldsa_driver.c`).
 - A Zephyr-facing API in `include/pqcp_zephyr/{mlkem,mldsa,rng,
   acvp_cmd, bench, tls_selftest, version}.h`.
-- An ACVP serial validation harness (`src/acvp_cmd.c`) implementing the
+- An ACVP serial validation harness (`src/crypto/acvp_cmd.c`) implementing the
   documented wire format described in
   [`docs/api-overview.md`](api-overview.md).
-- A TLS self-test (`src/tls_selftest.c`) that performs a deterministic
+- A TLS self-test (`src/crypto/tls_selftest.c`) that performs a deterministic
   PSA + ML-KEM + ML-DSA handshake and emits a stable
   `PQCP_METRIC,...` accounting line.
 

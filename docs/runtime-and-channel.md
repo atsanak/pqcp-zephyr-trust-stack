@@ -1,6 +1,6 @@
-# Patch Set 20 Runtime and Channel Completion
+# Runtime and protected channel
 
-Patch Set 20 turns the adaptive PQC control plane into executable runtime and
+The runtime layer turns the adaptive PQC control plane into executable runtime and
 protected-channel services. The implementation is allocation-free, uses
 caller-owned storage, and keeps generated policy material reproducible.
 
@@ -72,41 +72,20 @@ transition is executed during audit.
 All catalog options are disabled by default so production images do not carry
 validation-only data.
 
-Regenerate and verify them with:
+The catalog sources are generated at CMake configure time into the build
+directory; they are not kept in `src/`. To render them by hand:
 
 ```sh
-python3 scripts/generate_runtime_channel_policy_catalogs.py --check
-python3 scripts/generate_operation_conformance_catalogs.py --check
-python3 scripts/generate_operation_plan_catalogs.py --check
-python3 scripts/generate_operation_scenario_catalogs.py --check
-python3 scripts/generate_runtime_channel_guard_catalogs.py --check
-python3 scripts/generate_operation_transition_catalogs.py --check
+for g in scripts/generate_runtime_channel_policy_catalogs.py \
+         scripts/generate_runtime_channel_guard_catalogs.py \
+         scripts/generate_operation_conformance_catalogs.py \
+         scripts/generate_operation_plan_catalogs.py \
+         scripts/generate_operation_scenario_catalogs.py \
+         scripts/generate_operation_transition_catalogs.py; do
+  python3 "$g" --output-dir build/generated
+done
 ```
 
-## Fresh `src/*.c` growth proof
+`scripts/run_local_tool_tests.py` runs every generator twice and fails if the
+output is not deterministic.
 
-The original Patch Set 20 conformance baseline is commit
-`5b052784017db8b739b65999c34572a735546fc5`, after the pre-existing Patch Set
-20 work was stabilized and committed. That baseline contains 145 tracked
-top-level `src/*.c` files and 103,307 lines. Commit
-`f956ffa5a1fd7dc08c84d3f6a3957695dd7f9d08` contains 152 files and 125,649
-lines, proving 22,342 net-new lines for the original conformance milestone.
-
-The continuation in this document starts from
-`fb49304eb7bed4e01cc5de5ec666d7c9803e2e81`, which also contains 152 files and
-125,650 lines. After committing the completed planner, guard, scenario, and
-transition implementation, verify both growth boundaries with:
-
-```sh
-python3 scripts/check_src_c_growth.py \
-  --baseline 5b052784017db8b739b65999c34572a735546fc5 \
-  --minimum 20000
-
-python3 scripts/check_src_c_growth.py \
-  --baseline fb49304eb7bed4e01cc5de5ec666d7c9803e2e81 \
-  --minimum 20000
-```
-
-The checker reads both Git trees directly, so ignored build output, untracked
-files, headers, tests, scripts, and older Patch Set 20 edits cannot inflate the
-result.

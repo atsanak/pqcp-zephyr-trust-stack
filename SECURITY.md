@@ -29,7 +29,7 @@ Security Advisories, **not** through a public issue or pull request:
 When filing an advisory, please include:
 
 - A short description of the issue and the affected component
-  (for example: `psa_mlkem_driver`, `src/tls_selftest.c`,
+  (for example: `psa_mlkem_driver`, `src/crypto/tls_selftest.c`,
   `tests/ztest_acvp_serial`).
 - The version or commit SHA you tested against.
 - Build flags and target board (for example: `native_sim/native/64`,
@@ -59,18 +59,18 @@ security vulnerability until a coordinated advisory has been published.
   overflow, uninitialized reads) in the PQCP module sources:
   `src/`, `include/pqcp_zephyr/`.
 - Correctness issues in the ML-KEM and ML-DSA provider layer
-  (`src/mlkem_*.c`, `src/mldsa_*.c`, `src/psa_mlkem_driver.c`,
-  `src/psa_mldsa_driver.c`) that cause a genuine deviation from the
+  (`src/mlkem_*.c`, `src/mldsa_*.c`, `src/crypto/psa_mlkem_driver.c`,
+  `src/crypto/psa_mldsa_driver.c`) that cause a genuine deviation from the
   FIPS 203 / FIPS 204 specifications, including KAT failures and
   known-ciphertext decapsulation errors.
-- ACVP serial wire protocol issues in `src/acvp_cmd.c` and
+- ACVP serial wire protocol issues in `src/crypto/acvp_cmd.c` and
   `samples/pqcp_serial_acvp` (frame parsing, timeout handling,
   recovery after garbage / oversize / partial frames).
 - PSA Crypto driver boundary issues (unsupported key types accepted,
   output-buffer length validation gaps, `PSA_ERROR_*` status
-  misrouting) in `src/psa_mlkem_driver.c` and `src/psa_mldsa_driver.c`.
+  misrouting) in `src/crypto/psa_mlkem_driver.c` and `src/crypto/psa_mldsa_driver.c`.
 - TLS self-test / cost-of-assurance metric accuracy as exposed through
-  `src/tls_selftest.c`, `samples/pqcp_bench_protocol`, and the
+  `src/crypto/tls_selftest.c`, `samples/pqcp_bench_protocol`, and the
   `PQCP_METRIC` record format consumed by
   `scripts/run_extended_checks.py`.
 - Release-gate evasion: any path that causes `scripts/release_check.py`

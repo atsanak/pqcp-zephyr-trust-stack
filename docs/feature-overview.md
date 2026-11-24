@@ -65,7 +65,7 @@ The module combines the following parts.
   add direct witnesses, two-step scenarios, authorization/continuity and
   epoch/stream guards, and eight-step transition traces without adding
   validation-only data to normal production builds. See
-  [`docs/patch-set-20-runtime-channel.md`](patch-set-20-runtime-channel.md).
+  [`docs/runtime-and-channel.md`](runtime-and-channel.md).
 - **Policy-bound multi-tenant crypto broker.** Principals receive bounded
   quotas, grants, and attenuable capabilities over opaque ML-KEM, ML-DSA,
   HKDF, HMAC, and AES-GCM key handles. The broker provides exact idempotency,

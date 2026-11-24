@@ -23,7 +23,7 @@ See the [README](../README.md) for the project overview.
   - ML-DSA driver following TF-PSA-Crypto design
   - ML-KEM driver for key encapsulation
 
-- **Benchmarking Harness**: Comprehensive performance measurement
+- **Benchmarking Harness**: Performance measurement
   - Primitive-level benchmarks (cycles, stack, code size)
   - Protocol-level benchmarks (TLS handshake latency, memory)
 

@@ -1,6 +1,6 @@
 # Fleet drift audit and hardware passport status
 
-This documents Wave 5 of the novelty roadmap: a fleet-level drift audit
+This covers a fleet-level drift audit
 (implemented and validated on host) and the on-hardware passport capture
 (designed, board-gated).
 

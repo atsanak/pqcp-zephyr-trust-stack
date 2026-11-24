@@ -27,7 +27,7 @@ const SETTINGS_DEFAULTS = {
   "maxRegrP90": 5.0,
   "maxRegrRom": 2.0,
   "objective": "cycles_median",
-  "showHonestyBanner": true
+  "showScopeNotice": true
 };
 
 const NAV = [
@@ -108,7 +108,7 @@ function App() {
           <div className="shell__body">
             <Sidebar view={view} onNav={jumpView} groups={groups} pack={pack} />
             <main className="main">
-              {t.showHonestyBanner && <HonestyBanner onClose={() => setSetting("showHonestyBanner", false)} />}
+              {t.showScopeNotice && <ScopeNotice onClose={() => setSetting("showScopeNotice", false)} />}
               <GlobalFilterStrip />
 
               {view === "overview"     && <VOver.OverviewView session={session} pack={pack} onJumpView={jumpView} />}
@@ -143,7 +143,7 @@ function App() {
           <SettingSelect label="Objective" value={t.objective} options={["cycles_median","cycles_p90","cycles_p99","handshake_p99_ms"]} onChange={v => setSetting("objective", v)} />
 
           <SettingSection label="Disclosures" />
-          <SettingToggle label="Honesty banner" value={t.showHonestyBanner} onChange={v => setSetting("showHonestyBanner", v)} />
+          <SettingToggle label="Scope notice" value={t.showScopeNotice} onChange={v => setSetting("showScopeNotice", v)} />
         </SettingsPanel>
       </DrawerCtx.Provider>
     </FilterProvider>
@@ -256,7 +256,7 @@ function GlobalFilterStrip() {
   );
 }
 
-function HonestyBanner({ onClose }) {
+function ScopeNotice({ onClose }) {
   return (
     <div className="banner">
       <span className="banner__icn"><ASev level="info" /></span>

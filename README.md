@@ -44,8 +44,10 @@ be told apart.
   [`docs/assurance-model.md`](docs/assurance-model.md).
 - **Runtime and evidence services.** Key and session governance, a protected
   channel, fleet policy and signed audit export, described in
-  [`docs/feature-overview.md`](docs/feature-overview.md). These layers are
-  less mature than the cryptographic core and carry less test coverage.
+  [`docs/feature-overview.md`](docs/feature-overview.md). The fleet,
+  sovereign and adaptive families live under `src/experimental/`, select
+  Zephyr's `EXPERIMENTAL` Kconfig symbol and carry less test coverage than
+  the cryptographic core.
 
 ## Main results
 
@@ -86,6 +88,21 @@ west build -t run
 The full local release gate is `python3 scripts/release_check.py --tag v1.0.0`.
 Prerequisites, Kconfig options and the C API are in
 [`docs/getting-started.md`](docs/getting-started.md).
+
+## Source layout
+
+| Path | Contents |
+|------|----------|
+| `src/crypto/` | ML-KEM and ML-DSA glue, RNG backends, PSA drivers, ACVP and KAT support |
+| `src/evidence/` | Build manifest, evidence sessions, transcripts and deployment evidence |
+| `src/runtime/`, `src/channel/` | Runtime services and the protected channel |
+| `src/edge/` | Edge security services |
+| `src/experimental/` | Fleet, sovereign and adaptive families |
+| `include/pqcp_zephyr/` | Public headers |
+| `scripts/`, `tools/` | Host-side test, evidence and release tooling |
+
+The runtime and channel decision catalogs are generated into the build
+directory at configure time from `scripts/generate_*_catalogs.py`.
 
 ## Supported targets
 

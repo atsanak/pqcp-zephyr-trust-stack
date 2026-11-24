@@ -8,6 +8,14 @@ release tag to the validation and provider surface it introduced.
 
 ## [Unreleased]
 
+### Changed
+
+- Sources are grouped by family under `src/`; the fleet, sovereign and
+  adaptive families moved to `src/experimental/` and select `EXPERIMENTAL`.
+- The runtime and protected-channel decision catalogs are generated at
+  CMake configure time instead of being committed under `src/`.
+- The README is shorter; reference material moved to `docs/`.
+
 ### Added
 
 - Allocation-free policy-bound crypto broker with tenant principals, quotas,
@@ -114,7 +122,7 @@ sidecar.
   ML-KEM-512+ML-DSA-87 protocol suites, plus RTOS/TLS decomposition
   guardrails for provider overhead, transport overhead, and RTOS jitter
   columns emitted by the protocol benchmark.
-- `scripts/export_results.py` for publication-ready benchmark extraction,
+- `scripts/export_results.py` for benchmark extraction,
   generating `results/benchmark_results.csv` and
   `results/benchmark_summary.md` from the checked-in cost-of-assurance
   matrix, with paired `avg_cycles` and `avg_us` columns.
