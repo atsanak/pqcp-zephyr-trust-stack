@@ -2540,8 +2540,9 @@ def evaluate_ct_residue_scrub(
 ) -> dict[str, object]:
     """Bind security.ct_residue_scrub to the stock against scrubbed runs.
 
-    For ML-KEM decapsulation and ML-DSA-65 signing at three optimisation
-    levels the stock image leaves residue (ML-KEM shows shared secret words),
+    For ML-KEM decapsulation, encapsulation and key generation and for
+    ML-DSA-65 signing and key generation at three optimisation levels the
+    stock image leaves residue (secret words for ML-KEM and key generation),
     the scrubbed image keeps no shared secret word and less than half of the
     words, the declassification aware verdict still holds and the instruction
     overhead stays under the committed ceiling.
@@ -2575,12 +2576,20 @@ def evaluate_ct_residue_scrub(
             r"stock_nonzero=(\d+) scrub_nonzero=(\d+) scrub_violations=0 "
             r"insn_overhead_pct=(-?[0-9.]+)", body):
         alg, opt = m.group(1), m.group(2)
+        # Decapsulation must show shared secret words at every level and each
+        # key generation or encapsulation entry point at least at the default
+        # level (an optimiser may keep no literal copy at another level).
         if alg == "MLKEM-768" and int(m.group(3)) < 1:
+            continue
+        if alg.endswith(("-keygen", "-encaps")) and opt == "default" and \
+                int(m.group(3)) < 1:
             continue
         if int(m.group(4)) < 100 or int(m.group(5)) * 2 > int(m.group(4)):
             continue
         seen[f"{alg}/{opt}"] = float(m.group(6))
-    required = {f"{a}/{o}" for a in ("MLKEM-768", "MLDSA-65")
+    required = {f"{a}/{o}" for a in ("MLKEM-768", "MLDSA-65",
+                                     "MLKEM-768-keygen", "MLKEM-768-encaps",
+                                     "MLDSA-65-keygen")
                 for o in ("default", "speed", "debug")}
     problems = []
     if not required <= set(seen):

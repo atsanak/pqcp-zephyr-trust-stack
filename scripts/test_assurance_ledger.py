@@ -1867,10 +1867,12 @@ class AssuranceLedgerTests(unittest.TestCase):
 
     RES_BODY = "".join(
         f"PQCP_CT_TRACE_RESIDUE_VERIFY PASS alg={a} target=cortex-m4 opt={o} "
-        f"stock_ss_hits={320 if a == 'MLKEM-768' else 0} scrub_ss_hits=0 "
+        f"stock_ss_hits={0 if a == 'MLDSA-65' else 32} scrub_ss_hits=0 "
         f"stock_nonzero=300 scrub_nonzero=100 scrub_violations=0 "
         f"insn_overhead_pct=1.25\n"
-        for a in ("MLKEM-768", "MLDSA-65") for o in ("default", "speed", "debug"))
+        for a in ("MLKEM-768", "MLDSA-65", "MLKEM-768-keygen",
+                  "MLKEM-768-encaps", "MLDSA-65-keygen")
+        for o in ("default", "speed", "debug"))
 
     def _eval_res(self, body: str, ceiling: float = 3.0) -> dict:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1896,7 +1898,8 @@ class AssuranceLedgerTests(unittest.TestCase):
         b = self.RES_BODY
         for body, ceiling in (
             (b.replace("scrub_ss_hits=0", "scrub_ss_hits=8", 1), 3.0),
-            (b.replace("stock_ss_hits=320", "stock_ss_hits=0"), 3.0),
+            (b.replace("stock_ss_hits=32", "stock_ss_hits=0"), 3.0),
+            (b.replace("alg=MLKEM-768-keygen target=cortex-m4 opt=default stock_ss_hits=32", "alg=MLKEM-768-keygen target=cortex-m4 opt=default stock_ss_hits=0"), 3.0),
             (b.replace("scrub_nonzero=100", "scrub_nonzero=200", 1), 3.0),
             (b.replace("stock_nonzero=300", "stock_nonzero=50", 1), 3.0),
             (b.replace("scrub_violations=0", "scrub_violations=2", 1), 3.0),

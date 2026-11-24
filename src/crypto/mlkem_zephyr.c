@@ -121,7 +121,8 @@ const char *pqcp_mlkem_level_name(pqcp_mlkem_level_t level)
 
 /* Real implementation using mlkem-native */
 
-int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
+static int pqcp_mlkem_keypair_impl(pqcp_mlkem_level_t level, uint8_t *pk,
+                                   uint8_t *sk)
 {
     if (pk == NULL || sk == NULL) {
         return PQCP_MLKEM_ERR_INVALID_ARG;
@@ -160,8 +161,9 @@ int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
     return (ret == 0) ? PQCP_MLKEM_SUCCESS : PQCP_MLKEM_ERR_INTERNAL;
 }
 
-int pqcp_mlkem_encapsulate(pqcp_mlkem_level_t level, const uint8_t *pk,
-                           uint8_t *ct, uint8_t *ss)
+static int pqcp_mlkem_encapsulate_impl(pqcp_mlkem_level_t level,
+                                       const uint8_t *pk, uint8_t *ct,
+                                       uint8_t *ss)
 {
     if (pk == NULL || ct == NULL || ss == NULL) {
         return PQCP_MLKEM_ERR_INVALID_ARG;
@@ -388,6 +390,31 @@ static int mlkem_decapsulate_public(pqcp_mlkem_level_t level,
 #else
     return mlkem_decapsulate_backend(level, ct, sk, ss);
 #endif
+}
+
+/*
+ * Key generation and encapsulation draw secret seeds and the message through
+ * the same hash code as decapsulation, so they get the same optional wipe.
+ */
+int pqcp_mlkem_keypair(pqcp_mlkem_level_t level, uint8_t *pk, uint8_t *sk)
+{
+    int ret = pqcp_mlkem_keypair_impl(level, pk, sk);
+
+#ifdef CONFIG_PQCP_STACK_SCRUB
+    stack_scrub();
+#endif
+    return ret;
+}
+
+int pqcp_mlkem_encapsulate(pqcp_mlkem_level_t level, const uint8_t *pk,
+                           uint8_t *ct, uint8_t *ss)
+{
+    int ret = pqcp_mlkem_encapsulate_impl(level, pk, ct, ss);
+
+#ifdef CONFIG_PQCP_STACK_SCRUB
+    stack_scrub();
+#endif
+    return ret;
 }
 
 #endif /* HAVE_MLKEM_NATIVE */

@@ -378,10 +378,101 @@ def run_residue_verify(args, out: Path, west_root: Path, west_cmd: list,
             for issue in issues:
                 print(f"[ct-trace] FAIL: {issue}")
             failed = failed or bool(issues)
+    for opt in args.opt or ["default", "speed", "debug"]:
+        st_stock = entries_stats(False, opt, out, west_root, west_cmd, env,
+                                 plugin, target)
+        st_scrub = entries_stats(True, opt, out, west_root, west_cmd, env,
+                                 plugin, target)
+        for label in st_stock:
+            a, b = st_stock[label], st_scrub[label]
+            overhead = 100.0 * (b["insns"] - a["insns"]) / a["insns"]
+            issues = []
+            if b["hits"] != 0:
+                issues.append(f"{label} keeps {b['hits']} secret words")
+            if b["nonzero"] > a["nonzero"] / 2:
+                issues.append(f"{label} scrub removes less than half of the "
+                              "words")
+            print(f"PQCP_CT_TRACE_RESIDUE_VERIFY "
+                  f"{'FAIL' if issues else 'PASS'} alg={label} "
+                  f"target={target} opt={opt} stock_ss_hits={a['hits']} "
+                  f"scrub_ss_hits={b['hits']} "
+                  f"stock_nonzero={a['nonzero']:.0f} "
+                  f"scrub_nonzero={b['nonzero']:.0f} scrub_violations=0 "
+                  f"insn_overhead_pct={overhead:.2f}")
+            for issue in issues:
+                print(f"[ct-trace] FAIL: {issue}")
+            failed = failed or bool(issues)
     if not failed:
         print("[ct-trace] PASS: the stack wipe removes the residue without "
               "changing the leakage verdict")
     return 1 if failed else 0
+
+
+def entries_stats(scrub: bool, opt: str, out: Path, west_root: Path,
+                  west_cmd: list, env: dict, plugin: Path, target: str) -> dict:
+    """Build and trace the key generation and encapsulation workload, return
+    per entry point (non-zero words, dictionary hits, regions with hits,
+    instructions, writers)."""
+    import ct_residue_analysis as ra  # noqa: PLC0415
+
+    name = "scrub" if scrub else "stock"
+    build = out / f"build-{target}-entries-{name}-{opt}"
+    overlay = out / f"entries-{name}.conf"
+    overlay.write_text("CONFIG_PQCP_STACK_SCRUB=y\n" if scrub else "",
+                       encoding="utf-8")
+    text = trace_core(
+        MODULE_PATH, build, out / f"trace-entries-{name}-{opt}.txt",
+        opt=opt, target=target, west_root=west_root, west_cmd=west_cmd,
+        env=env, plugin=plugin, timeout=900, app="tests/ztest_ct_residue",
+        marker="PQCP_CT_TRACE_APP alg=RESIDUE", residue=True,
+        extra_cmake=(f"-DEXTRA_CONF_FILE={overlay.resolve()}",))
+    elf = build / "zephyr" / "zephyr.elf"
+    log = (build / "ct_trace_device.log").read_text(errors="replace")
+    excl = symbol_ranges(elf, {"kem_pk", "kem_sk", "kem_ct", "kem_ss",
+                               "dsa_pk", "dsa_sk"}, env)
+    found = ra.dict_matches(text, log, excl)
+    words, _ = ra.parse(text)
+    regions = cta.parse_trace(text)
+    stats = {}
+    for entry, label in ra.ENTRIES.items():
+        mine = [r for r in regions if r.label >> 8 == entry]
+        hits = [h for r in mine for h in found[r.index][1]]
+        pcs = {pc for _, _, pc in hits}
+        fns = functions_for(elf, pcs, env) if pcs else {}
+        writers: dict[str, int] = {}
+        for _, _, pc in hits:
+            writers[fns.get(pc, "?")] = writers.get(fns.get(pc, "?"), 0) + 1
+        top = ",".join(f"{k}:{v}" for k, v in sorted(
+            writers.items(), key=lambda kv: -kv[1])[:3]) or "none"
+        nz = sum(len({a for a in words.get(r.index, {})
+                      if not any(lo <= a < hi for lo, hi in excl)})
+                 for r in mine) / max(len(mine), 1)
+        stats[label] = {
+            "regions": len(mine), "nonzero": nz, "hits": len(hits),
+            "with_hits": sum(1 for r in mine if found[r.index][1]),
+            "insns": sum(r.insns for r in mine) / max(len(mine), 1),
+            "writers": top}
+    return stats
+
+
+def run_residue_entries(args, out: Path, west_root: Path, west_cmd: list,
+                        env: dict, plugin: Path) -> int:
+    """Residue of ML-KEM key generation, ML-KEM encapsulation and ML-DSA key
+    generation against a dictionary of the secret inputs they drew. With
+    --scrub the image is built with the stack wipe."""
+    target = args.target
+    name = "scrub" if args.scrub else "stock"
+    for opt in args.opt or ["default", "speed", "debug"]:
+        stats = entries_stats(args.scrub, opt, out, west_root, west_cmd, env,
+                              plugin, target)
+        for label, st in stats.items():
+            print(f"PQCP_CT_TRACE_RESIDUE_ENTRY alg={label} target={target} "
+                  f"opt={opt} variant={name} regions={st['regions']} "
+                  f"nonzero_mean={st['nonzero']:.0f} "
+                  f"insns_mean={st['insns']:.0f} dict_hits={st['hits']} "
+                  f"regions_with_hits={st['with_hits']} "
+                  f"writers={st['writers']}")
+    return 0
 
 
 def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
@@ -672,6 +763,10 @@ def main() -> int:
                         help="ML-DSA signing and ML-KEM decapsulation: record stack words left "
                              "below the caller after the call and compare "
                              "them across secret variants")
+    parser.add_argument("--residue-entries", action="store_true",
+                        help="Cortex-M: residue of key generation and "
+                             "encapsulation against a dictionary of the "
+                             "secret inputs (use --scrub for the wipe)")
     parser.add_argument("--residue-verify", action="store_true",
                         help="Cortex-M: build stock and scrubbed images and "
                              "check the stack wipe for ML-KEM and ML-DSA")
@@ -726,6 +821,9 @@ def main() -> int:
             return m3_leaks.rediscover(run_m3_trace,
                                        (args.opt or ["default"])[0],
                                        only or None)
+        if args.residue_entries:
+            return run_residue_entries(args, out, west_root, west_cmd, env,
+                                       plugin)
         if args.residue_verify:
             return run_residue_verify(args, out, west_root, west_cmd, env,
                                       plugin)

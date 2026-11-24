@@ -159,6 +159,45 @@ def ss_matches(text: str, device_log: str, exclude=()) -> dict:
             for r in regions}
 
 
+DICT_RE = re.compile(r"PQCP_CT_DICT label=(\d+) kind=(\w+) ([0-9a-f]+)")
+ENTRIES = {0: "MLKEM-768-keygen", 1: "MLKEM-768-encaps", 2: "MLDSA-65-keygen"}
+
+
+def _words(raw: bytes) -> set:
+    ws = {int.from_bytes(raw[i:i + 4], "little")
+          for i in range(0, len(raw) - 3, 4)}
+    return {w for w in ws if w >= 0x10000 and w != 0xffffffff}
+
+
+def dict_words(device_log: str) -> dict:
+    """label -> usable 32 bit words of the printed random bytes and outputs,
+    plus the values derived from them on the host. ML-DSA-65 key generation
+    expands the 32 byte seed xi with SHAKE256(xi || K || L) into rho,
+    rho prime and K (FIPS 204 Algorithm 6, K = 6, L = 5)."""
+    import hashlib  # noqa: PLC0415
+    words: dict[int, set] = {}
+    for m in DICT_RE.finditer(device_log):
+        label, kind, raw = int(m[1]), m[2], bytes.fromhex(m[3])
+        words.setdefault(label, set()).update(_words(raw))
+        if label >> 8 == 2 and kind == "random":
+            out = hashlib.shake_256(raw + bytes([6, 5])).digest(128)
+            words[label].update(_words(out[32:96]))      # rho prime
+            words[label].update(_words(out[96:128]))     # K
+    return words
+
+
+def dict_matches(text: str, device_log: str, exclude=()) -> dict:
+    regions = cta.parse_trace(text)
+    words, _ = parse(text)
+    dictionary = dict_words(device_log)
+    return {r.index: (r.label,
+                      [(a, v, pc) for a, (v, pc) in
+                       words.get(r.index, {}).items()
+                       if v in dictionary.get(r.label, set()) and
+                       not any(lo <= a < hi for lo, hi in exclude)])
+            for r in regions}
+
+
 def format_marker(r: Residue, alg: str, opt: str, target: str,
                   functions: dict | None = None) -> str:
     fns = functions or {}

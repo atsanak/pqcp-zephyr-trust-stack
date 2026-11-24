@@ -196,3 +196,39 @@ encapsulation handle secrets of their own, namely the seeds and the message.
 Non-claims as for the rest of this document. A dictionary only finds literal
 copies, so a null result means no literal copy of the listed values, not that
 nothing derived from them remains.
+
+### Key generation and encapsulation, results
+
+Cortex-M4 image, three optimisation levels, four keys per entry point. The
+dictionary holds the random bytes the call drew (the deterministic generator is
+reseeded and the same bytes are printed first), the call's outputs and, for
+ML-DSA-65 key generation, rho prime and K derived from the seed on the host.
+
+| entry point | stock non-zero words | stock dictionary matches | writers |
+|---|---|---|---|
+| ML-KEM-768 key generation | 285 to 306 | 32 at every level (8 per run) | Keccak permutation |
+| ML-KEM-768 encapsulation | 220 to 238 | 8 at -Os and -O2, 0 at -Og | the test random number backend |
+| ML-DSA-65 key generation | 288 to 315 | 68 at every level | Keccak permutation, the t0 packing |
+
+H20 holds for key generation at all levels and for encapsulation at -Os and
+-O2. It is falsified for encapsulation at -Og, where no literal copy was found.
+The matches in the encapsulation frame belong to the deterministic generator of
+the test build, a test only source, so they say nothing about a production
+entropy source.
+
+The deepest stack write below the caller was measured for each call on the
+same image, which fixes the wipe depths: about 18.2 KB for decapsulation, 17.1
+KB for encapsulation, 14.0 KB for ML-KEM key generation, 71.0 KB for ML-DSA key
+generation and 85.9 KB for signing. A first default of 16 KiB for the ML-KEM
+wipe was shallower than the deepest decapsulation and encapsulation frames. It
+already removed every dictionary match, but it left about 100 non-zero words
+below the wipe, so the defaults were raised to 20 KiB (ML-KEM), 76 KiB (ML-DSA
+key generation, its own option) and 96 KiB (signing).
+
+With the wipe enabled and these depths, all five entry points show 0
+dictionary matches and 2 to 4 non-zero words (down from 220 to 396) at every
+level, and the instruction overhead is 1.9 to 2.2 percent for the ML-KEM entry
+points and 2.1 to 2.6 percent for ML-DSA key generation. H21 holds. The check
+for all five entry points is part of the release gate step `ct residue stack
+wipe cortex-m4`.
+

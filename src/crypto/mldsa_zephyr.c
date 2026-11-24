@@ -16,6 +16,7 @@
 
 #ifdef CONFIG_PQCP_STACK_SCRUB
 PQCP_DEFINE_STACK_SCRUB(stack_scrub_sign, CONFIG_PQCP_STACK_SCRUB_SIGN_DEPTH)
+PQCP_DEFINE_STACK_SCRUB(stack_scrub_keygen, CONFIG_PQCP_STACK_SCRUB_KEYGEN_DEPTH)
 #endif
 
 /* Check if we have the real mldsa-native */
@@ -125,7 +126,8 @@ const char *pqcp_mldsa_level_name(pqcp_mldsa_level_t level)
 
 /* Real implementation using mldsa-native */
 
-int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk)
+static int pqcp_mldsa_keypair_impl(pqcp_mldsa_level_t level, uint8_t *pk,
+                                   uint8_t *sk)
 {
     if (pk == NULL || sk == NULL) {
         return PQCP_MLDSA_ERR_INVALID_ARG;
@@ -360,6 +362,17 @@ int pqcp_mldsa_verify(pqcp_mldsa_level_t level, const uint8_t *pk,
     if (ret == PQCP_MLDSA_SUCCESS && !dsa_canary_ok(level)) {
         return PQCP_MLDSA_ERR_FAULT_DETECTED;
     }
+#endif
+    return ret;
+}
+
+/* Key generation expands the seed with the same hash code as signing. */
+int pqcp_mldsa_keypair(pqcp_mldsa_level_t level, uint8_t *pk, uint8_t *sk)
+{
+    int ret = pqcp_mldsa_keypair_impl(level, pk, sk);
+
+#ifdef CONFIG_PQCP_STACK_SCRUB
+    stack_scrub_keygen();
 #endif
     return ret;
 }

@@ -164,33 +164,44 @@ config PQCP_RNG_CUSTOM
 endchoice
 
 config PQCP_STACK_SCRUB
-	bool "Wipe the stack below the caller after decapsulation and signing"
+	bool "Wipe the stack below the caller after the secret handling calls"
 	default n
 	help
-	  Decapsulation leaves copies of the shared secret in the dead stack
-	  frames of the library, mostly in the Keccak permutation. With this
-	  option the wrapper overwrites the stack below the caller after each
-	  decapsulation. Measured on an emulated image in docs/ct-residue.md.
+	  Decapsulation, encapsulation, key generation and signing leave copies
+	  of secrets in the dead stack frames of the library, mostly in the
+	  Keccak permutation. With this option the wrappers overwrite the stack
+	  below the caller after each of those calls. Measured on an emulated image in docs/ct-residue.md.
 	  The caller needs PQCP_STACK_SCRUB_DEPTH bytes of stack headroom.
+
+config PQCP_STACK_SCRUB_KEYGEN_DEPTH
+	int "Bytes of stack to wipe after ML-DSA key generation"
+	depends on PQCP_STACK_SCRUB
+	default 77824
+	range 4096 262144
+	help
+	  Deepest stack write measured for ML-DSA-65 key generation is about
+	  71 KB on the Cortex-M4 image. The default adds a margin.
 
 config PQCP_STACK_SCRUB_SIGN_DEPTH
 	int "Bytes of stack to wipe after ML-DSA signing"
 	depends on PQCP_STACK_SCRUB
-	default 110592
+	default 98304
 	range 4096 262144
 	help
-	  Signing uses far more stack than decapsulation. The wipe after
-	  pqcp_mldsa_sign needs this much stack headroom on top of the signing
-	  call itself.
+	  Deepest stack write measured for ML-DSA-65 signing is about 86 KB on
+	  the Cortex-M4 image. The default adds a margin. The wipe after
+	  pqcp_mldsa_sign needs this much stack headroom on top of the call.
 
 config PQCP_STACK_SCRUB_DEPTH
 	int "Bytes of stack to wipe after ML-KEM decapsulation"
 	depends on PQCP_STACK_SCRUB
-	default 16384
+	default 20480
 	range 256 131072
 	help
 	  Depth of the wipe in bytes. It has to cover the deepest frame the
-	  library used, which is measured, not proven.
+	  library used (about 18 KB for ML-KEM-768 decapsulation, 17 KB for
+	  encapsulation and 14 KB for key generation on the Cortex-M4 image),
+	  which is measured, not proven.
 
 config PQCP_RNG_DETERMINISTIC_TEST
 	bool "Deterministic RNG for testing (DANGEROUS)"
