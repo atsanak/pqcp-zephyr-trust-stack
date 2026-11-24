@@ -692,15 +692,19 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parents[1],
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="directory for the generated C sources (default: <repo>/build/generated)",
+    )
     args = parser.parse_args()
+    out_dir = (args.output_dir or args.repo_root / "build" / "generated").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     outputs = {
-        args.repo_root
-        / "src"
-        / "runtime_transition_conformance_catalog.c": render_runtime(),
-        args.repo_root
-        / "src"
-        / "protected_channel_transition_conformance_catalog.c": render_channel(),
+        out_dir / "runtime_transition_conformance_catalog.c": render_runtime(),
+        out_dir / "protected_channel_transition_conformance_catalog.c": render_channel(),
     }
     mismatches = []
     for output, content in outputs.items():

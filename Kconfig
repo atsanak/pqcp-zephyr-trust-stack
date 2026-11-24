@@ -961,6 +961,7 @@ menu "Adaptive PQC Deployment Control"
 
 config PQCP_ADAPTIVE_CONTROL
 	bool "Enable firmware-native adaptive PQC deployment control"
+	select EXPERIMENTAL
 	depends on PQCP_DEPLOYMENT_ADVISOR
 	depends on PQCP_DEPLOYMENT_EVIDENCE_CODEC
 	default n
@@ -1776,6 +1777,7 @@ menu "PQC Fleet Trust Fabric"
 
 config PQCP_FLEET_TRUST
 	bool "Enable device enrollment and fleet credential lifecycle"
+	select EXPERIMENTAL
 	depends on PQCP_PROTECTED_CHANNEL
 	default n
 	help
@@ -1803,6 +1805,7 @@ config PQCP_EVIDENCE_CONTINUITY
 
 config PQCP_FLEET_STORE_ITS
 	bool "Enable PSA Internal Trusted Storage fleet backend"
+	select EXPERIMENTAL
 	depends on PQCP_FLEET_TRUST
 	default n
 	help
@@ -1811,6 +1814,7 @@ config PQCP_FLEET_STORE_ITS
 
 config PQCP_FLEET_TRANSPARENCY
 	bool "Enable witnessed fleet transparency services"
+	select EXPERIMENTAL
 	depends on PQCP_FLEET_TRUST
 	default n
 	help
@@ -1825,6 +1829,7 @@ config PQCP_FLEET_TRANSPARENCY
 
 config PQCP_FLEET_APPROVAL
 	bool "Enable multi-party fleet action authorization"
+	select EXPERIMENTAL
 	depends on PQCP_FLEET_TRANSPARENCY
 	default n
 	help
@@ -1839,6 +1844,7 @@ config PQCP_FLEET_APPROVAL
 
 config PQCP_FLEET_ARTIFACT_CORE
 	bool "Enable canonical COSE, EAT, and RATS artifact core"
+	select EXPERIMENTAL
 	depends on PQCP_FLEET_TRUST
 	default n
 	help
@@ -1848,6 +1854,7 @@ config PQCP_FLEET_ARTIFACT_CORE
 
 config PQCP_FLEET_POLICY_VM
 	bool "Enable deterministic fleet policy virtual machine"
+	select EXPERIMENTAL
 	depends on PQCP_FLEET_TRUST
 	default n
 	help
@@ -1857,6 +1864,7 @@ config PQCP_FLEET_POLICY_VM
 
 config PQCP_FLEET_CONVERGENCE
 	bool "Enable durable fleet desired-state convergence"
+	select EXPERIMENTAL
 	depends on PQCP_FLEET_TRUST
 	default n
 	help
@@ -1896,6 +1904,7 @@ menu "Sovereign Runtime and Continuity"
 
 config PQCP_SOVEREIGN_RUNTIME
 	bool "Enable sovereign supply-chain and workload governance"
+	select EXPERIMENTAL
 	depends on PQCP_EDGE_SECURITY
 	depends on PQCP_CRYPTO_BROKER
 	depends on PQCP_PROTECTED_CHANNEL

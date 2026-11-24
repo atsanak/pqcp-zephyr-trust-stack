@@ -2378,7 +2378,7 @@ def readiness_asset_crypto_mlkem_512(experiment: ExperimentSpec) -> ExperimentRe
     """Build readiness matrix row for asset.crypto_mlkem_512."""
     expected_id = 'asset.crypto_mlkem_512'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2418,7 +2418,7 @@ def readiness_asset_crypto_mlkem_768(experiment: ExperimentSpec) -> ExperimentRe
     """Build readiness matrix row for asset.crypto_mlkem_768."""
     expected_id = 'asset.crypto_mlkem_768'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'src/psa_mlkem_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_ct_smoke/src/main.c', 'tests/ztest_primitive/src/main.c', 'scripts/verify_ct_instruction_policy.py')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'src/crypto/psa_mlkem_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_ct_smoke/src/main.c', 'tests/ztest_primitive/src/main.c', 'scripts/verify_ct_instruction_policy.py')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2458,7 +2458,7 @@ def readiness_asset_crypto_mlkem_1024(experiment: ExperimentSpec) -> ExperimentR
     """Build readiness matrix row for asset.crypto_mlkem_1024."""
     expected_id = 'asset.crypto_mlkem_1024'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2498,7 +2498,7 @@ def readiness_asset_crypto_mldsa_44(experiment: ExperimentSpec) -> ExperimentRea
     """Build readiness matrix row for asset.crypto_mldsa_44."""
     expected_id = 'asset.crypto_mldsa_44'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2538,7 +2538,7 @@ def readiness_asset_crypto_mldsa_65(experiment: ExperimentSpec) -> ExperimentRea
     """Build readiness matrix row for asset.crypto_mldsa_65."""
     expected_id = 'asset.crypto_mldsa_65'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'src/psa_mldsa_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_primitive/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'src/crypto/psa_mldsa_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_primitive/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2578,7 +2578,7 @@ def readiness_asset_crypto_mldsa_87(experiment: ExperimentSpec) -> ExperimentRea
     """Build readiness matrix row for asset.crypto_mldsa_87."""
     expected_id = 'asset.crypto_mldsa_87'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2618,7 +2618,7 @@ def readiness_asset_validation_acvp_serial(experiment: ExperimentSpec) -> Experi
     """Build readiness matrix row for asset.validation_acvp_serial."""
     expected_id = 'asset.validation_acvp_serial'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/acvp_cmd.h', 'src/acvp_cmd.c', 'samples/pqcp_serial_acvp/src/main.c', 'scripts/acvp_negative_scenarios.json', 'scripts/acvp_negative_scenario_floor.json', 'tests/ztest_acvp_serial/src/main.c', 'tests/ztest_acvp_serial_negative/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/acvp_cmd.h', 'src/crypto/acvp_cmd.c', 'samples/pqcp_serial_acvp/src/main.c', 'scripts/acvp_negative_scenarios.json', 'scripts/acvp_negative_scenario_floor.json', 'tests/ztest_acvp_serial/src/main.c', 'tests/ztest_acvp_serial_negative/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2658,7 +2658,7 @@ def readiness_asset_validation_tls_selftest(experiment: ExperimentSpec) -> Exper
     """Build readiness matrix row for asset.validation_tls_selftest."""
     expected_id = 'asset.validation_tls_selftest'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/tls_selftest.h', 'src/tls_selftest.c', 'samples/pqcp_tls_mbedtls_psa/src/main.c', 'tests/ztest_tls_selftest/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/tls_selftest.h', 'src/crypto/tls_selftest.c', 'samples/pqcp_tls_mbedtls_psa/src/main.c', 'tests/ztest_tls_selftest/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2698,7 +2698,7 @@ def readiness_asset_rng_zephyr_entropy(experiment: ExperimentSpec) -> Experiment
     """Build readiness matrix row for asset.rng_zephyr_entropy."""
     expected_id = 'asset.rng_zephyr_entropy'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_zephyr_entropy.c', 'tests/ztest_rng/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_zephyr_entropy.c', 'tests/ztest_rng/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2738,7 +2738,7 @@ def readiness_asset_rng_psa(experiment: ExperimentSpec) -> ExperimentReadiness:
     """Build readiness matrix row for asset.rng_psa."""
     expected_id = 'asset.rng_psa'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_psa.c', 'tests/ztest_rng/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_psa.c', 'tests/ztest_rng/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2778,7 +2778,7 @@ def readiness_asset_rng_deterministic_test(experiment: ExperimentSpec) -> Experi
     """Build readiness matrix row for asset.rng_deterministic_test."""
     expected_id = 'asset.rng_deterministic_test'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_deterministic.c', 'samples/pqcp_kat_deterministic/src/main.c', 'tests/ztest_primitive/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_deterministic.c', 'samples/pqcp_kat_deterministic/src/main.c', 'tests/ztest_primitive/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)
@@ -2818,7 +2818,7 @@ def readiness_asset_boot_kat_self_verify(experiment: ExperimentSpec) -> Experime
     """Build readiness matrix row for asset.boot_kat_self_verify."""
     expected_id = 'asset.boot_kat_self_verify'
     expected_category = 'asset_traceability'
-    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'src/kat_boot_verify.c', 'tests/ztest_kat_boot_verify/src/main.c')
+    required_inputs = ('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'src/crypto/kat_boot_verify.c', 'tests/ztest_kat_boot_verify/src/main.c')
     required_outputs = ('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')
     required_commands = ('python3 scripts/verify_pqc_asset_trace_map.py --trace-map scripts/pqc_asset_trace_map.json --module-path . --output /tmp/pqcp-asset-trace.json',)
     commands = tuple(experiment.commands)

@@ -683,7 +683,6 @@ ZTEST(pqcp_tls_loopback, test_parallel_psa_allocator_and_key_slots)
  * threads. Without the abort a timed-out run leaves the static client/server
  * threads and stacks live, the next run_tls_pair() re-creates them under a
  * running thread, and the first failure is buried under later corruption.
- * Ported from the superseded patch20-loopback-stability branch.
  */
 static int join_or_abort(struct k_thread *thread, k_timeout_t timeout,
 			 const char *side)

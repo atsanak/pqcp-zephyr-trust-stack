@@ -46,6 +46,29 @@ set(PQCP_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(PQCP_INC ${PQCP_DIR}/include)
 set(PQCP_SRC ${PQCP_DIR}/src)
 set(PQCP_EXT ${PQCP_DIR}/ext)
+set(PQCP_GENERATED ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+# The runtime and protected-channel decision catalogs are generated from the
+# scripts below at configure time instead of being kept in the source tree.
+set(PQCP_CATALOG_GENERATORS
+    ${PQCP_DIR}/scripts/generate_runtime_channel_policy_catalogs.py
+    ${PQCP_DIR}/scripts/generate_runtime_channel_guard_catalogs.py
+    ${PQCP_DIR}/scripts/generate_operation_conformance_catalogs.py
+    ${PQCP_DIR}/scripts/generate_operation_plan_catalogs.py
+    ${PQCP_DIR}/scripts/generate_operation_scenario_catalogs.py
+    ${PQCP_DIR}/scripts/generate_operation_transition_catalogs.py
+)
+foreach(generator ${PQCP_CATALOG_GENERATORS})
+    execute_process(
+        COMMAND ${PYTHON_EXECUTABLE} ${generator} --output-dir ${PQCP_GENERATED}
+        RESULT_VARIABLE pqcp_generator_result
+        OUTPUT_QUIET
+    )
+    if(NOT pqcp_generator_result EQUAL 0)
+        message(FATAL_ERROR "PQCP catalog generation failed: ${generator}")
+    endif()
+endforeach()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PQCP_CATALOG_GENERATORS})
 set(PQCP_WORKSPACE_CRYPTO_DIR ${PQCP_DIR}/../modules/crypto)
 
 # External library paths
@@ -74,632 +97,633 @@ zephyr_include_directories(${PQCP_INC})
 # Common Sources
 # =============================================================================
 zephyr_library_named(pqcp_common)
+zephyr_library_include_directories(${PQCP_SRC}/internal)
 
 if(CONFIG_PQCP_MBEDTLS_THREADING)
     # TF-PSA 1.x owns the threading configuration shared with Mbed TLS 4.
     zephyr_include_directories(${PQCP_INC}/pqcp_zephyr/mbedtls_threading)
     zephyr_compile_definitions(MBEDTLS_THREADING_C MBEDTLS_THREADING_ALT)
-    zephyr_library_sources(${PQCP_SRC}/mbedtls_threading_zephyr.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/mbedtls_threading_zephyr.c)
 endif()
 
 # RNG abstraction - select ONE backend
 if(CONFIG_PQCP_RNG_DETERMINISTIC_TEST)
     # Deterministic RNG for testing (overrides custom)
-    zephyr_library_sources(${PQCP_SRC}/rng_deterministic.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/rng_deterministic.c)
 elseif(CONFIG_PQCP_RNG_ZEPHYR_ENTROPY)
-    zephyr_library_sources(${PQCP_SRC}/rng_zephyr_entropy.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/rng_zephyr_entropy.c)
 elseif(CONFIG_PQCP_RNG_PSA)
-    zephyr_library_sources(${PQCP_SRC}/rng_psa.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/rng_psa.c)
 elseif(CONFIG_PQCP_RNG_CUSTOM)
-    zephyr_library_sources(${PQCP_SRC}/rng_custom.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/rng_custom.c)
 endif()
 
 # Common RNG interface
-zephyr_library_sources(${PQCP_SRC}/rng_common.c)
+zephyr_library_sources(${PQCP_SRC}/crypto/rng_common.c)
 
 if(CONFIG_PQCP_ASSURANCE_STATUS)
-    zephyr_library_sources(${PQCP_SRC}/assurance_status.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/assurance_status.c)
 endif()
 
 if(CONFIG_PQCP_PROVIDER_CONTRACT)
-    zephyr_library_sources(${PQCP_SRC}/provider_contract.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/provider_contract.c)
 endif()
 
 if(CONFIG_PQCP_BUILD_MANIFEST)
-    zephyr_library_sources(${PQCP_SRC}/build_manifest.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/build_manifest.c)
 endif()
 
 if(CONFIG_PQCP_EVIDENCE_SESSION)
-    zephyr_library_sources(${PQCP_SRC}/evidence_session.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/evidence_session.c)
 endif()
 
 if(CONFIG_PQCP_EVIDENCE_TRANSCRIPT)
-    zephyr_library_sources(${PQCP_SRC}/evidence_transcript.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/evidence_transcript.c)
 endif()
 
 if(CONFIG_PQCP_FIRMWARE_POLICY)
-    zephyr_library_sources(${PQCP_SRC}/firmware_policy.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/firmware_policy.c)
 endif()
 
 if(CONFIG_PQCP_CAPABILITY_DESCRIPTOR)
-    zephyr_library_sources(${PQCP_SRC}/capability_descriptor.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/capability_descriptor.c)
 endif()
 
 if(CONFIG_PQCP_CAPABILITY_EXTENSION)
-    zephyr_library_sources(${PQCP_SRC}/capability_extension.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/capability_extension.c)
 endif()
 
 if(CONFIG_PQCP_FIRMWARE_SCORECARD)
-    zephyr_library_sources(${PQCP_SRC}/firmware_scorecard.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/firmware_scorecard.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_ADVISOR)
-    zephyr_library_sources(${PQCP_SRC}/deployment_advisor.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_advisor.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_ROBUSTNESS)
-    zephyr_library_sources(${PQCP_SRC}/deployment_robustness.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_robustness.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_CAMPAIGN)
-    zephyr_library_sources(${PQCP_SRC}/deployment_campaign.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_campaign.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_TRANSCRIPT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_transcript.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_transcript.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_APPRAISAL)
-    zephyr_library_sources(${PQCP_SRC}/deployment_appraisal.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_appraisal.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_CLAIMS)
-    zephyr_library_sources(${PQCP_SRC}/deployment_claims.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_claims.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_TRACE_BUILDER)
-    zephyr_library_sources(${PQCP_SRC}/deployment_trace_builder.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_trace_builder.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_PIPELINE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_pipeline.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_pipeline.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_BUDGET)
-    zephyr_library_sources(${PQCP_SRC}/deployment_budget.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_budget.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EXPERIMENT_PLAN)
-    zephyr_library_sources(${PQCP_SRC}/deployment_experiment_plan.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_experiment_plan.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_REVIEW_PACKET)
-    zephyr_library_sources(${PQCP_SRC}/deployment_review_packet.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_review_packet.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_REVIEW_VERIFIER)
-    zephyr_library_sources(${PQCP_SRC}/deployment_review_verifier.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_review_verifier.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_REVIEW_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_review_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_review_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_RELEASE_GATE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_release_gate.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_release_gate.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_TOKEN)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_token.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_token.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_TOKEN_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_token_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_token_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_TOKEN_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_token_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_token_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_GATE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_gate.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_gate.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_PACKET)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_packet.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_packet.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_PACKET_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_packet_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_packet_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_DEVICE_PACKET_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_device_packet_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_device_packet_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_VERDICT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_verdict.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_verdict.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_verdict_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_verdict_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_VERDICT_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_verdict_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_verdict_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_seal.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_seal_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_SEAL_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_seal_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_seal_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_ASSURANCE_PASSPORT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_assurance_passport.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_assurance_passport.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_ASSURANCE_PASSPORT_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_assurance_passport_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_assurance_passport_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_PASSPORT_SIGNATURE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_passport_signature.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_passport_signature.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_MARKER_RENDER)
-    zephyr_library_sources(${PQCP_SRC}/deployment_marker_render.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_marker_render.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_TAMPER_ENGINE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_engine.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_tamper_engine.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_tamper_matrix.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_tamper_matrix_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_TAMPER_MATRIX_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_tamper_matrix_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_tamper_matrix_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_trail.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_trail_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_TRAIL_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_trail_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_trail_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CODEC)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_codec.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_codec.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CAPSULE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_capsule.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_capsule.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_CAPSULE_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_capsule_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_capsule_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_JOURNAL)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_journal.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_journal.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_REPLAY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_journal_replay.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_journal_replay.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_JOURNAL_AUDIT)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_journal_audit.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_journal_audit.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_FLEET_CONSENSUS)
-    zephyr_library_sources(${PQCP_SRC}/deployment_fleet_consensus.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_fleet_consensus.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_FLEET_POLICY)
-    zephyr_library_sources(${PQCP_SRC}/deployment_fleet_policy.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_fleet_policy.c)
 endif()
 
 if(CONFIG_PQCP_DEPLOYMENT_EVIDENCE_ARCHIVE)
-    zephyr_library_sources(${PQCP_SRC}/deployment_evidence_archive.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/deployment_evidence_archive.c)
 endif()
 
 if(CONFIG_PQCP_ADAPTIVE_CONTROL)
     zephyr_library_sources(
-        ${PQCP_SRC}/adaptive_common.c
-        ${PQCP_SRC}/adaptive_profile.c
-        ${PQCP_SRC}/adaptive_telemetry.c
-        ${PQCP_SRC}/adaptive_forecast.c
-        ${PQCP_SRC}/adaptive_threat.c
-        ${PQCP_SRC}/adaptive_resource.c
-        ${PQCP_SRC}/adaptive_policy.c
-        ${PQCP_SRC}/adaptive_optimizer.c
-        ${PQCP_SRC}/adaptive_downgrade.c
-        ${PQCP_SRC}/adaptive_transition.c
-        ${PQCP_SRC}/adaptive_session.c
-        ${PQCP_SRC}/adaptive_workload.c
-        ${PQCP_SRC}/adaptive_resilience.c
-        ${PQCP_SRC}/adaptive_event_log.c
-        ${PQCP_SRC}/adaptive_fleet.c
-        ${PQCP_SRC}/adaptive_snapshot.c
-        ${PQCP_SRC}/adaptive_calibration.c
-        ${PQCP_SRC}/adaptive_control.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_common.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_profile.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_telemetry.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_forecast.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_threat.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_resource.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_policy.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_optimizer.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_downgrade.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_transition.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_session.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_workload.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_resilience.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_event_log.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_fleet.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_snapshot.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_calibration.c
+        ${PQCP_SRC}/experimental/adaptive/adaptive_control.c
     )
 endif()
 
 if(CONFIG_PQCP_RUNTIME)
     zephyr_library_sources(
-        ${PQCP_SRC}/runtime_common.c
-        ${PQCP_SRC}/runtime_capability.c
-        ${PQCP_SRC}/runtime_profile.c
-        ${PQCP_SRC}/runtime_key_store.c
-        ${PQCP_SRC}/runtime_key_store_volatile.c
-        ${PQCP_SRC}/runtime_key_store_psa.c
-        ${PQCP_SRC}/runtime_workspace.c
-        ${PQCP_SRC}/runtime_measurement.c
-        ${PQCP_SRC}/runtime_executor.c
-        ${PQCP_SRC}/runtime_executor_mlkem.c
-        ${PQCP_SRC}/runtime_executor_mldsa.c
-        ${PQCP_SRC}/runtime_executor_symmetric.c
-        ${PQCP_SRC}/runtime_session.c
-        ${PQCP_SRC}/runtime_snapshot.c
-        ${PQCP_SRC}/runtime_key_policy.c
-        ${PQCP_SRC}/runtime_audit.c
-        ${PQCP_SRC}/runtime_health.c
-        ${PQCP_SRC}/runtime_controller.c
-        ${PQCP_SRC}/runtime_recovery.c
-        ${PQCP_SRC}/runtime_campaign.c
-        ${PQCP_SRC}/runtime_identity.c
-        ${PQCP_SRC}/runtime_admission.c
-        ${PQCP_SRC}/runtime_rotation.c
-        ${PQCP_SRC}/runtime_circuit.c
-        ${PQCP_SRC}/runtime_evidence_summary.c
-        ${PQCP_SRC}/runtime_service.c
-        ${PQCP_SRC}/runtime_selftest.c
-        ${PQCP_SRC}/runtime_transaction.c
-        ${PQCP_SRC}/runtime_migration.c
-        ${PQCP_SRC}/runtime_lease.c
-        ${PQCP_SRC}/runtime_event_bus.c
-        ${PQCP_SRC}/runtime_scheduler_policy.c
-        ${PQCP_SRC}/runtime_checkpoint_store.c
-        ${PQCP_SRC}/runtime_command_router.c
-        ${PQCP_SRC}/runtime_metrics.c
-        ${PQCP_SRC}/runtime_orchestrator.c
-        ${PQCP_SRC}/runtime_resource_governor.c
-        ${PQCP_SRC}/runtime_policy_catalog.c
-        ${PQCP_SRC}/runtime_resource_policy_catalog.c
-        ${PQCP_SRC}/runtime_recovery_policy_catalog.c
-        ${PQCP_SRC}/runtime_operation_planner.c
+        ${PQCP_SRC}/runtime/runtime_common.c
+        ${PQCP_SRC}/runtime/runtime_capability.c
+        ${PQCP_SRC}/runtime/runtime_profile.c
+        ${PQCP_SRC}/runtime/runtime_key_store.c
+        ${PQCP_SRC}/runtime/runtime_key_store_volatile.c
+        ${PQCP_SRC}/runtime/runtime_key_store_psa.c
+        ${PQCP_SRC}/runtime/runtime_workspace.c
+        ${PQCP_SRC}/runtime/runtime_measurement.c
+        ${PQCP_SRC}/runtime/runtime_executor.c
+        ${PQCP_SRC}/runtime/runtime_executor_mlkem.c
+        ${PQCP_SRC}/runtime/runtime_executor_mldsa.c
+        ${PQCP_SRC}/runtime/runtime_executor_symmetric.c
+        ${PQCP_SRC}/runtime/runtime_session.c
+        ${PQCP_SRC}/runtime/runtime_snapshot.c
+        ${PQCP_SRC}/runtime/runtime_key_policy.c
+        ${PQCP_SRC}/runtime/runtime_audit.c
+        ${PQCP_SRC}/runtime/runtime_health.c
+        ${PQCP_SRC}/runtime/runtime_controller.c
+        ${PQCP_SRC}/runtime/runtime_recovery.c
+        ${PQCP_SRC}/runtime/runtime_campaign.c
+        ${PQCP_SRC}/runtime/runtime_identity.c
+        ${PQCP_SRC}/runtime/runtime_admission.c
+        ${PQCP_SRC}/runtime/runtime_rotation.c
+        ${PQCP_SRC}/runtime/runtime_circuit.c
+        ${PQCP_SRC}/runtime/runtime_evidence_summary.c
+        ${PQCP_SRC}/runtime/runtime_service.c
+        ${PQCP_SRC}/runtime/runtime_selftest.c
+        ${PQCP_SRC}/runtime/runtime_transaction.c
+        ${PQCP_SRC}/runtime/runtime_migration.c
+        ${PQCP_SRC}/runtime/runtime_lease.c
+        ${PQCP_SRC}/runtime/runtime_event_bus.c
+        ${PQCP_SRC}/runtime/runtime_scheduler_policy.c
+        ${PQCP_SRC}/runtime/runtime_checkpoint_store.c
+        ${PQCP_SRC}/runtime/runtime_command_router.c
+        ${PQCP_SRC}/runtime/runtime_metrics.c
+        ${PQCP_SRC}/runtime/runtime_orchestrator.c
+        ${PQCP_SRC}/runtime/runtime_resource_governor.c
+        ${PQCP_GENERATED}/runtime_policy_catalog.c
+        ${PQCP_GENERATED}/runtime_resource_policy_catalog.c
+        ${PQCP_GENERATED}/runtime_recovery_policy_catalog.c
+        ${PQCP_SRC}/runtime/runtime_operation_planner.c
     )
 endif()
 
 if(CONFIG_PQCP_CRYPTO_BROKER)
     zephyr_library_sources(
-        ${PQCP_SRC}/crypto_broker.c
-        ${PQCP_SRC}/crypto_broker_authorization.c
-        ${PQCP_SRC}/crypto_broker_dispatch.c
-        ${PQCP_SRC}/crypto_broker_ledger.c
-        ${PQCP_SRC}/crypto_broker_receipt.c
+        ${PQCP_SRC}/crypto/crypto_broker.c
+        ${PQCP_SRC}/crypto/crypto_broker_authorization.c
+        ${PQCP_SRC}/crypto/crypto_broker_dispatch.c
+        ${PQCP_SRC}/crypto/crypto_broker_ledger.c
+        ${PQCP_SRC}/crypto/crypto_broker_receipt.c
     )
 endif()
 
 if(CONFIG_PQCP_RUNTIME_JOURNAL)
-    zephyr_library_sources(${PQCP_SRC}/runtime_journal.c)
+    zephyr_library_sources(${PQCP_SRC}/runtime/runtime_journal.c)
 endif()
 if(CONFIG_PQCP_RUNTIME_JOURNAL_FLASH)
-    zephyr_library_sources(${PQCP_SRC}/runtime_journal_flash.c)
+    zephyr_library_sources(${PQCP_SRC}/runtime/runtime_journal_flash.c)
 endif()
 
 if(CONFIG_PQCP_PROTECTED_CHANNEL)
     zephyr_library_sources(
-        ${PQCP_SRC}/protected_channel_codec.c
-        ${PQCP_SRC}/protected_channel_transcript.c
-        ${PQCP_SRC}/protected_channel_replay.c
-        ${PQCP_SRC}/protected_channel_transport.c
-        ${PQCP_SRC}/protected_channel_kdf.c
-        ${PQCP_SRC}/protected_channel_record.c
-        ${PQCP_SRC}/protected_channel_handshake.c
-        ${PQCP_SRC}/protected_channel_memory.c
-        ${PQCP_SRC}/protected_channel_fragment.c
-        ${PQCP_SRC}/protected_channel_policy.c
-        ${PQCP_SRC}/protected_channel_journal.c
-        ${PQCP_SRC}/protected_channel_supervisor.c
-        ${PQCP_SRC}/protected_channel_control_codec.c
-        ${PQCP_SRC}/protected_channel_flow_control.c
-        ${PQCP_SRC}/protected_channel_mux.c
-        ${PQCP_SRC}/protected_channel_rekey.c
-        ${PQCP_SRC}/protected_channel_resumption.c
-        ${PQCP_SRC}/protected_channel_peer_health.c
-        ${PQCP_SRC}/protected_channel_path_manager.c
-        ${PQCP_SRC}/protected_channel_operations.c
-        ${PQCP_SRC}/protected_channel_policy_catalog.c
-        ${PQCP_SRC}/protected_channel_path_policy_catalog.c
-        ${PQCP_SRC}/protected_channel_fault_policy_catalog.c
-        ${PQCP_SRC}/protected_channel_operation_planner.c
+        ${PQCP_SRC}/channel/protected_channel_codec.c
+        ${PQCP_SRC}/channel/protected_channel_transcript.c
+        ${PQCP_SRC}/channel/protected_channel_replay.c
+        ${PQCP_SRC}/channel/protected_channel_transport.c
+        ${PQCP_SRC}/channel/protected_channel_kdf.c
+        ${PQCP_SRC}/channel/protected_channel_record.c
+        ${PQCP_SRC}/channel/protected_channel_handshake.c
+        ${PQCP_SRC}/channel/protected_channel_memory.c
+        ${PQCP_SRC}/channel/protected_channel_fragment.c
+        ${PQCP_SRC}/channel/protected_channel_policy.c
+        ${PQCP_SRC}/channel/protected_channel_journal.c
+        ${PQCP_SRC}/channel/protected_channel_supervisor.c
+        ${PQCP_SRC}/channel/protected_channel_control_codec.c
+        ${PQCP_SRC}/channel/protected_channel_flow_control.c
+        ${PQCP_SRC}/channel/protected_channel_mux.c
+        ${PQCP_SRC}/channel/protected_channel_rekey.c
+        ${PQCP_SRC}/channel/protected_channel_resumption.c
+        ${PQCP_SRC}/channel/protected_channel_peer_health.c
+        ${PQCP_SRC}/channel/protected_channel_path_manager.c
+        ${PQCP_SRC}/channel/protected_channel_operations.c
+        ${PQCP_GENERATED}/protected_channel_policy_catalog.c
+        ${PQCP_GENERATED}/protected_channel_path_policy_catalog.c
+        ${PQCP_GENERATED}/protected_channel_fault_policy_catalog.c
+        ${PQCP_SRC}/channel/protected_channel_operation_planner.c
     )
 endif()
 
 if(CONFIG_PQCP_EVIDENCE_CONTINUITY)
-    zephyr_library_sources(${PQCP_SRC}/evidence_continuity_common.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/evidence_continuity_common.c)
 endif()
 
 if(CONFIG_PQCP_FLEET_TRUST)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_cbor.c
-        ${PQCP_SRC}/fleet_sha256.c
-        ${PQCP_SRC}/fleet_protocol.c
-        ${PQCP_SRC}/fleet_store.c
-        ${PQCP_SRC}/fleet_enrollment.c
-        ${PQCP_SRC}/fleet_registrar.c
-        ${PQCP_SRC}/fleet_policy_engine.c
-        ${PQCP_SRC}/fleet_command_engine.c
-        ${PQCP_SRC}/fleet_update_manager.c
-        ${PQCP_SRC}/fleet_audit_ledger.c
-        ${PQCP_SRC}/fleet_journal.c
-        ${PQCP_SRC}/fleet_telemetry.c
-        ${PQCP_SRC}/fleet_attestation.c
-        ${PQCP_SRC}/fleet_reconciliation.c
-        ${PQCP_SRC}/fleet_operations.c
-        ${PQCP_SRC}/fleet_secure_time.c
-        ${PQCP_SRC}/fleet_revocation_index.c
-        ${PQCP_SRC}/fleet_rollout.c
-        ${PQCP_SRC}/fleet_health_monitor.c
-        ${PQCP_SRC}/fleet_lease_manager.c
-        ${PQCP_SRC}/fleet_recovery_manager.c
-        ${PQCP_SRC}/fleet_peer_registry.c
-        ${PQCP_SRC}/fleet_admission_controller.c
-        ${PQCP_SRC}/fleet_risk_engine.c
-        ${PQCP_SRC}/fleet_maintenance_scheduler.c
+        ${PQCP_SRC}/experimental/fleet/fleet_cbor.c
+        ${PQCP_SRC}/experimental/fleet/fleet_sha256.c
+        ${PQCP_SRC}/experimental/fleet/fleet_protocol.c
+        ${PQCP_SRC}/experimental/fleet/fleet_store.c
+        ${PQCP_SRC}/experimental/fleet/fleet_enrollment.c
+        ${PQCP_SRC}/experimental/fleet/fleet_registrar.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_engine.c
+        ${PQCP_SRC}/experimental/fleet/fleet_command_engine.c
+        ${PQCP_SRC}/experimental/fleet/fleet_update_manager.c
+        ${PQCP_SRC}/experimental/fleet/fleet_audit_ledger.c
+        ${PQCP_SRC}/experimental/fleet/fleet_journal.c
+        ${PQCP_SRC}/experimental/fleet/fleet_telemetry.c
+        ${PQCP_SRC}/experimental/fleet/fleet_attestation.c
+        ${PQCP_SRC}/experimental/fleet/fleet_reconciliation.c
+        ${PQCP_SRC}/experimental/fleet/fleet_operations.c
+        ${PQCP_SRC}/experimental/fleet/fleet_secure_time.c
+        ${PQCP_SRC}/experimental/fleet/fleet_revocation_index.c
+        ${PQCP_SRC}/experimental/fleet/fleet_rollout.c
+        ${PQCP_SRC}/experimental/fleet/fleet_health_monitor.c
+        ${PQCP_SRC}/experimental/fleet/fleet_lease_manager.c
+        ${PQCP_SRC}/experimental/fleet/fleet_recovery_manager.c
+        ${PQCP_SRC}/experimental/fleet/fleet_peer_registry.c
+        ${PQCP_SRC}/experimental/fleet/fleet_admission_controller.c
+        ${PQCP_SRC}/experimental/fleet/fleet_risk_engine.c
+        ${PQCP_SRC}/experimental/fleet/fleet_maintenance_scheduler.c
     )
 endif()
 
 if(CONFIG_PQCP_FLEET_TRANSPARENCY)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_transparency_merkle.c
-        ${PQCP_SRC}/fleet_transparency_log.c
-        ${PQCP_SRC}/fleet_transparency_proof.c
-        ${PQCP_SRC}/fleet_transparency_checkpoint.c
-        ${PQCP_SRC}/fleet_transparency_witness.c
-        ${PQCP_SRC}/fleet_transparency_gossip.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transparency_merkle.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transparency_log.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transparency_proof.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transparency_checkpoint.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transparency_witness.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transparency_gossip.c
     )
 endif()
 
 if(CONFIG_PQCP_FLEET_APPROVAL)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_approval_policy.c
-        ${PQCP_SRC}/fleet_approval_session.c
-        ${PQCP_SRC}/fleet_approval_receipt.c
+        ${PQCP_SRC}/experimental/fleet/fleet_approval_policy.c
+        ${PQCP_SRC}/experimental/fleet/fleet_approval_session.c
+        ${PQCP_SRC}/experimental/fleet/fleet_approval_receipt.c
     )
 endif()
 
 if(CONFIG_PQCP_FLEET_ARTIFACT_CORE)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_cbor_map.c
-        ${PQCP_SRC}/fleet_cose_sign1.c
-        ${PQCP_SRC}/fleet_cose_key.c
-        ${PQCP_SRC}/fleet_eat_profile.c
-        ${PQCP_SRC}/fleet_rats.c
-        ${PQCP_SRC}/fleet_artifact_ffi.c
+        ${PQCP_SRC}/experimental/fleet/fleet_cbor_map.c
+        ${PQCP_SRC}/experimental/fleet/fleet_cose_sign1.c
+        ${PQCP_SRC}/experimental/fleet/fleet_cose_key.c
+        ${PQCP_SRC}/experimental/fleet/fleet_eat_profile.c
+        ${PQCP_SRC}/experimental/fleet/fleet_rats.c
+        ${PQCP_SRC}/experimental/fleet/fleet_artifact_ffi.c
     )
 endif()
 
 if(CONFIG_PQCP_FLEET_POLICY_VM)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_policy_vm.c
-        ${PQCP_SRC}/fleet_policy_verify.c
-        ${PQCP_SRC}/fleet_policy_codec.c
-        ${PQCP_SRC}/fleet_policy_builtins.c
-        ${PQCP_SRC}/fleet_policy_explain.c
-        ${PQCP_SRC}/fleet_policy_store.c
-        ${PQCP_SRC}/fleet_policy_rollout.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_vm.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_verify.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_codec.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_builtins.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_explain.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_store.c
+        ${PQCP_SRC}/experimental/fleet/fleet_policy_rollout.c
     )
 endif()
 
 if(CONFIG_PQCP_FLEET_CONVERGENCE)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_delivery.c
-        ${PQCP_SRC}/fleet_receipt.c
-        ${PQCP_SRC}/fleet_desired_state.c
-        ${PQCP_SRC}/fleet_convergence.c
-        ${PQCP_SRC}/fleet_artifact_cache.c
-        ${PQCP_SRC}/fleet_snapshot_sync.c
-        ${PQCP_SRC}/fleet_transport_mux.c
-        ${PQCP_SRC}/fleet_recovery_orchestrator.c
+        ${PQCP_SRC}/experimental/fleet/fleet_delivery.c
+        ${PQCP_SRC}/experimental/fleet/fleet_receipt.c
+        ${PQCP_SRC}/experimental/fleet/fleet_desired_state.c
+        ${PQCP_SRC}/experimental/fleet/fleet_convergence.c
+        ${PQCP_SRC}/experimental/fleet/fleet_artifact_cache.c
+        ${PQCP_SRC}/experimental/fleet/fleet_snapshot_sync.c
+        ${PQCP_SRC}/experimental/fleet/fleet_transport_mux.c
+        ${PQCP_SRC}/experimental/fleet/fleet_recovery_orchestrator.c
     )
 endif()
 
 if(CONFIG_PQCP_EDGE_SECURITY)
     zephyr_library_sources(
-        ${PQCP_SRC}/edge_security_common.c
-        ${PQCP_SRC}/edge_identity_directory.c
-        ${PQCP_SRC}/edge_service_registry.c
-        ${PQCP_SRC}/edge_access_engine.c
-        ${PQCP_SRC}/edge_route_table.c
-        ${PQCP_SRC}/edge_session_registry.c
-        ${PQCP_SRC}/edge_traffic_governor.c
-        ${PQCP_SRC}/edge_circuit_breaker.c
-        ${PQCP_SRC}/edge_message_queue.c
-        ${PQCP_SRC}/edge_replay_guard.c
-        ${PQCP_SRC}/edge_fragment_manager.c
-        ${PQCP_SRC}/edge_message_ratchet.c
-        ${PQCP_SRC}/edge_topic_registry.c
-        ${PQCP_SRC}/edge_group_manager.c
-        ${PQCP_SRC}/edge_delivery_manager.c
-        ${PQCP_SRC}/edge_vault_store.c
-        ${PQCP_SRC}/edge_vault_acl.c
-        ${PQCP_SRC}/edge_vault_version.c
-        ${PQCP_SRC}/edge_vault_lease.c
-        ${PQCP_SRC}/edge_vault_journal.c
-        ${PQCP_SRC}/edge_replication_manager.c
-        ${PQCP_SRC}/edge_snapshot_manager.c
-        ${PQCP_SRC}/edge_signal_engine.c
-        ${PQCP_SRC}/edge_incident_manager.c
-        ${PQCP_SRC}/edge_playbook_engine.c
-        ${PQCP_SRC}/edge_evidence_store.c
-        ${PQCP_SRC}/edge_containment_manager.c
-        ${PQCP_SRC}/edge_continuity_manager.c
-        ${PQCP_SRC}/edge_posture_engine.c
-        ${PQCP_SRC}/edge_attestation_manager.c
-        ${PQCP_SRC}/edge_policy_distributor.c
-        ${PQCP_SRC}/edge_rotation_manager.c
-        ${PQCP_SRC}/edge_anomaly_engine.c
-        ${PQCP_SRC}/edge_resource_monitor.c
-        ${PQCP_SRC}/edge_audit_exporter.c
-        ${PQCP_SRC}/edge_recovery_coordinator.c
-        ${PQCP_SRC}/edge_dlp_engine.c
-        ${PQCP_SRC}/edge_trust_federation.c
-        ${PQCP_SRC}/edge_credential_cache.c
-        ${PQCP_SRC}/edge_isolation_manager.c
-        ${PQCP_SRC}/edge_provenance_ledger.c
-        ${PQCP_SRC}/edge_workload_scheduler.c
-        ${PQCP_SRC}/edge_sla_monitor.c
-        ${PQCP_SRC}/edge_config_manager.c
-        ${PQCP_SRC}/edge_compliance.c
-        ${PQCP_SRC}/edge_runtime_admission.c
-        ${PQCP_SRC}/edge_security_runtime.c
+        ${PQCP_SRC}/edge/edge_security_common.c
+        ${PQCP_SRC}/edge/edge_identity_directory.c
+        ${PQCP_SRC}/edge/edge_service_registry.c
+        ${PQCP_SRC}/edge/edge_access_engine.c
+        ${PQCP_SRC}/edge/edge_route_table.c
+        ${PQCP_SRC}/edge/edge_session_registry.c
+        ${PQCP_SRC}/edge/edge_traffic_governor.c
+        ${PQCP_SRC}/edge/edge_circuit_breaker.c
+        ${PQCP_SRC}/edge/edge_message_queue.c
+        ${PQCP_SRC}/edge/edge_replay_guard.c
+        ${PQCP_SRC}/edge/edge_fragment_manager.c
+        ${PQCP_SRC}/edge/edge_message_ratchet.c
+        ${PQCP_SRC}/edge/edge_topic_registry.c
+        ${PQCP_SRC}/edge/edge_group_manager.c
+        ${PQCP_SRC}/edge/edge_delivery_manager.c
+        ${PQCP_SRC}/edge/edge_vault_store.c
+        ${PQCP_SRC}/edge/edge_vault_acl.c
+        ${PQCP_SRC}/edge/edge_vault_version.c
+        ${PQCP_SRC}/edge/edge_vault_lease.c
+        ${PQCP_SRC}/edge/edge_vault_journal.c
+        ${PQCP_SRC}/edge/edge_replication_manager.c
+        ${PQCP_SRC}/edge/edge_snapshot_manager.c
+        ${PQCP_SRC}/edge/edge_signal_engine.c
+        ${PQCP_SRC}/edge/edge_incident_manager.c
+        ${PQCP_SRC}/edge/edge_playbook_engine.c
+        ${PQCP_SRC}/edge/edge_evidence_store.c
+        ${PQCP_SRC}/edge/edge_containment_manager.c
+        ${PQCP_SRC}/edge/edge_continuity_manager.c
+        ${PQCP_SRC}/edge/edge_posture_engine.c
+        ${PQCP_SRC}/edge/edge_attestation_manager.c
+        ${PQCP_SRC}/edge/edge_policy_distributor.c
+        ${PQCP_SRC}/edge/edge_rotation_manager.c
+        ${PQCP_SRC}/edge/edge_anomaly_engine.c
+        ${PQCP_SRC}/edge/edge_resource_monitor.c
+        ${PQCP_SRC}/edge/edge_audit_exporter.c
+        ${PQCP_SRC}/edge/edge_recovery_coordinator.c
+        ${PQCP_SRC}/edge/edge_dlp_engine.c
+        ${PQCP_SRC}/edge/edge_trust_federation.c
+        ${PQCP_SRC}/edge/edge_credential_cache.c
+        ${PQCP_SRC}/edge/edge_isolation_manager.c
+        ${PQCP_SRC}/edge/edge_provenance_ledger.c
+        ${PQCP_SRC}/edge/edge_workload_scheduler.c
+        ${PQCP_SRC}/edge/edge_sla_monitor.c
+        ${PQCP_SRC}/edge/edge_config_manager.c
+        ${PQCP_SRC}/edge/edge_compliance.c
+        ${PQCP_SRC}/edge/edge_runtime_admission.c
+        ${PQCP_SRC}/edge/edge_security_runtime.c
     )
 endif()
 
 if(CONFIG_PQCP_SOVEREIGN_RUNTIME)
     zephyr_library_sources(
-        ${PQCP_SRC}/sovereign_artifact_catalog.c
-        ${PQCP_SRC}/sovereign_sbom_registry.c
-        ${PQCP_SRC}/sovereign_build_attestation.c
-        ${PQCP_SRC}/sovereign_release_policy.c
-        ${PQCP_SRC}/sovereign_transparency_log.c
-        ${PQCP_SRC}/sovereign_tenant_registry.c
-        ${PQCP_SRC}/sovereign_namespace_manager.c
-        ${PQCP_SRC}/sovereign_residency_engine.c
-        ${PQCP_SRC}/sovereign_purpose_engine.c
-        ${PQCP_SRC}/sovereign_privacy_budget.c
-        ${PQCP_SRC}/sovereign_data_contract.c
-        ${PQCP_SRC}/sovereign_consent_ledger.c
-        ${PQCP_SRC}/sovereign_retention_manager.c
-        ${PQCP_SRC}/sovereign_egress_engine.c
-        ${PQCP_SRC}/sovereign_approval_quorum.c
-        ${PQCP_SRC}/sovereign_key_ceremony.c
-        ${PQCP_SRC}/sovereign_secret_distributor.c
-        ${PQCP_SRC}/sovereign_ceremony_authorization.c
-        ${PQCP_SRC}/sovereign_custody_ledger.c
-        ${PQCP_SRC}/sovereign_event.c
-        ${PQCP_SRC}/sovereign_event_ledger.c
-        ${PQCP_SRC}/sovereign_audit_exporter.c
-        ${PQCP_SRC}/sovereign_audit_bridge.c
-        ${PQCP_SRC}/sovereign_audit_cbor.c
-        ${PQCP_SRC}/sovereign_audit_cef.c
-        ${PQCP_SRC}/sovereign_audit_ocsf.c
-        ${PQCP_SRC}/sovereign_channel_codec.c
-        ${PQCP_SRC}/sovereign_channel_assembler.c
-        ${PQCP_SRC}/sovereign_channel_flow.c
-        ${PQCP_SRC}/sovereign_channel_resume.c
-        ${PQCP_SRC}/sovereign_channel_broker.c
-        ${PQCP_SRC}/sovereign_channel_server.c
-        ${PQCP_SRC}/sovereign_channel_client.c
-        ${PQCP_SRC}/sovereign_policy_common.c
-        ${PQCP_SRC}/sovereign_network_policy.c
-        ${PQCP_SRC}/sovereign_placement_engine.c
-        ${PQCP_SRC}/sovereign_rollout_controller.c
-        ${PQCP_SRC}/sovereign_rollback_coordinator.c
-        ${PQCP_SRC}/sovereign_dependency_graph.c
-        ${PQCP_SRC}/sovereign_risk_graph.c
-        ${PQCP_SRC}/sovereign_threat_intelligence.c
-        ${PQCP_SRC}/sovereign_forensic_timeline.c
-        ${PQCP_SRC}/sovereign_control_catalog.c
-        ${PQCP_SRC}/sovereign_exception_manager.c
-        ${PQCP_SRC}/sovereign_evidence_packager.c
-        ${PQCP_SRC}/sovereign_regulator_exporter.c
-        ${PQCP_SRC}/sovereign_continuity_exerciser.c
-        ${PQCP_SRC}/sovereign_recovery_quorum.c
-        ${PQCP_SRC}/sovereign_cost_governor.c
-        ${PQCP_SRC}/sovereign_continuity_objective.c
-        ${PQCP_SRC}/sovereign_recovery_point.c
-        ${PQCP_SRC}/sovereign_authority_lease.c
-        ${PQCP_SRC}/sovereign_fencing.c
-        ${PQCP_SRC}/sovereign_recovery_plan.c
-        ${PQCP_SRC}/sovereign_recovery_orchestrator.c
-        ${PQCP_SRC}/sovereign_continuity_audit.c
-        ${PQCP_SRC}/sovereign_runtime.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_artifact_catalog.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_sbom_registry.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_build_attestation.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_release_policy.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_transparency_log.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_tenant_registry.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_namespace_manager.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_residency_engine.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_purpose_engine.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_privacy_budget.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_data_contract.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_consent_ledger.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_retention_manager.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_egress_engine.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_approval_quorum.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_key_ceremony.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_secret_distributor.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_ceremony_authorization.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_custody_ledger.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_event.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_event_ledger.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_audit_exporter.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_audit_bridge.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_audit_cbor.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_audit_cef.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_audit_ocsf.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_codec.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_assembler.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_flow.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_resume.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_broker.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_server.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_channel_client.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_policy_common.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_network_policy.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_placement_engine.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_rollout_controller.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_rollback_coordinator.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_dependency_graph.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_risk_graph.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_threat_intelligence.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_forensic_timeline.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_control_catalog.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_exception_manager.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_evidence_packager.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_regulator_exporter.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_continuity_exerciser.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_recovery_quorum.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_cost_governor.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_continuity_objective.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_recovery_point.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_authority_lease.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_fencing.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_recovery_plan.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_recovery_orchestrator.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_continuity_audit.c
+        ${PQCP_SRC}/experimental/sovereign/sovereign_runtime.c
     )
 endif()
 
 if(CONFIG_PQCP_FLEET_STORE_ITS)
     zephyr_library_sources(
-        ${PQCP_SRC}/fleet_store_its.c
+        ${PQCP_SRC}/experimental/fleet/fleet_store_its.c
     )
 endif()
 
 if(CONFIG_PQCP_OPERATION_CONFORMANCE_CATALOGS)
     zephyr_library_sources(
-        ${PQCP_SRC}/operation_conformance.c
-        ${PQCP_SRC}/runtime_policy_conformance_catalog.c
-        ${PQCP_SRC}/runtime_resource_conformance_catalog.c
-        ${PQCP_SRC}/runtime_recovery_conformance_catalog.c
-        ${PQCP_SRC}/protected_channel_policy_conformance_catalog.c
-        ${PQCP_SRC}/protected_channel_path_conformance_catalog.c
-        ${PQCP_SRC}/protected_channel_fault_conformance_catalog.c
-        ${PQCP_SRC}/operation_plan_conformance.c
-        ${PQCP_SRC}/runtime_operation_plan_conformance_catalog.c
-        ${PQCP_SRC}/protected_channel_operation_plan_conformance_catalog.c
+        ${PQCP_SRC}/runtime/operation_conformance.c
+        ${PQCP_GENERATED}/runtime_policy_conformance_catalog.c
+        ${PQCP_GENERATED}/runtime_resource_conformance_catalog.c
+        ${PQCP_GENERATED}/runtime_recovery_conformance_catalog.c
+        ${PQCP_GENERATED}/protected_channel_policy_conformance_catalog.c
+        ${PQCP_GENERATED}/protected_channel_path_conformance_catalog.c
+        ${PQCP_GENERATED}/protected_channel_fault_conformance_catalog.c
+        ${PQCP_SRC}/runtime/operation_plan_conformance.c
+        ${PQCP_GENERATED}/runtime_operation_plan_conformance_catalog.c
+        ${PQCP_GENERATED}/protected_channel_operation_plan_conformance_catalog.c
     )
 endif()
 
 if(CONFIG_PQCP_OPERATION_SCENARIO_CATALOGS)
     zephyr_library_sources(
-        ${PQCP_SRC}/operation_scenario.c
-        ${PQCP_SRC}/runtime_policy_scenario_catalog.c
-        ${PQCP_SRC}/runtime_resource_scenario_catalog.c
-        ${PQCP_SRC}/runtime_recovery_scenario_catalog.c
-        ${PQCP_SRC}/protected_channel_policy_scenario_catalog.c
-        ${PQCP_SRC}/protected_channel_path_scenario_catalog.c
-        ${PQCP_SRC}/protected_channel_fault_scenario_catalog.c
+        ${PQCP_SRC}/runtime/operation_scenario.c
+        ${PQCP_GENERATED}/runtime_policy_scenario_catalog.c
+        ${PQCP_GENERATED}/runtime_resource_scenario_catalog.c
+        ${PQCP_GENERATED}/runtime_recovery_scenario_catalog.c
+        ${PQCP_GENERATED}/protected_channel_policy_scenario_catalog.c
+        ${PQCP_GENERATED}/protected_channel_path_scenario_catalog.c
+        ${PQCP_GENERATED}/protected_channel_fault_scenario_catalog.c
     )
 endif()
 
 if(CONFIG_PQCP_RUNTIME_CHANNEL_GUARD_CATALOGS)
     zephyr_library_sources(
-        ${PQCP_SRC}/runtime_guard.c
-        ${PQCP_SRC}/runtime_authorization_policy_catalog.c
-        ${PQCP_SRC}/runtime_continuity_policy_catalog.c
-        ${PQCP_SRC}/protected_channel_guard.c
-        ${PQCP_SRC}/protected_channel_epoch_policy_catalog.c
-        ${PQCP_SRC}/protected_channel_stream_policy_catalog.c
+        ${PQCP_SRC}/runtime/runtime_guard.c
+        ${PQCP_GENERATED}/runtime_authorization_policy_catalog.c
+        ${PQCP_GENERATED}/runtime_continuity_policy_catalog.c
+        ${PQCP_SRC}/channel/protected_channel_guard.c
+        ${PQCP_GENERATED}/protected_channel_epoch_policy_catalog.c
+        ${PQCP_GENERATED}/protected_channel_stream_policy_catalog.c
     )
 endif()
 
 if(CONFIG_PQCP_OPERATION_TRANSITION_CATALOGS)
     zephyr_library_sources(
-        ${PQCP_SRC}/operation_transition.c
-        ${PQCP_SRC}/runtime_transition_conformance_catalog.c
-        ${PQCP_SRC}/protected_channel_transition_conformance_catalog.c
+        ${PQCP_SRC}/runtime/operation_transition.c
+        ${PQCP_GENERATED}/runtime_transition_conformance_catalog.c
+        ${PQCP_GENERATED}/protected_channel_transition_conformance_catalog.c
     )
 endif()
 
 if(CONFIG_PQCP_PROTECTED_CHANNEL_MBEDTLS)
     zephyr_library_sources(
-        ${PQCP_SRC}/protected_channel_mbedtls.c
-        ${PQCP_SRC}/protected_channel_tls.c
+        ${PQCP_SRC}/channel/protected_channel_mbedtls.c
+        ${PQCP_SRC}/channel/protected_channel_tls.c
     )
 endif()
 
 if(CONFIG_PQCP_FIRMWARE_EVIDENCE)
-    zephyr_library_sources(${PQCP_SRC}/firmware_evidence.c)
+    zephyr_library_sources(${PQCP_SRC}/evidence/firmware_evidence.c)
 endif()
 
 # =============================================================================
@@ -707,6 +731,7 @@ endif()
 # =============================================================================
 if(CONFIG_PQCP_MLKEM)
     zephyr_library_named(pqcp_mlkem)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
 
     # Check for mlkem-native availability
     if(EXISTS ${MLKEM_NATIVE_DIR}/mlkem)
@@ -772,7 +797,7 @@ if(CONFIG_PQCP_MLKEM)
         endif()
         
         # Compile our Zephyr wrapper
-        zephyr_library_sources(${PQCP_SRC}/mlkem_zephyr.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/mlkem_zephyr.c)
         
         # FIPS-202 (SHA-3/SHAKE) - use bundled or external
         if(NOT CONFIG_PQCP_FIPS202_EXTERNAL)
@@ -785,7 +810,7 @@ if(CONFIG_PQCP_MLKEM)
         message(WARNING "mlkem-native not found at ${MLKEM_NATIVE_DIR}. "
                         "Please run 'git submodule update --init' or use FetchContent.")
         # Provide stub implementation
-        zephyr_library_sources(${PQCP_SRC}/mlkem_zephyr.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/mlkem_zephyr.c)
     endif()
     
     zephyr_library_link_libraries(pqcp_common)
@@ -796,6 +821,7 @@ endif()
 # =============================================================================
 if(CONFIG_PQCP_MLDSA)
     zephyr_library_named(pqcp_mldsa)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
 
     # Check for mldsa-native availability
     if(EXISTS ${MLDSA_NATIVE_DIR}/mldsa)
@@ -861,11 +887,11 @@ if(CONFIG_PQCP_MLDSA)
         endif()
         
         # Compile our Zephyr wrapper
-        zephyr_library_sources(${PQCP_SRC}/mldsa_zephyr.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/mldsa_zephyr.c)
         
         # Streaming API
         if(CONFIG_PQCP_MLDSA_STREAMING)
-            zephyr_library_sources(${PQCP_SRC}/mldsa_streaming.c)
+            zephyr_library_sources(${PQCP_SRC}/crypto/mldsa_streaming.c)
         endif()
         
         # FIPS-202 (SHA-3/SHAKE) - use bundled or external
@@ -877,7 +903,7 @@ if(CONFIG_PQCP_MLDSA)
     else()
         message(WARNING "mldsa-native not found at ${MLDSA_NATIVE_DIR}. "
                         "Please run 'git submodule update --init' or use FetchContent.")
-        zephyr_library_sources(${PQCP_SRC}/mldsa_zephyr.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/mldsa_zephyr.c)
     endif()
     
     zephyr_library_link_libraries(pqcp_common)
@@ -886,7 +912,8 @@ endif()
 # Shared TLS self-test helpers
 if(CONFIG_PQCP_TLS_SELFTEST)
     zephyr_library_named(pqcp_tls_selftest)
-    zephyr_library_sources(${PQCP_SRC}/tls_selftest.c)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
+    zephyr_library_sources(${PQCP_SRC}/crypto/tls_selftest.c)
     zephyr_library_link_libraries(pqcp_common)
     zephyr_library_link_libraries(pqcp_mlkem)
     zephyr_library_link_libraries(pqcp_mldsa)
@@ -895,7 +922,8 @@ endif()
 # Boot-time power-on self-test (FIPS-style)
 if(CONFIG_PQCP_KAT_BOOT_VERIFY)
     zephyr_library_named(pqcp_kat_boot_verify)
-    zephyr_library_sources(${PQCP_SRC}/kat_boot_verify.c)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
+    zephyr_library_sources(${PQCP_SRC}/crypto/kat_boot_verify.c)
     zephyr_library_link_libraries(pqcp_common)
     if(CONFIG_PQCP_MLKEM)
         zephyr_library_link_libraries(pqcp_mlkem)
@@ -910,13 +938,14 @@ endif()
 # =============================================================================
 if(CONFIG_PQCP_PSA_DRIVER)
     zephyr_library_named(pqcp_psa_driver)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
     
     if(CONFIG_PQCP_PSA_DRIVER_MLDSA)
-        zephyr_library_sources(${PQCP_SRC}/psa_mldsa_driver.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/psa_mldsa_driver.c)
     endif()
     
     if(CONFIG_PQCP_PSA_DRIVER_MLKEM)
-        zephyr_library_sources(${PQCP_SRC}/psa_mlkem_driver.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/psa_mlkem_driver.c)
     endif()
     
     zephyr_library_link_libraries(pqcp_common)
@@ -936,8 +965,9 @@ endif()
 # =============================================================================
 if(CONFIG_PQCP_ACVP)
     zephyr_library_named(pqcp_acvp)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
     
-    zephyr_library_sources(${PQCP_SRC}/acvp_cmd.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/acvp_cmd.c)
     
     zephyr_library_link_libraries(pqcp_common)
     
@@ -959,13 +989,14 @@ endif()
 # =============================================================================
 if(CONFIG_PQCP_BENCH)
     zephyr_library_named(pqcp_bench)
+    zephyr_library_include_directories(${PQCP_SRC}/internal)
     
-    zephyr_library_sources(${PQCP_SRC}/bench_primitive.c)
+    zephyr_library_sources(${PQCP_SRC}/crypto/bench_primitive.c)
     
     # Protocol benchmark is always included (simulated mode)
     # Real networking benchmarks require CONFIG_PQCP_BENCH_PROTOCOL
     if(CONFIG_PQCP_TLS_SELFTEST)
-        zephyr_library_sources(${PQCP_SRC}/bench_protocol.c)
+        zephyr_library_sources(${PQCP_SRC}/crypto/bench_protocol.c)
     endif()
     
     zephyr_library_link_libraries(pqcp_common)

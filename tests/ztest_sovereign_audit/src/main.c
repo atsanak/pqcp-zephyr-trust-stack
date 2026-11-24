@@ -19,7 +19,7 @@
 #include <pqcp_zephyr/runtime_key_store.h>
 #include <psa/crypto.h>
 
-#include "../../../src/sovereign_audit_internal.h"
+#include "../../../src/internal/sovereign_audit_internal.h"
 
 #define DIGEST_BYTES PQCP_SOVEREIGN_AUDIT_DIGEST_BYTES
 #define LEDGER_CAP_MAX 16U

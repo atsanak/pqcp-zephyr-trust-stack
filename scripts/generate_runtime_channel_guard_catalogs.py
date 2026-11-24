@@ -726,10 +726,18 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parents[1],
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="directory for the generated C sources (default: <repo>/build/generated)",
+    )
     args = parser.parse_args()
+    out_dir = (args.output_dir or args.repo_root / "build" / "generated").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
     root = args.repo_root.resolve()
     results = [
-        update_file(root / "src" / catalog.filename, render(catalog), args.check)
+        update_file(out_dir / catalog.filename, render(catalog), args.check)
         for catalog in CATALOGS
     ]
     return 0 if all(results) else 1

@@ -11,7 +11,7 @@ project(ztest_edge_model)
 # test_common.h (principal/digest fixtures, T0, CAP_ALL) is shared with the
 # edge security suite, so the two suites move together.
 target_include_directories(app PRIVATE
-    ${PQCP_LOCAL_MODULE_ROOT}/src
+    ${PQCP_LOCAL_MODULE_ROOT}/src/internal
     ${PQCP_LOCAL_MODULE_ROOT}/tests/ztest_edge_security/src
     ${CMAKE_CURRENT_LIST_DIR}/src)
 target_sources(app PRIVATE

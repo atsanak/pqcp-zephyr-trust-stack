@@ -8,5 +8,5 @@ include(${PQCP_LOCAL_MODULE_ROOT}/cmake/pqcp_local_module.cmake)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(ztest_evidence_continuity)
 
-target_include_directories(app PRIVATE ${PQCP_LOCAL_MODULE_ROOT}/src)
+target_include_directories(app PRIVATE ${PQCP_LOCAL_MODULE_ROOT}/src/internal)
 target_sources(app PRIVATE src/main.c)

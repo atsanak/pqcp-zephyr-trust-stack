@@ -1725,6 +1725,7 @@ def main() -> int:
                 "--suppress=constVariable",
                 "--template={severity}:{id}:{file}:{line}:{message}",
                 f"-I{module_path / 'include'}",
+                f"-I{module_path / 'src' / 'internal'}",
                 str(module_path / "src"),
             ],
             cwd=module_path,

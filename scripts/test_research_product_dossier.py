@@ -53,12 +53,12 @@ class ResearchProductDossierTests(unittest.TestCase):
                 "assets": [
                     {
                         "id": "crypto.mlkem_768",
-                        "source_files": ["src/psa_mlkem_driver.c"],
+                        "source_files": ["src/crypto/psa_mlkem_driver.c"],
                         "claim_ids": ["kat.mlkem_768", "acvp.mlkem_negative_paths"],
                     },
                     {
                         "id": "crypto.mldsa_65",
-                        "source_files": ["src/psa_mldsa_driver.c"],
+                        "source_files": ["src/crypto/psa_mldsa_driver.c"],
                         "claim_ids": ["kat.mldsa_65"],
                     },
                     {

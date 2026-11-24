@@ -329,11 +329,19 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parents[1],
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="directory for the generated C sources (default: <repo>/build/generated)",
+    )
     args = parser.parse_args()
+    out_dir = (args.output_dir or args.repo_root / "build" / "generated").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     mismatches: list[str] = []
     for domain in DOMAINS:
-        output = args.repo_root / "src" / domain.filename
+        output = out_dir / domain.filename
         content = render(domain)
         if args.check:
             if not output.exists() or output.read_text() != content:

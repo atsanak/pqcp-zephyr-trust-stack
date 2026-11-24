@@ -1285,36 +1285,44 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parents[1],
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="directory for the generated C sources (default: <repo>/build/generated)",
+    )
     args = parser.parse_args()
+    out_dir = (args.output_dir or args.repo_root / "build" / "generated").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
     root = args.repo_root.resolve()
     results = [
         update_file(
-            root / "src/runtime_policy_catalog.c",
+            out_dir / "runtime_policy_catalog.c",
             runtime_source(),
             args.check,
         ),
         update_file(
-            root / "src/protected_channel_policy_catalog.c",
+            out_dir / "protected_channel_policy_catalog.c",
             channel_source(),
             args.check,
         ),
         update_file(
-            root / "src/runtime_resource_policy_catalog.c",
+            out_dir / "runtime_resource_policy_catalog.c",
             runtime_resource_source(),
             args.check,
         ),
         update_file(
-            root / "src/runtime_recovery_policy_catalog.c",
+            out_dir / "runtime_recovery_policy_catalog.c",
             runtime_recovery_source(),
             args.check,
         ),
         update_file(
-            root / "src/protected_channel_path_policy_catalog.c",
+            out_dir / "protected_channel_path_policy_catalog.c",
             channel_path_policy_source(),
             args.check,
         ),
         update_file(
-            root / "src/protected_channel_fault_policy_catalog.c",
+            out_dir / "protected_channel_fault_policy_catalog.c",
             channel_fault_policy_source(),
             args.check,
         ),

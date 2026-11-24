@@ -271,7 +271,7 @@ HISTORICAL_DEFECTS = (
     _defect(
         "H1", "credential",
         "credential cache: revoked records recycled as free slots",
-        "src/edge_credential_cache.c",
+        "src/edge/edge_credential_cache.c",
         r"/\* Revoked records are tombstones and are never recycled\. \*/\s*"
         r"if \(!cache->records\[index\]\.occupied\) \{",
         "if (!cache->records[index].occupied ||\n"
@@ -280,7 +280,7 @@ HISTORICAL_DEFECTS = (
     _defect(
         "H2", "credential",
         "credential cache: put over a revoked id no longer rejected",
-        "src/edge_credential_cache.c",
+        "src/edge/edge_credential_cache.c",
         r"/\* A revoked id stays revoked until an explicit policy.*?\*/\s*"
         r"if \(cache->records\[index\]\.state ==\s*"
         r"PQCP_EDGE_CREDENTIAL_REVOKED\) \{\s*"
@@ -289,14 +289,14 @@ HISTORICAL_DEFECTS = (
     _defect(
         "H3", "principal",
         "principal directory: re-register lifts a quarantine",
-        "src/edge_identity_directory.c",
+        "src/edge/edge_identity_directory.c",
         r"if \(current->state ==\s*"
         r"PQCP_EDGE_PRINCIPAL_QUARANTINED\) \{",
         "if (0) {"),
     _defect(
         "H4", "principal",
         "principal directory: observe no longer honours a sticky quarantine",
-        "src/edge_identity_directory.c",
+        "src/edge/edge_identity_directory.c",
         r"if \(principal->state ==\s*"
         r"PQCP_EDGE_PRINCIPAL_QUARANTINED &&\s*"
         r"\(principal->quarantine_until_ms == 0U \|\|\s*"
@@ -306,7 +306,7 @@ HISTORICAL_DEFECTS = (
         "H5", "principal",
         "principal directory: tick demotes a quarantined principal on "
         "credential expiry",
-        "src/edge_identity_directory.c",
+        "src/edge/edge_identity_directory.c",
         r"PQCP_EDGE_PRINCIPAL_DEGRADED &&\s*"
         r"principal->state !=\s*"
         r"PQCP_EDGE_PRINCIPAL_QUARANTINED\) \{",
@@ -315,35 +315,35 @@ HISTORICAL_DEFECTS = (
         "H6", "session",
         "session registry: closing a finished session decrements the quota "
         "again",
-        "src/edge_session_registry.c",
+        "src/edge/edge_session_registry.c",
         r"session->state == PQCP_EDGE_SESSION_CLOSED \|\|\s*"
         r"session->principal_released\) \{",
         "session->state == PQCP_EDGE_SESSION_CLOSED) {"),
     _defect(
         "H7", "session",
         "session registry: closed session slots are never reclaimed",
-        "src/edge_session_registry.c",
+        "src/edge/edge_session_registry.c",
         r"return reclaim >= 0 \? reclaim : -ENOSPC;",
         "return -ENOSPC;"),
     _defect(
         "H8", "policy",
         "policy distributor: stale bundle may be promoted over a newer "
         "active epoch",
-        "src/edge_policy_distributor.c",
+        "src/edge/edge_policy_distributor.c",
         r"if \(bundle->policy_epoch <= distributor->active_policy_epoch\) \{",
         "if (0) {"),
     _defect(
         "H9", "policy",
         "policy distributor: rollback rewrites expires_at_ms and breaks the "
         "bundle digest",
-        "src/edge_policy_distributor.c",
+        "src/edge/edge_policy_distributor.c",
         r"/\* expires_at_ms is covered by bundle_digest and must not change;"
         r".*?\*/",
         "bundle->expires_at_ms = now_ms;"),
     _defect(
         "H10", "policy",
         "identifier counter: first issued id is 2, not 1",
-        "src/edge_security_common.c",
+        "src/edge/edge_security_common.c",
         r"uint64_t issued = \*identifier;\s*"
         r"if \(issued == 0U \|\| issued == UINT64_MAX\) \{\s*"
         r"issued = 1U;\s*\}\s*"
@@ -446,7 +446,7 @@ def build_tree(destination: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         if source.is_dir():
             # Skip only build output directories: a bare "build*" pattern
-            # also dropped the real source file src/build_manifest.c.
+            # also dropped the real source file src/evidence/build_manifest.c.
             shutil.copytree(
                 source, target,
                 ignore=lambda d, names: [

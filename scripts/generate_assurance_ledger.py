@@ -1144,7 +1144,7 @@ def evaluate_boot_kat_self_verify(
 ) -> dict[str, object]:
     """Bind boot.kat_self_verify to the captured tests/ztest_kat_boot_verify run.
 
-    The C-side SYS_INIT hook in src/kat_boot_verify.c calls k_panic() on
+    The C-side SYS_INIT hook in src/crypto/kat_boot_verify.c calls k_panic() on
     any failure, so simply observing the suite-success marker plus the
     "all enabled primitives passed" log line in the captured transcript
     is sufficient to prove the boot self-test ran and every enabled

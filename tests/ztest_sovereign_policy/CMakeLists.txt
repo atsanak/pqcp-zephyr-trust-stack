@@ -11,4 +11,4 @@ project(ztest_sovereign_policy)
 target_sources(app PRIVATE src/main.c)
 # sovereign_policy_common.c helpers are exported but declared only in a
 # private header next to the implementation.
-target_include_directories(app PRIVATE ${PQCP_LOCAL_MODULE_ROOT}/src)
+target_include_directories(app PRIVATE ${PQCP_LOCAL_MODULE_ROOT}/src/internal)

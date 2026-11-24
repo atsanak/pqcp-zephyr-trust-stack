@@ -9,12 +9,12 @@
  * parsers (compiled for host in the instrumented fuzz_targets library):
  *
  *   cbor        fleet deterministic-CBOR validator, skipper, map/array
- *               accessors and writer (src/fleet_cbor_map.c)
+ *               accessors and writer (src/experimental/fleet/fleet_cbor_map.c)
  *   cose_sign1  COSE_Sign1 decode/encode/verify and the protected-header
- *               codec (src/fleet_cose_sign1.c)
- *   cose_key    COSE_Key decode/encode/thumbprint (src/fleet_cose_key.c)
+ *               codec (src/experimental/fleet/fleet_cose_sign1.c)
+ *   cose_key    COSE_Key decode/encode/thumbprint (src/experimental/fleet/fleet_cose_key.c)
  *   policy      policy bytecode module codec, structural verifier and VM
- *               (src/fleet_policy_codec.c, _verify.c, _vm.c)
+ *               (src/experimental/fleet/fleet_policy_codec.c, _verify.c, _vm.c)
  *
  * The channel frame codecs (protected_channel_codec.c,
  * sovereign_channel_codec.c) are intentionally NOT here: they are only

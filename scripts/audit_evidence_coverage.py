@@ -27,10 +27,15 @@ preprocessor branches, macro expansion and callback execution are not resolved.
 """
 
 import argparse
+import atexit
 import json
 import re
+import shutil
 import sys
+import tempfile
 from pathlib import Path
+
+from pqcp_generated_sources import render_generated_sources
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = MODULE_ROOT / "scripts" / "evidence_coverage_baseline.json"
@@ -38,7 +43,7 @@ BASELINE_PATH = MODULE_ROOT / "scripts" / "evidence_coverage_baseline.json"
 LEVEL_NAMES = {0: "untested", 1: "tested", 2: "gated", 3: "claimed"}
 
 INCLUDE_RE = re.compile(r"#\s*include\s*<pqcp_zephyr/([A-Za-z0-9_]+)\.h>")
-CMAKE_SRC_RE = re.compile(r"\$\{PQCP_SRC\}/([A-Za-z0-9_]+)\.c")
+CMAKE_SRC_RE = re.compile(r"\$\{PQCP_(?:SRC|GENERATED)\}/(?:[A-Za-z0-9_]+/)*([A-Za-z0-9_]+)\.c")
 CMAKE_IF_RE = re.compile(r"^\s*if\s*\((.*)\)\s*$")
 CONFIG_RE = re.compile(r"\bCONFIG_[A-Z0-9_]+\b")
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -199,6 +204,10 @@ def twister_runs_all_tests(surfaces: dict[str, str]) -> bool:
 
 def build_report(root: Path) -> dict:
     src_dir = root / "src"
+    generated_dir = Path(tempfile.mkdtemp(prefix="pqcp-generated-"))
+    atexit.register(shutil.rmtree, generated_dir, True)
+    c_sources = sorted(list(src_dir.rglob("*.c")) +
+                       render_generated_sources(generated_dir, root))
     headers = {p.stem for p in (root / "include/pqcp_zephyr").glob("*.h")}
     cmake_configs = parse_cmake_configs(read_text(root / "CMakeLists.txt"))
     tests = collect_tests(root)
@@ -209,7 +218,7 @@ def build_report(root: Path) -> dict:
 
     raw: dict[str, dict] = {}
     owner: dict[str, str] = {}
-    for source in sorted(src_dir.glob("*.c")):
+    for source in c_sources:
         text = read_text(source)
         symbols = defined_symbols(text)
         raw[source.stem] = {"text": text, "symbols": symbols,
@@ -234,7 +243,7 @@ def build_report(root: Path) -> dict:
                 frontier.append(callee)
 
     modules = []
-    for source in sorted(src_dir.glob("*.c")):
+    for source in c_sources:
         name = source.stem
         text = raw[name]["text"]
         header = implemented_header(name, text, headers)

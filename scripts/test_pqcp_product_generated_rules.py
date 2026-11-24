@@ -610,7 +610,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_crypto_mlkem_768(self) -> None:
@@ -620,7 +620,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'src/psa_mlkem_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_ct_smoke/src/main.c', 'tests/ztest_primitive/src/main.c', 'scripts/verify_ct_instruction_policy.py')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'src/crypto/psa_mlkem_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_ct_smoke/src/main.c', 'tests/ztest_primitive/src/main.c', 'scripts/verify_ct_instruction_policy.py')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_crypto_mlkem_1024(self) -> None:
@@ -630,7 +630,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_crypto_mldsa_44(self) -> None:
@@ -640,7 +640,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_crypto_mldsa_65(self) -> None:
@@ -650,7 +650,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'src/psa_mldsa_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_primitive/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'src/crypto/psa_mldsa_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_primitive/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_crypto_mldsa_87(self) -> None:
@@ -660,7 +660,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_validation_acvp_serial(self) -> None:
@@ -670,7 +670,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/acvp_cmd.h', 'src/acvp_cmd.c', 'samples/pqcp_serial_acvp/src/main.c', 'scripts/acvp_negative_scenarios.json', 'scripts/acvp_negative_scenario_floor.json', 'tests/ztest_acvp_serial/src/main.c', 'tests/ztest_acvp_serial_negative/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/acvp_cmd.h', 'src/crypto/acvp_cmd.c', 'samples/pqcp_serial_acvp/src/main.c', 'scripts/acvp_negative_scenarios.json', 'scripts/acvp_negative_scenario_floor.json', 'tests/ztest_acvp_serial/src/main.c', 'tests/ztest_acvp_serial_negative/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_validation_tls_selftest(self) -> None:
@@ -680,7 +680,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/tls_selftest.h', 'src/tls_selftest.c', 'samples/pqcp_tls_mbedtls_psa/src/main.c', 'tests/ztest_tls_selftest/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/tls_selftest.h', 'src/crypto/tls_selftest.c', 'samples/pqcp_tls_mbedtls_psa/src/main.c', 'tests/ztest_tls_selftest/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_rng_zephyr_entropy(self) -> None:
@@ -690,7 +690,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_zephyr_entropy.c', 'tests/ztest_rng/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_zephyr_entropy.c', 'tests/ztest_rng/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_rng_psa(self) -> None:
@@ -700,7 +700,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_psa.c', 'tests/ztest_rng/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_psa.c', 'tests/ztest_rng/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_rng_deterministic_test(self) -> None:
@@ -710,7 +710,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_deterministic.c', 'samples/pqcp_kat_deterministic/src/main.c', 'tests/ztest_primitive/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_deterministic.c', 'samples/pqcp_kat_deterministic/src/main.c', 'tests/ztest_primitive/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_boot_kat_self_verify(self) -> None:
@@ -720,7 +720,7 @@ class GeneratedExperimentRuleTests(unittest.TestCase):
         experiment = self.by_id[experiment_id]
         self.assertEqual(experiment.category, 'asset_traceability')
         self.assertGreaterEqual(len(experiment.acceptance_criteria), 5)
-        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'src/kat_boot_verify.c', 'tests/ztest_kat_boot_verify/src/main.c')).issubset(set(experiment.repository_inputs)))
+        self.assertTrue(set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'src/crypto/kat_boot_verify.c', 'tests/ztest_kat_boot_verify/src/main.c')).issubset(set(experiment.repository_inputs)))
         self.assertTrue(set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')).issubset(set(experiment.expected_outputs)))
 
     def test_rule_asset_security_ct_smoke(self) -> None:

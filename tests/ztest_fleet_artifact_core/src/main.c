@@ -21,7 +21,7 @@
 #include <pqcp_zephyr/mldsa.h>
 #include <pqcp_zephyr/rng.h>
 
-/* Defined in src/fleet_sha256.c (module-private header, so redeclared). */
+/* Defined in src/experimental/fleet/fleet_sha256.c (module-private header, so redeclared). */
 int pqcp_fleet_sha256(const uint8_t *input, size_t input_length,
 		      uint8_t output[32]);
 
@@ -2858,7 +2858,7 @@ static struct pqcp_fleet_eat_claims CC;
 static struct pqcp_fleet_eat_appraisal_policy P;
 static struct pqcp_fleet_eat_appraisal_result R;
 
-/* Reason bits of the RATS appraiser (mirror of src/fleet_rats.c; they are
+/* Reason bits of the RATS appraiser (mirror of src/experimental/fleet/fleet_rats.c; they are
  * exported through the result_reason claim so they are part of the wire
  * contract).
  */
@@ -3012,7 +3012,7 @@ static size_t compose_claims(unsigned int count, const char *p1,
 	return vdec(hexbuf);
 }
 
-/* BUG tracking: src/fleet_eat_profile.c claims_field_count() reports one
+/* BUG tracking: src/experimental/fleet/fleet_eat_profile.c claims_field_count() reports one
  * more entry than pqcp_fleet_eat_claims_encode() writes, so every encoded
  * claims map has a map head that is too large by one. g_enc_bug is detected
  * at suite setup; the helpers below repair only that map-head count so the

@@ -19,7 +19,10 @@ import argparse
 import json
 import re
 import sys
+import tempfile
 from pathlib import Path
+
+from pqcp_generated_sources import render_generated_sources
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 HEADERS = MODULE_ROOT / "include" / "pqcp_zephyr"
@@ -71,7 +74,14 @@ def declared_functions(header: Path) -> set[str]:
 
 def defined_functions() -> set[str]:
     defined = set()
-    for path in SOURCES.glob("*.c"):
+    with tempfile.TemporaryDirectory(prefix="pqcp-generated-") as tmp:
+        generated = {p.name: p.read_text(encoding="utf-8")
+                     for p in render_generated_sources(Path(tmp))}
+    for text in generated.values():
+        text = strip(text)
+        defined.update(DEF_RE.findall(text))
+        defined.update(DEF_NAME_FIRST_RE.findall(text))
+    for path in SOURCES.rglob("*.c"):
         text = strip(path.read_text(encoding="utf-8", errors="replace"))
         defined.update(DEF_RE.findall(text))
         defined.update(DEF_NAME_FIRST_RE.findall(text))

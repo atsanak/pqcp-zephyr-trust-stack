@@ -74,7 +74,7 @@ DEFAULT_CASES = [
         # Build-only keeps the sanitizer build path covered, and
         # the runtime ASan/UBSan TLS path is now exercised by
         # tests/ztest_tls_selftest after the timer-source fix landed in
-        # src/tls_selftest.c (commit 011c937).
+        # src/crypto/tls_selftest.c (commit 011c937).
         run=False,
     ),
 ]

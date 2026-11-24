@@ -628,7 +628,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.crypto_mlkem_512'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -638,7 +638,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.crypto_mlkem_768'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'src/psa_mlkem_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_ct_smoke/src/main.c', 'tests/ztest_primitive/src/main.c', 'scripts/verify_ct_instruction_policy.py')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'src/crypto/psa_mlkem_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_ct_smoke/src/main.c', 'tests/ztest_primitive/src/main.c', 'scripts/verify_ct_instruction_policy.py')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -648,7 +648,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.crypto_mlkem_1024'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mlkem.h', 'src/crypto/mlkem_zephyr.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c', 'tests/ztest_ct_smoke/src/main.c', 'scripts/verify_ct_instruction_policy.py')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -658,7 +658,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.crypto_mldsa_44'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -668,7 +668,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.crypto_mldsa_65'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'src/psa_mldsa_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_primitive/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'src/crypto/psa_mldsa_driver.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_primitive/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -678,7 +678,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.crypto_mldsa_87'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/mldsa_zephyr.c', 'src/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/mldsa.h', 'src/crypto/mldsa_zephyr.c', 'src/crypto/mldsa_streaming.c', 'tests/ztest_acvp_kat/src/kat_vectors.h', 'tests/ztest_acvp_kat/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -688,7 +688,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.validation_acvp_serial'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/acvp_cmd.h', 'src/acvp_cmd.c', 'samples/pqcp_serial_acvp/src/main.c', 'scripts/acvp_negative_scenarios.json', 'scripts/acvp_negative_scenario_floor.json', 'tests/ztest_acvp_serial/src/main.c', 'tests/ztest_acvp_serial_negative/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/acvp_cmd.h', 'src/crypto/acvp_cmd.c', 'samples/pqcp_serial_acvp/src/main.c', 'scripts/acvp_negative_scenarios.json', 'scripts/acvp_negative_scenario_floor.json', 'tests/ztest_acvp_serial/src/main.c', 'tests/ztest_acvp_serial_negative/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -698,7 +698,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.validation_tls_selftest'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/tls_selftest.h', 'src/tls_selftest.c', 'samples/pqcp_tls_mbedtls_psa/src/main.c', 'tests/ztest_tls_selftest/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/tls_selftest.h', 'src/crypto/tls_selftest.c', 'samples/pqcp_tls_mbedtls_psa/src/main.c', 'tests/ztest_tls_selftest/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -708,7 +708,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.rng_zephyr_entropy'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_zephyr_entropy.c', 'tests/ztest_rng/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_zephyr_entropy.c', 'tests/ztest_rng/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -718,7 +718,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.rng_psa'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_psa.c', 'tests/ztest_rng/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_psa.c', 'tests/ztest_rng/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -728,7 +728,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.rng_deterministic_test'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/rng_common.c', 'src/rng_deterministic.c', 'samples/pqcp_kat_deterministic/src/main.c', 'tests/ztest_primitive/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'include/pqcp_zephyr/rng.h', 'src/crypto/rng_common.c', 'src/crypto/rng_deterministic.c', 'samples/pqcp_kat_deterministic/src/main.c', 'tests/ztest_primitive/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)
@@ -738,7 +738,7 @@ class ProductExperimentMatrixTests(unittest.TestCase):
         experiment_id = 'asset.boot_kat_self_verify'
         row = READINESS_BUILDERS[experiment_id](self.by_id[experiment_id])
         self.assertEqual(row.category, 'asset_traceability')
-        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'src/kat_boot_verify.c', 'tests/ztest_kat_boot_verify/src/main.c')))
+        self.assertEqual(set(row.required_inputs), set(('scripts/pqc_asset_trace_map.json', 'scripts/verify_pqc_asset_trace_map.py', 'src/crypto/kat_boot_verify.c', 'tests/ztest_kat_boot_verify/src/main.c')))
         self.assertEqual(set(row.required_outputs), set(('pqc_asset_trace_result.json', 'pqc_evidence_graph.json', 'pqc_cbom.cdx.json')))
         self.assertGreaterEqual(row.evidence_score, 40)
         self.assertTrue(row.falsification_ready)

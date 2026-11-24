@@ -37,11 +37,11 @@ add_executable(pqcp-evidence-register
     ${PQCP_VERIFIER_DIR}/src/host_sha256.c
     ${PQCP_VERIFIER_DIR}/src/receipt_mldsa_ops.c
     ${PQCP_VERIFIER_DIR}/src/receipt_codec.c
-    ${PQCP_MODULE_ROOT}/src/fleet_cbor_map.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_merkle.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_log.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_proof.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_checkpoint.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_cbor_map.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_merkle.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_log.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_proof.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_checkpoint.c
 )
 target_include_directories(pqcp-evidence-register PRIVATE
     ${PQCP_VERIFIER_DIR}/src

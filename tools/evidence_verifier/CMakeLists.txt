@@ -50,16 +50,16 @@ add_executable(pqcp-evidence-verify
     src/receipt_verify.c
     # Transparent appraisal receipts: the unmodified firmware RFC 9162 log,
     # proof and checkpoint code plus the host-portable CBOR codec.
-    ${PQCP_MODULE_ROOT}/src/fleet_cbor_map.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_merkle.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_log.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_proof.c
-    ${PQCP_MODULE_ROOT}/src/fleet_transparency_checkpoint.c
-    ${PQCP_MODULE_ROOT}/src/deployment_evidence_verdict_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_evidence_seal_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_assurance_passport_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_tamper_matrix_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_evidence_trail_replay.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_cbor_map.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_merkle.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_log.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_proof.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_transparency_checkpoint.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_evidence_verdict_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_evidence_seal_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_assurance_passport_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_tamper_matrix_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_evidence_trail_replay.c
 )
 
 target_include_directories(pqcp-evidence-verify PRIVATE

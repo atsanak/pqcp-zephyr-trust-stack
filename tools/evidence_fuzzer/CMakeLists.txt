@@ -45,19 +45,19 @@ add_library(fuzz_targets OBJECT
     ${PQCP_VERIFIER_DIR}/src/host_tokens.c
     ${PQCP_VERIFIER_DIR}/src/passport_parse.c
     ${PQCP_VERIFIER_DIR}/src/signature_check.c
-    ${PQCP_MODULE_ROOT}/src/deployment_evidence_verdict_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_evidence_seal_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_assurance_passport_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_tamper_matrix_replay.c
-    ${PQCP_MODULE_ROOT}/src/deployment_evidence_trail_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_evidence_verdict_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_evidence_seal_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_assurance_passport_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_tamper_matrix_replay.c
+    ${PQCP_MODULE_ROOT}/src/evidence/deployment_evidence_trail_replay.c
     # Host-portable fleet parsers (no Zephyr/PSA dependencies): CBOR,
     # COSE_Sign1/COSE_Key, and the policy bytecode codec/verifier/VM.
-    ${PQCP_MODULE_ROOT}/src/fleet_cbor_map.c
-    ${PQCP_MODULE_ROOT}/src/fleet_cose_sign1.c
-    ${PQCP_MODULE_ROOT}/src/fleet_cose_key.c
-    ${PQCP_MODULE_ROOT}/src/fleet_policy_codec.c
-    ${PQCP_MODULE_ROOT}/src/fleet_policy_verify.c
-    ${PQCP_MODULE_ROOT}/src/fleet_policy_vm.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_cbor_map.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_cose_sign1.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_cose_key.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_policy_codec.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_policy_verify.c
+    ${PQCP_MODULE_ROOT}/src/experimental/fleet/fleet_policy_vm.c
 )
 target_include_directories(fuzz_targets PRIVATE
     ${PQCP_VERIFIER_DIR}/shim

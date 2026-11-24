@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -128,23 +129,29 @@ def main() -> int:
 
     if args.list:
         for name in GENERATED_CHECKS:
-            print(f"scripts/{name} --check")
+            print(f"scripts/{name} --output-dir <tmp> (then --check)")
         for path in tests:
             print(path.relative_to(module_path))
         return 0
 
-    for name in GENERATED_CHECKS:
-        path = script_dir / name
-        print(f"\n[RUN ] {name} --check")
-        result = subprocess.run(
-            [sys.executable, str(path), "--check"],
-            cwd=str(module_path),
-            check=False,
-        )
-        if result.returncode != 0:
-            print(f"[FAIL] {name} --check exited with {result.returncode}")
-            return result.returncode
-        print(f"[PASS] {name} --check")
+    # Generate every catalog into a scratch directory, then re-run each
+    # generator with --check against it: this proves the generators run and
+    # that their output is deterministic.
+    with tempfile.TemporaryDirectory(prefix="pqcp-generated-") as generated:
+        for name in GENERATED_CHECKS:
+            path = script_dir / name
+            print(f"\n[RUN ] {name}")
+            for extra in ([], ["--check"]):
+                result = subprocess.run(
+                    [sys.executable, str(path), *extra, "--output-dir", generated],
+                    cwd=str(module_path),
+                    stdout=subprocess.DEVNULL,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    print(f"[FAIL] {name} {' '.join(extra)} exited with {result.returncode}")
+                    return result.returncode
+            print(f"[PASS] {name} (deterministic)")
 
     for path in tests:
         print(f"\n[RUN ] {path.name}")

@@ -48,17 +48,17 @@ COPY_PATHS = (
     "ext/mldsa-native/mldsa",
 )
 REPLAY_SOURCES = (
-    "src/deployment_evidence_verdict_replay.c",
-    "src/deployment_evidence_seal_replay.c",
-    "src/deployment_assurance_passport_replay.c",
-    "src/deployment_evidence_trail_replay.c",
-    "src/deployment_tamper_matrix_replay.c",
+    "src/evidence/deployment_evidence_verdict_replay.c",
+    "src/evidence/deployment_evidence_seal_replay.c",
+    "src/evidence/deployment_assurance_passport_replay.c",
+    "src/evidence/deployment_evidence_trail_replay.c",
+    "src/evidence/deployment_tamper_matrix_replay.c",
     # RFC 9162 transparency code shared by the verifier and register tool.
-    "src/fleet_cbor_map.c",
-    "src/fleet_transparency_merkle.c",
-    "src/fleet_transparency_log.c",
-    "src/fleet_transparency_proof.c",
-    "src/fleet_transparency_checkpoint.c",
+    "src/experimental/fleet/fleet_cbor_map.c",
+    "src/experimental/fleet/fleet_transparency_merkle.c",
+    "src/experimental/fleet/fleet_transparency_log.c",
+    "src/experimental/fleet/fleet_transparency_proof.c",
+    "src/experimental/fleet/fleet_transparency_checkpoint.c",
 )
 
 # Test suites a mutant can be judged by. Receipt/consistency checks are only
@@ -99,24 +99,24 @@ def binding_disabled(name: str, expr_regex: str) -> Mutant:
 MUTANTS = (
     digest_check_disabled(
         "verdict replay: digest recomputation check removed",
-        "src/deployment_evidence_verdict_replay.c",
+        "src/evidence/deployment_evidence_verdict_replay.c",
         "verdict->verdict_digest_hex"),
     digest_check_disabled(
         "seal replay: digest recomputation check removed",
-        "src/deployment_evidence_seal_replay.c", "seal->seal_digest_hex"),
+        "src/evidence/deployment_evidence_seal_replay.c", "seal->seal_digest_hex"),
     digest_check_disabled(
         "passport replay: digest recomputation check removed",
-        "src/deployment_assurance_passport_replay.c",
+        "src/evidence/deployment_assurance_passport_replay.c",
         "passport->passport_digest_hex"),
     digest_check_disabled(
         "trail replay: hash-chain link check removed",
-        "src/deployment_evidence_trail_replay.c", "entry->link_digest_hex"),
+        "src/evidence/deployment_evidence_trail_replay.c", "entry->link_digest_hex"),
     digest_check_disabled(
         "tamper matrix replay: matrix digest check removed",
-        "src/deployment_tamper_matrix_replay.c", "report->matrix_digest_hex"),
+        "src/evidence/deployment_tamper_matrix_replay.c", "report->matrix_digest_hex"),
     Mutant(
         "verdict replay: duplicate-marker detection removed",
-        "src/deployment_evidence_verdict_replay.c",
+        "src/evidence/deployment_evidence_verdict_replay.c",
         r"if \(\(state->marker_mask &\s*"
         r"PQCP_DEPLOYMENT_EVIDENCE_VERDICT_REPLAY_MARKER_VERDICT\) != 0U\) \{",
         "if (0) {"),
