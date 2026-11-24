@@ -107,12 +107,18 @@
       "profile": "GATEWAY",
       "sample": "pqcp_tls_mbedtls_psa",
       "description": "Gateway-profile TLS sample build envelope on qemu_x86_64.",
-      "status": "estimated_pending_ci_baseline",
-      "status_note": "Envelope is a safe upper bound carried from the previous release; not yet re-measured.",
+      "status": "measured",
       "limits": {
-        "rom": 180224,
-        "ram": 491520
-      }
+        "rom": 274432,
+        "ram": 1657856
+      },
+      "measured_rom_bytes": 261152,
+      "measured_ram_bytes": 1577944,
+      "measured_on_board": "qemu_x86_64",
+      "measured_sdk": "zephyr-sdk-1.0.1",
+      "measured_toolchain": "x86_64-zephyr-elf-gcc 14.3.0",
+      "measured_at": "2026-11-24",
+      "measured_notes": "Recorded by the full release gate profile validation on a macOS host. The earlier envelope was an estimate that predates the MbedTLS PSA TLS channel."
     },
     {
       "board": "qemu_x86_64",
