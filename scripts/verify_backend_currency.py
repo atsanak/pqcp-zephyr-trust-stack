@@ -29,6 +29,7 @@ BACKENDS = {
         "url": "https://github.com/pq-code-package/mldsa-native",
     },
 }
+SUBMODULE_STATUS_RE = re.compile(r"^([ +\-U]?)([0-9a-f]{40})\s+(\S+)")
 FORBIDDEN_PQCLEAN_RE = re.compile(r"OQ" r"Clean|PQC" r"LEAN", re.IGNORECASE)
 LIBOQS_RE = re.compile(r"lib" r"oqs|\bOQS\b", re.IGNORECASE)
 MLKEM_MLDSA_RE = re.compile(r"ML[-_ ]?KEM|MLKEM|Kyber|ML[-_ ]?DSA|MLDSA|Dilithium", re.IGNORECASE)
@@ -47,7 +48,13 @@ POLICY_SCAN_ROOTS = (
     "west.yml",
 )
 POLICY_SKIP_DIRS = {"__pycache__", "html"}
-POLICY_SKIP_FILES = {"scripts/verify_backend_currency.py"}
+POLICY_SKIP_FILES = {
+    "scripts/verify_backend_currency.py",
+    # Importer and fixtures for third-party benchmark results (liboqs and
+    # others); they describe external measurements, not a linked backend.
+    "scripts/pqcp_product/cli.py",
+    "scripts/test_pqcp_product_cross_framework_bridge.py",
+}
 POLICY_SCAN_SUFFIXES = {
     "",
     ".c",
@@ -220,13 +227,13 @@ def parse_submodule_status(module_path: Path) -> dict[str, dict[str, str]]:
         return {}
     status: dict[str, dict[str, str]] = {}
     for line in stdout.splitlines():
-        if not line:
+        # "<state><sha> <path> (<describe>)"; state is one of " +-U" and may
+        # have been trimmed from the first line by the git helper.
+        match = SUBMODULE_STATUS_RE.match(line)
+        if not match:
             continue
-        state = line[0]
-        parts = line[1:].split()
-        if len(parts) < 2:
-            continue
-        status[parts[1]] = {"state": state, "sha": parts[0]}
+        state, sha, path = match.groups()
+        status[path] = {"state": state or " ", "sha": sha}
     return status
 
 
