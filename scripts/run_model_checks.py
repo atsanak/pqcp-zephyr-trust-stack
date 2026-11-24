@@ -528,12 +528,20 @@ def echo(text: str) -> None:
 
 
 def run_conformance(west_cmd, west_root, env, module: Path, build_dir: Path,
-                    args) -> tuple[Parsed, list[str], str]:
+                    args, quiet: bool = False) -> tuple[Parsed, list[str], str]:
     west_build(west_cmd, west_root, env, module, build_dir, pristine=True,
                timeout=args.build_timeout)
     output = west_run(west_cmd, west_root, env, build_dir,
                       timeout=args.run_timeout)
-    echo(output)
+    if quiet:
+        # The unmutated rediscovery baseline repeats the conformance run on a
+        # private copy. Only a short note is printed so the transcript keeps
+        # exactly one conformance summary.
+        print("[model] baseline run complete, "
+              f"{len(parse_transcript(output).checks)} module checks",
+              flush=True)
+    else:
+        echo(output)
     parsed = parse_transcript(output)
     return parsed, assess_conformance(parsed), output
 
@@ -551,7 +559,7 @@ def rediscover(west_cmd, west_root, env, build_dir: Path, args) -> int:
         print("[model] rediscovery baseline: unmutated private tree must "
               "pass", flush=True)
         _, problems, _ = run_conformance(west_cmd, west_root, env, tree,
-                                         rd_build, args)
+                                         rd_build, args, quiet=True)
         if problems:
             for problem in problems:
                 print(f"[model] FAIL: {problem}")

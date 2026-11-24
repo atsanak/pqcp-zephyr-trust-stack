@@ -2252,7 +2252,7 @@ def main() -> int:
             ],
             cwd=module_path,
             timeout=4800,
-            success_markers=("PQCP_CT_TRACE_VLAT_MITIGATION PASS",),
+            success_markers=("PQCP_CT_TRACE_VLAT_MITIGATION PASS", "[ct-trace] PASS:"),
         ),
         Step(
             name="ct latency model crosscheck",
@@ -2301,7 +2301,7 @@ def main() -> int:
             ],
             cwd=module_path,
             timeout=4800,
-            success_markers=("PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS",),
+            success_markers=("PQCP_CT_TRACE_VLAT_MITIGATION_KEM PASS", "[ct-trace] PASS:"),
         ),
         Step(
             name="ct trace cortex-m33 decapsulation",
@@ -2323,7 +2323,7 @@ def main() -> int:
             ],
             cwd=module_path,
             timeout=1800,
-            success_markers=("PQCP_CT_TRACE_VLAT PASS",),
+            success_markers=("PQCP_CT_TRACE_VLAT PASS", "[ct-trace] PASS:"),
         ),
         Step(
             name="ct trace cortex-m33 signing",
@@ -2347,7 +2347,7 @@ def main() -> int:
             ],
             cwd=module_path,
             timeout=2400,
-            success_markers=("PQCP_CT_TRACE_VLAT_DECLASS PASS",),
+            success_markers=("PQCP_CT_TRACE_VLAT_DECLASS PASS", "[ct-trace] PASS:"),
         ),
         Step(
             name="mldsa rejection selftest",

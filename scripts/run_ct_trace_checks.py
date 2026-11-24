@@ -360,6 +360,9 @@ def run_core_mlkem_mitigated(args, out: Path, west_root: Path,
             for issue in issues:
                 print(f"[ct-trace] FAIL: {issue}")
             failed = failed or bool(issues)
+    if not failed:
+        print("[ct-trace] PASS: the repair removes the finding at every "
+              "parameter set and level without changing the output")
     return 1 if failed else 0
 
 
@@ -446,6 +449,9 @@ def run_core_mldsa_mitigated(args, out: Path, west_root: Path,
             for issue in issues:
                 print(f"[ct-trace] FAIL: {issue}")
             failed = failed or bool(issues)
+    if not failed:
+        print("[ct-trace] PASS: the patch removes the finding at every level "
+              "without changing the signatures")
     return 1 if failed else 0
 
 
