@@ -14,8 +14,8 @@ release gate (`scripts/release_check.py`) re-runs every check listed here.
 ## Background: what already existed here
 
 Before this work the repository already had a firmware-native deployment
-evidence chain — verdict, seal, and assurance passport modules with their
-replay verifiers and audit aggregators — and a host-side assurance ledger
+evidence chain, verdict, seal, and assurance passport modules with their
+replay verifiers and audit aggregators, and a host-side assurance ledger
 (`scripts/assurance_claims.json`, schema 7, 57 claims) that bound build,
 KAT, ACVP, benchmark, sanitizer, boot-POST, CT-smoke, CBOM, and attestation
 evidence. The host passport was hash-bound and replay-verifiable but **not
@@ -23,7 +23,7 @@ signed**, and the host ledger bound **zero** firmware `PQCP_DEPLOYMENT_*`
 markers: the on-device evidence chain and the host assurance system were
 two disjoint trust systems.
 
-## Claim 1 — Single-source host replay of on-device evidence
+## Claim 1, Single-source host replay of on-device evidence
 
 **Prior art.** in-toto and SLSA attestations, SLSA provenance, and
 reproducible-build verifiers all let a third party check a build artifact.
@@ -31,9 +31,9 @@ Embedded test frameworks (Zephyr ztest, Twister) parse device serial output
 on a host.
 
 **What is new.** The host verifier `tools/evidence_verifier` is compiled
-from the *unmodified firmware replay-verifier C* — the same
+from the *unmodified firmware replay-verifier C*, the same
 `deployment_evidence_verdict_replay.c`, `deployment_evidence_seal_replay.c`,
-and `deployment_assurance_passport_replay.c` that run on the device —
+and `deployment_assurance_passport_replay.c` that run on the device, 
 behind a two-macro `printk`→`stdio` shim. A reviewer with only a C compiler
 replays a captured device transcript, recomputes every terminal digest, and
 checks the verdict→seal→passport digest bindings. Because the verifier *is*
@@ -47,7 +47,7 @@ uncompromised; it establishes that a given transcript is internally
 consistent and tamper-evident under the same digest algorithm the device
 used.
 
-## Claim 2 — A PQC stack that signs its own assurance evidence
+## Claim 2, A PQC stack that signs its own assurance evidence
 
 **Prior art.** in-toto/Sigstore sign attestations with (classical or PQC)
 keys managed off-device. PSA Attestation and DICE produce device identity
@@ -70,7 +70,7 @@ device. A production custody profile (hardware entropy, sealed storage,
 provisioning, revocation) does not exist and the marker schema refuses any
 value other than `custody=demo`.
 
-## Claim 3 — Instruction-count constant-time evidence
+## Claim 3, Instruction-count constant-time evidence
 
 **Prior art.** dudect and `ctgrind`/Valgrind measure timing or memory-access
 constancy; the existing `security.ct_smoke` here uses a wall-clock-cycle
@@ -85,7 +85,7 @@ valid-ciphertext and every corrupted-ciphertext ML-KEM-768 decapsulation
 region to share one exact (insns, loads, stores) tuple (measured: 814304
 instructions, 133443 loads, 106992 stores per region, identical across
 both classes). This is input-independence of both the decapsulation
-control flow and its memory-operation counts — two rungs above the
+control flow and its memory-operation counts, two rungs above the
 wall-clock bound.
 
 **Non-claims.** This is **not** a formal constant-time proof. It does not
@@ -94,7 +94,7 @@ microarchitectural timing (caches, ports, prefetch). The project does not
 claim ML-KEM is constant-time; it claims a measured, reproducible
 instruction-count and memory-access-count equality under one emulator.
 
-## Claim 4 — The evidence grammar is a fuzzed security surface
+## Claim 4, The evidence grammar is a fuzzed security surface
 
 **Prior art.** libFuzzer/AFL fuzz parsers routinely; OSS-Fuzz runs them in
 CI.
@@ -105,7 +105,7 @@ attacker-visible surface they are: `tools/evidence_fuzzer` drives the
 signature reassembler with mutated lines from real device transcripts,
 under ASan+UBSan with `-fno-sanitize-recover=all`. It is a self-contained
 deterministic C driver (not libFuzzer), so it runs identically on any host
-with a C compiler and a fixed seed reproduces any run — and it is
+with a C compiler and a fixed seed reproduces any run, and it is
 coverage-guided without a fuzzer runtime: the target parsers carry
 SanitizerCoverage edge instrumentation, the harness implements the
 `trace_pc_guard` callbacks itself, and any input reaching a new edge is
@@ -130,7 +130,7 @@ not fuzzed: they reach `runtime_internal.h`, which needs a fake
 `zephyr/kernel.h` and PSA-backed helpers, a larger shim than the
 printk-only alias this harness permits.
 
-## Claim 5 — In-image adversarial self-validation of the evidence chain
+## Claim 5, In-image adversarial self-validation of the evidence chain
 
 **Claim.** The firmware does not only prove that its replay verifiers
 accept genuine evidence; it proves, inside the same image and boot, that
@@ -161,12 +161,12 @@ proof of resistance against arbitrary forgery, does not cover physical or
 fault attacks, and the digests involved are integrity checksums, not
 cryptographic MACs.
 
-## Claim 6 — Hash-chained evidence trail (sequence + completeness commitment)
+## Claim 6, Hash-chained evidence trail (sequence + completeness commitment)
 
 **Claim.** The terminal chain stages already bind to each other through
 embedded digests, but nothing committed to the ORDER and COMPLETENESS of
 the terminal artifacts as a sequence. The evidence trail is an
-append-only, forward-linked commitment in the Schneier–Kelsey secure
+append-only, forward-linked commitment in the Schneier-Kelsey secure
 audit log tradition: each terminal stage digest (verdict, seal, seal
 audit, passport, tamper matrix) becomes a sequenced entry whose link
 digest covers the previous link, with a genesis link bound to the chain
@@ -174,10 +174,10 @@ identity (profile, top candidate, nonce). Removing, reordering, or
 splicing any entry breaks the chain head; the host CLI re-derives the
 genesis and every link from the captured transcript and rejects all four
 manipulations (verified by `scripts/test_evidence_verifier.py` cases
-14–17).
+14-17).
 
 **Prior art.** Hash-chained audit logs and transparency logs are
-well-established (Schneier–Kelsey, Certificate Transparency, in-toto
+well-established (Schneier-Kelsey, Certificate Transparency, in-toto
 layouts). The contribution is the integration depth, not the data
 structure: the trail is generated by the same firmware that generated the
 evidence, covers an adversarial self-validation artifact, and is
@@ -190,7 +190,7 @@ digests. It is scoped to one boot; cross-boot continuity remains future
 work. Signing the trail head falls under the existing demo-custody
 signature discussion.
 
-## Claim 7 — Transparent appraisal receipts (a logged, verifier-bound verdict)
+## Claim 7, Transparent appraisal receipts (a logged, verifier-bound verdict)
 
 **Claim.** Every artifact in the stack used to be checked by one party,
 the host verifier, and nothing made that verifier's VERDICT accountable:
@@ -246,8 +246,8 @@ Python agreement covers structure and Merkle math, not authenticity.
 
 ## Combined novelty
 
-Taken together, the repository demonstrates — to our knowledge for the
-first time in an open Zephyr PQC module — a firmware-emitted, host-
+Taken together, the repository demonstrates, to our knowledge for the
+first time in an open Zephyr PQC module, a firmware-emitted, host-
 replayable, **ML-DSA-self-signed** deployment assurance passport whose
 every terminal artifact is independently re-verifiable from a serial
 transcript with nothing but a C compiler, backed by instruction-count CT
@@ -276,7 +276,7 @@ hard to overclaim.
 | 10 | `python3 scripts/run_fault_gate.py --output-dir <dir>` | `PQCP_FAULT_GATE PASS exploitable_boot=8 exploitable_boot_negative=0` |
 | 11 | `python3 scripts/run_fault_timing_gate.py --output-dir <dir>` | `PQCP_FAULT_TIMING_GATE PASS base_postboot=9 base_transient=9 hardened_postboot=0 hardened_transient=0` |
 
-Claims 1–4 are required steps in `scripts/release_check.py` and required
+Claims 1-4 are required steps in `scripts/release_check.py` and required
 claims in `scripts/assurance_claims.json` (schema 8). Claims 5 and 6 ride
 the same `evidence chain host replay` gate step: the host verifier fails
 the step if tamper matrix or trail markers are present but inconsistent.

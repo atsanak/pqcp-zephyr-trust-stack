@@ -3,106 +3,30 @@
 [![CI](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/ci.yml)
 [![Release dry-run](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml/badge.svg?branch=main)](https://github.com/atsanak/pqcp-zephyr-trust-stack/actions/workflows/release-dry-run.yml)
 
-An out-of-tree Zephyr RTOS module providing first-class support for Post-Quantum Cryptography (PQC) using the PQ Code Package's `mlkem-native` (ML-KEM, FIPS-203) and `mldsa-native` (ML-DSA, FIPS-204) reference implementations.
+PQCP Zephyr Trust Stack is an out-of-tree Zephyr module that integrates the PQ Code Package libraries `mlkem-native` (ML-KEM, FIPS 203) and `mldsa-native` (ML-DSA, FIPS 204). On top of the primitives it provides a validation and evidence toolchain for embedded post-quantum deployments.
 
-> **Status:** research and engineering project, MIT-licensed
-> ([`LICENSE`](LICENSE)). Everything here is measured on QEMU and the host:
-> there is no hardware evidence, and the constant-time results are tests under
-> a documented latency model, not proofs. Read the non-claims next to each
-> claim in [`docs/novelty-claims.md`](docs/novelty-claims.md).
+> **Status.** Research and engineering project under the MIT license ([`LICENSE`](LICENSE)). All results come from the host and QEMU. There are no hardware measurements, and the constant-time results are tests under a stated latency model, not proofs. The non-claims for each result are listed in [`docs/novelty-claims.md`](docs/novelty-claims.md).
 
-## What is novel here?
+## Overview
 
-This repository is intentionally not "another PQC sample". The
-engineering bar is set by the following properties that, together, are unusual
-for a Zephyr module:
+- **Primitives.** ML-KEM-512/768/1024 and ML-DSA-44/65/87 with a Zephyr RNG backend, Kconfig and CMake integration, and PSA-facing driver glue.
+- **Known answer tests.** NIST ACVP vectors, pinned to the vendored constants and exercised over a serial wire format on QEMU and on Nucleo class boards.
+- **Constant-time testing.** A QEMU TCG plugin records instruction addresses, data addresses, cache lines and operand-dependent latency of the real firmware image. Executions that differ only in secret data must produce identical traces. Declassification events inside ML-DSA signing are honoured. Details are in [`docs/ct-trace-leakage.md`](docs/ct-trace-leakage.md).
+- **Measured findings.** Cortex-M3, M4 and M33 coverage, a comparison of two Cortex-M3 latency models, opt-in repairs for the two multiplies that vary with the secret (ML-KEM compression and the ML-DSA Montgomery path), and a study of whether the ML-DSA signing attempt count depends on the key. Each claim lists its hypotheses, results and limits in [`docs/novelty-claims.md`](docs/novelty-claims.md).
+- **Fault injection.** An emulated campaign over the boot image that measures how a self test with negative vectors changes the set of exploitable skip sites.
+- **Assurance ledger.** Release relevant statements are typed claims in [`scripts/assurance_claims.json`](scripts/assurance_claims.json), each with an evaluator that reads captured transcripts. The release gate produces a JSON ledger and an HTML report. See [`docs/assurance-model.md`](docs/assurance-model.md).
+- **Runtime and evidence services.** Allocation free key and session governance, a protected channel, fleet policy, and signed audit export. The longer description is in [`docs/feature-overview.md`](docs/feature-overview.md).
 
-- **Signed audit delivery across subsystems.** Nine typed adapters project
-  broker, fleet, edge and sovereign snapshots into one tenant-scoped event
-  chain. The exporter supports ML-DSA-signed CBOR/CEF/OCSF batches, frozen
-  retransmission and exact acknowledgements. QEMU tests exercise source
-  tampering, tenant isolation and redaction. State is currently volatile;
-  see [the protocol and trust boundaries](docs/sovereign-audit-export.md).
-- **Claim-to-evidence assurance ledger.** Every release-relevant
-  behaviour ("ML-DSA-65 KAT vectors match the header", "the ACVP
-  harness rejects malformed input", "the benchmark CSV is bound to its
-  provenance sidecar") is encoded as a typed claim in
-  [`scripts/assurance_claims.json`](scripts/assurance_claims.json) with
-  a dedicated evaluator. The release gate produces a JSON ledger
-  ([`assurance_ledger.json`](docs/assurance-model.md)) and a
-  self-contained HTML report that can be handed to a reviewer or
-  attached to a paper. The ledger has a versioned schema with a
-  documented backward-compatibility shim — old packs degrade
-  gracefully instead of hard-failing.
-- **PQC Assurance Passport for partner review.** The full local release
-  gate now wraps the ledger with a CycloneDX-style cryptography BOM
-  (`pqc_cbom.cdx.json`), an unsigned in-toto Statement-style evidence
-  attestation (`pqc_attestation.intoto.json`), a partner policy result
-  (`pqc_policy_result.json`), and a stable digest manifest
-  (`pqc_assurance_digest.json`). Passport v2 also adds an append-only
-  ACVP negative scenario floor, an asset trace map, an evidence graph,
-  and a generated firmware digest header. This is not a certification
-  claim; it is a replay-verifiable bridge between PQC inventory,
-  release metadata, transcript hashes, and local validation evidence.
-- **Offline KAT provenance binding.** The `tests/ztest_acvp_kat`
-  vectors are vendored from NIST ACVP fixtures and pinned to
-  `kat_vectors.h` constants by
-  [`scripts/verify_kat_provenance.py`](scripts/verify_kat_provenance.py).
-  Per-parameter-set claims (`kat.mlkem_512`, `kat.mlkem_768`,
-  `kat.mlkem_1024`, `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87`)
-  decompose KAT verification so a regression in a single primitive is
-  named directly in the failure reason rather than hidden in an
-  aggregate.
-- **QEMU-only local release gate with transcript-hash assurance.**
-  [`scripts/release_check.py`](scripts/release_check.py) runs the
-  entire validation sequence locally — no GitHub Actions required —
-  and captures stdout transcripts for every required step. Each
-  transcript is SHA-256-hashed into
-  `transcripts/evidence_transcript_manifest.json`. The replay verifier
-  re-hashes every file and rejects the pack if any transcript is
-  missing, empty, size-drifted, or hash-drifted. This makes the
-  release pack tamper-evident.
-- **ACVP serial validation on embedded Zephyr targets.** The serial
-  wire format (`KEYGEN:MLKEM:768:...`, `ERROR:TIMEOUT`,
-  `ERROR:INVALID_HEX`, `ERROR:WRONG_SIZE`) is exercised under
-  `qemu_x86_64` ztests and bound to two assurance claims
-  (`acvp.negative_path_rejection`, `acvp.timeout_recovery`) that
-  require specific markers in the captured transcript. The same wire
-  format runs unmodified on `nucleo_h743zi`-class hardware.
-- **Executable runtime and exporter-bound protected channel.** The module
-  includes allocation-free key/session governance, scheduling, checkpoints,
-  recovery, multiplexing, flow control, rekeying, resumption, and path
-  migration. Composite planners reconcile lifecycle, resource/recovery, path,
-  and fault policy into one executable outcome. Optional generated catalogs
-  add direct witnesses, two-step scenarios, authorization/continuity and
-  epoch/stream guards, and eight-step transition traces without adding
-  validation-only data to normal production builds. See
-  [`docs/patch-set-20-runtime-channel.md`](docs/patch-set-20-runtime-channel.md).
-- **Policy-bound multi-tenant crypto broker.** Principals receive bounded
-  quotas, grants, and attenuable capabilities over opaque ML-KEM, ML-DSA,
-  HKDF, HMAC, and AES-GCM key handles. The broker provides exact idempotency,
-  cancellation, deadline and custody enforcement, chained execution receipts,
-  and optional ML-DSA receipt signatures without exposing private key
-  material.
-- **Live PQC fleet trust fabric.** Factory ML-DSA identities authorize local
-  operational-key generation, ownership vouchers, short-lived credentials,
-  signed policy, revocation, key rotation, firmware authorization, and
-  decommissioning. Its operations plane adds idempotent commands, deterministic
-  device policy, firmware probation and rollback, tamper-evident audit,
-  telemetry summaries, signed attestation, secure-time uncertainty, offline
-  leases, exact revocations, health circuit breaking, admission control,
-  correlated risk scoring, recovery evidence, and conflict-aware maintenance.
-  Canonical CBOR artifacts are shared with an offline-first Rust coordinator
-  that provides SQLite inventory, deterministic canaries, measured rollout
-  decisions, signed revocation publication, a durable anti-replay sequence
-  allocator, REST/SSE, and an operator CLI. See
-  [`samples/pqcp_fleet_trust`](samples/pqcp_fleet_trust) and
-  [`tools/pqcp_fleet_coordinator`](tools/pqcp_fleet_coordinator).
+## Quick check
 
-For the underlying architecture see
-[`docs/assurance-model.md`](docs/assurance-model.md). For the Passport
-artifact model see [`docs/pqc-assurance-passport.md`](docs/pqc-assurance-passport.md).
-For the public C API surface see [`docs/api-overview.md`](docs/api-overview.md).
+```bash
+west init -m https://github.com/atsanak/pqcp-zephyr-trust-stack my-workspace
+cd my-workspace && west update
+python3 pqcp-zephyr-trust-stack/scripts/run_host_assurance.py
+python3 pqcp-zephyr-trust-stack/scripts/run_local_tool_tests.py
+```
+
+The full local release gate is `python3 scripts/release_check.py --tag v1.0.0`. The sections below describe configuration, the API, targets and testing in detail.
 
 ## Performance
 
@@ -116,7 +40,7 @@ For the public C API surface see [`docs/api-overview.md`](docs/api-overview.md).
 <!-- Performance numbers generated by:
      python3 scripts/export_results.py --platform qemu_x86_64 --smoke
      Last run: 2026-04-19 on qemu_x86_64
-     Source: results/benchmark_results.csv (not committed — gitignored)
+     Source: results/benchmark_results.csv (not committed, gitignored)
      To regenerate: see scripts/export_results.py --help -->
 
 | Operation | Param Set | PQCP cycles | PQCP us | Baseline cycles | Baseline us | Overhead |
@@ -251,7 +175,7 @@ without having to rebuild the matrix themselves.
 For a fresh workspace, use the repository-root `west.yml` directly:
 
 ```bash
-west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
+west init -m https://github.com/atsanak/pqcp-zephyr-trust-stack my-workspace
 cd my-workspace && west update
 west build -b qemu_x86_64 pqcp-zephyr-trust-stack/samples/pqcp_serial_acvp
 ```
@@ -276,7 +200,7 @@ The repository-root manifest makes this project usable as the west manifest
 repository for a clean consumer workspace:
 
 ```bash
-west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
+west init -m https://github.com/atsanak/pqcp-zephyr-trust-stack my-workspace
 cd my-workspace
 west update
 python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py --module-mode manifest
@@ -320,7 +244,7 @@ python3 pqcp-zephyr-trust-stack/scripts/consumer_smoke.py \
 manifest:
   projects:
     - name: pqcp-zephyr-trust-stack
-      url: https://github.com/atsana01/pqcp-zephyr-trust-stack
+      url: https://github.com/atsanak/pqcp-zephyr-trust-stack
       revision: main  # Prefer a pinned tag or commit for release integration
       path: modules/pqcp
 ```
@@ -360,7 +284,7 @@ pulls Zephyr plus the pinned PQ Code Package dependencies automatically and
 extra glue:
 
 ```bash
-west init -m https://github.com/atsana01/pqcp-zephyr-trust-stack my-workspace
+west init -m https://github.com/atsanak/pqcp-zephyr-trust-stack my-workspace
 cd my-workspace && west update
 west build -b qemu_x86_64 pqcp-zephyr-trust-stack/samples/pqcp_serial_acvp
 ```

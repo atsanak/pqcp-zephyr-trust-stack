@@ -36,7 +36,7 @@
       user-visible (API, Kconfig, wire protocol, release gate)
 - [ ] Public contracts in `include/pqcp_zephyr/acvp_cmd.h`,
       `PQCP_METRIC` log format, regression JSON field names, or
-      benchmark provenance schema are unchanged — or, if changed, the
+      benchmark provenance schema are unchanged, or, if changed, the
       rationale and the upgrade path are documented in the commit body
 - [ ] Relevant ztest / sample covers the new or changed behaviour
 - [ ] For security-sensitive changes: filed a draft GitHub Security

@@ -58,7 +58,7 @@ ZTEST(pqcp_acvp_serial_negative, test_every_negative_scenario_rejected)
          * pqcp_acvp_process_command() returns a negative errno-style code
          * for parse/dispatch failures; the wire-format response still has
          * to be the documented ERROR:* line. A successful return here
-         * would mean a documented-malformed input was *accepted* — which
+         * would mean a documented-malformed input was *accepted*, which
          * is exactly the regression class this test exists to catch.
          */
         (void)pqcp_acvp_process_command(line_buffer, work_buffer,

@@ -1,4 +1,4 @@
-// views-ledger.jsx — Assurance Ledger (real claim data + drawer detail).
+// views-ledger.jsx, Assurance Ledger (real claim data + drawer detail).
 
 const { Card: LdCard, KV: LdKV, Tag: LdTag, Badge: LdBadge, Hr: LdHr, Sev: LdSev,
         Kpi: LdKpi, Tabs: LdTabs, Pagination: LdPgn, usePaged: ldUsePaged,
@@ -84,12 +84,12 @@ function LedgerView({ session, pack }) {
                sub={lsum ? `${lsum.required} required` : `catalog only`}
                evbind={<LdEvBind2 ev={LS.evbind(pack, "assurance_ledger.json", "claims[]")} compact />} />
         <LdKpi label="Passing" status={lsum ? "ok" : "neutral"}
-               value={lsum ? lsum.pass : "—"}
+               value={lsum ? lsum.pass : "n/a"}
                sub={lsum ? `replay verified` : "no pack"} />
         <LdKpi label="Failing" status={lsum && lsum.fail > 0 ? "err" : "ok"}
-               value={lsum ? lsum.fail : "—"} sub="block partner sign-off" />
+               value={lsum ? lsum.fail : "n/a"} sub="block partner sign-off" />
         <LdKpi label="Not applicable" status="na"
-               value={lsum ? lsum.not_applicable : "—"}
+               value={lsum ? lsum.not_applicable : "n/a"}
                sub="environment-skipped, allow_na set" />
         <LdKpi label="v7 additive" status="info"
                value={LP.CLAIMS.filter(c => c.schema_version_added === 7).length}
@@ -131,14 +131,14 @@ function LedgerView({ session, pack }) {
                   <td><span className={`sdot sdot--${c.status === "pass" ? "pass" : c.status === "fail" ? "fail" : c.status === "not_applicable" ? "na" : "neutral"}`} /></td>
                   <td className="mono"><strong style={{ color: "var(--fg-0)" }}>{c.id}</strong></td>
                   <td><LdTag tone={ldTone(c.category)}>{c.category}</LdTag></td>
-                  <td><LdBadge tone="info">{c.quality.class || "—"}</LdBadge></td>
+                  <td><LdBadge tone="info">{c.quality.class || "n/a"}</LdBadge></td>
                   <td><LdOrigin env={c.quality.env} /></td>
                   <td>{c.schema_version_added === 7 ? <LdTag tone="accent">v7</LdTag> : <span className="dim mono">≤v6</span>}</td>
                   <td className="mono dim" style={{ fontSize: 10.5, maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {c.validators.length > 0 ? c.validators[0] : "—"}
+                    {c.validators.length > 0 ? c.validators[0] : "n/a"}
                     {c.validators.length > 1 && <span> +{c.validators.length - 1}</span>}
                   </td>
-                  <td className="mono dim" style={{ fontSize: 10.5 }}>{c.evidence_artifacts.length || "—"}</td>
+                  <td className="mono dim" style={{ fontSize: 10.5 }}>{c.evidence_artifacts.length || "n/a"}</td>
                   <td>{ldStatusTag(c.status)}</td>
                   <td className="act"><button className="actbtn">Inspect →</button></td>
                 </tr>
@@ -178,17 +178,17 @@ function ClaimDetail({ id, pack }) {
       <p>{c.claim}</p>
 
       <LdDT value={tab} onChange={setTab} tabs={[
-        { id: "evidence",  label: "Evidence" },
-        { id: "details",   label: "Pack details" },
-        { id: "trace",     label: "Trace map" },
-        { id: "replay",    label: "Replay" },
+        { id: "evidence", label: "Evidence" },
+        { id: "details",  label: "Pack details" },
+        { id: "trace",    label: "Trace map" },
+        { id: "replay",   label: "Replay" },
       ]} />
 
       {tab === "evidence" && (
         <>
           <div className="kv__k" style={{ marginBottom: 6 }}>Validators</div>
           {(ledgerClaim?.validators || []).length === 0 ? (
-            <div className="dim mono">— no validators recorded</div>
+            <div className="dim mono">, no validators recorded</div>
           ) : (
             <ul className="filelist">
               {ledgerClaim.validators.map((v, i) => <li key={i} className="filelist__f filelist__f--wrap">{v}</li>)}
@@ -216,7 +216,7 @@ function ClaimDetail({ id, pack }) {
 
       {tab === "trace" && (
         <>
-          <LdDetail k="Evidence class" v={<LdBadge tone="info">{q.class || "—"}</LdBadge>} />
+          <LdDetail k="Evidence class" v={<LdBadge tone="info">{q.class || "n/a"}</LdBadge>} />
           <LdDetail k="Environment" v={<LdOrigin env={q.env} />} />
           <LdDetail k="Allow NA" v={q.allow_na ? <LdTag tone="info">yes</LdTag> : <LdTag>no</LdTag>} />
           <LdDetail k="Smoke-only" v={q.smoke_only ? <LdTag tone="warn">yes</LdTag> : <LdTag>no</LdTag>} />
@@ -238,7 +238,7 @@ function ClaimDetail({ id, pack }) {
         <>
           <div className="kv__k" style={{ marginBottom: 6 }}>Commands recorded in the ledger</div>
           {(ledgerClaim?.commands || []).length === 0 ? (
-            <div className="dim mono">— no commands captured in this claim</div>
+            <div className="dim mono">, no commands captured in this claim</div>
           ) : (
             (ledgerClaim.commands || []).map((cmd, i) => <LdCode key={i} label={`$ ledger.commands[${i}]`}>{cmd}</LdCode>)
           )}

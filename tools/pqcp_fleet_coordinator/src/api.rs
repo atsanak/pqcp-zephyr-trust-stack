@@ -287,10 +287,10 @@ h1{font-size:clamp(2rem,5vw,4rem);letter-spacing:-.05em;margin:.2em 0}
 <h1>Cryptographic fleet control<br>with bounded autonomy.</h1>
 <p class="muted">ML-DSA-65 signed policy, deterministic canaries, measured promotion, automatic rollback.</p>
 <section class="grid">
-<div class="card"><div class="muted">Devices</div><div class="value" id="devices">—</div></div>
-<div class="card"><div class="muted">Operational</div><div class="value" id="operational">—</div></div>
-<div class="card"><div class="muted">Policies</div><div class="value" id="policies">—</div></div>
-<div class="card"><div class="muted">Active rollouts</div><div class="value" id="rollouts">—</div></div>
+<div class="card"><div class="muted">Devices</div><div class="value" id="devices">n/a</div></div>
+<div class="card"><div class="muted">Operational</div><div class="value" id="operational">n/a</div></div>
+<div class="card"><div class="muted">Policies</div><div class="value" id="policies">n/a</div></div>
+<div class="card"><div class="muted">Active rollouts</div><div class="value" id="rollouts">n/a</div></div>
 </section>
 <section class="card" id="events"><div class="muted">Waiting for fleet events…</div></section>
 </main>

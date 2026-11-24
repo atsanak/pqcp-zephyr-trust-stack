@@ -1,14 +1,14 @@
-// seedpack.jsx — Seed-pack and release-directory loader.
+// seedpack.jsx, Seed-pack and release-directory loader.
 //
 // Two ingest modes:
-//   (A) SEED PACK MODE — a single JSON file shaped as a `pqcp_dashboard_seed_pack`:
+//   (A) SEED PACK MODE, a single JSON file shaped as a `pqcp_dashboard_seed_pack`:
 //       { schema_version, kind, generated_from, summary,
 //         artifacts: { "<relpath>": { path, sha256, size, json?, text_preview? } }
 //       }
 //       NOTE: the on-disk format uses `artifacts` as a MAP keyed by path. We
 //       also accept a legacy list form for forward-compatibility.
 //
-//   (B) RELEASE DIRECTORY MODE — `showDirectoryPicker()` against the release
+//   (B) RELEASE DIRECTORY MODE, `showDirectoryPicker()` against the release
 //       output root. Returns the same internal shape so views stay
 //       mode-agnostic.
 //
@@ -21,7 +21,7 @@ const SEED_LS_KEY = "pqcp_seedpack_v2";
 function emptyPack() {
   return {
     loaded: false,
-    state: "empty",         // "empty" | "parsing" | "loaded" | "loaded_warnings" | "failed"
+    state: "empty",        // "empty" | "parsing" | "loaded" | "loaded_warnings" | "failed"
     kind: null,
     schema_version: null,
     generated_from: null,
@@ -29,7 +29,7 @@ function emptyPack() {
     artifacts: {},
     errors: [],
     warnings: [],
-    source: null,           // { mode: "seedpack"|"directory", name, size? }
+    source: null,          // { mode: "seedpack"|"directory", name, size? }
   };
 }
 
@@ -46,7 +46,7 @@ function normalizePack(raw, source) {
     return { ...emptyPack(), state: "failed", errors: ["Seed pack must be a JSON object."], source: source || null };
   }
   if (raw.kind && !KIND_NAMES.has(raw.kind)) {
-    warnings.push(`Unrecognized seed-pack kind "${raw.kind}" — proceeding anyway.`);
+    warnings.push(`Unrecognized seed-pack kind "${raw.kind}", proceeding anyway.`);
   }
 
   // artifacts can be { path: entry } OR [{ path, ... }]
@@ -54,7 +54,7 @@ function normalizePack(raw, source) {
   const rawArts = raw.artifacts;
   if (Array.isArray(rawArts)) {
     for (const a of rawArts) {
-      if (!a || !a.path) { warnings.push("Artifact entry without `path` — skipped."); continue; }
+      if (!a || !a.path) { warnings.push("Artifact entry without `path`, skipped."); continue; }
       byPath[a.path] = a;
     }
   } else if (rawArts && typeof rawArts === "object") {
@@ -69,7 +69,7 @@ function normalizePack(raw, source) {
   // Quick consistency probes
   for (const [p, a] of Object.entries(byPath)) {
     if (p.endsWith(".json") && a && a.json === undefined && a.text_preview === undefined) {
-      warnings.push(`${p}: no parsed JSON and no text_preview — value lookups will return undefined.`);
+      warnings.push(`${p}: no parsed JSON and no text_preview, value lookups will return undefined.`);
     }
   }
 
@@ -175,7 +175,7 @@ async function loadFromUrl(url, friendlyName) {
   }
 }
 
-// Directory mode — reads a known list of artifact filenames from a DirectoryHandle.
+// Directory mode, reads a known list of artifact filenames from a DirectoryHandle.
 async function loadFromDirectory(dirHandle, expectedFiles) {
   const warnings = [];
   const artifacts = {};

@@ -14,88 +14,88 @@ release review.
 
 `scripts/release_check.py --tag v1.0.0 --output-root <dir>` writes:
 
-- `pqc_cbom.cdx.json` — CycloneDX 1.7-style cryptography BOM covering ML-KEM,
+- `pqc_cbom.cdx.json`, CycloneDX 1.7-style cryptography BOM covering ML-KEM,
   ML-DSA, RNG backends, ACVP/TLS validation paths, Zephyr, Zephyr SDK,
   `mlkem-native`, and `mldsa-native`.
-- `pqc_attestation.intoto.json` — unsigned in-toto Statement-style attestation
+- `pqc_attestation.intoto.json`, unsigned in-toto Statement-style attestation
   binding ledger, CBOM, transcript manifest, benchmark provenance, release
   manifest, `west.yml`, and `CMakeLists.txt` hashes.
-- `pqc_policy_result.json` — partner-review policy result that fails on missing
+- `pqc_policy_result.json`, partner-review policy result that fails on missing
   required claims, missing crypto assets, stale hashes, inconsistent metadata,
   or deterministic RNG being represented as production-capable.
-- `pqc_environment_result.json` — local replay result checking that west
+- `pqc_environment_result.json`, local replay result checking that west
   dependency pins, workflow Zephyr/SDK settings, release manifest dependencies,
   and CBOM dependency components agree.
-- `pqc_assurance_digest.json` — stable SHA-256 digest manifest over the core
+- `pqc_assurance_digest.json`, stable SHA-256 digest manifest over the core
   passport artifacts. This is the future bridge to firmware/device attestation.
-- `pqc_assurance_profile_result.json` — profile replay result that checks which
+- `pqc_assurance_profile_result.json`, profile replay result that checks which
   assets are production-allowed, validation-only, test-only, or profile-scoped.
-- `pqc_evidence_quality_result.json` — claim quality replay result that assigns
+- `pqc_evidence_quality_result.json`, claim quality replay result that assigns
   every required claim to a validation class and execution environment.
-- `pqc_migration_readiness.json` / `pqc_migration_readiness.md` — generated
+- `pqc_migration_readiness.json` / `pqc_migration_readiness.md`, generated
   profile summary for partner review and maintenance planning.
-- `ct_instruction_policy_result.json` — disassembly policy result checking
+- `ct_instruction_policy_result.json`, disassembly policy result checking
   ML-KEM decapsulation-related symbols for variable-latency division
   instructions.
-- `pqc_claim_closure_result.json` — post-policy closure result proving that
+- `pqc_claim_closure_result.json`, post-policy closure result proving that
   generated profile, evidence-quality, migration, attestation, digest, and
   firmware-digest artifacts still agree after the full Passport is assembled.
-- `acvp_negative_scenario_floor_result.json` — proof that every compatibility
+- `acvp_negative_scenario_floor_result.json`, proof that every compatibility
   floor ACVP negative scenario is still present, uniquely named, and still
   expects an `ERROR:*` or explicitly marked recovery response.
-- `pqc_asset_trace_result.json` — verification that the PQC asset trace map
+- `pqc_asset_trace_result.json`, verification that the PQC asset trace map
   resolves each crypto/validation/RNG asset to source files, Kconfig symbols,
   claims, ztests, transcript markers, and CBOM components.
-- `pqc_evidence_graph.json` / `pqc_evidence_graph.md` — graph-form evidence
+- `pqc_evidence_graph.json` / `pqc_evidence_graph.md`, graph-form evidence
   showing asset-to-source, asset-to-test, asset-to-claim, asset-to-marker, and
   asset-to-CBOM relationships.
-- `generated/pqcp_assurance_digest_generated.h` — a generated C header that
+- `generated/pqcp_assurance_digest_generated.h`, a generated C header that
   carries the assurance digest root hash for future firmware attestation
   binding.
-- `pqc_reference_values.json` / `pqc_reference_values_result.json` — replayable
+- `pqc_reference_values.json` / `pqc_reference_values_result.json`, replayable
   reference values and verifier output binding release metadata, artifact
   hashes, required claim IDs, CBOM component IDs, and the expected firmware
   digest root.
-- `firmware_assurance_status_result.json` — verifier output for the
+- `firmware_assurance_status_result.json`, verifier output for the
   `PQCP_ASSURANCE_STATUS` and `PQCP_ASSURANCE_ARTIFACT` lines emitted by
   `samples/pqcp_assurance_status`.
 - `acvp_json_interop_result.json` /
-  `acvp_json_transcript_manifest.json` — ACVP JSON vector translation evidence
+  `acvp_json_transcript_manifest.json`, ACVP JSON vector translation evidence
   with per-test serial-command transcript hashes.
 - `pqc_build_provenance.slsa.json` /
-  `pqc_build_provenance_result.json` — unsigned in-toto Statement using a
+  `pqc_build_provenance_result.json`, unsigned in-toto Statement using a
   SLSA provenance predicate shape for local release inputs and byproducts.
-- `ct_sample_analysis_result.json` — replay result for optional raw
+- `ct_sample_analysis_result.json`, replay result for optional raw
   `PQCP_CT_SAMPLE` timing-smoke transcript markers.
-- `backend_update_evaluation.json` — comparison-only review of pinned native
+- `backend_update_evaluation.json`, comparison-only review of pinned native
   backend metadata and optional upstream drift.
-- `backend_contract_result.json` — release backend-contract result showing
+- `backend_contract_result.json`, release backend-contract result showing
   native backend pins, provider-policy scan coverage, denied references, and
   the allowed external-provider scope.
-- `liboqs_non_native_inventory.json` — experimental external-provider inventory
+- `liboqs_non_native_inventory.json`, experimental external-provider inventory
   for schemes outside the native provider families. It is inventory and policy
   evidence, not a production default.
-- `provider_scope_result.json` — replay result checking that CBOM provider
+- `provider_scope_result.json`, replay result checking that CBOM provider
   metadata agrees with the backend contract and external-provider inventory.
 - `benchmark_campaign_result.json` /
-  `benchmark_campaign_verify_result.json` — benchmark campaign statistics and
+  `benchmark_campaign_verify_result.json`, benchmark campaign statistics and
   replay result.
-- `benchmark_confidence_result.json` — replay result that checks distribution
+- `benchmark_confidence_result.json`, replay result that checks distribution
   monotonicity through `max`, balanced sample counts, outlier spread, and
   confidence tier for each benchmark row.
 - `paper_comparison_campaign.csv` /
-  `paper_comparison_campaign.json` — normalized benchmark export with explicit
+  `paper_comparison_campaign.json`, normalized benchmark export with explicit
   source, platform, clock, compiler, statistic, backend, and transcript-hash
   metadata for comparison workflows.
-- `ct_campaign_result.json` — replay result over the CT sample manifest.
-- `acvp_json_schema_result.json` — ACVP JSON operation-coverage replay result.
+- `ct_campaign_result.json`, replay result over the CT sample manifest.
+- `acvp_json_schema_result.json`, ACVP JSON operation-coverage replay result.
 - `device_evidence_token.json` /
-  `device_evidence_token_result.json` — firmware device-evidence marker and
+  `device_evidence_token_result.json`, firmware device-evidence marker and
   replay result.
 - `pqc_appraisal_evidence.json` /
-  `pqc_appraisal_result.json` — mode-specific evidence appraisal inputs and
+  `pqc_appraisal_result.json`, mode-specific evidence appraisal inputs and
   replay result.
-- `release_reference_values_result.json` — replay result checking reference
+- `release_reference_values_result.json`, replay result checking reference
   values against the release manifest, CBOM, backend contract, and provider
   scope.
 

@@ -1,4 +1,4 @@
-// views-policy.jsx — Policy Replay + Profile + Environment + Closure + Appraisal.
+// views-policy.jsx, Policy Replay + Profile + Environment + Closure + Appraisal.
 
 const { Card: PoCard, KV: PoKV, Tag: PoTag, Badge: PoBadge, Hr: PoHr, Sev: PoSev,
         Kpi: PoKpi, Tabs: PoTabs, Pagination: PoPgn, usePaged: poUsePaged,
@@ -27,23 +27,23 @@ function PolicyView({ session, pack }) {
     <>
       <div className="grid-kpi" style={{ marginBottom: 12 }}>
         <PoKpi label="Policy" status={policy?.passed === false ? "err" : policy?.passed ? "ok" : "warn"}
-               value={policy ? (policy.passed ? "pass" : "fail") : "—"}
+               value={policy ? (policy.passed ? "pass" : "fail") : "n/a"}
                sub={policy ? `${(policy.checks || []).length} checks` : "awaiting pqc_policy_result.json"}
                evbind={<PoEvBind2 ev={policy?.evbind} compact />} />
         <PoKpi label="Profile" status={profile?.passed === false ? "err" : profile?.passed ? "ok" : "warn"}
-               value={profile ? (profile.passed ? "pass" : "fail") : "—"}
+               value={profile ? (profile.passed ? "pass" : "fail") : "n/a"}
                sub={profile ? `${profile.summary?.checks ?? "?"} checks · ${profile.summary?.assets ?? "?"} assets` : "awaiting pqc_assurance_profile_result.json"}
                evbind={<PoEvBind2 ev={profile?.evbind} compact />} />
         <PoKpi label="Evidence quality" status={quality?.passed === false ? "err" : quality?.passed ? "ok" : "warn"}
-               value={quality ? (quality.passed ? "pass" : "fail") : "—"}
+               value={quality ? (quality.passed ? "pass" : "fail") : "n/a"}
                sub={quality ? `${(quality.checks || []).length} mappings` : "awaiting pqc_evidence_quality_result.json"}
                evbind={<PoEvBind2 ev={quality?.evbind} compact />} />
         <PoKpi label="Appraisal" status={appraisal?.passed === false ? "err" : appraisal?.passed ? "ok" : "warn"}
-               value={appraisal ? (appraisal.passed ? "pass" : "fail") : "—"}
+               value={appraisal ? (appraisal.passed ? "pass" : "fail") : "n/a"}
                sub={appraisal?.mode ? `mode: ${appraisal.mode}` : "awaiting pqc_appraisal_result.json"}
                evbind={<PoEvBind2 ev={appraisal?.evbind} compact />} />
         <PoKpi label="Environment" status={env?.passed === false ? "err" : env?.passed ? "ok" : "warn"}
-               value={env ? (env.passed ? "pass" : "fail") : "—"}
+               value={env ? (env.passed ? "pass" : "fail") : "n/a"}
                sub={env ? `${(env.checks || []).length} checks` : "awaiting pqc_environment_result.json"}
                evbind={<PoEvBind2 ev={env?.evbind} compact />} />
       </div>
@@ -53,12 +53,12 @@ function PolicyView({ session, pack }) {
               subtitle="Five separate enforcement layers verify the release pack: policy, profile, evidence-quality mapping, environment pinning, and mode appraisal."
               padded={false}
               actions={<PoTabs value={tab} onChange={setTab} tabs={[
-                { id: "policy",    label: "Policy",     count: policy ? policy.checks.length : 0 },
-                { id: "profile",   label: "Profile",    count: profile ? profile.checks.length : 0 },
-                { id: "quality",   label: "Quality",    count: quality ? quality.checks.length : 0 },
-                { id: "appraisal", label: "Appraisal",  count: appraisal ? appraisal.checks.length : 0 },
-                { id: "env",       label: "Env",        count: env ? env.checks.length : 0 },
-                { id: "closure",   label: "Closure",    count: closure ? closure.checks.length : 0 },
+                { id: "policy",   label: "Policy",    count: policy ? policy.checks.length : 0 },
+                { id: "profile",  label: "Profile",   count: profile ? profile.checks.length : 0 },
+                { id: "quality",  label: "Quality",   count: quality ? quality.checks.length : 0 },
+                { id: "appraisal", label: "Appraisal", count: appraisal ? appraisal.checks.length : 0 },
+                { id: "env",      label: "Env",       count: env ? env.checks.length : 0 },
+                { id: "closure",  label: "Closure",   count: closure ? closure.checks.length : 0 },
               ]} />}>
 
           {tab === "policy" && <PolicyTab policy={policy} />}
@@ -107,7 +107,7 @@ function PolicyTab({ policy }) {
           return (
             <div key={s} className="subjrow">
               <span className="subjrow__f">{s}</span>
-              <span className="subjrow__h">{matched?.sha256 ? <PoHash sha={matched.sha256} /> : "—"}</span>
+              <span className="subjrow__h">{matched?.sha256 ? <PoHash sha={matched.sha256} /> : "n/a"}</span>
               <PoTag tone={matched ? "ok" : "warn"}>{matched ? "verified" : "no entry"}</PoTag>
             </div>
           );
@@ -125,7 +125,7 @@ function ProfileTab({ profile }) {
   return (
     <div style={{ padding: 14 }}>
       <PoSGrid>
-        <PoStat k="profile" v={profile.profile || "—"} />
+        <PoStat k="profile" v={profile.profile || "n/a"} />
         <PoStat k="checks" v={(profile.checks || []).length} />
         <PoStat k="failures" v={(profile.failures || []).length} />
         <PoStat k="passed" v={profile.passed ? "true" : "false"} />
@@ -162,7 +162,7 @@ function AppraisalTab({ appraisal, session }) {
   return (
     <div style={{ padding: 14 }}>
       <PoSGrid>
-        <PoStat k="mode" v={appraisal.mode || "—"} />
+        <PoStat k="mode" v={appraisal.mode || "n/a"} />
         <PoStat k="passed" v={appraisal.passed ? "true" : "false"} />
         <PoStat k="checks" v={(appraisal.checks || []).length} />
         <PoStat k="failures" v={(appraisal.failures || []).length} />
@@ -221,7 +221,7 @@ function EnvTab({ env }) {
 
 function ClosureTab({ closure }) {
   if (!closure) return <PoEmpty icon="○" title="Awaiting pqc_claim_closure_result.json"
-    hint="Produced by scripts/verify_pqc_claim_closure.py — checks that all artifacts the ledger claims to bind actually exist." />;
+    hint="Produced by scripts/verify_pqc_claim_closure.py, checks that all artifacts the ledger claims to bind actually exist." />;
   return (
     <div style={{ padding: 14 }}>
       <PoSGrid>

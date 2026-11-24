@@ -24,7 +24,7 @@ to the supported release line when a patch release is cut.
 Please report suspected vulnerabilities through GitHub's private
 Security Advisories, **not** through a public issue or pull request:
 
-  https://github.com/atsana01/pqcp-zephyr-trust-stack/security/advisories/new
+  https://github.com/atsanak/pqcp-zephyr-trust-stack/security/advisories/new
 
 When filing an advisory, please include:
 
@@ -95,8 +95,8 @@ security vulnerability until a coordinated advisory has been published.
 
 `pqcp-zephyr-trust-stack` targets the finalised NIST PQC standards:
 
-- FIPS 203 — ML-KEM at levels 512, 768, and 1024.
-- FIPS 204 — ML-DSA at levels 44, 65, and 87.
+- FIPS 203, ML-KEM at levels 512, 768, and 1024.
+- FIPS 204, ML-DSA at levels 44, 65, and 87.
 
 Side-channel resistance (timing, power, EM) is **not** claimed for
 `qemu_x86_64` or `native_sim/native/64` builds. These targets are

@@ -25,7 +25,7 @@
  *
  * The implementation deliberately uses the public PQCP API
  * (pqcp_mlkem_*, pqcp_mldsa_*, pqcp_rng_*) and never reaches into
- * upstream mlkem-native or mldsa-native internals — this keeps the
+ * upstream mlkem-native or mldsa-native internals, this keeps the
  * self-test layered the same way a downstream consumer would call the
  * primitives.
  */
@@ -240,7 +240,7 @@ static int pqcp_kat_boot_verify_init(void)
 		 * external harnesses can tell a boot-test detection from a crash.
 		 */
 		printk("PQCP_KAT_BOOT_VERIFY FAIL rc=%d\n", rc);
-		LOG_ERR("PQCP_KAT_BOOT_VERIFY: panic — refusing to boot with broken PQCP");
+		LOG_ERR("PQCP_KAT_BOOT_VERIFY: panic, refusing to boot with broken PQCP");
 		k_panic();
 	}
 	return rc;

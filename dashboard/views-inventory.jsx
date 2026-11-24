@@ -1,4 +1,4 @@
-// views-inventory.jsx — CBOM inventory + Migration readiness + Asset drawer.
+// views-inventory.jsx, CBOM inventory + Migration readiness + Asset drawer.
 
 const { Card: InCard, KV: InKV, Tag: InTag, Badge: InBadge, Hr: InHr, Sev: InSev,
         Kpi: InKpi, Tabs: InTabs, Pagination: InPgn, usePaged: inUsePaged,
@@ -45,20 +45,20 @@ function InventoryView({ session, pack }) {
     <>
       <div className="grid-kpi" style={{ marginBottom: 12 }}>
         <InKpi label="CBOM components" status={meta ? "info" : "warn"}
-               value={meta ? meta.component_count : "—"}
+               value={meta ? meta.component_count : "n/a"}
                sub={meta ? `spec ${meta.specVersion}` : "awaiting pqc_cbom.cdx.json"}
                evbind={<InEvBind2 ev={meta?.evbind} compact />} />
         <InKpi label="Floor coverage" status={floor.missing.length === 0 && meta ? "ok" : "warn"}
-               value={meta ? `${floor.floor_present}/${floor.floor_total}` : "—"}
+               value={meta ? `${floor.floor_present}/${floor.floor_total}` : "n/a"}
                sub={floor.missing.length ? `missing: ${floor.missing.length}` : "all required components present"} />
         <InKpi label="Production-allowed" status="info"
-               value={comps.filter(c => c.productionAllowed).length || "—"}
+               value={comps.filter(c => c.productionAllowed).length || "n/a"}
                sub="pqcp:production_allowed=true" />
         <InKpi label="Test-only" status={comps.find(c => c.name === "Deterministic test RNG" && c.productionAllowed) ? "err" : "warn"}
-               value={comps.filter(c => c.productionStatus === "test_only" || !c.productionAllowed).length || "—"}
+               value={comps.filter(c => c.productionStatus === "test_only" || !c.productionAllowed).length || "n/a"}
                sub="forbidden in production profiles" />
         <InKpi label="Migration readiness" status={mig?.passed === false ? "err" : mig?.passed ? "ok" : "warn"}
-               value={mig ? (mig.passed ? "ready" : "blocked") : "—"}
+               value={mig ? (mig.passed ? "ready" : "blocked") : "n/a"}
                sub={mig?.blocked_conditions?.length ? `${mig.blocked_conditions.length} blocked` : "awaiting"}
                evbind={<InEvBind2 ev={mig?.evbind} compact />} />
       </div>
@@ -98,11 +98,11 @@ function InventoryView({ session, pack }) {
                       <tr key={c.name} onClick={() => drawer.openDrawer("cbom", { id: c.name, title: c.name, subtitle: c.parameterSet || c.primitive })} style={{ cursor: "pointer" }}>
                         <td><span className={`sdot ${someFail ? "sdot--fail" : allPass ? "sdot--pass" : isTest ? "sdot--warn" : "sdot--neutral"}`} /></td>
                         <td className="mono"><strong style={{ color: "var(--fg-0)" }}>{c.name}</strong>{c.standard && <InBadge tone="info" size="sm" style={{ marginLeft: 6 }}>{c.standard}</InBadge>}</td>
-                        <td className="mono dim">{c.primitive || c.cryptoAssetType || "—"}</td>
-                        <td>{c.lifecycleStatus ? <InTag tone={c.lifecycleStatus === "test_only" ? "warn" : c.lifecycleStatus === "default" ? "ok" : "info"}>{c.lifecycleStatus}</InTag> : <span className="dim">—</span>}</td>
+                        <td className="mono dim">{c.primitive || c.cryptoAssetType || "n/a"}</td>
+                        <td>{c.lifecycleStatus ? <InTag tone={c.lifecycleStatus === "test_only" ? "warn" : c.lifecycleStatus === "default" ? "ok" : "info"}>{c.lifecycleStatus}</InTag> : <span className="dim">n/a</span>}</td>
                         <td>
                           <div className="proflist">
-                            {c.profileSupport.length === 0 ? <span className="dim">—</span> : c.profileSupport.map(p => <span key={p} className={`prof ${p === "native_lab" ? "prof--test" : ""}`}>{p}</span>)}
+                            {c.profileSupport.length === 0 ? <span className="dim">n/a</span> : c.profileSupport.map(p => <span key={p} className={`prof ${p === "native_lab" ? "prof--test" : ""}`}>{p}</span>)}
                           </div>
                         </td>
                         <td>
@@ -111,8 +111,8 @@ function InventoryView({ session, pack }) {
                             {c.validationScope.length > 3 && <span className="kchip dim">+{c.validationScope.length - 3}</span>}
                           </div>
                         </td>
-                        <td className="num mono">{c.claimIds.length || "—"}</td>
-                        <td className="mono dim">{c.version || "—"}</td>
+                        <td className="num mono">{c.claimIds.length || "n/a"}</td>
+                        <td className="mono dim">{c.version || "n/a"}</td>
                         <td>{c.productionAllowed
                           ? <InTag tone="ok">production</InTag>
                           : <InTag tone="warn">test-only</InTag>}
@@ -164,7 +164,7 @@ function InventoryView({ session, pack }) {
           ) : (
             <>
               <InSGrid>
-                {Object.entries(mig.profile_summary || {}).map(([p, n]) => <InStat key={p} k={p} v={typeof n === "number" ? n : (n?.count ?? "—")} />)}
+                {Object.entries(mig.profile_summary || {}).map(([p, n]) => <InStat key={p} k={p} v={typeof n === "number" ? n : (n?.count ?? "n/a")} />)}
               </InSGrid>
               <InHr />
               <div className="kv__k" style={{ marginBottom: 6 }}>Per-asset migration status</div>
@@ -214,10 +214,10 @@ function CbomComponentDetail({ id, pack }) {
       </div>
 
       <InDT value={tab} onChange={setTab} tabs={[
-        { id: "overview",   label: "Overview" },
-        { id: "claims",     label: "Claims" },
-        { id: "profiles",   label: "Profiles" },
-        { id: "raw",        label: "Raw entry" },
+        { id: "overview",  label: "Overview" },
+        { id: "claims",    label: "Claims" },
+        { id: "profiles",  label: "Profiles" },
+        { id: "raw",       label: "Raw entry" },
       ]} />
 
       {tab === "overview" && (
@@ -230,7 +230,7 @@ function CbomComponentDetail({ id, pack }) {
           <InDetail k="license" v={c.licenses.length ? <span className="mono">{c.licenses.join(", ")}</span> : null} />
           <InHr />
           <div className="kv__k" style={{ marginBottom: 6 }}>Validation scope</div>
-          <div className="kchips">{c.validationScope.length === 0 ? <span className="dim mono">—</span> : c.validationScope.map(v => <span key={v} className="kchip">{v}</span>)}</div>
+          <div className="kchips">{c.validationScope.length === 0 ? <span className="dim mono">n/a</span> : c.validationScope.map(v => <span key={v} className="kchip">{v}</span>)}</div>
         </>
       )}
 
@@ -248,7 +248,7 @@ function CbomComponentDetail({ id, pack }) {
                   return (
                     <tr key={cid}>
                       <td className="mono">{cid}</td>
-                      <td><InTag tone={tone}>{st || "—"}</InTag></td>
+                      <td><InTag tone={tone}>{st || "n/a"}</InTag></td>
                     </tr>
                   );
                 })}
@@ -261,7 +261,7 @@ function CbomComponentDetail({ id, pack }) {
       {tab === "profiles" && (
         <>
           <div className="kv__k" style={{ marginBottom: 6 }}>Profile support (pqcp:profile_support)</div>
-          <div className="proflist">{c.profileSupport.length === 0 ? <span className="dim mono">—</span> : c.profileSupport.map(p => <span key={p} className="prof">{p}</span>)}</div>
+          <div className="proflist">{c.profileSupport.length === 0 ? <span className="dim mono">n/a</span> : c.profileSupport.map(p => <span key={p} className="prof">{p}</span>)}</div>
 
           {trace && (
             <>

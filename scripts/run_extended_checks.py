@@ -194,7 +194,7 @@ DEFAULT_COMPATIBILITY_TARGETS = [
 VERSION_STRING_RE = re.compile(r'^#define\s+PQCP_VERSION_STRING\s+"([^"]+)"$', re.MULTILINE)
 CHANGELOG_VERSION_RE = re.compile(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", re.MULTILINE)
 README_MANIFEST_REQUIRED_SNIPPETS = [
-    "url: https://github.com/atsana01/pqcp-zephyr-trust-stack",
+    "url: https://github.com/atsanak/pqcp-zephyr-trust-stack",
     "revision: main  # Prefer a pinned tag or commit for release integration",
     "matches both `PQCP_VERSION_STRING`",
     "top release entry in `CHANGELOG.md`",

@@ -6833,7 +6833,7 @@
               },
               {
                 "name": "pqcp:source",
-                "value": "https://github.com/atsana01/pqcp-zephyr-trust-stack.git"
+                "value": "https://github.com/atsanak/pqcp-zephyr-trust-stack.git"
               }
             ],
             "type": "application",
@@ -11266,7 +11266,7 @@
         ],
         "schema_version": 1,
         "sdk_version": "unknown",
-        "source_remote": "https://github.com/atsana01/pqcp-zephyr-trust-stack.git",
+        "source_remote": "https://github.com/atsanak/pqcp-zephyr-trust-stack.git",
         "tag": "v1.0.0",
         "tag_commit": "120f8b1bbcb2caa7fdba7f10644172c151533bf5",
         "tag_points_to_head": false,

@@ -1,4 +1,4 @@
-// views-ingest.jsx — ArtifactLoader UI. Two ingest modes (seed-pack or
+// views-ingest.jsx, ArtifactLoader UI. Two ingest modes (seed-pack or
 // release directory), live parsing state, completeness check, parse warnings.
 
 const { Card: IgCard, KV: IgKV, Tag: IgTag, Hr: IgHr, Sev: IgSev,
@@ -101,7 +101,7 @@ function IngestView({ session, setSession, pack, onLoadPack, onClearPack }) {
                 label="Drop seed-pack JSON here"
                 hint="Produced by scripts/build_pqcp_dashboard_seed_pack.py over a release output root." />
 
-        <div className="dropzone__or">— or —</div>
+        <div className="dropzone__or">, or, </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <button className="btn" onClick={handleDirectory}>Pick release output directory…</button>

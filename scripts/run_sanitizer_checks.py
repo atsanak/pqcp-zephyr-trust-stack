@@ -164,7 +164,7 @@ def run_command(
     # the captured output. This is deliberately preferred over
     # subprocess.run(..., timeout=...) raising TimeoutExpired: the caller
     # treats the result uniformly and we avoid losing whatever stdout had
-    # been produced before the hang — critical for diagnosing which
+    # been produced before the hang, critical for diagnosing which
     # sanitizer case is wedged on CI.
     if verbose:
         print(" ".join(cmd))

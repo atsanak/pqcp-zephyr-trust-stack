@@ -18,7 +18,7 @@ The deployment assurance passport may be signed on-device with
   and the signature record carries `boot_post_gated=1`. Without the boot
   POST the signature is still produced but is honestly marked
   `boot_post_gated=0`.
-- The secret key signs **exactly one message** — the passport digest — and
+- The secret key signs **exactly one message**, the passport digest, and
   is zeroized before the signing call returns to the caller. It is never
   stored, exported, reused, or printed.
 - The public key is emitted next to the signature in the device transcript.

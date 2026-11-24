@@ -115,7 +115,7 @@ def build_statement(args: argparse.Namespace) -> dict[str, Any]:
         "subject": subjects,
         "predicate": {
             "buildDefinition": {
-                "buildType": "https://github.com/atsana01/pqcp-zephyr-trust-stack/build-types/local-release/v1",
+                "buildType": "https://github.com/atsanak/pqcp-zephyr-trust-stack/build-types/local-release/v1",
                 "externalParameters": {
                     "tag": manifest.get("tag"),
                     "version": manifest.get("version"),

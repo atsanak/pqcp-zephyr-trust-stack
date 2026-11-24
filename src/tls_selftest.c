@@ -46,7 +46,7 @@ static const uint8_t tls_transcript[] = "TLS 1.3 PQCP self-test transcript";
  * regression suite (handshake_provider_overhead absolute limits) does
  * not see any extra accounting overhead.
  *
- * On native_sim — both plain and ASan/UBSan — the simulated cycle
+ * On native_sim, both plain and ASan/UBSan, the simulated cycle
  * counter is driven by the system tick rather than host wall time, so
  * a sub-tick stage call returns the same value twice and produces a
  * 0-cycle delta. The zassert_true(handshake_us > 0U, ...) assertions

@@ -17,7 +17,7 @@
     "tag": "v1.0.0",
     "version": "1.0.0"
   },
-  "predicateType": "https://github.com/atsana01/pqcp-zephyr-trust-stack/attestations/pqc-assurance/v1",
+  "predicateType": "https://github.com/atsanak/pqcp-zephyr-trust-stack/attestations/pqc-assurance/v1",
   "subject": [
     {
       "digest": {

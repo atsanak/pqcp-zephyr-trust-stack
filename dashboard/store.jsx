@@ -1,4 +1,4 @@
-// store.jsx — EvidenceStore: typed selectors over a loaded seed pack.
+// store.jsx, EvidenceStore: typed selectors over a loaded seed pack.
 //
 // Every visible value in the dashboard goes through one of these selectors so
 // the rest of the app doesn't poke at raw JSON. Selectors return either a
@@ -10,40 +10,40 @@ const PK = window.PACK;
 
 // ─── Validator + environment registry ────────────────────────────────────
 // Centralizes "this artifact was produced by this script, on this kind of
-// environment" — surfaced in EvBind tooltips and detail drawers.
+// environment", surfaced in EvBind tooltips and detail drawers.
 
 const VALIDATORS = {
   "assurance_ledger.json":                    { v: "scripts/generate_assurance_ledger.py", env: "host_python" },
   "assurance_ledger.md":                      { v: "scripts/generate_assurance_ledger.py", env: "host_python" },
-  "assurance_report.html":                    { v: "scripts/render_assurance_report.py",   env: "host_python" },
-  "pqc_cbom.cdx.json":                        { v: "scripts/export_pqc_cbom.py",           env: "host_python" },
-  "pqc_policy_result.json":                   { v: "scripts/verify_assurance_policy.py",   env: "host_python" },
-  "pqc_environment_result.json":              { v: "scripts/verify_pqc_environment.py",    env: "host_python" },
-  "pqc_attestation.intoto.json":              { v: "scripts/generate_pqc_attestation.py",  env: "host_python" },
-  "pqc_assurance_digest.json":                { v: "scripts/generate_pqc_attestation.py",  env: "host_python" },
+  "assurance_report.html":                    { v: "scripts/render_assurance_report.py",  env: "host_python" },
+  "pqc_cbom.cdx.json":                        { v: "scripts/export_pqc_cbom.py",          env: "host_python" },
+  "pqc_policy_result.json":                   { v: "scripts/verify_assurance_policy.py",  env: "host_python" },
+  "pqc_environment_result.json":              { v: "scripts/verify_pqc_environment.py",   env: "host_python" },
+  "pqc_attestation.intoto.json":              { v: "scripts/generate_pqc_attestation.py", env: "host_python" },
+  "pqc_assurance_digest.json":                { v: "scripts/generate_pqc_attestation.py", env: "host_python" },
   "pqc_asset_trace_result.json":              { v: "scripts/verify_pqc_asset_trace_map.py",env: "host_python" },
   "pqc_evidence_graph.json":                  { v: "scripts/generate_pqc_evidence_graph.py", env: "host_python" },
   "pqc_assurance_profile_result.json":        { v: "scripts/verify_pqc_assurance_profile.py", env: "host_python" },
   "pqc_evidence_quality_result.json":         { v: "scripts/verify_pqc_evidence_quality.py", env: "host_python" },
   "pqc_migration_readiness.json":             { v: "scripts/generate_migration_readiness_report.py", env: "host_python" },
   "ct_instruction_policy_result.json":        { v: "scripts/verify_ct_instruction_policy.py", env: "host_python" },
-  "pqc_claim_closure_result.json":            { v: "scripts/verify_pqc_claim_closure.py",  env: "host_python" },
+  "pqc_claim_closure_result.json":            { v: "scripts/verify_pqc_claim_closure.py", env: "host_python" },
   "pqc_reference_values.json":                { v: "scripts/generate_pqc_reference_values.py", env: "host_python" },
   "firmware_assurance_status_result.json":    { v: "scripts/verify_firmware_assurance_status.py", env: "host_python" },
-  "acvp_json_interop_result.json":            { v: "scripts/run_acvp_json_vectors.py",     env: "qemu_x86_64" },
+  "acvp_json_interop_result.json":            { v: "scripts/run_acvp_json_vectors.py",    env: "qemu_x86_64" },
   "pqc_build_provenance.slsa.json":           { v: "scripts/generate_pqc_build_provenance.py", env: "host_python" },
-  "ct_sample_analysis_result.json":           { v: "scripts/analyze_ct_samples.py",        env: "host_python" },
-  "backend_currency_result.json":             { v: "scripts/evaluate_backend_update.py",   env: "host_python" },
-  "backend_update_evaluation.json":           { v: "scripts/evaluate_backend_update.py",   env: "host_python" },
-  "benchmark_campaign_result.json":           { v: "scripts/run_benchmark_campaign.py",    env: "qemu_x86_64" },
-  "benchmark_results.csv":                    { v: "scripts/release_check.py",             env: "qemu_x86_64" },
-  "benchmark_provenance.json":                { v: "scripts/release_check.py",             env: "host_python" },
-  "cost_of_assurance_evidence.json":          { v: "scripts/release_check.py",             env: "qemu_x86_64" },
-  "device_evidence_token.json":               { v: "samples/pqcp_assurance_status",        env: "qemu_x86_64" },
+  "ct_sample_analysis_result.json":           { v: "scripts/analyze_ct_samples.py",       env: "host_python" },
+  "backend_currency_result.json":             { v: "scripts/evaluate_backend_update.py",  env: "host_python" },
+  "backend_update_evaluation.json":           { v: "scripts/evaluate_backend_update.py",  env: "host_python" },
+  "benchmark_campaign_result.json":           { v: "scripts/run_benchmark_campaign.py",   env: "qemu_x86_64" },
+  "benchmark_results.csv":                    { v: "scripts/release_check.py",            env: "qemu_x86_64" },
+  "benchmark_provenance.json":                { v: "scripts/release_check.py",            env: "host_python" },
+  "cost_of_assurance_evidence.json":          { v: "scripts/release_check.py",            env: "qemu_x86_64" },
+  "device_evidence_token.json":               { v: "samples/pqcp_assurance_status",       env: "qemu_x86_64" },
   "device_evidence_token_result.json":        { v: "scripts/verify_device_evidence_token.py", env: "host_python" },
   "pqc_appraisal_result.json":                { v: "scripts/verify_pqc_appraisal_evidence.py", env: "host_python" },
-  "release_check_results.xml":                { v: "scripts/release_check.py",             env: "host_python" },
-  "transcripts/evidence_transcript_manifest.json": { v: "scripts/release_check.py",        env: "host_python" },
+  "release_check_results.xml":                { v: "scripts/release_check.py",            env: "host_python" },
+  "transcripts/evidence_transcript_manifest.json": { v: "scripts/release_check.py",       env: "host_python" },
   "generated/pqcp_assurance_digest_generated.h":   { v: "scripts/export_firmware_assurance_digest.py", env: "host_python" },
 };
 

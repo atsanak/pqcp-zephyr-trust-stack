@@ -1,4 +1,4 @@
-// app.jsx — DashboardShell: topbar, sidebar, drawer host, view router.
+// app.jsx, DashboardShell: topbar, sidebar, drawer host, view router.
 
 const { useState: pS, useEffect: pE, useMemo: pM, createContext: pCx, useContext: pCt } = React;
 
@@ -31,18 +31,18 @@ const SETTINGS_DEFAULTS = {
 };
 
 const NAV = [
-  { id: "overview",     label: "Control Room",    icn: "◧", group: "Monitor" },
-  { id: "findings",     label: "Findings",        icn: "△", group: "Monitor" },
-  { id: "ledger",       label: "Assurance Ledger",icn: "≡", group: "Assurance" },
-  { id: "policy",       label: "Policy Replay",   icn: "◆", group: "Assurance" },
-  { id: "inventory",    label: "CBOM Inventory",  icn: "◇", group: "Inventory" },
-  { id: "provenance",   label: "Provenance",      icn: "◈", group: "Inventory" },
-  { id: "bench",        label: "Benchmark Lab",   icn: "▤", group: "Measurement" },
-  { id: "validation",   label: "Validation",      icn: "✓", group: "Measurement" },
-  { id: "firmware",     label: "Firmware",        icn: "▣", group: "Measurement" },
-  { id: "integration",  label: "Integration",     icn: "↻", group: "Settings" },
-  { id: "configurator", label: "Configurator",    icn: "⚙", group: "Settings" },
-  { id: "ingest",       label: "Ingest",          icn: "↓", group: "Settings" },
+  { id: "overview",    label: "Control Room",   icn: "◧", group: "Monitor" },
+  { id: "findings",    label: "Findings",       icn: "△", group: "Monitor" },
+  { id: "ledger",      label: "Assurance Ledger",icn: "≡", group: "Assurance" },
+  { id: "policy",      label: "Policy Replay",  icn: "◆", group: "Assurance" },
+  { id: "inventory",   label: "CBOM Inventory", icn: "◇", group: "Inventory" },
+  { id: "provenance",  label: "Provenance",     icn: "◈", group: "Inventory" },
+  { id: "bench",       label: "Benchmark Lab",  icn: "▤", group: "Measurement" },
+  { id: "validation",  label: "Validation",     icn: "✓", group: "Measurement" },
+  { id: "firmware",    label: "Firmware",       icn: "▣", group: "Measurement" },
+  { id: "integration", label: "Integration",    icn: "↻", group: "Settings" },
+  { id: "configurator", label: "Configurator",   icn: "⚙", group: "Settings" },
+  { id: "ingest",      label: "Ingest",         icn: "↓", group: "Settings" },
 ];
 
 // Drawer context
@@ -166,7 +166,7 @@ function TopBar({ session, setSession, pack, onClearPack }) {
         <div>
           <div className="topbar__t">PQCP Assurance</div>
           <div className="topbar__s mono">
-            {release?.tag ? `${release.tag} · ${release.head_sha ? release.head_sha.slice(0, 8) : "—"}${release.dirty ? " · dirty" : ""}`
+            {release?.tag ? `${release.tag} · ${release.head_sha ? release.head_sha.slice(0, 8) : "n/a"}${release.dirty ? " · dirty" : ""}`
                           : `${PD.REPO.owner}/${PD.REPO.name}`}
           </div>
         </div>
@@ -243,11 +243,11 @@ function GlobalFilterStrip() {
   const { FilterChip, FilterBar } = window.UI;
   function truncate(s, n) { return s.length <= n ? s : "…" + s.slice(-(n - 1)); }
   const chips = [];
-  if (f.q !== "")        chips.push({ k: "q",        l: "search",     v: '"' + truncate(f.q, 20) + '"', onClear: () => f.setQ("") });
-  if (f.category !== "any") chips.push({ k: "cat",   l: "category",   v: f.category, onClear: () => f.setCategory("any") });
-  if (f.env !== "any")      chips.push({ k: "env",   l: "env",        v: f.env,      onClear: () => f.setEnv("any") });
-  if (f.severity !== "any") chips.push({ k: "sev",   l: "severity",   v: f.severity, onClear: () => f.setSeverity("any") });
-  if (f.status !== "any")   chips.push({ k: "stat",  l: "status",     v: f.status,   onClear: () => f.setStatus("any") });
+  if (f.q !== "")        chips.push({ k: "q",       l: "search",    v: '"' + truncate(f.q, 20) + '"', onClear: () => f.setQ("") });
+  if (f.category !== "any") chips.push({ k: "cat",  l: "category",  v: f.category, onClear: () => f.setCategory("any") });
+  if (f.env !== "any")      chips.push({ k: "env",  l: "env",       v: f.env,     onClear: () => f.setEnv("any") });
+  if (f.severity !== "any") chips.push({ k: "sev",  l: "severity",  v: f.severity, onClear: () => f.setSeverity("any") });
+  if (f.status !== "any")   chips.push({ k: "stat", l: "status",    v: f.status,  onClear: () => f.setStatus("any") });
   if (!f.hasAny) return null;
   return (
     <FilterBar hasFilters={f.hasAny} onClearAll={f.clear}>

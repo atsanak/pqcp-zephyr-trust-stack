@@ -1,4 +1,4 @@
-/* dashboard.css — PQCP Assurance Console v2
+/* dashboard.css, PQCP Assurance Console v2
    shadcn/Radix/Tremor aesthetic; graphite default with steel / paper themes.
 */
 
@@ -691,7 +691,7 @@ select.input { padding-right: 24px; cursor: pointer;
 
 
 /* ═══════════════════════════════════════════════════════════════════════
-   v3 additions — service-grade refinements
+   v3 additions, service-grade refinements
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── NA status, secondary status tones ─────────────────────────────── */

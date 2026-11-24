@@ -544,7 +544,7 @@ jobs:
     # Blocking on main-branch pushes, PRs targeting main, and tag pushes.
     # Do NOT re-add continue-on-error here: that would downgrade the gate to
     # advisory and let broken release_check.py runs merge silently.
-    # benchmark-smoke is intentionally NOT in this needs: list — it is
+    # benchmark-smoke is intentionally NOT in this needs: list, it is
     # informational CI evidence, not a release-gate step (release_check.py
     # runs its own export_results.py on the full matrix).
     if: >-

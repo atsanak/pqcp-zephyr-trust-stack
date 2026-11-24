@@ -196,7 +196,7 @@ sidecar.
   is pushed.
 - Release-gate bulk-build matrices in `release.yml` and
   `release-dry-run.yml` are aligned; both include `tests/ztest_acvp_kat`.
-- README links and example commands are portable — all absolute
+- README links and example commands are portable, all absolute
   `/Users/...` paths have been replaced with repo-relative paths and
   environment-variable placeholders.
 - Cost-of-assurance regression validation now fails clearly when a

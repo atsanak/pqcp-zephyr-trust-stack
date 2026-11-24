@@ -1,5 +1,5 @@
-// components.jsx — UI primitives for the PQCP Assurance Console.
-// Service-grade aesthetic — shadcn/Radix/Tremor lineage. Every metric carries
+// components.jsx, UI primitives for the PQCP Assurance Console.
+// Service-grade aesthetic, shadcn/Radix/Tremor lineage. Every metric carries
 // an EvBind chip (source artifact + JSON path + validator + env).
 
 const { useState, useMemo, useRef, useEffect, useLayoutEffect, createContext, useContext } = React;
@@ -108,7 +108,7 @@ function Kpi({ label, value, unit, status = "neutral", trend, evbind, hint, sub 
         {hint && <span className="kpi__hint" title={hint}>ⓘ</span>}
       </div>
       <div className="kpi__val">
-        <span className={`kpi__num ${value === "—" || value === "awaiting" ? "kpi__num--dim mono" : "mono"}`}>{value}</span>
+        <span className={`kpi__num ${value === "n/a" || value === "awaiting" ? "kpi__num--dim mono" : "mono"}`}>{value}</span>
         {unit && <span className="kpi__unit mono">{unit}</span>}
       </div>
       {sub && <div className="kpi__sub">{sub}</div>}
@@ -281,7 +281,7 @@ function Pagination({ page, pages, onChange, total, pageSize }) {
   const end = Math.min(page * pageSize, total);
   return (
     <div className="pgn">
-      <div className="pgn__t mono">{start}–{end} of {total}</div>
+      <div className="pgn__t mono">{start}-{end} of {total}</div>
       <div className="pgn__btns">
         <button className="pgn__b" disabled={page === 1} onClick={() => onChange(page - 1)}>‹</button>
         {pgs.map(p => (

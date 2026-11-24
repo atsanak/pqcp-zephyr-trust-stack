@@ -1,4 +1,4 @@
-// views-provenance.jsx — Evidence graph (real nodes+edges from
+// views-provenance.jsx, Evidence graph (real nodes+edges from
 // pqc_evidence_graph.json), transcript manifest, asset trace map.
 
 const { Card: PrCard, KV: PrKV, Tag: PrTag, Badge: PrBadge, Hr: PrHr, Sev: PrSev,
@@ -20,21 +20,21 @@ function ProvenanceView({ session, pack }) {
     <>
       <div className="grid-kpi" style={{ marginBottom: 12 }}>
         <PrKpi label="Evidence graph" status={eg ? "ok" : "warn"}
-               value={eg ? `${eg.nodes.length} / ${eg.edges.length}` : "—"}
+               value={eg ? `${eg.nodes.length} / ${eg.edges.length}` : "n/a"}
                sub={eg ? "nodes / edges" : "awaiting pqc_evidence_graph.json"}
                evbind={<PrEvBind2 ev={eg?.evbind} compact />} />
         <PrKpi label="Transcripts" status={tm ? "ok" : "warn"}
-               value={tm ? (tm.qemu_stdout_transcripts.length + tm.transcripts.length) : "—"}
+               value={tm ? (tm.qemu_stdout_transcripts.length + tm.transcripts.length) : "n/a"}
                sub={tm ? `${tm.qemu_stdout_transcripts.length} qemu stdout · ${tm.transcripts.length} other` : "awaiting"}
                evbind={<PrEvBind2 ev={tm?.evbind} compact />} />
         <PrKpi label="Reference values" status={refv ? "ok" : "warn"}
-               value={refv ? `${Object.keys(refv.artifact_hashes).length}` : "—"}
+               value={refv ? `${Object.keys(refv.artifact_hashes).length}` : "n/a"}
                sub="hash-bound artifacts" />
         <PrKpi label="Allowed profiles" status="info"
-               value={refv ? (refv.allowed_profile_ids.length || "any") : "—"}
+               value={refv ? (refv.allowed_profile_ids.length || "any") : "n/a"}
                sub="empty = unrestricted in this mode" />
         <PrKpi label="CBOM ids in references" status="info"
-               value={refv ? refv.cbom_component_ids.length : "—"}
+               value={refv ? refv.cbom_component_ids.length : "n/a"}
                sub="pqc_reference_values.cbom_component_ids" />
       </div>
 
@@ -43,9 +43,9 @@ function ProvenanceView({ session, pack }) {
               subtitle="asset → source → kconfig → ztest → claim → marker → artifact. Filter to one asset to declutter."
               padded={false}
               actions={<PrTabs value={tab} onChange={setTab} tabs={[
-                { id: "graph",       label: "Graph", count: eg?.nodes.length || 0 },
+                { id: "graph",      label: "Graph", count: eg?.nodes.length || 0 },
                 { id: "transcripts", label: "Transcripts", count: tm ? (tm.qemu_stdout_transcripts.length + tm.transcripts.length) : 0 },
-                { id: "references",  label: "Reference values" },
+                { id: "references", label: "Reference values" },
               ]} />}>
           {tab === "graph" && (eg ? <EvidenceGraphView eg={eg} /> : <div style={{ padding: 14 }}><PrEmpty icon="○" title="No pqc_evidence_graph.json" hint="Produced by scripts/generate_pqc_evidence_graph.py." /></div>)}
           {tab === "transcripts" && (tm ? <TranscriptList tm={tm} /> : <div style={{ padding: 14 }}><PrEmpty icon="○" title="No transcript manifest" hint="Awaiting transcripts/evidence_transcript_manifest.json." /></div>)}
@@ -202,7 +202,7 @@ function TranscriptList({ tm }) {
           <div key={i} className="subjrow">
             <span className="subjrow__f">{t.label || t.step_label || `transcript-${i}`}</span>
             <span className="subjrow__h"><PrHash sha={t.sha256} /></span>
-            <PrTag>{t.size_bytes != null ? `${t.size_bytes} B` : "—"}</PrTag>
+            <PrTag>{t.size_bytes != null ? `${t.size_bytes} B` : "n/a"}</PrTag>
           </div>
         ))}
       </div>
@@ -238,7 +238,7 @@ function ReferenceValuesView({ refv }) {
           <div key={name} className="subjrow">
             <span className="subjrow__f">{name}</span>
             <span className="subjrow__h"><PrHash sha={h.sha256} /></span>
-            <PrTag>{h.size_bytes != null ? `${h.size_bytes} B` : "—"}</PrTag>
+            <PrTag>{h.size_bytes != null ? `${h.size_bytes} B` : "n/a"}</PrTag>
           </div>
         ))}
       </div>

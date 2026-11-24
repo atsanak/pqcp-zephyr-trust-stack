@@ -1,4 +1,4 @@
-// views-overview.jsx — Release Control Room.
+// views-overview.jsx, Release Control Room.
 // Real values from assurance_ledger.json, pqc_policy_result.json,
 // pqc_reference_values.json, release-manifest, pqc_appraisal_result.json,
 // firmware_assurance_status_result.json, device_evidence_token_result.json.
@@ -49,7 +49,7 @@ function OverviewView({ session, pack, onJumpView }) {
         <OvKpi
           label="Release"
           status={rel?.tag ? "info" : "warn"}
-          value={rel?.tag || "—"}
+          value={rel?.tag || "n/a"}
           sub={rel?.head_sha
             ? <span className="mono">{String(rel.head_sha).slice(0,10)}{rel.dirty ? " · dirty" : " · clean"}</span>
             : "no release metadata"}
@@ -58,28 +58,28 @@ function OverviewView({ session, pack, onJumpView }) {
         <OvKpi
           label="Policy"
           status={policyTone}
-          value={policy ? (policy.passed ? "pass" : "fail") : "—"}
+          value={policy ? (policy.passed ? "pass" : "fail") : "n/a"}
           sub={policy ? `${(policy.checks || []).length} checks · ${(policy.failures || []).length} failures` : "awaiting pqc_policy_result.json"}
           evbind={<OvEvBind2 ev={OvS.evbind(pack, "pqc_policy_result.json", "passed, failures[]")} compact />}
         />
         <OvKpi
           label="Claims"
           status={claimCovTone}
-          value={lsum ? `${lsum.pass}/${lsum.total}` : "—"}
+          value={lsum ? `${lsum.pass}/${lsum.total}` : "n/a"}
           sub={lsum ? <>{lsum.fail > 0 && <span style={{color:"var(--err)"}}>{lsum.fail} fail · </span>}{lsum.not_applicable} not-applicable</> : "awaiting assurance_ledger.json"}
           evbind={<OvEvBind2 ev={OvS.evbind(pack, "assurance_ledger.json", "claims[].status")} compact />}
         />
         <OvKpi
           label="CBOM floor"
           status={cbomTone}
-          value={cbom ? `${floor.floor_present}/${floor.floor_total}` : "—"}
+          value={cbom ? `${floor.floor_present}/${floor.floor_total}` : "n/a"}
           sub={cbom ? `${cbom.component_count} components · ${floor.missing.length} missing` : "awaiting pqc_cbom.cdx.json"}
           evbind={<OvEvBind2 ev={OvS.evbind(pack, "pqc_cbom.cdx.json", "components[]")} compact />}
         />
         <OvKpi
           label="Mode appraisal"
           status={apprTone}
-          value={appraisal ? (appraisal.passed ? "pass" : "fail") : "—"}
+          value={appraisal ? (appraisal.passed ? "pass" : "fail") : "n/a"}
           sub={appraisal ? `mode: ${appraisal.mode || mode.id}` : `awaiting pqc_appraisal_result.json · ${mode.id}`}
           evbind={<OvEvBind2 ev={OvS.evbind(pack, "pqc_appraisal_result.json", "passed, mode")} compact />}
         />
@@ -141,12 +141,12 @@ function OverviewView({ session, pack, onJumpView }) {
               : `missing: ${floor.missing.join(", ")}`} />
           <OvHr />
           <OvSGrid>
-            <OvStat k="Policy" v={policy ? (policy.passed ? "pass" : "fail") : "—"} s={`pqc_policy_result.json`} />
-            <OvStat k="Profile" v={profile ? (profile.passed ? "pass" : "fail") : "—"} s={`pqc_assurance_profile_result.json`} />
-            <OvStat k="Appraisal" v={appraisal ? (appraisal.passed ? "pass" : "fail") : "—"} s={`pqc_appraisal_result.json`} />
-            <OvStat k="Firmware status" v={fw ? (fw.passed ? "pass" : "fail") : "—"} s={`firmware_assurance_status_result.json`} />
-            <OvStat k="Device token" v={tok ? (tok.passed ? "pass" : "fail") : "—"} s={`device_evidence_token_result.json`} />
-            <OvStat k="Environment" v={env ? (env.passed ? "pass" : "fail") : "—"} s={`pqc_environment_result.json`} />
+            <OvStat k="Policy" v={policy ? (policy.passed ? "pass" : "fail") : "n/a"} s={`pqc_policy_result.json`} />
+            <OvStat k="Profile" v={profile ? (profile.passed ? "pass" : "fail") : "n/a"} s={`pqc_assurance_profile_result.json`} />
+            <OvStat k="Appraisal" v={appraisal ? (appraisal.passed ? "pass" : "fail") : "n/a"} s={`pqc_appraisal_result.json`} />
+            <OvStat k="Firmware status" v={fw ? (fw.passed ? "pass" : "fail") : "n/a"} s={`firmware_assurance_status_result.json`} />
+            <OvStat k="Device token" v={tok ? (tok.passed ? "pass" : "fail") : "n/a"} s={`device_evidence_token_result.json`} />
+            <OvStat k="Environment" v={env ? (env.passed ? "pass" : "fail") : "n/a"} s={`pqc_environment_result.json`} />
           </OvSGrid>
         </OvCard>
 

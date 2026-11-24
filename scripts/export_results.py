@@ -992,7 +992,7 @@ def verify_provenance(csv_path: Path, provenance_path: Path) -> List[Dict[str, s
     """Verify a provenance sidecar matches its CSV.
 
     Returns a list of failure dicts following the validate_benchmark_rows
-    convention. Missing provenance is not an error — callers may opt in.
+    convention. Missing provenance is not an error, callers may opt in.
     """
     failures: List[Dict[str, str]] = []
     try:

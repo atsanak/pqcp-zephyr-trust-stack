@@ -1,4 +1,4 @@
-# pqcp-zephyr-trust-stack — Publication-Ready Technical Brief
+# pqcp-zephyr-trust-stack, Publication-Ready Technical Brief
 
 > Two-page workshop-style brief describing what this repository proves
 > and how a reviewer can re-verify every claim. Intended as the abstract
@@ -123,7 +123,7 @@ python3 scripts/release_check.py \
     --tag v1.0.0 \
     --output-root /tmp/pqcp-release-pack
 
-# 2. Replay-verify the produced pack with only Python 3.12 — no
+# 2. Replay-verify the produced pack with only Python 3.12, no
 #    Zephyr SDK, no QEMU, no compilation.
 python3 scripts/verify_release_evidence_pack.py \
     /tmp/pqcp-release-pack \
@@ -173,4 +173,4 @@ What this repository explicitly does **not** prove:
 - Maintainer release path: [`docs/release.md`](release.md) and
   [`docs/maintainer-release-checklist.md`](maintainer-release-checklist.md)
 - Citation metadata: [`CITATION.cff`](../CITATION.cff)
-- Source: [github.com/atsana01/pqcp-zephyr-trust-stack](https://github.com/atsana01/pqcp-zephyr-trust-stack)
+- Source: [github.com/atsanak/pqcp-zephyr-trust-stack](https://github.com/atsanak/pqcp-zephyr-trust-stack)

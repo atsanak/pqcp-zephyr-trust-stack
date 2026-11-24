@@ -129,30 +129,30 @@ behaviour being asserted, and a `required` flag.
 Highlights:
 
 - `kat.mlkem_512`, `kat.mlkem_768`, `kat.mlkem_1024`,
-  `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87` —
+  `kat.mldsa_44`, `kat.mldsa_65`, `kat.mldsa_87`, 
   per-parameter-set KAT decomposition. A regression in ML-DSA-65 names
   ML-DSA-65 in the failure reason rather than disappearing into an
   aggregate.
-- `benchmark.mlkem_throughput`, `benchmark.mldsa_throughput` —
+- `benchmark.mlkem_throughput`, `benchmark.mldsa_throughput`, 
   per-primitive benchmark CSV checks.
-- `acvp.negative_path_rejection` — proves the ACVP serial harness
+- `acvp.negative_path_rejection`, proves the ACVP serial harness
   rejects malformed inputs (bad hex, unknown commands, wrong sizes,
   oversize payloads) by binding `scripts/acvp_negative_scenarios.json`
   to the captured `ACVP serial ztest run` transcript and requiring the
   documented ztest markers (`test_rejects_malformed_commands`,
   `test_rejects_invalid_hex_and_wrong_sizes`,
   `test_serial_line_garbage_rejected_and_recovered`).
-- `acvp.timeout_recovery` — proves the stalled-frame timeout path is
+- `acvp.timeout_recovery`, proves the stalled-frame timeout path is
   exercised by requiring the `test_readline_timeout` ztest marker and
   successful `pqcp_acvp_serial` suite marker in the same transcript.
   The ledger details record that the ztest asserts the locked
   `ERROR:TIMEOUT` wire response, even when the test runner does not
   echo the UART payload literally.
-- `release.transcript_binding` — every required release-check step has
+- `release.transcript_binding`, every required release-check step has
   a captured stdout transcript with a recorded SHA-256, plus QEMU
   cost-of-assurance run logs.
 
-## Constant-time smoke (`security.ct_smoke`) — what it does and does not prove
+## Constant-time smoke (`security.ct_smoke`), what it does and does not prove
 
 `tests/ztest_ct_smoke` runs ML-KEM-512, ML-KEM-768, and ML-KEM-1024
 decapsulation 32 times against a valid ciphertext and 32 times against a
@@ -197,7 +197,7 @@ of scope and called out the same way in
 
 The claim is required because the stable marker line is a useful
 regression target; the smoke nature of the test is itself a stated
-assurance property — visibly admitting the limit is part of the
+assurance property, visibly admitting the limit is part of the
 credibility story.
 
 `security.mlkem_decap_instruction_policy` is a separate build-only smoke claim.
@@ -248,7 +248,7 @@ The catalog and the ledger carry a `schema_version`.
 accept supported historical versions. Loading a v1 catalog or replaying a v1 ledger
 emits a single `[warn]` line that names the path and explains the
 reduced coverage. Older evidence packs therefore degrade gracefully
-instead of hard-failing — a maintainer can hand an old pack to a
+instead of hard-failing, a maintainer can hand an old pack to a
 reviewer and the verifier will still pass while clearly labelling it as
 legacy.
 
@@ -332,7 +332,7 @@ duplicate the UART payload as a literal `ERROR:TIMEOUT` line.
 
 ## Producing vs replaying an evidence pack
 
-**Producing** — run the full gate. This requires a working Zephyr SDK,
+**Producing**, run the full gate. This requires a working Zephyr SDK,
 `west`, `cppcheck`, `qemu-system-x86`, and (optionally) an ARM toolchain
 for the MCU protocol footprint step:
 
@@ -347,7 +347,7 @@ HTML assurance report, the captured transcripts, the local release
 bundle, the benchmark CSV with provenance sidecar, the cost-of-assurance
 evidence, and the MCU footprint CSV.
 
-**Replaying** — verify a previously produced pack. This requires only
+**Replaying**, verify a previously produced pack. This requires only
 Python 3.12; no Zephyr SDK, no QEMU, no compilation:
 
 ```sh

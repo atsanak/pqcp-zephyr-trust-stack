@@ -1,4 +1,4 @@
-// views-bench.jsx — Benchmark Lab driven by benchmark_campaign_result.json,
+// views-bench.jsx, Benchmark Lab driven by benchmark_campaign_result.json,
 // benchmark_provenance.json, cost_of_assurance_evidence.json, and
 // backend_currency_result.json. Sliders generate CLI commands; nothing is
 // "run" in the browser.
@@ -65,21 +65,21 @@ function BenchLabView({ settings, setSetting, session, pack }) {
     <>
       <div className="grid-kpi" style={{ marginBottom: 12 }}>
         <BnKpi label="Campaign" status={bench?.passed === true ? "ok" : bench?.passed === false ? "err" : "warn"}
-               value={bench ? (bench.passed ? "pass" : "fail") : "—"}
+               value={bench ? (bench.passed ? "pass" : "fail") : "n/a"}
                sub={bench ? `${bench.rows.length} rows · ${algoSets.length} algos` : "awaiting benchmark_campaign_result.json"}
                evbind={<BnEvBind2 ev={bench?.evbind} compact />} />
         <BnKpi label="Repetitions" status="info" value={bench?.config?.repetitions ?? reps} sub="config.repetitions" />
-        <BnKpi label="Keep candidates" status={passedCt > 0 ? "ok" : "warn"} value={pairs.length ? passedCt : "—"} sub={`min impr ${minImpr.toFixed(1)}%`} />
-        <BnKpi label="Reject candidates" status={rejectCt > 0 ? "err" : "ok"} value={pairs.length ? rejectCt : "—"} sub={`max p90 regr ${maxRegrP90.toFixed(1)}%`} />
+        <BnKpi label="Keep candidates" status={passedCt > 0 ? "ok" : "warn"} value={pairs.length ? passedCt : "n/a"} sub={`min impr ${minImpr.toFixed(1)}%`} />
+        <BnKpi label="Reject candidates" status={rejectCt > 0 ? "err" : "ok"} value={pairs.length ? rejectCt : "n/a"} sub={`max p90 regr ${maxRegrP90.toFixed(1)}%`} />
         <BnKpi label="Backend currency" status={backend?.passed === true ? "ok" : backend?.passed === false ? "err" : "warn"}
-               value={backend ? (backend.passed ? "pass" : "fail") : "—"}
+               value={backend ? (backend.passed ? "pass" : "fail") : "n/a"}
                sub={backend ? `${backend.backends.length} backends` : "awaiting backend_currency_result.json"}
                evbind={<BnEvBind2 ev={backend?.evbind} compact />} />
       </div>
 
       <div className="grid grid-12">
         <BnCard span={4} kicker="Optimization thresholds" title="Acceptance gates"
-              subtitle="Sliders compose CLI flags for scripts/optimize_metric_campaign.py — they do not run the benchmark inside the browser.">
+              subtitle="Sliders compose CLI flags for scripts/optimize_metric_campaign.py, they do not run the benchmark inside the browser.">
           <BnCtrl label="Repetitions" v={reps} min={1} max={50} step={1} onChange={v => setSetting("reps", v)} hint={`campaign default · ${BnP.CAMPAIGN.repetitions}`} />
           <BnCtrl label="Min median improvement" v={minImpr} unit="%" min={0} max={50} step={0.5} onChange={v => setSetting("minMedianImpr", v)} />
           <BnCtrl label="Max p90/p99 regression" v={maxRegrP90} unit="%" min={0} max={25} step={0.5} onChange={v => setSetting("maxRegrP90", v)} />
@@ -212,15 +212,15 @@ function BenchLabView({ settings, setSetting, session, pack }) {
         {/* Provenance summary */}
         {prov && (
           <BnCard span={12} kicker="Benchmark provenance" title="Hash-bound run context"
-                subtitle="benchmark_provenance.json — host, platform, compiler, profile flags, smoke flags. All bound to the CSV bytes."
+                subtitle="benchmark_provenance.json, host, platform, compiler, profile flags, smoke flags. All bound to the CSV bytes."
                 actions={<BnEvBind2 ev={prov.evbind} compact />}>
             <BnSGrid>
-              <BnStat k="csv sha256" v={prov.csv?.sha256 ? <BnHash sha={prov.csv.sha256} /> : "—"} s={prov.csv?.path ? prov.csv.path.split("/").pop() : null} />
-              <BnStat k="board" v={prov.benchmark_metadata?.by_key?.["board.name"]?.[0] || "—"} />
-              <BnStat k="compiler" v={prov.benchmark_metadata?.by_key?.["compiler.id"]?.[0] || "—"} />
-              <BnStat k="sample cap" v={prov.benchmark_metadata?.by_key?.["distribution.sample_cap"]?.[0] || "—"} />
-              <BnStat k="environment" v={prov.comparison_context?.environment_type || "—"} />
-              <BnStat k="physical?" v={String(prov.comparison_context?.is_physical_measurement ?? "—")} />
+              <BnStat k="csv sha256" v={prov.csv?.sha256 ? <BnHash sha={prov.csv.sha256} /> : "n/a"} s={prov.csv?.path ? prov.csv.path.split("/").pop() : null} />
+              <BnStat k="board" v={prov.benchmark_metadata?.by_key?.["board.name"]?.[0] || "n/a"} />
+              <BnStat k="compiler" v={prov.benchmark_metadata?.by_key?.["compiler.id"]?.[0] || "n/a"} />
+              <BnStat k="sample cap" v={prov.benchmark_metadata?.by_key?.["distribution.sample_cap"]?.[0] || "n/a"} />
+              <BnStat k="environment" v={prov.comparison_context?.environment_type || "n/a"} />
+              <BnStat k="physical?" v={String(prov.comparison_context?.is_physical_measurement ?? "n/a")} />
             </BnSGrid>
           </BnCard>
         )}
@@ -250,15 +250,15 @@ function BenchTable({ pairs }) {
             <tr key={p.ps + p.op}>
               <td className="mono"><strong>{p.ps}</strong></td>
               <td className="mono dim">{p.op}</td>
-              <td className="num mono">{p.baseline?.median ?? "—"}</td>
-              <td className="num mono">{p.pqcp?.median ?? "—"}</td>
-              <td className="num mono">{p.pqcp?.p99 ?? "—"}</td>
-              <td className="num mono">{p.pqcp?.mad ?? "—"}</td>
-              <td className="num mono">{p.pqcp?.sample_count ?? "—"}</td>
-              <td className="num mono">{p.romRatio == null ? "—" : (p.romRatio * 100 - 100).toFixed(1) + "%"}</td>
+              <td className="num mono">{p.baseline?.median ?? "n/a"}</td>
+              <td className="num mono">{p.pqcp?.median ?? "n/a"}</td>
+              <td className="num mono">{p.pqcp?.p99 ?? "n/a"}</td>
+              <td className="num mono">{p.pqcp?.mad ?? "n/a"}</td>
+              <td className="num mono">{p.pqcp?.sample_count ?? "n/a"}</td>
+              <td className="num mono">{p.romRatio == null ? "n/a" : (p.romRatio * 100 - 100).toFixed(1) + "%"}</td>
               <td style={{ minWidth: 130 }}>
                 {p.medianRatio == null
-                  ? <span className="dim">—</span>
+                  ? <span className="dim">n/a</span>
                   : <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <BnRBar ratio={p.medianRatio} span={0.6} />
                       <span className="mono" style={{ fontSize: 10.5 }}>{p.medianRatio.toFixed(2)}×</span>
@@ -284,7 +284,7 @@ function BenchHex({ pairs }) {
       {pairs.map(p => (
         <BnBHXCell key={p.ps + p.op}
           label={`${p.ps} · ${p.op}`}
-          value={p.pqcp?.median ?? "—"}
+          value={p.pqcp?.median ?? "n/a"}
           ratio={p.medianRatio}
           sub={p.medianRatio == null ? "no pair" : `${p.medianRatio.toFixed(2)}× vs baseline · p99 ${p.p99Ratio?.toFixed(2)}×`}
         />

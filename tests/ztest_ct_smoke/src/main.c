@@ -55,7 +55,7 @@
 /* Loose bound: under 50% relative variance between valid and invalid
  * decap medians. Anything larger is symptomatic of an obvious
  * data-dependent branch on the result. We intentionally do NOT set a
- * tight bound here — that would be more honest if we had access to
+ * tight bound here, that would be more honest if we had access to
  * cycle-accurate hardware, but on a simulator a tight bound just
  * generates noise.
  */

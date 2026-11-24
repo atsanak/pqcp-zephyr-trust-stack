@@ -133,7 +133,7 @@ exact signatures and parameter contracts; this section answers
 ### Emitting and consuming benchmark metrics (`bench.h`)
 
 - Sample code emits `PQCP_METRIC,...` lines on stdout. The format and
-  column ordering are part of the public contract — `parse_logs.py`,
+  column ordering are part of the public contract, `parse_logs.py`,
   `export_results.py`, and the cost-of-assurance regression suite all
   depend on it.
 - New benchmarks should reuse the existing emission helpers rather than

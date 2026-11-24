@@ -650,8 +650,8 @@ def evaluate_acvp_negative_replay(
     scripts/acvp_negative_scenarios.json and asserts the produced wire
     response matches the documented ERROR:* string. This evaluator does
     not re-run the test; it verifies the captured transcript reports
-    suite success and (optionally) that a category-specific marker — for
-    example "MLKEM" or "MLDSA" in a case name — actually appeared in the
+    suite success and (optionally) that a category-specific marker, for
+    example "MLKEM" or "MLDSA" in a case name, actually appeared in the
     test output.
     """
     artifacts = [
@@ -962,7 +962,7 @@ def _evaluate_sanitizer_clean(
             spec,
             reason=(
                 "sanitizers transcript does not contain the 'PQCP Sanitizer Checks' "
-                "header — release_check.py likely skipped the step"
+                "header, release_check.py likely skipped the step"
             ),
             validators=validators,
             evidence_artifacts=artifacts,

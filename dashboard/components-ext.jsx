@@ -1,4 +1,4 @@
-// components-ext.jsx — additional UI primitives layered on top of UI from
+// components-ext.jsx, additional UI primitives layered on top of UI from
 // components.jsx. Adds the source-traceability building blocks the v3 views
 // rely on: HashChip, OriginChip, PackStateChip, DropZone, EvidenceList,
 // DetailRow, StatGrid, ChecksList, RBar, BHX.
@@ -8,7 +8,7 @@ const { Tag: EXTag } = window.UI;
 
 // ── HashChip ──────────────────────────────────────────────────────────
 function HashChip({ sha, full = false, label }) {
-  if (!sha) return <span className="hash hash--dim">—</span>;
+  if (!sha) return <span className="hash hash--dim">n/a</span>;
   const txt = full ? sha : sha.slice(0, 12);
   return (
     <span className={`hash ${full ? "hash--full" : ""}`} title={`${label ? label + " · " : ""}sha256:${sha}`}>
@@ -63,7 +63,7 @@ function DetailRow({ k, v }) {
   return (
     <div className="detailrow">
       <div className="detailrow__k">{k}</div>
-      <div className="detailrow__v">{v == null || v === "" ? <span className="dim">—</span> : v}</div>
+      <div className="detailrow__v">{v == null || v === "" ? <span className="dim">n/a</span> : v}</div>
     </div>
   );
 }
@@ -74,7 +74,7 @@ function Stat({ k, v, s, dim }) {
   return (
     <div className="statgrid__cell">
       <div className="statgrid__k">{k}</div>
-      <div className="statgrid__v" style={dim ? { color: "var(--fg-3)" } : null}>{v ?? "—"}</div>
+      <div className="statgrid__v" style={dim ? { color: "var(--fg-3)" } : null}>{v ?? "n/a"}</div>
       {s && <div className="statgrid__s">{s}</div>}
     </div>
   );
@@ -82,7 +82,7 @@ function Stat({ k, v, s, dim }) {
 
 // ── EvidenceList: drawer-friendly artifact list with sha256s ─────────
 function EvidenceList({ items }) {
-  if (!items || !items.length) return <div className="dim mono">— no evidence artifacts attached</div>;
+  if (!items || !items.length) return <div className="dim mono">, no evidence artifacts attached</div>;
   return (
     <div className="evlist">
       {items.map((it, i) => (
@@ -101,7 +101,7 @@ function EvidenceList({ items }) {
 
 // ── ChecksList: pass/fail rows for policy / closure / appraisal ──────
 function ChecksList({ items, max = 200 }) {
-  if (!items || !items.length) return <div className="dim mono">— no checks recorded</div>;
+  if (!items || !items.length) return <div className="dim mono">, no checks recorded</div>;
   const rows = items.slice(0, max);
   return (
     <div className="checks">
@@ -196,7 +196,7 @@ function BHXCell({ label, value, sub, ratio }) {
   return (
     <div className="bhx__cell">
       <div className="bhx__t">{label}</div>
-      <div className="bhx__v">{value ?? "—"}</div>
+      <div className="bhx__v">{value ?? "n/a"}</div>
       {sub && <div className={`bhx__r ${ratioCls}`}>{sub}</div>}
     </div>
   );

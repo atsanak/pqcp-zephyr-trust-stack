@@ -1,4 +1,4 @@
-// views-misc.jsx — Findings, Integration, Configurator. Derived from real
+// views-misc.jsx, Findings, Integration, Configurator. Derived from real
 // pack state where possible; everything else exposes the source artifact +
 // validator that would close the gap.
 
@@ -16,7 +16,7 @@ function msFiltersSafe() { return (window.useFilters && window.useFilters()) || 
 function msDrawerSafe()  { return (window.useDrawer  && window.useDrawer())  || { openDrawer: () => {} }; }
 
 // ═══════════════════════════════════════════════════════════════════════
-// FINDINGS — derived from console state + parsed artifact contents
+// FINDINGS, derived from console state + parsed artifact contents
 // ═══════════════════════════════════════════════════════════════════════
 
 function FindingsView({ session, pack }) {
@@ -47,7 +47,7 @@ function FindingsView({ session, pack }) {
       </div>
 
       <div className="grid grid-12">
-        <MsCard span={12} kicker="Findings" title="Backlog — every entry references a real artifact"
+        <MsCard span={12} kicker="Findings" title="Backlog, every entry references a real artifact"
               subtitle="Each finding ties a failed or awaiting state to the artifact + validator that would close it."
               padded={false}
               actions={<MsSeg size="sm" value={f.severity || "any"} onChange={f.setSeverity}
@@ -198,7 +198,7 @@ function IntegrationView({ session, pack }) {
   return (
     <div className="grid grid-12">
       <MsCard span={5} kicker="Consumer smoke" title="west-based downstream check"
-            subtitle="scripts/consumer_smoke.py — minimum proof that a downstream Zephyr workspace can build this module."
+            subtitle="scripts/consumer_smoke.py, minimum proof that a downstream Zephyr workspace can build this module."
             actions={<MsEvBind2 ev={{ file: "scripts/consumer_smoke.py", validator: "scripts/consumer_smoke.py", env: "qemu_x86_64", status: "present" }} compact />}>
         <div className="ctrl">
           <div className="ctrl__lbl"><span>Board</span></div>

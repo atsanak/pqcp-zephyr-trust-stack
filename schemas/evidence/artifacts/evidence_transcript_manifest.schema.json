@@ -175,6 +175,6 @@
   },
   "additionalProperties": true,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/evidence_transcript_manifest.schema.json",
+  "$id": "https://github.com/atsanak/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/evidence_transcript_manifest.schema.json",
   "title": "Evidence Transcript Manifest"
 }

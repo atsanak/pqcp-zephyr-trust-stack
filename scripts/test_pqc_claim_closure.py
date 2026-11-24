@@ -58,7 +58,7 @@ class PQCClaimClosureTests(unittest.TestCase):
             root / "pqc_attestation.intoto.json",
             {
                 "_type": "https://in-toto.io/Statement/v1",
-                "predicateType": "https://github.com/atsana01/pqcp-zephyr-trust-stack/attestations/pqc-assurance/v1",
+                "predicateType": "https://github.com/atsanak/pqcp-zephyr-trust-stack/attestations/pqc-assurance/v1",
                 "subject": [{"name": "assurance_ledger.json", "digest": {"sha256": sha256(ledger)}}],
                 "predicate": {},
             },

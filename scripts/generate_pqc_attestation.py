@@ -16,7 +16,7 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 PREDICATE_TYPE = (
-    "https://github.com/atsana01/pqcp-zephyr-trust-stack/"
+    "https://github.com/atsanak/pqcp-zephyr-trust-stack/"
     "attestations/pqc-assurance/v1"
 )
 

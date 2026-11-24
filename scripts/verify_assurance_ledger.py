@@ -257,7 +257,7 @@ def verify_ledger(
     elif ledger_schema == 1:
         print(
             f"[warn] {ledger_json} is a legacy schema_version=1 ledger; replay-only "
-            "compatibility verification — re-generate with the current "
+            "compatibility verification, re-generate with the current "
             "generate_assurance_ledger.py to capture per-primitive and ACVP claims.",
             file=sys.stderr,
         )

@@ -53,6 +53,6 @@
   },
   "additionalProperties": true,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/atsana01/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/benchmark_provenance.schema.json",
+  "$id": "https://github.com/atsanak/pqcp-zephyr-trust-stack/schemas/evidence/artifacts/benchmark_provenance.schema.json",
   "title": "Benchmark Provenance"
 }

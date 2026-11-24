@@ -11,7 +11,7 @@ verifies each device's full chain with the C verifier
 `pqcp-evidence-verify`, and then aggregates the per-device results:
 
 - **Every device must verify individually** (chain replays, digests bind,
-  and — with `--require-signature` — the ML-DSA-65 signature checks out).
+  and, with `--require-signature`, the ML-DSA-65 signature checks out).
 - **Homogeneous fleet** (default): all devices must share one passport
   digest and one board identity. Output: `PQCP_FLEET_AUDIT PASS`.
 - **Drift**: devices that each verify individually but disagree on passport
@@ -32,7 +32,7 @@ device FAIL, and a well-formed fleet JSON summary.
 
 ## Hardware passport (board-gated, not yet captured)
 
-The full chain — including the ML-DSA-signed passport — is hardware-ready:
+The full chain, including the ML-DSA-signed passport, is hardware-ready:
 the evidence modules use no QEMU-specific facilities, and `nucleo_h743zi`
 already builds in this repository's MCU matrix. The remaining step is
 physical: flash `samples/pqcp_deployment_advisor` (with the signature and

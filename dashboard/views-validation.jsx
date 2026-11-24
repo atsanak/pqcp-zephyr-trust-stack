@@ -1,4 +1,4 @@
-// views-validation.jsx — ACVP + KAT + CT smoke + Boot.
+// views-validation.jsx, ACVP + KAT + CT smoke + Boot.
 
 const { Card: VlCard, KV: VlKV, Tag: VlTag, Badge: VlBadge, Hr: VlHr, Sev: VlSev,
         Kpi: VlKpi, Tabs: VlTabs, Pagination: VlPgn, usePaged: vlUsePaged,
@@ -17,10 +17,10 @@ function ValidationView({ session, pack }) {
       <VlCard span={12} kicker="Validation" title="ACVP serial + KAT + side-channel smoke + boot KAT"
             subtitle="Algorithm correctness against NIST vectorsets, plus the runtime smoke that catches first-order regressions on the ML-KEM decapsulation hot path."
             actions={<VlTabs value={tab} onChange={setTab} tabs={[
-              { id: "acvp",  label: "ACVP" },
-              { id: "kat",   label: "KAT" },
-              { id: "ct",    label: "CT smoke" },
-              { id: "boot",  label: "Boot KAT" },
+              { id: "acvp", label: "ACVP" },
+              { id: "kat",  label: "KAT" },
+              { id: "ct",   label: "CT smoke" },
+              { id: "boot", label: "Boot KAT" },
             ]} />}>
         {tab === "acvp" && <ACVPPanel pack={pack} />}
         {tab === "kat"  && <KATPanel pack={pack} />}
@@ -95,7 +95,7 @@ function CTPanel({ pack }) {
 
   return (
     <>
-      <VlCallout tone="warn" title="Smoke / regression evidence — not constant-time proof">
+      <VlCallout tone="warn" title="Smoke / regression evidence, not constant-time proof">
         CT smoke runs each ML-KEM decapsulation 32× against valid and 32× against deliberately corrupted ciphertext on
         <span className="mono"> qemu_x86_64</span>/<span className="mono">native_sim</span>. It catches first-order timing-bifurcation regressions but does not prove constant-time behaviour, and does not extend to physical hardware.
         Source: <span className="mono">docs/assurance-model.md § security.ct_smoke</span>.
@@ -214,10 +214,10 @@ function ClaimStatusTable({ rows, ledgerById }) {
             <tr key={c.id}>
               <td className="mono"><strong style={{ color: "var(--fg-0)" }}>{c.id}</strong></td>
               <td><VlTag tone={tone}>{status}</VlTag></td>
-              <td><VlBadge tone="info">{q.class || "—"}</VlBadge></td>
+              <td><VlBadge tone="info">{q.class || "n/a"}</VlBadge></td>
               <td><VlOrigin env={q.env} /></td>
-              <td className="mono dim" style={{ fontSize: 10.5, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lc?.validators?.[0] || "—"}{lc?.validators?.length > 1 && <span> +{lc.validators.length - 1}</span>}</td>
-              <td className="num mono">{lc?.evidence_artifacts?.length ?? "—"}</td>
+              <td className="mono dim" style={{ fontSize: 10.5, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lc?.validators?.[0] || "n/a"}{lc?.validators?.length > 1 && <span> +{lc.validators.length - 1}</span>}</td>
+              <td className="num mono">{lc?.evidence_artifacts?.length ?? "n/a"}</td>
             </tr>
           );
         })}

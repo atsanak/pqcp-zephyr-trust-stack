@@ -379,7 +379,7 @@ def main() -> int:
     # Verify the tag exists before doing any expensive work. If --tag was
     # passed explicitly the tag MUST exist locally (this is a
     # release-publishing path). If the tag was inferred from version.h
-    # (no --tag), an absent local tag is allowed — for example, CI
+    # (no --tag), an absent local tag is allowed, for example, CI
     # checkouts that did not fetch tags. In that case we record that the
     # tag was unresolved and continue with HEAD as the source commit.
     head_commit = git(module_path, "rev-parse", "HEAD")

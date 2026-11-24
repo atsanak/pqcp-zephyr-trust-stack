@@ -1,13 +1,13 @@
 cff-version: 1.2.0
-title: "pqcp-zephyr-trust-stack: a production-grade Post-Quantum Cryptography trust stack for Zephyr RTOS"
+title: "PQCP Zephyr Trust Stack, ML-KEM and ML-DSA for Zephyr with constant-time leakage testing"
 message: "If you use this software in academic work or technical reports, please cite it using the metadata below."
 type: software
 authors:
-  - alias: atsana01
-    family-names: "(repository owner — see git log for full author list)"
-    given-names: "atsana01"
-repository-code: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
-url: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
+  - alias: atsanak
+    family-names: "Tsanaktsidis"
+    given-names: "Angelos"
+repository-code: "https://github.com/atsanak/pqcp-zephyr-trust-stack"
+url: "https://github.com/atsanak/pqcp-zephyr-trust-stack"
 license: MIT
 version: "1.0.0"
 date-released: "2026-04-26"
@@ -35,11 +35,11 @@ abstract: >-
   reviewer with only Python 3.12, no Zephyr SDK.
 preferred-citation:
   type: software
-  title: "pqcp-zephyr-trust-stack"
+  title: "PQCP Zephyr Trust Stack"
   authors:
-    - alias: atsana01
-      family-names: "(repository owner)"
-      given-names: "atsana01"
+    - alias: atsanak
+      family-names: "Tsanaktsidis"
+      given-names: "Angelos"
   version: "1.0.0"
   date-released: "2026-04-26"
-  url: "https://github.com/atsana01/pqcp-zephyr-trust-stack"
+  url: "https://github.com/atsanak/pqcp-zephyr-trust-stack"

@@ -1,4 +1,4 @@
-// views-firmware.jsx — Firmware assurance digest, status, device token, build provenance.
+// views-firmware.jsx, Firmware assurance digest, status, device token, build provenance.
 
 const { Card: FwCard, KV: FwKV, Tag: FwTag, Badge: FwBadge, Hr: FwHr, Sev: FwSev,
         Kpi: FwKpi, Tabs: FwTabs, EvBind: FwEv, Callout: FwCallout, Code: FwCode, EmptyState: FwEmpty } = window.UI;
@@ -17,22 +17,22 @@ function FirmwareView({ session, pack }) {
     <>
       <div className="grid-kpi" style={{ marginBottom: 12 }}>
         <FwKpi label="Digest root" status={refv?.expected_firmware_digest_root ? "ok" : "warn"}
-               value={refv?.expected_firmware_digest_root ? "hash-bound" : "—"}
+               value={refv?.expected_firmware_digest_root ? "hash-bound" : "n/a"}
                sub={refv ? `${refv.firmware_digest_artifact_count} bound artifacts` : "awaiting pqc_reference_values.json"}
                evbind={<FwEvBind2 ev={refv?.evbind} compact />} />
         <FwKpi label="Firmware status" status={fw?.passed === true ? "ok" : fw?.passed === false ? "err" : "warn"}
-               value={fw ? (fw.passed ? "verified" : "fail") : "—"}
+               value={fw ? (fw.passed ? "verified" : "fail") : "n/a"}
                sub={fw ? `${(fw.checks || []).length} checks` : "awaiting firmware_assurance_status_result.json"}
                evbind={<FwEvBind2 ev={fw?.evbind} compact />} />
         <FwKpi label="Device evidence token" status={tok?.passed === true ? "ok" : tok?.passed === false ? "err" : "warn"}
-               value={tok ? (tok.passed ? "matched" : "fail") : "—"}
+               value={tok ? (tok.passed ? "matched" : "fail") : "n/a"}
                sub={tok ? `${(tok.checks || []).length} checks` : "awaiting device_evidence_token_result.json"}
                evbind={<FwEvBind2 ev={tok?.evbind} compact />} />
         <FwKpi label="Hardware evidence" status="warn"
                value="optional"
                sub="not required outside hardware_review mode" />
         <FwKpi label="Embeddable header" status="warn"
-               value={FwS.evbind(pack, "generated/pqcp_assurance_digest_generated.h").status === "present" ? "present" : "—"}
+               value={FwS.evbind(pack, "generated/pqcp_assurance_digest_generated.h").status === "present" ? "present" : "n/a"}
                sub="generated/pqcp_assurance_digest_generated.h"
                evbind={<FwEvBind2 ev={FwS.evbind(pack, "generated/pqcp_assurance_digest_generated.h")} compact />} />
       </div>
@@ -75,7 +75,7 @@ function FirmwareView({ session, pack }) {
             <>
               <FwSGrid>
                 <FwStat k="passed" v={fw.passed ? "true" : "false"} />
-                <FwStat k="status" v={typeof fw.status === "string" ? fw.status : fw.status ? "ok" : "—"} />
+                <FwStat k="status" v={typeof fw.status === "string" ? fw.status : fw.status ? "ok" : "n/a"} />
                 <FwStat k="artifacts" v={(fw.artifacts || []).length} />
                 <FwStat k="checks" v={(fw.checks || []).length} />
               </FwSGrid>
