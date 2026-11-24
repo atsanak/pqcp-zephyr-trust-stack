@@ -821,3 +821,13 @@ Non-claims. Emulation only. Caches, DMA and other threads are not covered.
 Sampled inputs and crafted key variants that are not valid key pairs. The
 attribution of differing words is manual. Not part of the release gate. Residue
 is not an exploit and none is shown.
+
+Addendum to claim 20, ML-KEM decapsulation. Measured on the Cortex-M4 and
+x86_64 images. After an implicit rejection the 8 words of the returned shared
+secret are still present in the dead frames of the Keccak permutation below the
+caller (320 matches over 40 of 48 runs), while no word of the stored secret key
+is. An opt-in wrapper (`CONFIG_PQCP_STACK_SCRUB`) removes every match for 1.3 to
+1.5 percent more instructions. Limits as above, plus a depth that is measured
+and a ciphertext relation that cannot separate public from secret derived
+words, which is why the two dictionary checks were added.
+

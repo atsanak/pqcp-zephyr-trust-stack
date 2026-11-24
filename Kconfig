@@ -163,6 +163,25 @@ config PQCP_RNG_CUSTOM
 
 endchoice
 
+config PQCP_STACK_SCRUB
+	bool "Wipe the stack below the caller after ML-KEM decapsulation"
+	default n
+	help
+	  Decapsulation leaves copies of the shared secret in the dead stack
+	  frames of the library, mostly in the Keccak permutation. With this
+	  option the wrapper overwrites the stack below the caller after each
+	  decapsulation. Measured on an emulated image in docs/ct-residue.md.
+	  The caller needs PQCP_STACK_SCRUB_DEPTH bytes of stack headroom.
+
+config PQCP_STACK_SCRUB_DEPTH
+	int "Bytes of stack to wipe"
+	depends on PQCP_STACK_SCRUB
+	default 16384
+	range 256 131072
+	help
+	  Depth of the wipe in bytes. It has to cover the deepest frame the
+	  library used, which is measured, not proven.
+
 config PQCP_RNG_DETERMINISTIC_TEST
 	bool "Deterministic RNG for testing (DANGEROUS)"
 	depends on PQCP_RNG_CUSTOM

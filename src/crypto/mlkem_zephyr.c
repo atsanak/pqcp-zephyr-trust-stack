@@ -321,8 +321,41 @@ static int kem_canary_check(pqcp_mlkem_level_t level)
 }
 #endif /* CONFIG_PQCP_FAULT_CANARY */
 
+#ifdef CONFIG_PQCP_STACK_SCRUB
+/*
+ * Overwrite the stack below the caller. The volatile array forces real
+ * stores that the compiler may not drop, and the empty asm makes the array
+ * observable so it is not optimised away.
+ */
+static void __attribute__((noinline)) stack_scrub(void)
+{
+    volatile uint32_t pad[CONFIG_PQCP_STACK_SCRUB_DEPTH / 4];
+
+    for (size_t i = 0U; i < ARRAY_SIZE(pad); ++i) {
+        pad[i] = 0U;
+    }
+    __asm__ volatile("" : : "r"(pad) : "memory");
+}
+#endif
+
+static int mlkem_decapsulate_public(pqcp_mlkem_level_t level,
+                                    const uint8_t *ct, const uint8_t *sk,
+                                    uint8_t *ss);
+
 int pqcp_mlkem_decapsulate(pqcp_mlkem_level_t level, const uint8_t *ct,
                            const uint8_t *sk, uint8_t *ss)
+{
+    int ret = mlkem_decapsulate_public(level, ct, sk, ss);
+
+#ifdef CONFIG_PQCP_STACK_SCRUB
+    stack_scrub();
+#endif
+    return ret;
+}
+
+static int mlkem_decapsulate_public(pqcp_mlkem_level_t level,
+                                    const uint8_t *ct, const uint8_t *sk,
+                                    uint8_t *ss)
 {
 #if defined(CONFIG_PQCP_FAULT_CANARY) || defined(CONFIG_PQCP_FAULT_DUPLICATE)
     /*

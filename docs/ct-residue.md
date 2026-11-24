@@ -106,3 +106,50 @@ secret and the working ciphertext buffer are excluded (output and public input).
   function that processes the decrypted message or the rejection key
   (`indcpa_dec`, `poly_tomsg`, the key derivation) is reported as a residue
   candidate.
+
+### ML-KEM-768 decapsulation, results
+
+Eight keys with six ciphertexts each (one valid, five corrupted), three
+optimisation levels.
+
+| target | non-zero words after return | words that differ between ciphertexts | writers of the differing words |
+|---|---|---|---|
+| x86_64 | 246 to 265 | 109 to 124 | the Keccak permutation, the compression functions, the decapsulate frame |
+| Cortex-M4 | 301 to 306 | 126 to 137 | the same |
+
+H18 holds, since fewer than 400 non-zero words remain. Most differing words
+are Keccak lane spills, which depend on the ciphertext, so H19 cannot be
+settled by the relation alone. Two dictionary checks settle the question that
+matters:
+
+- Words of the secret key bytes in the residue. The key bytes of each key are
+  printed by the test and every 32 bit word of them (above 0xffff) is looked
+  up in the residue of that key's regions. Result 0 matches on x86_64 and on
+  the Cortex-M4 at all levels, so no key word survives in its stored form.
+  Keccak lanes that mix the rejection seed with the ciphertext are not
+  recognisable by this check, so it excludes only the literal copy.
+- Words of the call's own shared secret. Result on the Cortex-M4 at all three
+  levels is 320 matches over 40 of the 48 regions, which is a complete copy of
+  the 8 words in every corrupted ciphertext region (on x86_64 default it is the
+  same 240 matches over 40 regions). The valid ciphertext regions show none.
+  The copies are in the frames of the Keccak permutation. The output buffer
+  itself is excluded. So the session key of an implicit rejection survives
+  below the caller after the call returns.
+
+### Repair and re-check
+
+`CONFIG_PQCP_STACK_SCRUB` (default off, with `CONFIG_PQCP_STACK_SCRUB_DEPTH`,
+default 16384 bytes) makes the decapsulation wrapper overwrite the stack below
+the caller with 32 bit stores. On the Cortex-M4 image at the three levels:
+
+| level | shared secret matches stock to scrubbed | non-zero words | instruction overhead |
+|---|---|---|---|
+| -Os | 320 to 0 | 306 to 103 | 1.25% |
+| -O2 | 320 to 0 | 293 to 86 | 1.29% |
+| -Og | 320 to 0 | 304 to 100 | 1.52% |
+
+The scrub needs the configured number of bytes of stack headroom. A first
+version with byte stores cost 5 to 6 percent. The depth is measured, not
+proven, and ML-DSA signing used about 21,000 stack words, so it would need a
+much larger depth and no wrapper exists for it yet. The check is not part of
+the release gate.

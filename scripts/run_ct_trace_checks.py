@@ -125,16 +125,22 @@ LONG_MUL_VARIABLE = {"cortex-m3": True, "cortex-m4": False,
                      "cortex-m33": False}
 
 
-def kem_level_kwargs(level: int, out: Path) -> dict:
+def kem_level_kwargs(level: int, out: Path, scrub: bool = False) -> dict:
     """Marker and Kconfig overlay for one ML-KEM parameter set."""
-    if level == 768:
+    if level == 768 and not scrub:
         return {}
-    overlay = (out / f"kem{level}.conf").resolve()
-    overlay.write_text("CONFIG_PQCP_MLKEM_LEVEL_768=n\n"
-                       f"CONFIG_PQCP_MLKEM_LEVEL_{level}=y\n",
-                       encoding="utf-8")
-    return {"marker": f"PQCP_CT_TRACE_APP alg=MLKEM-{level}",
-            "extra_cmake": (f"-DEXTRA_CONF_FILE={overlay}",)}
+    overlay = (out / f"kem{level}{'-scrub' if scrub else ''}.conf").resolve()
+    lines = []
+    if level != 768:
+        lines += ["CONFIG_PQCP_MLKEM_LEVEL_768=n\n",
+                  f"CONFIG_PQCP_MLKEM_LEVEL_{level}=y\n"]
+    if scrub:
+        lines.append("CONFIG_PQCP_STACK_SCRUB=y\n")
+    overlay.write_text("".join(lines), encoding="utf-8")
+    kw = {"extra_cmake": (f"-DEXTRA_CONF_FILE={overlay}",)}
+    if level != 768:
+        kw["marker"] = f"PQCP_CT_TRACE_APP alg=MLKEM-{level}"
+    return kw
 
 
 def trace_core(module: Path, build_dir: Path, outfile: Path, *, opt: str,
@@ -206,7 +212,7 @@ def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
     target = args.target
     level = 768 if args.kem_level == "all" else int(args.kem_level)
     alg = f"MLKEM-{level}"
-    kw = kem_level_kwargs(level, out)
+    kw = kem_level_kwargs(level, out, scrub=args.scrub)
     failed = False
     for opt in args.opt or ["default", "speed", "debug"]:
         print(f"[ct-trace] ML-KEM decapsulation on {target} "
@@ -214,7 +220,12 @@ def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
         text = trace_core(MODULE_PATH, out / f"build-{target}-{opt}",
                           out / f"trace-{target}-{opt}.txt", opt=opt,
                           target=target, west_root=west_root,
-                          west_cmd=west_cmd, env=env, plugin=plugin, **kw)
+                          west_cmd=west_cmd, env=env, plugin=plugin,
+                          residue=args.residue, **kw)
+        if args.residue:
+            report_residue(text, out / f"build-{target}-{opt}" / "zephyr" /
+                           "zephyr.elf", env, alg, opt, target,
+                           ("shared_secret", "work_ct"))
         analysis = cta.analyze_vlat(
             cta.parse_trace(text), cta.parse_vlat(text),
             long_mul_variable=LONG_MUL_VARIABLE[target])
@@ -241,13 +252,51 @@ def run_core(args, out: Path, west_root: Path, west_cmd: list, env: dict,
     return 0
 
 
+def symbol_ranges(elf: Path, names, env: dict) -> list:
+    """(low, high) address ranges of data symbols, from `nm -S`."""
+    sdk = Path.home() / "zephyr-sdk-1.0.1"
+    tools = [sdk / "gnu" / "arm-zephyr-eabi" / "bin" / "arm-zephyr-eabi-nm",
+             sdk / "gnu" / "x86_64-zephyr-elf" / "bin" / "x86_64-zephyr-elf-nm"]
+    ranges = []
+    for nm in tools:
+        if not nm.exists():
+            continue
+        out = subprocess.run([str(nm), "-S", str(elf)], capture_output=True,
+                             text=True, env=env).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) == 4 and parts[3] in names:
+                lo = int(parts[0], 16)
+                ranges.append((lo, lo + int(parts[1], 16)))
+        if ranges:
+            break
+    return ranges
+
+
 def report_residue(text: str, elf: Path, env: dict, alg: str, opt: str,
-                   target: str) -> None:
+                   target: str, exclude_symbols=()) -> None:
     import ct_residue_analysis as ra  # noqa: PLC0415
-    res = ra.analyze(text)
+    res = ra.analyze(text, symbol_ranges(elf, set(exclude_symbols), env)
+                     if exclude_symbols else ())
     pcs = set(res.by_pc)
     fns = functions_for(elf, pcs, env) if pcs else {}
     print(ra.format_marker(res, alg, opt, target, fns))
+    log = elf.parent.parent / "ct_trace_device.log"
+    if log.exists() and "PQCP_CT_SK" in log.read_text(errors="replace"):
+        excl = (symbol_ranges(elf, set(exclude_symbols), env)
+                if exclude_symbols else ())
+        found = ra.key_matches(text, log.read_text(errors="replace"), excl)
+        pcs2 = {pc for _, hits in found.values() for _, _, pc in hits}
+        fns2 = functions_for(elf, pcs2, env) if pcs2 else {}
+        print(ra.format_key_marker(found, alg, opt, target, fns2))
+    if log.exists() and "PQCP_CT_SS" in log.read_text(errors="replace"):
+        found = ra.ss_matches(text, log.read_text(errors="replace"), excl)
+        pcs3 = {pc for _, hits in found.values() for _, _, pc in hits}
+        fns3 = functions_for(elf, pcs3, env) if pcs3 else {}
+        print(ra.format_key_marker(found, alg, opt, target, fns3)
+              .replace("RESIDUE_KEY", "RESIDUE_SS")
+              .replace("key_words", "ss_words").replace("key_word_hits",
+                                                        "ss_word_hits"))
 
 
 def run_core_mldsa(args, out: Path, west_root: Path, west_cmd: list,
@@ -534,9 +583,12 @@ def main() -> int:
                         help="ML-KEM parameter set (Cortex-M3); `all` runs "
                              "the three with --mitigated")
     parser.add_argument("--residue", action="store_true",
-                        help="ML-DSA signing: also record stack words left "
+                        help="ML-DSA signing and ML-KEM decapsulation: record stack words left "
                              "below the caller after the call and compare "
                              "them across secret variants")
+    parser.add_argument("--scrub", action="store_true",
+                        help="build with CONFIG_PQCP_STACK_SCRUB=y "
+                             "(Cortex-M ML-KEM runs)")
     parser.add_argument("--measure", action="store_true",
                         help="Cortex-M signing: exit 0 when the only "
                              "findings are documented-model long-multiply "
@@ -632,7 +684,11 @@ def main() -> int:
         text = trace_once(MODULE_PATH, out / f"build-{opt}",
                           out / f"trace-{opt}.txt", opt=opt,
                           west_root=west_root, west_cmd=west_cmd, env=env,
-                          plugin=plugin)
+                          plugin=plugin, residue=args.residue)
+        if args.residue:
+            report_residue(text, out / f"build-{opt}" / "zephyr" /
+                           "zephyr.elf", env, ALG, opt, "x86_64",
+                           ("shared_secret", "work_ct"))
         analysis = cta.analyze(cta.parse_trace(text))
         print(cta.format_marker(analysis, ALG, opt))
         print(f"[ct-trace] cross-key distinct={analysis.cross_group_distinct} "

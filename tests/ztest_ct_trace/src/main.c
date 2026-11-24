@@ -119,6 +119,13 @@ ZTEST(pqcp_ct_trace, test_decap_relational_trace_regions)
 		zassert_equal(pqcp_mlkem_keypair(CT_LEVEL, public_key,
 						 secret_key),
 			      PQCP_MLKEM_SUCCESS);
+		/* Printed outside the traced regions so the residue analysis can
+		 * look for key words left in memory. */
+		printk("PQCP_CT_SK key=%u ", (unsigned int)key);
+		for (size_t i = 0U; i < sizeof(secret_key); ++i) {
+			printk("%02x", secret_key[i]);
+		}
+		printk("\n");
 		zassert_equal(pqcp_mlkem_encapsulate(CT_LEVEL,
 						     public_key, valid_ct,
 						     shared_secret),
@@ -133,6 +140,11 @@ ZTEST(pqcp_ct_trace, test_decap_relational_trace_regions)
 			}
 			run_region((key << 8) | c);
 			digest_secret();
+			printk("PQCP_CT_SS label=%u ", (unsigned int)((key << 8) | c));
+			for (size_t i = 0U; i < sizeof(shared_secret); ++i) {
+				printk("%02x", shared_secret[i]);
+			}
+			printk("\n");
 		}
 	}
 	printk("PQCP_CT_SSDIGEST 0x%08x\n", ss_digest);
