@@ -836,3 +836,32 @@ stack wipe cortex-m4`, full gate only). The wipe now also covers ML-DSA signing
 (non-zero words after the call from about 330 to 400 down to 4 or 5, overhead
 about 1.2 percent, leakage verdict unchanged).
 
+
+## Claim 21, SHA3 cross-check against Zephyr 4.5
+
+Zephyr 4.5 adds SHA3 to its crypto API, backed by Mbed TLS behind the PSA layer.
+That gives an independent FIPS 202 implementation on the same board. The test
+`tests/ztest_sha3_crosscheck` compares the `sha3_256` and `sha3_512` of the
+ML-KEM library with it on every input length up to 300 bytes (both sponge rate
+boundaries included) and 700 longer pseudo random lengths, 1001 digest pairs in
+all, with 0 mismatches, and a flipped input bit is detected. Ledger claim
+`security.sha3_crosscheck` (schema 24, steps `sha3 crosscheck build` and
+`sha3 crosscheck run`).
+
+Prior art. Differential testing of hash implementations is routine (the NIST
+known answer tests cover the same functions with fixed vectors). Not new,
+the idea. New here, the use of the platform's own SHA3, which only exists
+since Zephyr 4.5, as the independent oracle for the hash code the post quantum
+library depends on.
+
+Non-claims. One board and one build. SHAKE128 and SHAKE256 are not compared,
+inputs stop at 1500 bytes, and agreement on sampled inputs is not a proof of
+correctness.
+
+## Zephyr 4.5 move
+
+The workspace moved from Zephyr v4.4.0 to v4.5.0 with the SDK unchanged at
+1.0.1. The module builds and traces unchanged, the residue and wipe results of
+claim 20 hold on 4.5 (the deepest stack writes are identical to within 100
+bytes), and one wipe depth default was raised after the check, see
+`docs/ct-residue.md`.

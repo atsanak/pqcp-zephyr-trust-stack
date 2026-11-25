@@ -1911,6 +1911,35 @@ class AssuranceLedgerTests(unittest.TestCase):
             self.assertEqual(self._eval_res(body, ceiling)["status"], "fail",
                              (body[:80], ceiling))
 
+    SHA3_BODY = ("PQCP_SHA3_CROSSCHECK lengths=1001 mismatches=0 control=detected\n"
+                 "PROJECT EXECUTION SUCCESSFUL\n")
+
+    def _eval_sha3(self, body: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "transcripts" / "evidence_transcript_manifest.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            (manifest_path.parent / "01.log").write_text(body, encoding="utf-8")
+            manifest_path.write_text(json.dumps({"schema_version": 1, "transcripts": [{
+                "step": "sha3 crosscheck run", "transcript_path": "01.log",
+                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                "size_bytes": len(body.encode()), "returncode": 0}]}) + "\n",
+                encoding="utf-8")
+            spec = {"id": "security.sha3_crosscheck", "category": "security",
+                    "claim": "x", "required": True}
+            return ledger.evaluate_sha3_crosscheck(
+                spec, transcript_manifest=manifest_path)
+
+    def test_sha3_crosscheck_passes_and_fails(self) -> None:
+        self.assertEqual(self._eval_sha3(self.SHA3_BODY)["status"], "pass")
+        b = self.SHA3_BODY
+        for body in (b.replace("mismatches=0", "mismatches=3"),
+                     b.replace("lengths=1001", "lengths=300"),
+                     b.replace(" control=detected", ""),
+                     b.replace("PROJECT EXECUTION SUCCESSFUL", ""),
+                     "noise\n"):
+            self.assertEqual(self._eval_sha3(body)["status"], "fail", body)
+
     FAULT_BODY = (
         "PQCP_FAULT_CAMPAIGN variant=boot sites=388 kem_fo_bypass=3 "
         "sig_verify_bypass=5 detected_boot=111 fail_safe=1 corrupt=16 "

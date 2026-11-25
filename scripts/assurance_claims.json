@@ -1,5 +1,5 @@
 {
-  "schema_version": 23,
+  "schema_version": 24,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -480,6 +480,13 @@
       "claim": "After ML-KEM-768 decapsulation, encapsulation and key generation and ML-DSA-65 signing and key generation return, the dead stack frames below the caller are measured on the Cortex-M4 image under QEMU and an opt-in stack wipe is verified. The pqcp_ct_trace plugin (option residue) records every stack word written during a traced region and reads it back at the end marker, and scripts/ct_residue_analysis.py counts the non-zero words and the words equal to the call's own shared secret (the output buffer excluded). Measured on the stock image: about 300 non-zero words after decapsulation, among them a complete 8 word copy of the shared secret in the Keccak permutation frames of every corrupted ciphertext run (no word of the stored secret key survives), and about 330 to 400 non-zero words after signing. CONFIG_PQCP_STACK_SCRUB (default off) makes the wrappers overwrite the stack below the caller with 32 bit stores. The release gate builds the stock and the scrubbed image at three optimisation levels for these five entry points and requires, for each, that the stock image leaves at least 100 non-zero words (and literal copies of the secret inputs or outputs for decapsulation at every level and for the other ML-KEM and key generation entry points at the default level, using a dictionary of the random bytes the call drew), that the scrubbed image keeps no shared secret word and less than half of the words, that the declassification aware leakage verdict of signing still holds with the wipe, and that the instruction overhead stays under a committed ceiling (measured about 1.3 to 2.2 percent for the ML-KEM entry points and 1.1 to 2.6 percent for the ML-DSA ones, with each wipe depth set from the deepest stack write measured on the image plus a margin). This is an emulated measurement: caches, DMA and other threads are not covered, the wipe depth is measured and not proven, the sampled inputs include crafted key variants that are not valid key pairs, the dictionary check cannot recognise Keccak lanes that mix the rejection seed with the ciphertext, and residue is not an exploit. Not a constant-time proof.",
       "required": true,
       "schema_version_added": 23
+    },
+    {
+      "id": "security.sha3_crosscheck",
+      "category": "security",
+      "claim": "The SHA3 inside the ML-KEM library (the sha3_256 and sha3_512 exported by the single level ML-KEM-768 build) is compared with the SHA3 of Zephyr's crypto API, which Zephyr 4.5 backs with Mbed TLS behind the PSA layer and which shares no code with the library, on qemu_x86_64. The test hashes every input length from 0 to 300 bytes, which includes both sponge rate boundaries (136 bytes for SHA3-256, 72 bytes for SHA3-512), and 700 pseudo random longer lengths up to 1500 bytes, and requires every one of the 1001 digest pairs to be identical. A flipped input bit has to change both library digests, which shows the comparison is able to fail. The release gate requires at least 1000 lengths, zero mismatches, the control marker and a successful image run. This checks the hash functions the key generation, encapsulation and decapsulation use for matrix expansion, seeds and the key derivation, against an independent implementation, on one board and one build. It does not cover the SHAKE functions, other targets or inputs beyond 1500 bytes, and it is not a proof of correctness.",
+      "required": true,
+      "schema_version_added": 24
     }
   ]
 }

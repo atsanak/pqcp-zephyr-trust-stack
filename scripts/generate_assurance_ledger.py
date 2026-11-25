@@ -44,7 +44,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2609,6 +2609,43 @@ def evaluate_ct_residue_scrub(
         commands=commands, details=details)
 
 
+def evaluate_sha3_crosscheck(
+    spec: dict[str, Any], *, transcript_manifest: Path,
+) -> dict[str, object]:
+    """Bind security.sha3_crosscheck to the Zephyr SHA3 comparison run."""
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    validators = ["tests/ztest_sha3_crosscheck/src/main.c"]
+    commands = ["west build -b qemu_x86_64 tests/ztest_sha3_crosscheck -t run"]
+    step = "sha3 crosscheck run"
+    path, sha, body = _read_named_transcript(transcript_manifest, step)
+    if path is None or not body:
+        return fail_claim(
+            spec, reason=f"{step} transcript missing or empty in {transcript_manifest}",
+            validators=validators, evidence_artifacts=artifacts, commands=commands)
+    artifacts.append(artifact(path, label=f"{step} transcript"))
+    details: dict[str, object] = {f"{step} transcript_sha256": sha}
+    m = re.search(r"PQCP_SHA3_CROSSCHECK lengths=(\d+) mismatches=(\d+) "
+                  r"control=detected", body)
+    problems = []
+    if not m:
+        problems.append("no PQCP_SHA3_CROSSCHECK result with the control")
+    else:
+        details["lengths"] = int(m.group(1))
+        if int(m.group(1)) < 1000:
+            problems.append(f"only {m.group(1)} input lengths compared")
+        if int(m.group(2)) != 0:
+            problems.append(f"{m.group(2)} digest mismatches")
+    if "PROJECT EXECUTION SUCCESSFUL" not in body:
+        problems.append("the image did not finish successfully")
+    if problems:
+        return fail_claim(
+            spec, reason="; ".join(problems), validators=validators,
+            evidence_artifacts=artifacts, commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts,
+        commands=commands, details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3675,6 +3712,9 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_trace_cortex_m_kem_mitigation": lambda spec: evaluate_ct_trace_cortex_m_kem_mitigation(
+            spec, transcript_manifest=transcript_manifest
+        ),
+        "security.sha3_crosscheck": lambda spec: evaluate_sha3_crosscheck(
             spec, transcript_manifest=transcript_manifest
         ),
         "security.ct_residue_scrub": lambda spec: evaluate_ct_residue_scrub(

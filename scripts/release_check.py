@@ -71,6 +71,8 @@ REQUIRED_EVIDENCE_TRANSCRIPT_STEPS = (
     "fault campaign",
     "fault timing campaign",
     "ct smoke ztest run",
+    "sha3 crosscheck build",
+    "sha3 crosscheck run",
     "ct instruction policy",
     "benchmark_csv",
     "benchmark_csv_validate",
@@ -618,6 +620,7 @@ def main() -> int:
     ct_trace_output_dir = output_root / "ct_trace"
     fault_output_dir = output_root / "fault_campaign"
     ct_smoke_build_dir = output_root / "ztest_ct_smoke_qemu"
+    sha3_build_dir = output_root / "ztest_sha3_crosscheck_qemu"
     profile_output_dir = output_root / "profile_validation"
     benchmark_csv_path = output_root / "benchmark_results.csv"
     benchmark_provenance_path = benchmark_csv_path.with_name("benchmark_provenance.json")
@@ -2458,6 +2461,40 @@ def main() -> int:
             timeout=180,
             success_markers=(
                 "TESTSUITE pqcp_ct_smoke succeeded",
+                "PROJECT EXECUTION SUCCESSFUL",
+            ),
+        ),
+        Step(
+            name="sha3 crosscheck build",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-p",
+                "always",
+                "-b",
+                "qemu_x86_64",
+                str(module_path / "tests/ztest_sha3_crosscheck"),
+                "-d",
+                str(sha3_build_dir),
+                "--",
+                f"-DZEPHYR_EXTRA_MODULES={module_path}",
+            ],
+            cwd=west_root,
+        ),
+        Step(
+            name="sha3 crosscheck run",
+            cmd=[
+                *west_cmd,
+                "build",
+                "-d",
+                str(sha3_build_dir),
+                "-t",
+                "run",
+            ],
+            cwd=west_root,
+            timeout=180,
+            success_markers=(
+                "PQCP_SHA3_CROSSCHECK lengths=1001 mismatches=0 control=detected",
                 "PROJECT EXECUTION SUCCESSFUL",
             ),
         ),
