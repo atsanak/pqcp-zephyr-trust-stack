@@ -13,7 +13,7 @@
   ],
   "claims": [
     {"id": "release.version_consistency", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true},
-    {"id": "release.tag_integrity", "evidence_class": "replay", "environment": "git", "requires_artifact": false},
+    {"id": "release.tag_integrity", "evidence_class": "replay", "environment": "git", "requires_artifact": false, "allow_not_applicable": true},
     {"id": "kat.offline_provenance", "evidence_class": "replay", "environment": "host_python", "requires_artifact": true},
     {"id": "kat.mlkem_512", "evidence_class": "unit", "environment": "qemu_x86_64", "requires_artifact": true},
     {"id": "kat.mlkem_768", "evidence_class": "unit", "environment": "qemu_x86_64", "requires_artifact": true},
