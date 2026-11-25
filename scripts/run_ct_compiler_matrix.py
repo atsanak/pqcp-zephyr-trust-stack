@@ -35,8 +35,9 @@ class Variant:
                  "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
         if self.opt in {"-O2", "-O3"}:
             flags.append("-DCONFIG_SPEED_OPTIMIZATIONS=y")
-        if self.opt == "-O3":
-            flags.append("-DEXTRA_CFLAGS=-O3")
+        # Zephyr selects -Oz for Clang's default size profile.
+        if self.opt == "-O3" or (self.compiler == "clang" and self.opt == "-Os"):
+            flags.append(f"-DEXTRA_CFLAGS={self.opt}")
         if self.opt == "-Og":
             flags.append("-DCONFIG_DEBUG_OPTIMIZATIONS=y")
         if self.lto:
