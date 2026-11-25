@@ -232,3 +232,17 @@ points and 2.1 to 2.6 percent for ML-DSA key generation. H21 holds. The check
 for all five entry points is part of the release gate step `ct residue stack
 wipe cortex-m4`.
 
+
+## Zephyr 4.5 regression (registered before the run)
+
+The workspace moved from Zephyr v4.4.0 to v4.5.0. The new release changes the
+Cortex-M interrupt lock path, context switching and the minimal libc
+`memset` and `memcpy`, any of which can move stack frames or instruction counts.
+
+- H22. On the Cortex-M4 image at the three optimisation levels, with Zephyr
+  4.5.0, each of the five entry points still shows stock dictionary matches
+  (decapsulation at every level, the others at the default level), the wiped
+  image shows 0 matches and at most 4 non-zero words, the deepest measured stack
+  write stays at least 10 percent under the configured wipe depth (20, 76 and 96
+  KiB), the instruction overhead stays at or under 3 percent and signing keeps
+  546 comparable segments with 0 violations. Falsified if any of these fails.

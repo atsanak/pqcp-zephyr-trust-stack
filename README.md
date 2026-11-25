@@ -111,7 +111,7 @@ directory at configure time from `scripts/generate_*_catalogs.py`.
   also use Cortex-M4 and Cortex-M33 board models
 - `nucleo_h743zi` for build-only validation of an STM32H7 path
 
-Tested against Zephyr `v4.4.0` with Zephyr SDK `1.0.1`.
+Tested against Zephyr `v4.5.0` with Zephyr SDK `1.0.1`.
 
 ## Samples
 

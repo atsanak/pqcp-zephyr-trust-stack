@@ -11,7 +11,7 @@ const REPO = {
   head_short: "74ec5053",
   license: "MIT",
   west_pins: [
-    { name: "zephyr",       revision: "684c9e8f32e4373a21098559f748f06915f950c9", remote: "zephyrproject-rtos" },
+    { name: "zephyr",       revision: "41d10b59730406bbab4ca9f1fbbe9e96aafb4966", remote: "zephyrproject-rtos" },
     { name: "mlkem-native", revision: "e07bff537f38b457601e524038f2395e235b011b", remote: "pqcp" },
     { name: "mldsa-native", revision: "0f8b8e074b2525eb844b022b03b962bf888d51aa", remote: "pqcp" },
   ],

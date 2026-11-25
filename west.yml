@@ -14,7 +14,7 @@ manifest:
   projects:
     - name: zephyr
       remote: zephyrproject-rtos
-      revision: 684c9e8f32e4373a21098559f748f06915f950c9
+      revision: 41d10b59730406bbab4ca9f1fbbe9e96aafb4966
       import: true
     - name: mlkem-native
       remote: pqcp

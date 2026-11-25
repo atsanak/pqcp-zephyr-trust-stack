@@ -6,7 +6,7 @@ on:
       zephyr_ref:
         description: Zephyr tag, branch, or commit to validate
         required: false
-        default: v4.4.0
+        default: v4.5.0
         type: string
       run_sanitizers:
         description: Run native_sim/native/64 ASan/UBSan checks
