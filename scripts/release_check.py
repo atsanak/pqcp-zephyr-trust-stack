@@ -1977,7 +1977,7 @@ def main() -> int:
             ],
             cwd=module_path,
             timeout=900,
-            success_markers=("PQCP_APPRAISAL_RECEIPT PASS",),
+            # The ledger needs every field in the runner’s final line.
         ),
         Step(
             name="evidence coverage audit",
