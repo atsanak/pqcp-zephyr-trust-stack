@@ -22,6 +22,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 MODULE_PATH = SCRIPT_DIR.parent
@@ -59,6 +60,10 @@ def build_plugin(plugin_inc: Path, env: dict) -> Path:
     return path
 
 
+class TraceBuildError(RuntimeError):
+    """A trace app or its runnable image failed to build."""
+
+
 def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                west_root: Path, west_cmd: list, env: dict, plugin: Path,
                timeout: int = 300, app: str = TEST_APP_RELATIVE,
@@ -66,19 +71,25 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                event_symbol: str | None = None,
                board: str = "qemu_x86_64",
                extra_cmake: tuple = (),
-               residue: bool = False) -> str:
+               residue: bool = False,
+               after_build: Callable[[Path], None] | None = None) -> str:
     """Build `module`'s trace app, run it under the plugin, return the trace."""
-    run_command(
-        [*west_cmd, "build", "-p", "always", "-b", board,
-         str(module / app), "-d", str(build_dir), "--",
-         f"-DZEPHYR_EXTRA_MODULES={module}", *OPT_FLAGS[opt],
-         *extra_cmake],
-        cwd=west_root, env=env, timeout=600)
-    if board == "qemu_x86_64":
-        run_command(["ninja", "-C", str(build_dir),
-                     "zephyr/qemu_locore_image_target",
-                     "zephyr/qemu_main_image_target"],
-                    cwd=module, env=env, timeout=120)
+    try:
+        run_command(
+            [*west_cmd, "build", "-p", "always", "-b", board,
+             str(module / app), "-d", str(build_dir), "--",
+             f"-DZEPHYR_EXTRA_MODULES={module}", *OPT_FLAGS[opt],
+             *extra_cmake],
+            cwd=west_root, env=env, timeout=600)
+        if board == "qemu_x86_64":
+            run_command(["ninja", "-C", str(build_dir),
+                         "zephyr/qemu_locore_image_target",
+                         "zephyr/qemu_main_image_target"],
+                        cwd=module, env=env, timeout=120)
+    except (RuntimeError, OSError) as exc:
+        raise TraceBuildError(str(exc)) from exc
+    if after_build is not None:
+        after_build(build_dir)
     elf = build_dir / "zephyr" / "zephyr.elf"
     begin = resolve_symbol(elf, "pqcp_ct_region_begin", env)
     end = resolve_symbol(elf, "pqcp_ct_region_end", env)
