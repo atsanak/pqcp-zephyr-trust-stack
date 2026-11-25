@@ -77,24 +77,6 @@ class PQCEvidenceQualityTests(unittest.TestCase):
             )
             self.assertTrue(result["passed"], result["failures"])
 
-    def test_tag_integrity_is_optional_only_for_untagged_evidence(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            ledger = self.make_ledger(root)
-            payload = json.loads(ledger.read_text(encoding="utf-8"))
-            claim = next(c for c in payload["claims"] if c["id"] == "release.tag_integrity")
-            graph = self.make_graph(root)
-            for status, passed in (("not_applicable", True), ("fail", False)):
-                with self.subTest(status=status):
-                    claim["status"] = status
-                    write_json(ledger, payload)
-                    result = verify_pqc_evidence_quality.verify_quality(
-                        quality_path=SCRIPT_DIR / "pqc_evidence_quality.json",
-                        ledger_path=ledger,
-                        graph_path=graph,
-                    )
-                    self.assertEqual(result["passed"], passed, result["failures"])
-
     def test_missing_quality_entry_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -101,6 +101,7 @@ jobs:
           python "$MODULE_PATH/scripts/release_check.py" \
             --west-root "$ZEPHYR_WORKSPACE" \
             --module-path "$MODULE_PATH" \
+            --tag "$RELEASE_REF" \
             --output-root "$RUNNER_TEMP/release-check-output" \
             | tee "$RUNNER_TEMP/release-check.log"
 
