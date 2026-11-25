@@ -114,11 +114,16 @@ def trace_once(module: Path, build_dir: Path, outfile: Path, *, opt: str,
                 time.sleep(1)
                 break
             time.sleep(1)
-        if proc.poll() is None:
-            os.killpg(os.getpgid(proc.pid), signal.SIGINT)
-            time.sleep(2)
-            if proc.poll() is None:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        # The emulator may exit between the poll and the signal, which is
+        # the normal case after the marker, so a missing process is fine.
+        for sig, wait in ((signal.SIGINT, 2), (signal.SIGKILL, 0)):
+            if proc.poll() is not None:
+                break
+            try:
+                os.killpg(os.getpgid(proc.pid), sig)
+            except ProcessLookupError:
+                break
+            time.sleep(wait)
     if marker not in device_log.read_text(errors="replace"):
         raise RuntimeError("device marker not observed:\n" +
                            device_log.read_text(errors="replace")[-1500:])
