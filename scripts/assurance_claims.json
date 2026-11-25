@@ -1,5 +1,5 @@
 {
-  "schema_version": 24,
+  "schema_version": 25,
   "claims": [
     {
       "id": "release.version_consistency",
@@ -487,6 +487,20 @@
       "claim": "The SHA3 inside the ML-KEM library (the sha3_256 and sha3_512 exported by the single level ML-KEM-768 build) is compared with the SHA3 of Zephyr's crypto API, which Zephyr 4.5 backs with Mbed TLS behind the PSA layer and which shares no code with the library, on qemu_x86_64. The test hashes every input length from 0 to 300 bytes, which includes both sponge rate boundaries (136 bytes for SHA3-256, 72 bytes for SHA3-512), and 700 pseudo random longer lengths up to 1500 bytes, and requires every one of the 1001 digest pairs to be identical. A flipped input bit has to change both library digests, which shows the comparison is able to fail. The release gate requires at least 1000 lengths, zero mismatches, the control marker and a successful image run. This checks the hash functions the key generation, encapsulation and decapsulation use for matrix expansion, seeds and the key derivation, against an independent implementation, on one board and one build. It does not cover the SHAKE functions, other targets or inputs beyond 1500 bytes, and it is not a proof of correctness.",
       "required": true,
       "schema_version_added": 24
+    },
+    {
+      "id": "security.ct_static_dynamic_agreement",
+      "category": "security",
+      "claim": "On the default Cortex-M3 ML-KEM-768 decapsulation image, the scoped GNU objdump inventory matches the instruction address and kind of every variable-latency site logged by the QEMU trace. The release gate also checks that conditional branch and variable-latency instruction counts in the linked project functions do not grow relative to the project baseline. The overlap is coverage of observed instructions. The static inventory by itself does not determine whether an instruction depends on a secret.",
+      "required": true,
+      "schema_version_added": 25
+    },
+    {
+      "id": "security.ct_compiler_invariance",
+      "category": "security",
+      "claim": "The sampled ML-KEM-768 decapsulation relation holds in the runnable cells of a two-board GCC and Clang matrix. Every successful cell verifies the intended compile options, observes all 48 regions, agrees on the workload output digest and passes its relational channels and the applicable documented Cortex-M3 latency model. The matched GCC link-time optimisation comparison has no additional source-attributed secret-varying site. Clang build failures remain explicit in the transcript. The evidence covers the tested configurations under QEMU and does not extend to hardware timing or to unbuilt cells.",
+      "required": true,
+      "schema_version_added": 25
     }
   ]
 }

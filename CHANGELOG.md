@@ -18,6 +18,8 @@ release tag to the validation and provider surface it introduced.
 
 ### Added
 
+- ML-KEM decapsulation compiler matrix and a release check that compares
+  traced Cortex-M3 instructions with the firmware disassembly.
 - Allocation-free policy-bound crypto broker with tenant principals, quotas,
   grants, attenuable capabilities, opaque-key dispatch, exact idempotency,
   cancellation, custody and deadline enforcement, chained receipts, HMAC

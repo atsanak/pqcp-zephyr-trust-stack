@@ -52,6 +52,8 @@
     {"id": "security.ct_trace_cortex_m_latency_models", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin_cortex_m3_latency_model_comparison", "requires_artifact": true, "smoke_only": true},
     {"id": "security.ct_trace_cortex_m_kem_mitigation", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin_cortex_m3_kem_operand_offset_repair", "requires_artifact": true, "smoke_only": true},
     {"id": "security.ct_trace_cortex_m33", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin_cortex_m33_operand_latency", "requires_artifact": true, "smoke_only": true},
+    {"id": "security.ct_static_dynamic_agreement", "evidence_class": "qemu_smoke", "environment": "qemu_cortex_m3_trace_and_elf_disassembly", "requires_artifact": true, "smoke_only": true},
+    {"id": "security.ct_compiler_invariance", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin_compiler_matrix", "requires_artifact": true, "smoke_only": true},
     {"id": "security.sha3_crosscheck", "evidence_class": "unit", "environment": "qemu_x86_64_ztest", "requires_artifact": true},
     {"id": "security.ct_residue_scrub", "evidence_class": "qemu_smoke", "environment": "qemu_tcg_plugin_cortex_m4_stack_residue", "requires_artifact": true, "smoke_only": true},
     {"id": "security.mldsa_rejection_independence", "evidence_class": "unit", "environment": "host_mldsa_native_attempt_count_study", "requires_artifact": true, "smoke_only": true},

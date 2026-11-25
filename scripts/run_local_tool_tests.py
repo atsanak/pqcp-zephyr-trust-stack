@@ -24,6 +24,7 @@ TOOL_TESTS = (
     "test_run_mutation_checks.py",
     "test_model_checks.py",
     "test_ct_trace_analysis.py",
+    "test_ct_static_scan.py",
     "test_fault_inject.py",
     "test_fault_oracle.py",
     "test_fault_gate.py",

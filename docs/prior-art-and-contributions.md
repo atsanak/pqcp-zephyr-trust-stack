@@ -865,3 +865,30 @@ The workspace moved from Zephyr v4.4.0 to v4.5.0 with the SDK unchanged at
 claim 20 hold on 4.5 (the deepest stack writes are identical to within 100
 bytes), and one wipe depth default was raised after the check, see
 `docs/ct-residue.md`.
+
+## Compiler and static/dynamic comparison of ML-KEM decapsulation
+
+**Prior art.** ct-verif reasons about constant time in optimised LLVM IR.
+Binsec/Rel applies relational symbolic analysis to binaries. dudect measures
+timing distributions, and TIMECOP tracks secret-dependent operations in
+execution. Schneider et al. document compiler-introduced leakage across
+optimisation settings. [ct-verif](https://www.usenix.org/conference/usenixsecurity16/technical-sessions/presentation/almeida)
+· [Binsec/Rel](https://doi.org/10.1145/3563037)
+· [dudect](https://eprint.iacr.org/2016/1123)
+· [TIMECOP](https://bench.cr.yp.to/tips.html)
+· [Breaking Bad](https://arxiv.org/abs/2410.13489)
+
+**Contribution.** The Zephyr 4.5 experiment verifies the effective compiler
+flags for the ML-KEM translation units and traces the resulting firmware on
+QEMU x86_64 and Cortex-M3. It measures the stability of the sampled relational
+result across build settings. It also joins executed Cortex-M3
+variable-latency instruction addresses and kinds to the corresponding static
+ELF inventory and reports observed precision and recall. The release gate
+ratchets conditional-branch and variable-latency counts for the project
+functions in the default Cortex-M3 image. See the
+[study and results](ct-compiler-and-static-study.md).
+
+**Scope.** The findings apply to the sampled decapsulations, executable code
+in the listed image scope, and the documented Cortex-M3 latency model.
+Coverage and precision use the dynamic trace as the reference. Static
+conditional branch counts alone establish no dependency on secret data.

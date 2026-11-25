@@ -28,6 +28,10 @@ from check_version_consistency import (  # noqa: E402
     validate_changelog,
 )
 import run_model_checks as model_checks  # noqa: E402
+from run_ct_compiler_matrix import (  # noqa: E402
+    TARGETS as CT_MATRIX_TARGETS,
+    VARIANTS as CT_MATRIX_VARIANTS,
+)
 from export_results import (  # noqa: E402
     validate_benchmark_csv,
     validate_benchmark_metadata_document,
@@ -44,7 +48,7 @@ from verify_kat_provenance import (  # noqa: E402
 )
 
 LEDGER_SCHEMA_VERSION = 7
-SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24)
+SUPPORTED_CLAIMS_SCHEMA_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25)
 DEFAULT_CLAIMS = SCRIPT_DIR / "assurance_claims.json"
 DEFAULT_NEGATIVE_SCENARIOS = SCRIPT_DIR / "acvp_negative_scenarios.json"
 
@@ -2646,6 +2650,107 @@ def evaluate_sha3_crosscheck(
         commands=commands, details=details)
 
 
+def _ct_study_markers(body: str, prefix: str) -> list[dict[str, str]]:
+    rows = []
+    for line in body.splitlines():
+        marker, _, fields = line.partition(" ")
+        if marker == prefix:
+            tokens = [field.split("=", 1) for field in fields.split()]
+            if all(len(token) == 2 for token in tokens):
+                row = dict(tokens)
+                if len(row) == len(tokens):
+                    rows.append(row)
+    return rows
+
+
+def _ct_static_result(body: str) -> tuple[str | None, dict]:
+    rows = _ct_study_markers(body, "PQCP_CT_STATIC_XVAL")
+    ratchets = _ct_study_markers(body, "PQCP_CT_STATIC_RATCHET")
+    if len(rows) != 1 or len(ratchets) != 1:
+        return "expected one static cross-check and one ratchet result", {}
+    row, ratchet = rows[0], ratchets[0]
+    if (row.get("target") != "cortex-m3" or row.get("status") != "PASS"
+            or row.get("dynamic_only") != "0" or row.get("kind_mismatches") != "0"
+            or row.get("recall") != "1.000"
+            or not re.fullmatch(r"[1-9]\d*", row.get("executed", ""))):
+        return "Cortex-M3 static cross-check did not show full observed coverage", row
+    if (ratchet.get("target") != "cortex-m3" or ratchet.get("status") != "PASS"
+            or not re.fullmatch(r"[1-9]\d*", ratchet.get("functions", ""))):
+        return "Cortex-M3 project instruction ratchet did not pass", row
+    return None, {"cross_check": row, "ratchet": ratchet}
+
+
+def _ct_matrix_result(body: str) -> tuple[str | None, dict]:
+    rows = _ct_study_markers(body, "PQCP_CT_COMPILER")
+    summaries = _ct_study_markers(body, "PQCP_CT_COMPILER_MATRIX")
+    expected = {(target, variant) for target in CT_MATRIX_TARGETS
+                for variant in CT_MATRIX_VARIANTS}
+    observed = {(row.get("target"), row.get("variant")) for row in rows}
+    if len(rows) != len(expected) or observed != expected or len(summaries) != 1:
+        return "compiler matrix does not contain exactly one result for each cell", {}
+    summary = summaries[0]
+    details = {"summary": summary, "cells": rows}
+    counts = {"CLEAN": 0, "CANDIDATE": 0, "BUILD_FAIL": 0}
+    measured_families = set()
+    for row in rows:
+        target, name, status = row["target"], row["variant"], row.get("status")
+        variant = CT_MATRIX_VARIANTS[name]
+        if status == "BUILD_FAIL" and variant.compiler == "clang":
+            counts[status] += 1
+            continue
+        if (status not in {"CLEAN", "CANDIDATE"}
+                or (status == "CANDIDATE" and target != "cortex-m3")
+                or row.get("cc") != variant.compiler or row.get("opt") != variant.opt
+                or row.get("lto") != str(int(variant.lto))
+                or not re.fullmatch(r"[1-9]\d*(?:,[1-9]\d*)*", row.get("insns", ""))
+                or (target == "cortex-m3" and row.get("recall") not in {"1.000", "na"})
+                or (status == "CANDIDATE" and row.get("recall") != "1.000")):
+            return f"{target}/{name} lacks a valid compiler result", details
+        counts[status] += 1
+        measured_families.add(variant.compiler)
+    if measured_families != {"gcc", "clang"}:
+        return "compiler matrix needs at least one measured cell for each compiler", details
+    expected_summary = {
+        "cells": str(len(expected)), "clean": str(counts["CLEAN"]),
+        "candidate": str(counts["CANDIDATE"]), "build_fail": str(counts["BUILD_FAIL"]),
+        "config_mismatch": "0", "fail": "0", "digests": "1", "status": "PASS",
+    }
+    if summary != expected_summary:
+        return "compiler matrix summary disagrees with its cell results", details
+    return None, details
+
+
+def evaluate_ct_study(
+    spec: dict[str, Any], *, transcript_manifest: Path, matrix: bool = False,
+) -> dict[str, object]:
+    """Evaluate the completed static or compiler experiment transcript."""
+    step = "ct compiler matrix" if matrix else "ct static cross-check"
+    script = "scripts/run_ct_compiler_matrix.py" if matrix else "scripts/ct_static_scan.py"
+    validators = [script, "scripts/ct_trace_analysis.py"]
+    commands = [f"python3 {script}"]
+    artifacts = [artifact(transcript_manifest, label="release-check transcript manifest")]
+    path, sha, body = _read_named_transcript(transcript_manifest, step)
+    if path is None or not body:
+        return fail_claim(
+            spec, reason=f"{step} transcript missing or empty",
+            validators=validators, evidence_artifacts=artifacts, commands=commands)
+    evidence = artifact(path, label=f"{step} transcript")
+    artifacts.append(evidence)
+    if sha != evidence["sha256"]:
+        return fail_claim(
+            spec, reason=f"{step} transcript digest mismatch",
+            validators=validators, evidence_artifacts=artifacts, commands=commands)
+    error, details = (_ct_matrix_result if matrix else _ct_static_result)(body)
+    details["is_smoke_test_only"] = True
+    if error:
+        return fail_claim(
+            spec, reason=error, validators=validators, evidence_artifacts=artifacts,
+            commands=commands, details=details)
+    return pass_claim(
+        spec, validators=validators, evidence_artifacts=artifacts, commands=commands,
+        details=details)
+
+
 def evaluate_fault_campaign_boot_selftest(
     spec: dict[str, Any], *, transcript_manifest: Path
 ) -> dict[str, object]:
@@ -3713,6 +3818,12 @@ def build_claim_evaluators(args: argparse.Namespace, version: str) -> dict[str, 
         ),
         "security.ct_trace_cortex_m_kem_mitigation": lambda spec: evaluate_ct_trace_cortex_m_kem_mitigation(
             spec, transcript_manifest=transcript_manifest
+        ),
+        "security.ct_static_dynamic_agreement": lambda spec: evaluate_ct_study(
+            spec, transcript_manifest=transcript_manifest,
+        ),
+        "security.ct_compiler_invariance": lambda spec: evaluate_ct_study(
+            spec, transcript_manifest=transcript_manifest, matrix=True,
         ),
         "security.sha3_crosscheck": lambda spec: evaluate_sha3_crosscheck(
             spec, transcript_manifest=transcript_manifest
