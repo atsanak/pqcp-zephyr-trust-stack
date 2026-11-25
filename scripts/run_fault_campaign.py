@@ -304,9 +304,15 @@ def main() -> int:
 
     def one(item):
         index, (fault, scenario, hit) = item
-        text, timed = execute(fault, scenario, hit,
-                              images / f"f{index}.elf")
-        cls = fo.classify(golden, text, timed_out=timed)
+        # A timed fault needs a connection to QEMU's gdbstub, which can fail
+        # when the host is busy. A harness error says nothing about the
+        # firmware, so the run is repeated before it is counted.
+        for _attempt in range(3):
+            text, timed = execute(fault, scenario, hit,
+                                  images / f"f{index}.elf")
+            cls = fo.classify(golden, text, timed_out=timed)
+            if cls != "HARNESS_ERROR":
+                break
         if cls == "HARNESS_ERROR":
             line = next((l for l in text.splitlines()
                          if "PQCP_FAULT_HARNESS_ERROR" in l), "")
