@@ -1,0 +1,53 @@
+{
+  "functions": {
+    "pqcp_mlkem_decapsulate": {
+      "branches": 4,
+      "vlat": 0
+    },
+    "pqcp_mlkem_encapsulate": {
+      "branches": 0,
+      "vlat": 0
+    },
+    "pqcp_mlkem_encapsulate_impl": {
+      "branches": 5,
+      "vlat": 0
+    },
+    "pqcp_mlkem_keypair": {
+      "branches": 0,
+      "vlat": 0
+    },
+    "pqcp_mlkem_keypair_impl": {
+      "branches": 4,
+      "vlat": 0
+    },
+    "pqcp_rng_backend_get_bytes": {
+      "branches": 5,
+      "vlat": 0
+    },
+    "pqcp_rng_backend_init": {
+      "branches": 0,
+      "vlat": 0
+    },
+    "pqcp_rng_deterministic_seed": {
+      "branches": 5,
+      "vlat": 0
+    },
+    "pqcp_rng_get_bytes": {
+      "branches": 3,
+      "vlat": 0
+    },
+    "pqcp_rng_init": {
+      "branches": 2,
+      "vlat": 0
+    },
+    "pqcp_rng_is_ready": {
+      "branches": 0,
+      "vlat": 0
+    },
+    "pqcp_rng_sys_init": {
+      "branches": 0,
+      "vlat": 0
+    }
+  },
+  "target": "cortex-m3"
+}
