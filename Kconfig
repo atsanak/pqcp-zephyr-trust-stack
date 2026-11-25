@@ -176,7 +176,7 @@ config PQCP_STACK_SCRUB
 config PQCP_STACK_SCRUB_KEYGEN_DEPTH
 	int "Bytes of stack to wipe after ML-DSA key generation"
 	depends on PQCP_STACK_SCRUB
-	default 77824
+	default 81920
 	range 4096 262144
 	help
 	  Deepest stack write measured for ML-DSA-65 key generation is about

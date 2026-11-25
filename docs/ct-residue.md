@@ -222,7 +222,7 @@ KB for encapsulation, 14.0 KB for ML-KEM key generation, 71.0 KB for ML-DSA key
 generation and 85.9 KB for signing. A first default of 16 KiB for the ML-KEM
 wipe was shallower than the deepest decapsulation and encapsulation frames. It
 already removed every dictionary match, but it left about 100 non-zero words
-below the wipe, so the defaults were raised to 20 KiB (ML-KEM), 76 KiB (ML-DSA
+below the wipe, so the defaults were raised to 20 KiB (ML-KEM), 80 KiB (ML-DSA
 key generation, its own option) and 96 KiB (signing).
 
 With the wipe enabled and these depths, all five entry points show 0
@@ -246,3 +246,23 @@ Cortex-M interrupt lock path, context switching and the minimal libc
   write stays at least 10 percent under the configured wipe depth (20, 76 and 96
   KiB), the instruction overhead stays at or under 3 percent and signing keeps
   546 comparable segments with 0 violations. Falsified if any of these fails.
+
+### Zephyr 4.5 regression, results
+
+Zephyr v4.5.0, Cortex-M4 image, three levels, SDK 1.0.1 unchanged. The image
+builds and traces without changes to the module. Stock images leave the same
+residue (320 shared secret matches for decapsulation, 32, 8 and 68 to 80 for
+key generation, encapsulation and ML-DSA key generation, where the optimiser
+removed the encapsulation match at -O2 and -Og as before). The wiped images
+show 0 matches and 2 to 5 non-zero words, signing keeps 546 comparable segments
+with 0 violations, and the instruction overhead is 1.0 to 1.1 percent for
+signing, 1.6 to 1.9 for decapsulation and 1.9 to 2.7 for the other entry
+points.
+
+The deepest stack writes are unchanged from 4.4, to within 100 bytes (18.2 KB
+decapsulation, 85.9 KB signing, 71.0 KB key generation). H22 asked for at least
+10 percent margin between that depth and the configured wipe depth. The
+ML-DSA key generation default of 76 KiB gave 9.5 percent, so H22 failed on that
+point and the default was raised to 80 KiB (15 percent). The other margins are
+12.5 percent (ML-KEM) and 12.7 percent (signing).
+
