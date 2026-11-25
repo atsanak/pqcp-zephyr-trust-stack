@@ -70,13 +70,22 @@ static void digest_secret(void)
 	}
 }
 
-/* The plugin reads the label from the first argument register (rdi). */
-__attribute__((noinline)) void pqcp_ct_region_begin(uint32_t label)
+/*
+ * The plugin reads the label from the first argument register. GCC LTO
+ * would otherwise fold these identical bodies into one hook address.
+ */
+#if defined(CONFIG_LTO) && defined(__GNUC__) && !defined(__clang__)
+#define CT_TRACE_MARKER __attribute__((noipa))
+#else
+#define CT_TRACE_MARKER __attribute__((noinline))
+#endif
+
+CT_TRACE_MARKER void pqcp_ct_region_begin(uint32_t label)
 {
 	__asm__ volatile("" : : "r"(label) : "memory");
 }
 
-__attribute__((noinline)) void pqcp_ct_region_end(uint32_t label)
+CT_TRACE_MARKER void pqcp_ct_region_end(uint32_t label)
 {
 	__asm__ volatile("" : : "r"(label) : "memory");
 }
